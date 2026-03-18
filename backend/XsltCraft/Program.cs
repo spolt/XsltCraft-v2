@@ -58,7 +58,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseRouting();
+// UseCors MUST come before UseRouting when using named policies with endpoint routing
 app.UseCors("dev");
 app.UseAuthentication();
 app.UseAuthorization();

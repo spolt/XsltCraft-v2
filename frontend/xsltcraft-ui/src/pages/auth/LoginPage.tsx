@@ -44,8 +44,8 @@ export default function LoginPage() {
       })
       login(data.accessToken, me.data)
       navigate('/dashboard')
-    } catch {
-      setError('Google ile giriş başarısız.')
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? 'Google ile giriş başarısız.')
     } finally {
       setLoading(false)
     }

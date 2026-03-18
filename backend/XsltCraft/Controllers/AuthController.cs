@@ -140,6 +140,10 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
         {
             return Unauthorized(new { message = "Geçersiz Google token." });
         }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Google token doğrulaması başarısız.", detail = ex.Message });
+        }
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.GoogleId == payload.Subject)
                 ?? await db.Users.FirstOrDefaultAsync(u => u.Email == payload.Email);
@@ -188,11 +192,12 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
         db.RefreshTokens.Add(token);
         await db.SaveChangesAsync();
 
+        var isHttps = Request.IsHttps;
         Response.Cookies.Append(RefreshTokenCookie, token.Token, new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
+            Secure = isHttps,
+            SameSite = isHttps ? SameSiteMode.Strict : SameSiteMode.Lax,
             Expires = token.ExpiresAt
         });
     }

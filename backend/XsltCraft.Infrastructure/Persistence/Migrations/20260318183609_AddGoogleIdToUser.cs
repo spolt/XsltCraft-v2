@@ -22,7 +22,7 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                 table: "Users",
                 column: "GoogleId",
                 unique: true,
-                filter: "google_id IS NOT NULL");
+                filter: "\"GoogleId\" IS NOT NULL");
         }
 
         /// <inheritdoc />
