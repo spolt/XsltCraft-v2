@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+# ============================================================
+# XsltCraft — pre-push hook
+# Kapsamlı kontroller: push öncesi çalışır (~60–90 sn)
+# ============================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+PASS="${GREEN}✓${NC}"
+FAIL="${RED}✗${NC}"
+WARN="${YELLOW}⚠${NC}"
+
+error=0
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+BACKEND_DIR="$REPO_ROOT/backend"
+FRONTEND_DIR="$REPO_ROOT/frontend/xsltcraft-ui"
+SOLUTION_FILE="$BACKEND_DIR/XsltCraft.slnx"
+
+echo -e "\n${CYAN}${BOLD}╔══════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}${BOLD}║        XsltCraft pre-push kontrol        ║${NC}"
+echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════╝${NC}\n"
+
+# ── Push bilgilerini oku ───────────────────────────────────
+REMOTE="$1"
+URL="$2"
+
+while read local_ref local_sha remote_ref remote_sha; do
+  PUSH_BRANCH=$(echo "$remote_ref" | sed 's|refs/heads/||')
+
+  # ──────────────────────────────────────────────────────────
+  # 1. MAIN'E DOĞRUDAN PUSH ENGELLEME
+  # ──────────────────────────────────────────────────────────
+  echo -e "${CYAN}[1/6] Koruma: main branch kontrolü...${NC}"
+  if [[ "$PUSH_BRANCH" == "main" ]]; then
+    # CI/CD ortamında push'a izin ver (GITHUB_ACTIONS değişkeni set ise)
+    if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+      echo -e "  ${PASS} CI ortamı — main push'a izin verildi."
+    else
+      echo -e "  ${FAIL} HATA: 'main' branch'ine doğrudan push yapılamaz!"
+      echo -e "       Lütfen PR açın: develop → main"
+      echo -e "       Zorunlu ise hook'u geç: git push --no-verify"
+      exit 1
+    fi
+  else
+    echo -e "  ${PASS} Branch: '${PUSH_BRANCH}' (main değil)."
+  fi
+
+done
+
+# ──────────────────────────────────────────────────────────
+# 2. BACKEND BUILD KONTROLÜ
+# ──────────────────────────────────────────────────────────
+echo -e "${CYAN}[2/6] Backend build (.NET)...${NC}"
+if command -v dotnet &>/dev/null; then
+  if [[ -f "$SOLUTION_FILE" ]]; then
+    build_output=$(dotnet build "$SOLUTION_FILE" \
+      --configuration Release \
+      --no-incremental \
+      -p:TreatWarningsAsErrors=false \
+      2>&1)
+    if echo "$build_output" | grep -q "0 Hata\|0 Error"; then
+      warning_count=$(echo "$build_output" | grep -oE "[0-9]+ Uyarı|[0-9]+ Warning" | grep -oE "[0-9]+" || echo "0")
+      echo -e "  ${PASS} Backend build başarılı. (${warning_count} uyarı)"
+    else
+      echo -e "  ${FAIL} HATA: Backend build başarısız!"
+      echo "$build_output" | grep -E "error|Error|HATA" | grep -v "0 Hata" | head -10 | sed 's/^/       /'
+      error=1
+    fi
+  else
+    echo -e "  ${WARN}  UYARI: Solution dosyası bulunamadı: $SOLUTION_FILE"
+  fi
+else
+  echo -e "  ${WARN}  UYARI: dotnet CLI bulunamadı, build atlandı."
+fi
+
+# ──────────────────────────────────────────────────────────
+# 3. FRONTEND BUILD KONTROLÜ
+# ──────────────────────────────────────────────────────────
+echo -e "${CYAN}[3/6] Frontend build (TypeScript + Vite)...${NC}"
+if command -v node &>/dev/null && [[ -d "$FRONTEND_DIR" ]]; then
+  if [[ -f "$FRONTEND_DIR/node_modules/.bin/vite" ]] || [[ -f "$FRONTEND_DIR/node_modules/.bin/tsc" ]]; then
+    build_output=$(cd "$FRONTEND_DIR" && npm run build 2>&1)
+    if [[ $? -eq 0 ]]; then
+      echo -e "  ${PASS} Frontend build başarılı."
+    else
+      echo -e "  ${FAIL} HATA: Frontend build başarısız!"
+      echo "$build_output" | grep -E "error TS|Error|error" | head -10 | sed 's/^/       /'
+      error=1
+    fi
+  else
+    echo -e "  ${WARN}  UYARI: node_modules bulunamadı. 'npm install' çalıştırın."
+    error=1
+  fi
+else
+  echo -e "  ${WARN}  UYARI: Node.js veya frontend dizini bulunamadı, build atlandı."
+fi
+
+# ──────────────────────────────────────────────────────────
+# 4. FRONTEND LINT KONTROLÜ
+# ──────────────────────────────────────────────────────────
+echo -e "${CYAN}[4/6] Frontend ESLint...${NC}"
+if [[ -d "$FRONTEND_DIR/node_modules" ]]; then
+  lint_output=$(cd "$FRONTEND_DIR" && npm run lint 2>&1 || true)
+  error_count=$(echo "$lint_output" | grep -cE "^\s+[0-9]+:[0-9]+\s+error" || echo "0")
+  warning_count=$(echo "$lint_output" | grep -cE "^\s+[0-9]+:[0-9]+\s+warning" || echo "0")
+  if [[ "$error_count" -gt 0 ]]; then
+    echo -e "  ${FAIL} HATA: ${error_count} ESLint hatası bulundu!"
+    echo "$lint_output" | grep -E "error" | head -5 | sed 's/^/       /'
+    error=1
+  elif [[ "$warning_count" -gt 0 ]]; then
+    echo -e "  ${WARN}  ${warning_count} ESLint uyarısı var (hata yok, devam edildi)."
+  else
+    echo -e "  ${PASS} ESLint temiz."
+  fi
+else
+  echo -e "  ${WARN}  UYARI: node_modules yok, lint atlandı."
+fi
+
+# ──────────────────────────────────────────────────────────
+# 5. KAPSAMLI SECRET TARAMASI (tüm değişen dosyalar)
+# ──────────────────────────────────────────────────────────
+echo -e "${CYAN}[5/6] Kapsamlı secret taraması...${NC}"
+
+# Push edilecek commit'lerdeki tüm değişmiş dosyaları bul
+CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null \
+  | grep -vE "\.(png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|bin|dll|exe|pdb)$" \
+  || true)
+
+DEEP_PATTERNS=(
+  "GOCSPX-[A-Za-z0-9_-]{20,}"
+  "AIza[0-9A-Za-z_-]{35}"
+  "AKIA[0-9A-Z]{16}"
+  "BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY"
+  "password\s*[:=]\s*['\"][^'\"]{8,}['\"]"
+  "secret\s*[:=]\s*['\"][^'\"]{16,}['\"]"
+  "token\s*[:=]\s*['\"][a-zA-Z0-9_\-\.]{30,}['\"]"
+  # XsltCraft'a özgü: production credentials kalıbı
+  "ConnectionStrings.*Password=[^;\"'<]{8,}"
+)
+
+deep_secret_found=0
+if [[ -n "$CHANGED_FILES" ]]; then
+  while IFS= read -r file; do
+    [[ -f "$REPO_ROOT/$file" ]] || continue
+    for pattern in "${DEEP_PATTERNS[@]}"; do
+      if grep -iE "$pattern" "$REPO_ROOT/$file" \
+          | grep -qv -E "change-me|your-secret|example|placeholder|xxx|<secret>|<password>"; then
+        echo -e "  ${FAIL} HATA: '$file' içinde secret olabilecek değer:"
+        grep -iEn "$pattern" "$REPO_ROOT/$file" \
+          | grep -v -E "change-me|your-secret|example|placeholder" \
+          | head -2 | sed 's/^/       /'
+        deep_secret_found=1
+        error=1
+      fi
+    done
+  done <<< "$CHANGED_FILES"
+fi
+[[ $deep_secret_found -eq 0 ]] && echo -e "  ${PASS} Kapsamlı taramada secret bulunamadı."
+
+# ──────────────────────────────────────────────────────────
+# 6. MİMARİ KURAL KONTROLÜ
+# PRD kurallarına uymayan pattern'ları yakala.
+# ──────────────────────────────────────────────────────────
+echo -e "${CYAN}[6/6] Mimari kural kontrolü...${NC}"
+arch_error=0
+
+if [[ -n "$CHANGED_FILES" ]]; then
+  while IFS= read -r file; do
+    [[ -f "$REPO_ROOT/$file" ]] || continue
+
+    # Kural A: Preview endpoint storage'a yazmamalı
+    # POST /api/preview içinde WriteAsync çağrısı olmamalı
+    if echo "$file" | grep -q "PreviewController\|Preview"; then
+      if grep -qE "WriteAsync|StorageService\.Write" "$REPO_ROOT/$file" 2>/dev/null; then
+        echo -e "  ${FAIL} HATA: '$file' — Preview endpoint storage'a yazıyor! (PRD §17)"
+        echo -e "       Preview yalnızca in-memory çalışır."
+        arch_error=1
+        error=1
+      fi
+    fi
+
+    # Kural B: XSLT içeriği DB'ye yazılmamalı
+    # Template entity veya repository'de XsltContent/binary kolonu olmamalı
+    if echo "$file" | grep -qE "Template\.cs|AppDbContext"; then
+      if grep -qE "XsltContent\s*\{|byte\[\]\s*Xslt|string\s*XsltContent" "$REPO_ROOT/$file" 2>/dev/null; then
+        echo -e "  ${WARN}  UYARI: '$file' — XSLT içeriği Entity'de görünüyor. DB'ye content değil path yazılmalı (PRD §17)."
+        arch_error=1
+      fi
+    fi
+
+    # Kural C: IStorageService bypass — new LocalStorageService() kullanılmamalı
+    if echo "$file" | grep -qE "\.cs$"; then
+      if grep -qE "new LocalStorageService|new S3StorageService" "$REPO_ROOT/$file" 2>/dev/null; then
+        echo -e "  ${FAIL} HATA: '$file' — StorageService doğrudan new ile örnekleniyor! DI kullanın (PRD §17)."
+        arch_error=1
+        error=1
+      fi
+    fi
+
+  done <<< "$CHANGED_FILES"
+fi
+
+[[ $arch_error -eq 0 ]] && echo -e "  ${PASS} Mimari kurallar temiz."
+
+# ──────────────────────────────────────────────────────────
+# SONUÇ
+# ──────────────────────────────────────────────────────────
+echo ""
+if [[ $error -ne 0 ]]; then
+  echo -e "${RED}${BOLD}╔══════════════════════════════════════════╗${NC}"
+  echo -e "${RED}${BOLD}║    Push ENGELLENDİ — hataları düzelt    ║${NC}"
+  echo -e "${RED}${BOLD}╚══════════════════════════════════════════╝${NC}\n"
+  exit 1
+else
+  echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════╗${NC}"
+  echo -e "${GREEN}${BOLD}║      Tüm kontroller başarılı — Push ✓    ║${NC}"
+  echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════╝${NC}\n"
+  exit 0
+fi
