@@ -7,20 +7,49 @@ obj/
 *.dll
 *.pdb
 *.exe
+backend/**/bin/
+backend/**/obj/
+
+# ----------------------
+# Storage (local dev files)
+# ----------------------
+storage/themes/*
+storage/assets/*
+!storage/themes/.gitkeep
+!storage/assets/.gitkeep
+
+# ----------------------
+# Environment
+# ----------------------
+.env
+.env.local
+.env.development
+.env.production
+
 
 # Visual Studio
 .vs/
 *.vsidx
 launchSettings.json
 
-# Node / Frontend
-node_modules/
-dist/
-package-lock.json
+# Sensitive config
+**/appsettings.Development.json
+
+# ----------------------
+# Frontend
+# ----------------------
+frontend/**/node_modules
+frontend/**/dist
+frontend/**/.env
 
 # OS
 .DS_Store
 Thumbs.db
+
+# ----------------------
+# Logs
+# ----------------------
+*.log
 
 # Templates
 *.xslt

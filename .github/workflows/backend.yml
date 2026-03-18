@@ -1,0 +1,33 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore backend/XsltCraft.slnx
+
+      - name: Build
+        run: dotnet build backend/XsltCraft.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test backend/XsltCraft.slnx --no-build --configuration Release --verbosity normal

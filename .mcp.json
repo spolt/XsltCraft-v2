@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://xsltcraft:xsltcraft_dev_password@localhost:5432/xsltcraft"
+      ]
+    }
+  }
+}

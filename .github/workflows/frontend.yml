@@ -1,0 +1,37 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/xsltcraft-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: frontend/xsltcraft-ui
+
+      - name: Build
+        run: npm run build
+        working-directory: frontend/xsltcraft-ui
+        env:
+          VITE_API_URL: http://localhost:5000
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
