@@ -149,6 +149,23 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 - [x] `/templates` sayfasını oluştur: free theme kartlarını listele (ad, döküman tipi)
 - [x] Her kartta "Bu temayı kullan" butonu ekle (Faz 3'te editor'a bağlanacak)
 
+### Görev grubu 6 — Seed admin kullanıcısı
+
+- [x] `appsettings.Development.json`'a `Admin:Email` ve `Admin:Password` alanlarını ekle
+- [x] `Program.cs`'te uygulama başlarken seed kontrolü yap: `Admin:Email` adresiyle kayıtlı kullanıcı yoksa oluştur, `role = "admin"` ata
+- [x] Kullanıcı zaten varsa seed'i atla (idempotent davran)
+- [x] `Admin:Password` değeri `appsettings`'te düz metin değil, `dotnet user-secrets` üzerinden beslensin
+
+### Görev grubu 7 — Admin paneli (frontend)
+
+- [x] `/admin` route'u oluştur, `[Authorize(Roles = "admin")]` kontrolü ile koru (token'da rol yoksa `/dashboard`'a yönlendir)
+- [x] `/admin/themes` sayfasını yaz:
+  - [x] Mevcut free theme'leri tablo halinde listele (ad, döküman tipi, yükleme tarihi)
+  - [x] "Yeni Tema Yükle" formu: `.xslt` dosya seçici + ad + döküman tipi alanları, `POST /api/admin/themes` çağrısı
+  - [x] Her satırda "Güncelle" butonu: yeni `.xslt` dosyası seçip `PUT /api/admin/themes/:id` çağrısı
+  - [x] Her satırda "Sil" butonu: onay modal'ı + `DELETE /api/admin/themes/:id` çağrısı
+- [x] Navbar'a rol kontrolüne göre "Admin Paneli" linkini koşullu göster
+
 ### Faz 2 tamamlanma kriterleri
 
 | Kriter | Nasıl doğrulanır |
@@ -157,6 +174,8 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 | DB'de yalnızca path tutuluyor | `templates` tablosunda `xslt_storage_path` dolu, binary yok |
 | Free theme indirilebilir | `GET /api/templates/:id/download` → `.xslt` dosyası tarayıcıya iner |
 | Storage servisi DI ile geliyor | `LocalStorageService` doğrudan `new` ile değil inject ile kullanılıyor |
+| Seed admin çalışır | `docker compose up` sonrası `Admin:Email` ile giriş yapılabilir, DB'de `role = admin` görünür |
+| Admin paneli erişilebilir | Admin kullanıcı `/admin/themes`'e girebilir; normal kullanıcı yönlendirilir |
 
 ---
 
@@ -167,58 +186,58 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 
 ### Görev grubu 1 — Block tree veri modeli (frontend)
 
-- [ ] `src/types/blocks.ts` dosyasını oluştur: tüm 14 block tipi için TypeScript interface'leri (PRD §9.2)
-- [ ] `src/types/template.ts`: `Section`, `BlockTree` tipleri
-- [ ] `src/store/editorStore.ts` — Zustand store:
-  - [ ] `sections`, `selectedBlockId`, `isDirty` state'leri
-  - [ ] `addBlock`, `removeBlock`, `moveBlock`, `updateBlockConfig` aksiyonları
-  - [ ] Undo/redo için `past[]` ve `future[]` stack'leri (min 20 adım)
+- [x] `src/types/blocks.ts` dosyasını oluştur: tüm 14 block tipi için TypeScript interface'leri (PRD §9.2)
+- [x] `src/types/template.ts`: `Section`, `BlockTree` tipleri
+- [x] `src/store/editorStore.ts` — Zustand store:
+  - [x] `sections`, `selectedBlockId`, `isDirty` state'leri
+  - [x] `addBlock`, `removeBlock`, `moveBlock`, `updateBlockConfig` aksiyonları
+  - [x] Undo/redo için `past[]` ve `future[]` stack'leri (min 20 adım)
 
 ### Görev grubu 2 — Block editor UI bileşenleri
 
-- [ ] `BlockPalette` bileşeni: 14 block tipini kategorilere göre listele (Layout, Data, Media, Decoration)
-- [ ] `Canvas` bileşeni: section'ları ve içindeki block'ları render et
-- [ ] `Section` bileşeni: başlık, block listesi, "+" butonu
-- [ ] `BlockCard` bileşeni: block'un adını ve tipini göster, seçili olunca highlight
-- [ ] `PropertyPanel` bileşeni: seçili block'un `config`'ini düzenleyen form alanları (her block tipi için ayrı sub-component)
-- [ ] `dnd-kit` entegrasyonu:
-  - [ ] Palette'ten Canvas'a sürükle-bırak (yeni block oluştur)
-  - [ ] Section içinde block sıralamasını değiştir
-  - [ ] Block'u section'lar arası taşı
-  - [ ] Drop zone highlight efekti
-- [ ] Undo/redo: `Ctrl+Z` / `Ctrl+Y` keyboard shortcut'ları
+- [x] `BlockPalette` bileşeni: 14 block tipini kategorilere göre listele (Layout, Data, Media, Decoration)
+- [x] `Canvas` bileşeni: section'ları ve içindeki block'ları render et
+- [x] `Section` bileşeni: başlık, block listesi, "+" butonu
+- [x] `BlockCard` bileşeni: block'un adını ve tipini göster, seçili olunca highlight
+- [x] `PropertyPanel` bileşeni: seçili block'un `config`'ini düzenleyen form alanları (her block tipi için ayrı sub-component)
+- [x] `dnd-kit` entegrasyonu:
+  - [x] Palette'ten Canvas'a sürükle-bırak (yeni block oluştur)
+  - [x] Section içinde block sıralamasını değiştir
+  - [x] Block'u section'lar arası taşı
+  - [x] Drop zone highlight efekti
+- [x] Undo/redo: `Ctrl+Z` / `Ctrl+Y` keyboard shortcut'ları
 
 ### Görev grubu 3 — XSLT üretim motoru (backend)
 
-- [ ] `XsltGeneratorService` sınıfını `XsltCraft.Application/Preview/` altında yaz
-- [ ] Her block tipi için XSLT snippet üretici metot yaz (PRD §9.2'deki XSLT Output örneklerini baz al):
-  - [ ] `Text`, `Heading`, `Paragraph`
-  - [ ] `Table` (for-each loop dahil)
-  - [ ] `ForEach` (container)
-  - [ ] `Conditional` (if/choose, tüm operatörler)
-  - [ ] `Image` (base64 embed)
-  - [ ] `DocumentInfo`, `Totals`, `Notes`, `BankInfo`, `ETTN`
-  - [ ] `Divider`, `Spacer`
-- [ ] Snippet'leri birleştirip tam ve geçerli XSLT stylesheet'i oluştur (namespace declarations, `xsl:stylesheet` wrapper dahil)
-- [ ] UBL 2.1 namespace'lerini otomatik ekle (PRD §10.5)
-- [ ] Üretilen XSLT'yi `System.Xml.Xsl.XslCompiledTransform` ile doğrula (syntax hatası varsa anlamlı hata mesajı döndür)
+- [x] `XsltGeneratorService` sınıfını `XsltCraft.Application/Preview/` altında yaz
+- [x] Her block tipi için XSLT snippet üretici metot yaz (PRD §9.2'deki XSLT Output örneklerini baz al):
+  - [x] `Text`, `Heading`, `Paragraph`
+  - [x] `Table` (for-each loop dahil)
+  - [x] `ForEach` (container)
+  - [x] `Conditional` (if/choose, tüm operatörler)
+  - [x] `Image` (base64 embed)
+  - [x] `DocumentInfo`, `Totals`, `Notes`, `BankInfo`, `ETTN`
+  - [x] `Divider`, `Spacer`
+- [x] Snippet'leri birleştirip tam ve geçerli XSLT stylesheet'i oluştur (namespace declarations, `xsl:stylesheet` wrapper dahil)
+- [x] UBL 2.1 namespace'lerini otomatik ekle (PRD §10.5)
+- [x] Üretilen XSLT'yi `System.Xml.Xsl.XslCompiledTransform` ile doğrula (syntax hatası varsa anlamlı hata mesajı döndür)
 
 ### Görev grubu 4 — Editor sayfası & route'lar
 
-- [ ] `/editor/new` route'u: boş block tree ile editor aç
-- [ ] `/editor/:templateId` route'u: mevcut template'i yükle, block tree'yi doldur
-- [ ] Editor toolbar'ı: template adı (inline edit), Save butonu, Download butonu (Faz 5'te aktif)
-- [ ] `PUT /api/templates/:id` çağrısıyla otomatik kaydetme (30 sn debounce + manuel save butonu)
-- [ ] `POST /api/templates` ile yeni template oluşturma
+- [x] `/editor/new` route'u: boş block tree ile editor aç
+- [x] `/editor/:templateId` route'u: mevcut template'i yükle, block tree'yi doldur
+- [x] Editor toolbar'ı: template adı (inline edit), Save butonu, Download butonu (Faz 5'te aktif)
+- [x] `PUT /api/templates/:id` çağrısıyla otomatik kaydetme (30 sn debounce + manuel save butonu)
+- [x] `POST /api/templates` ile yeni template oluşturma
 
 ### Faz 3 tamamlanma kriterleri
 
-| Kriter | Nasıl doğrulanır |
-|--------|-----------------|
-| Tüm 14 block tipi eklenebilir | Palette'ten canvas'a sürüklenebilir, property panel açılır |
-| Undo/redo çalışır | 20 adım geri/ileri gidilebilir |
-| XSLT üretimi doğru | Her block tipi için üretilen XSLT XSD'ye göre valid |
-| Block tree DB'ye kaydediliyor | `PUT /api/templates/:id` → DB'de `block_tree` JSONB güncellenir |
+| Kriter | Nasıl doğrulanır | Durum |
+|--------|-----------------|-------|
+| Tüm 14 block tipi eklenebilir | Palette'ten canvas'a sürüklenebilir, property panel açılır | ✅ |
+| Undo/redo çalışır | 20 adım geri/ileri gidilebilir | ✅ |
+| XSLT üretimi doğru | Her block tipi için üretilen XSLT XSD'ye göre valid | ✅ 29/29 test geçiyor |
+| Block tree DB'ye kaydediliyor | `PUT /api/templates/:id` → DB'de `block_tree` JSONB güncellenir | ✅ |
 
 ---
 

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using XsltCraft.Application.Interfaces;
+using XsltCraft.Application.Preview;
 using XsltCraft.Application.Services;
 
 using XsltCraft.Infrastructure.Auth;
@@ -71,6 +72,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<RenderService>();
         services.AddScoped<ITemplateService, TemplateService>();
+        services.AddScoped<IXsltGeneratorService, XsltGeneratorService>();
 
         // -------------------------------------------------
         // Repositories

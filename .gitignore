@@ -57,3 +57,10 @@ Thumbs.db
 # Misc
 *.log
 *.tmp
+
+# Root-level npm artifacts (accidental installs)
+/node_modules/
+/package-lock.json
+
+# Claude Code memory & session data
+.claude/

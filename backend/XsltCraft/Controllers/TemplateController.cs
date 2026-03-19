@@ -1,7 +1,11 @@
+using System.Security.Claims;
+
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Application.DTO;
+using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
 
@@ -54,5 +58,105 @@ public class TemplateController(AppDbContext db, IStorageService storage) : Cont
         var fileName = $"{template.Name.Replace(" ", "_")}.xslt";
 
         return File(stream, "application/xslt+xml", fileName);
+    }
+
+    // GET /api/templates/:id  — tekil template'i getir (sahibi veya admin)
+    [Authorize]
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var template = await db.Templates.FindAsync(id);
+        if (template is null)
+            return NotFound(new { message = "Template bulunamadı." });
+
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var role = User.FindFirstValue(ClaimTypes.Role);
+
+        if (!template.IsFreeTheme && template.OwnerId != userId && role != "Admin")
+            return Forbid();
+
+        return Ok(new TemplateDetailResponse
+        {
+            Id = template.Id,
+            Name = template.Name,
+            DocumentType = template.DocumentType.ToString(),
+            IsFreeTheme = template.IsFreeTheme,
+            BlockTree = template.BlockTree,
+            ThumbnailUrl = template.ThumbnailUrl,
+            CreatedAt = template.CreatedAt,
+            UpdatedAt = template.UpdatedAt
+        });
+    }
+
+    // POST /api/templates  — yeni kullanıcı template'i oluştur
+    [Authorize]
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateTemplateRequest request)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        if (!Enum.TryParse<DocumentType>(request.DocumentType, ignoreCase: true, out var docType))
+            return BadRequest(new { message = "Geçersiz documentType. 'Invoice' veya 'Despatch' olmalı." });
+
+        var template = new Template
+        {
+            Id = Guid.NewGuid(),
+            Name = string.IsNullOrWhiteSpace(request.Name) ? "Yeni Şablon" : request.Name.Trim(),
+            OwnerId = userId,
+            DocumentType = docType,
+            IsFreeTheme = false,
+            BlockTree = request.BlockTree,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        db.Templates.Add(template);
+        await db.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetById), new { id = template.Id }, new TemplateDetailResponse
+        {
+            Id = template.Id,
+            Name = template.Name,
+            DocumentType = template.DocumentType.ToString(),
+            IsFreeTheme = false,
+            BlockTree = template.BlockTree,
+            CreatedAt = template.CreatedAt,
+            UpdatedAt = template.UpdatedAt
+        });
+    }
+
+    // PUT /api/templates/:id  — template'i güncelle (ad + block tree)
+    [Authorize]
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTemplateBlockTreeRequest request)
+    {
+        var template = await db.Templates.FindAsync(id);
+        if (template is null)
+            return NotFound(new { message = "Template bulunamadı." });
+
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (template.OwnerId != userId)
+            return Forbid();
+
+        if (request.Name is not null)
+            template.Name = request.Name.Trim();
+
+        if (request.BlockTree is not null)
+            template.BlockTree = request.BlockTree;
+
+        template.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new TemplateDetailResponse
+        {
+            Id = template.Id,
+            Name = template.Name,
+            DocumentType = template.DocumentType.ToString(),
+            IsFreeTheme = template.IsFreeTheme,
+            BlockTree = template.BlockTree,
+            ThumbnailUrl = template.ThumbnailUrl,
+            CreatedAt = template.CreatedAt,
+            UpdatedAt = template.UpdatedAt
+        });
     }
 }

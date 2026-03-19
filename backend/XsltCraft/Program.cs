@@ -45,11 +45,36 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Auto-apply migrations on startup
+// Auto-apply migrations + seed admin on startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+
     db.Database.Migrate();
+
+    var adminEmail = config["Admin:Email"];
+    var adminPassword = config["Admin:Password"];
+
+    if (!string.IsNullOrEmpty(adminEmail) && !string.IsNullOrEmpty(adminPassword))
+    {
+        var exists = await db.Users.AnyAsync(u => u.Email == adminEmail);
+        if (!exists)
+        {
+            db.Users.Add(new XsltCraft.Domain.Entities.User
+            {
+                Id = Guid.NewGuid(),
+                Email = adminEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+                DisplayName = "Admin",
+                Role = XsltCraft.Domain.Entities.UserRole.Admin,
+                EmailVerified = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+    }
 }
 
 if (app.Environment.IsDevelopment())

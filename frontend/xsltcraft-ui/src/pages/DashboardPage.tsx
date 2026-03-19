@@ -12,6 +12,8 @@ export default function DashboardPage() {
     navigate('/auth/login')
   }
 
+  const isAdmin = user?.role === 'Admin'
+
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
       <h1 className="text-3xl font-bold">Dashboard</h1>
@@ -26,6 +28,14 @@ export default function DashboardPage() {
       >
         Tema Kütüphanesi
       </Link>
+      {isAdmin && (
+        <Link
+          to="/admin/themes"
+          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg text-sm transition"
+        >
+          Admin Paneli
+        </Link>
+      )}
       <button
         onClick={handleLogout}
         className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition"
