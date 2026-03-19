@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/apiService'
 import { useAuthStore } from '../store/authStore'
 
@@ -20,6 +20,12 @@ export default function DashboardPage() {
           Hoş geldin, <span className="text-white">{user.displayName ?? user.email}</span>
         </p>
       )}
+      <Link
+        to="/templates"
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition"
+      >
+        Tema Kütüphanesi
+      </Link>
       <button
         onClick={handleLogout}
         className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition"

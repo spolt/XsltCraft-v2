@@ -108,46 +108,46 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 
 ### Görev grubu 1 — IStorageService arayüzü
 
-- [ ] `IStorageService` interface'ini `XsltCraft.Infrastructure/Storage/` altında tanımla:
-  - [ ] `Task<string> WriteAsync(Stream content, string relativePath, string contentType)`
-  - [ ] `Task<Stream> ReadAsync(string relativePath)`
-  - [ ] `Task DeleteAsync(string relativePath)`
-  - [ ] `Task<bool> ExistsAsync(string relativePath)`
-- [ ] `LocalStorageService` implementasyonunu yaz (fiziksel dosya sistemi, dev ortamı)
-- [ ] `appsettings.Development.json`'a `Storage:Provider: "Local"` ve `Storage:LocalBasePath` ekle
-- [ ] `Program.cs`'te DI kaydını yap: `Storage:Provider` değerine göre doğru implementasyonu enjekte et
+- [x] `IStorageService` interface'ini `XsltCraft.Infrastructure/Storage/` altında tanımla:
+  - [x] `Task<string> WriteAsync(Stream content, string relativePath, string contentType)`
+  - [x] `Task<Stream> ReadAsync(string relativePath)`
+  - [x] `Task DeleteAsync(string relativePath)`
+  - [x] `Task<bool> ExistsAsync(string relativePath)`
+- [x] `LocalStorageService` implementasyonunu yaz (fiziksel dosya sistemi, dev ortamı)
+- [x] `appsettings.Development.json`'a `Storage:Provider: "Local"` ve `Storage:LocalBasePath` ekle
+- [x] `Program.cs`'te DI kaydını yap: `Storage:Provider` değerine göre doğru implementasyonu enjekte et
 
 ### Görev grubu 2 — Template & Asset data modelleri
 
-- [ ] `Template` entity'sini `XsltCraft.Domain/Entities/` altında tanımla (PRD §16.2 — `xsltStoragePath` dahil)
-- [ ] `Asset` entity'sini tanımla (PRD §16.3)
-- [ ] `AppDbContext`'e `Templates` ve `Assets` `DbSet`'lerini ekle
-- [ ] Migration oluştur: `dotnet ef migrations add AddTemplateAndAsset`
+- [x] `Template` entity'sini `XsltCraft.Domain/Entities/` altında tanımla (PRD §16.2 — `xsltStoragePath` dahil)
+- [x] `Asset` entity'sini tanımla (PRD §16.3)
+- [x] `AppDbContext`'e `Templates` ve `Assets` `DbSet`'lerini ekle
+- [x] Migration oluştur: `dotnet ef migrations add AddTemplateAndAsset`
 
 ### Görev grubu 3 — Admin free theme endpoint'leri
 
-- [ ] `AdminController`'ı yaz, `[Authorize(Roles = "admin")]` ile koru
-- [ ] `POST /api/admin/themes` endpoint'i:
-  - [ ] `multipart/form-data` ile `.xslt` dosyası + metadata al
-  - [ ] `IStorageService.WriteAsync` ile `themes/{themeId}.xslt` yoluna yaz
-  - [ ] `Template` kaydını DB'ye ekle: `isFreeTheme = true`, `xsltStoragePath` set et
-- [ ] `GET /api/templates` endpoint'i: tüm free theme'leri listele (public, auth gerektirmez)
-- [ ] `PUT /api/admin/themes/:id` endpoint'i: eski dosyayı değiştir, DB path'i güncelle
-- [ ] `DELETE /api/admin/themes/:id` endpoint'i: storage'dan sil + DB kaydını kaldır
-- [ ] `.xslt` dosya tipi ve boyut validasyonu ekle (max 2MB, yalnızca `.xslt`)
+- [x] `AdminController`'ı yaz, `[Authorize(Roles = "admin")]` ile koru
+- [x] `POST /api/admin/themes` endpoint'i:
+  - [x] `multipart/form-data` ile `.xslt` dosyası + metadata al
+  - [x] `IStorageService.WriteAsync` ile `themes/{themeId}.xslt` yoluna yaz
+  - [x] `Template` kaydını DB'ye ekle: `isFreeTheme = true`, `xsltStoragePath` set et
+- [x] `GET /api/templates` endpoint'i: tüm free theme'leri listele (public, auth gerektirmez)
+- [x] `PUT /api/admin/themes/:id` endpoint'i: eski dosyayı değiştir, DB path'i güncelle
+- [x] `DELETE /api/admin/themes/:id` endpoint'i: storage'dan sil + DB kaydını kaldır
+- [x] `.xslt` dosya tipi ve boyut validasyonu ekle (max 2MB, yalnızca `.xslt`)
 
 ### Görev grubu 4 — Free theme download endpoint'i
 
-- [ ] `GET /api/templates/:id/download` endpoint'ini yaz (free theme için):
-  - [ ] DB'den `xsltStoragePath` oku
-  - [ ] `IStorageService.ReadAsync` ile dosyayı stream olarak aç
-  - [ ] `Content-Type: application/xslt+xml`, `Content-Disposition: attachment` header'larıyla döndür
+- [x] `GET /api/templates/:id/download` endpoint'ini yaz (free theme için):
+  - [x] DB'den `xsltStoragePath` oku
+  - [x] `IStorageService.ReadAsync` ile dosyayı stream olarak aç
+  - [x] `Content-Type: application/xslt+xml`, `Content-Disposition: attachment` header'larıyla döndür
 
 ### Görev grubu 5 — Frontend: Template Library sayfası (iskelet)
 
-- [ ] `GET /api/templates` çağrısı yapan `templateService.ts` fonksiyonu yaz
-- [ ] `/templates` sayfasını oluştur: free theme kartlarını listele (ad, döküman tipi)
-- [ ] Her kartta "Bu temayı kullan" butonu ekle (Faz 3'te editor'a bağlanacak)
+- [x] `GET /api/templates` çağrısı yapan `templateService.ts` fonksiyonu yaz
+- [x] `/templates` sayfasını oluştur: free theme kartlarını listele (ad, döküman tipi)
+- [x] Her kartta "Bu temayı kullan" butonu ekle (Faz 3'te editor'a bağlanacak)
 
 ### Faz 2 tamamlanma kriterleri
 

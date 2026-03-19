@@ -1,91 +1,58 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using System.Xml;
-using XsltCraft.Api.DTO;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
 using XsltCraft.Application.DTO;
-using XsltCraft.Application.Interfaces;
-using XsltCraft.Application.Services;
-using XsltCraft.Domain.Entities;
+using XsltCraft.Infrastructure.Persistence;
+using XsltCraft.Infrastructure.Storage;
 
 namespace XsltCraft.Api.Controllers;
 
 [ApiController]
 [Route("api/templates")]
-public class TemplateController : ControllerBase
+public class TemplateController(AppDbContext db, IStorageService storage) : ControllerBase
 {
-    private readonly IWebHostEnvironment _env;
-    private readonly ITemplateRepository _repo;
-    private readonly ITemplateService _templateService;
-
-    public TemplateController(IWebHostEnvironment env, ITemplateRepository repo)
-    {
-        _env = env;
-        _repo = repo;
-    }
-
+    // GET /api/templates  — tüm free theme'leri listele (public, auth gerektirmez)
     [HttpGet]
-    public IActionResult GetAll()
+    public async Task<IActionResult> GetAll()
     {
-        var templates = _repo.GetAll();
+        var themes = await db.Templates
+            .Where(t => t.IsFreeTheme)
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new FreeThemeResponse
+            {
+                Id = t.Id,
+                Name = t.Name,
+                DocumentType = t.DocumentType.ToString(),
+                ThumbnailUrl = t.ThumbnailUrl,
+                CreatedAt = t.CreatedAt,
+                UpdatedAt = t.UpdatedAt
+            })
+            .ToListAsync();
 
-        return Ok(templates);
+        return Ok(themes);
     }
 
-    [HttpGet("{templateId}")]
-    public IActionResult Get(string templateId)
+    // GET /api/templates/:id/download  — free theme .xslt dosyasını indir
+    [HttpGet("{id:guid}/download")]
+    public async Task<IActionResult> Download(Guid id)
     {
-        var root = Path.Combine(_env.ContentRootPath, "templates");
-        var dir = Path.Combine(root, templateId);
+        var template = await db.Templates.FindAsync(id);
 
-        if (!Directory.Exists(dir))
-            return NotFound();
+        if (template is null)
+            return NotFound(new { message = "Template bulunamadı." });
 
-        var files = Directory.GetFiles(dir, "*.xslt")
-            .Select(f => Path.GetFileName(f))
-            .OrderBy(f => f)
-            .ToList();
+        if (!template.IsFreeTheme)
+            return Forbid();
 
-        return Ok(new { id = templateId, files });
-    }
+        if (string.IsNullOrEmpty(template.XsltStoragePath))
+            return NotFound(new { message = "Bu template için henüz XSLT dosyası yüklenmemiş." });
 
-    [HttpGet("{templateId}/{fileName}")]
-    public IActionResult GetFile(string templateId, string fileName)
-    {
-        var root = Path.Combine(_env.ContentRootPath, "templates");
-        var path = Path.Combine(root, templateId, fileName);
+        if (!await storage.ExistsAsync(template.XsltStoragePath))
+            return NotFound(new { message = "XSLT dosyası storage'da bulunamadı." });
 
-        if (!System.IO.File.Exists(path))
-            return NotFound();
+        var stream = await storage.ReadAsync(template.XsltStoragePath);
+        var fileName = $"{template.Name.Replace(" ", "_")}.xslt";
 
-        var content = System.IO.File.ReadAllText(path);
-
-        return Ok(new { id = templateId, fileName, content });
-    }
-
-
-    [HttpPut("{templateId}")]
-    public IActionResult Update(string templateId, [FromBody] UpdateTemplateDto dto)
-    {
-        _templateService.Update(templateId, dto.Content);
-
-        return Ok();
-    }
-
-    [HttpPost("{templateId}")]
-    public async Task<IActionResult> UploadTemplate(
-        string templateId,
-        IFormFile file)
-    {
-        var root = Path.Combine(_env.ContentRootPath, "templates");
-
-        var dir = Path.Combine(root, templateId);
-
-        Directory.CreateDirectory(dir);
-
-        var path = Path.Combine(dir, "template.xslt");
-
-        using var stream = new FileStream(path, FileMode.Create);
-        await file.CopyToAsync(stream);
-
-        return Ok();
+        return File(stream, "application/xslt+xml", fileName);
     }
 }

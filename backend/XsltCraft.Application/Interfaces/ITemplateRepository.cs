@@ -9,5 +9,5 @@ public interface ITemplateRepository
 {
     IEnumerable<Template> GetAll();
 
-    Task<Template?> GetById(string id);
+    Task<Template?> GetById(Guid id);
 }

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using XsltCraft.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using XsltCraft.Infrastructure.Persistence;
 namespace XsltCraft.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260319130002_AddTemplateAndAsset")]
+    partial class AddTemplateAndAsset
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -49,6 +52,9 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");
 
+                    b.Property<Guid?>("TemplateId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text");
@@ -56,6 +62,8 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId");
+
+                    b.HasIndex("TemplateId");
 
                     b.ToTable("Assets");
                 });
@@ -203,6 +211,10 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("XsltCraft.Domain.Entities.Template", null)
+                        .WithMany("Assets")
+                        .HasForeignKey("TemplateId");
+
                     b.Navigation("Owner");
                 });
 
@@ -225,6 +237,11 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("XsltCraft.Domain.Entities.Template", b =>
+                {
+                    b.Navigation("Assets");
                 });
 
             modelBuilder.Entity("XsltCraft.Domain.Entities.User", b =>

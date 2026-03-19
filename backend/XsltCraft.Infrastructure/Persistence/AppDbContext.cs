@@ -7,6 +7,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Template> Templates => Set<Template>();
+    public DbSet<Asset> Assets => Set<Asset>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +34,36 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(rt => rt.User)
                   .WithMany(u => u.RefreshTokens)
                   .HasForeignKey(rt => rt.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Template>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Name).HasMaxLength(255).IsRequired();
+            entity.Property(t => t.DocumentType).HasConversion<string>();
+            entity.Property(t => t.BlockTree).HasColumnType("jsonb");
+            entity.Property(t => t.XsltStoragePath).HasMaxLength(1000);
+            entity.Property(t => t.ThumbnailUrl).HasMaxLength(500);
+            entity.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            entity.Property(t => t.UpdatedAt).HasDefaultValueSql("NOW()");
+            entity.HasOne(t => t.Owner)
+                  .WithMany()
+                  .HasForeignKey(t => t.OwnerId)
+                  .IsRequired(false)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Asset>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.Type).HasConversion<string>();
+            entity.Property(a => a.FilePath).HasMaxLength(1000).IsRequired();
+            entity.Property(a => a.MimeType).HasMaxLength(100).IsRequired();
+            entity.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+            entity.HasOne(a => a.Owner)
+                  .WithMany()
+                  .HasForeignKey(a => a.OwnerId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
     }

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 interface User {
   id: string
@@ -15,13 +16,21 @@ interface AuthState {
   setAccessToken: (token: string) => void
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  accessToken: null,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      accessToken: null,
 
-  login: (token, user) => set({ accessToken: token, user }),
+      login: (token, user) => set({ accessToken: token, user }),
 
-  logout: () => set({ accessToken: null, user: null }),
+      logout: () => set({ accessToken: null, user: null }),
 
-  setAccessToken: (token) => set({ accessToken: token }),
-}))
+      setAccessToken: (token) => set({ accessToken: token }),
+    }),
+    {
+      name: 'xsltcraft-auth',
+      partialize: (state) => ({ accessToken: state.accessToken, user: state.user }),
+    }
+  )
+)

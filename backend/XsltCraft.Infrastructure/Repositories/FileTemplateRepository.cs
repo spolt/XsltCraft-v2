@@ -1,9 +1,13 @@
-﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Domain.Entities;
 
 namespace XsltCraft.Infrastructure.Repositories;
 
+/// <summary>
+/// Faz 1 geliştirme ortamı için dosya sistemi tabanlı geçici uygulama.
+/// Faz 2'de DB tabanlı repository ile değiştirilecektir.
+/// </summary>
 public class FileTemplateRepository : ITemplateRepository
 {
     private readonly IWebHostEnvironment _env;
@@ -17,36 +21,36 @@ public class FileTemplateRepository : ITemplateRepository
     {
         var root = Path.Combine(_env.ContentRootPath, "templates");
 
-        var dirs = Directory.GetDirectories(root)
-        .Where(d => File.Exists(Path.Combine(d, "template.xslt")));
+        if (!Directory.Exists(root))
+            return [];
 
-        return dirs.Select(LoadTemplate);
+        return Directory.GetDirectories(root)
+            .Where(d => File.Exists(Path.Combine(d, "template.xslt")))
+            .Select(LoadTemplate);
     }
 
-    public Task<Template?> GetById(string id)
+    public Task<Template?> GetById(Guid id)
     {
         var root = Path.Combine(_env.ContentRootPath, "templates");
-        var dir = Path.Combine(root, id);
+        var dir = Path.Combine(root, id.ToString());
 
         if (!Directory.Exists(dir))
             return Task.FromResult<Template?>(null);
 
-        var template = LoadTemplate(dir);
-
-        return Task.FromResult<Template?>(template);
+        return Task.FromResult<Template?>(LoadTemplate(dir));
     }
 
-    private Template LoadTemplate(string dir)
+    private static Template LoadTemplate(string dir)
     {
         var xsltPath = Path.Combine(dir, "template.xslt");
-
-        var xslt = File.ReadAllText(xsltPath);
+        var folderName = Path.GetFileName(dir);
 
         return new Template
         {
-            Id = Path.GetFileName(dir),
-            Name = Path.GetFileName(dir),
-            XsltContent = xslt
+            Id = Guid.TryParse(folderName, out var id) ? id : Guid.NewGuid(),
+            Name = folderName,
+            XsltStoragePath = xsltPath,
+            IsFreeTheme = true
         };
     }
 }

@@ -8,6 +8,7 @@ using XsltCraft.Application.Services;
 using XsltCraft.Infrastructure.Auth;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Repositories;
+using XsltCraft.Infrastructure.Storage;
 using XsltCraft.Infrastructure.Templates;
 using XsltCraft.Infrastructure.Xslt;
 
@@ -23,6 +24,16 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("Default")));
+
+        // -------------------------------------------------
+        // Storage
+        // -------------------------------------------------
+
+        var storageProvider = configuration["Storage:Provider"] ?? "Local";
+        if (storageProvider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+            services.AddScoped<IStorageService, LocalStorageService>();
+        else
+            throw new InvalidOperationException($"Desteklenmeyen storage provider: '{storageProvider}'. Geçerli değerler: Local");
 
         // -------------------------------------------------
         // Auth
