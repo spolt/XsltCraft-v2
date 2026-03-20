@@ -1,0 +1,262 @@
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Check, Copy, FilePlus, Pencil, Trash2, X } from 'lucide-react'
+import {
+  cloneTemplate,
+  deleteTemplate,
+  getMyTemplates,
+  updateTemplate,
+  type TemplateDetail,
+} from '../services/templateService'
+
+const DOC_TYPE_LABEL: Record<string, string> = {
+  Invoice: 'e-Fatura / e-Arşiv',
+  Despatch: 'e-İrsaliye',
+}
+
+export default function DraftsPage() {
+  const [templates, setTemplates] = useState<TemplateDetail[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      setTemplates(await getMyTemplates())
+    } catch {
+      setError('Şablonlar yüklenirken bir hata oluştu.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleClone(id: string) {
+    try {
+      const clone = await cloneTemplate(id)
+      navigate(`/editor/${clone.id}`)
+    } catch {
+      alert('Kopyalama başarısız.')
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteTemplate(id)
+      setTemplates((prev) => prev.filter((t) => t.id !== id))
+    } catch {
+      alert('Silme başarısız.')
+    }
+  }
+
+  async function handleRename(id: string, name: string) {
+    try {
+      const updated = await updateTemplate(id, { name })
+      setTemplates((prev) => prev.map((t) => (t.id === id ? updated : t)))
+    } catch {
+      alert('Yeniden adlandırma başarısız.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <p className="text-gray-400 text-sm">Yükleniyor...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <p className="text-red-500 text-sm">{error}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-800">Şablonlarım</h1>
+          <p className="text-sm text-gray-400 mt-0.5">{templates.length} şablon</p>
+        </div>
+        <Link
+          to="/editor/new"
+          className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors"
+        >
+          <FilePlus size={15} />
+          Yeni Şablon
+        </Link>
+      </div>
+
+      {templates.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <div className="flex flex-col gap-2">
+          {templates.map((t) => (
+            <TemplateRow
+              key={t.id}
+              template={t}
+              onClone={handleClone}
+              onDelete={handleDelete}
+              onRename={handleRename}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center py-24 text-center">
+      <span className="text-5xl mb-4 select-none">📄</span>
+      <p className="text-gray-600 font-medium">Henüz bir şablonunuz yok.</p>
+      <p className="text-sm text-gray-400 mt-1">
+        Yeni şablon oluşturun veya hazır temalardan birini kullanın.
+      </p>
+      <div className="flex gap-3 mt-5">
+        <Link
+          to="/editor/new"
+          className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors"
+        >
+          Yeni Şablon Oluştur
+        </Link>
+        <Link
+          to="/templates"
+          className="text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg px-4 py-2 transition-colors"
+        >
+          Tema Kütüphanesi
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function TemplateRow({
+  template,
+  onClone,
+  onDelete,
+  onRename,
+}: {
+  template: TemplateDetail
+  onClone: (id: string) => void
+  onDelete: (id: string) => void
+  onRename: (id: string, name: string) => void
+}) {
+  const navigate = useNavigate()
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState(template.name)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  function commitRename() {
+    const trimmed = editName.trim()
+    if (trimmed && trimmed !== template.name) {
+      onRename(template.id, trimmed)
+    } else {
+      setEditName(template.name)
+    }
+    setEditing(false)
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        {editing ? (
+          <div className="flex items-center gap-1 flex-1">
+            <input
+              autoFocus
+              className="flex-1 text-sm border border-blue-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-200"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') {
+                  setEditName(template.name)
+                  setEditing(false)
+                }
+              }}
+            />
+            <button onClick={commitRename} className="text-green-600 hover:text-green-700">
+              <Check size={14} />
+            </button>
+            <button
+              onClick={() => {
+                setEditName(template.name)
+                setEditing(false)
+              }}
+              className="text-red-400 hover:text-red-600"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => navigate(`/editor/${template.id}`)}
+            className="text-sm font-medium text-gray-800 hover:text-blue-600 truncate text-left"
+          >
+            {template.name}
+          </button>
+        )}
+        <span className="flex-shrink-0 text-xs text-blue-500 bg-blue-50 rounded-full px-2 py-0.5">
+          {DOC_TYPE_LABEL[template.documentType] ?? template.documentType}
+        </span>
+      </div>
+
+      <span className="text-xs text-gray-400 flex-shrink-0 hidden sm:block">
+        {new Date(template.updatedAt).toLocaleDateString('tr-TR')}
+      </span>
+
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          onClick={() => setEditing(true)}
+          title="Yeniden adlandır"
+          className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          onClick={() => onClone(template.id)}
+          title="Kopyala"
+          className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+        >
+          <Copy size={14} />
+        </button>
+        {showConfirm ? (
+          <div className="flex items-center gap-1 bg-red-50 rounded px-2 py-1 text-xs">
+            <span className="text-red-600">Emin misin?</span>
+            <button
+              onClick={() => onDelete(template.id)}
+              className="font-medium text-red-600 hover:text-red-700"
+            >
+              Evet
+            </button>
+            <span className="text-gray-300">/</span>
+            <button
+              onClick={() => setShowConfirm(false)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              Hayır
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowConfirm(true)}
+            title="Sil"
+            className="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}

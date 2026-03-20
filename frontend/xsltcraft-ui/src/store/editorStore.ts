@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
-import type { Block, BlockType, BlockConfig } from '../types/blocks'
+import { DEFAULT_BLOCK_LAYOUT } from '../types/blocks'
+import type { Block, BlockType, BlockConfig, BlockLayout } from '../types/blocks'
 import type { BlockTree, Section } from '../types/template'
 
 const MAX_HISTORY = 20
@@ -34,17 +35,38 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
     case 'BankInfo':
       return {}
     case 'ETTN':
-      return { ettnXpath: '', showQR: false, qrAssetId: null }
+      return { ettnXpath: '', showEttn: true, showQR: false, qrWidth: 80, qrHeight: 80, qrAlignment: 'right' }
     case 'Divider':
       return { style: 'solid', color: '#CCCCCC', thickness: '1px' }
     case 'Spacer':
       return { height: '24px' }
+    case 'Variable':
+      return { name: '', xpath: '' }
+    case 'ConditionalText':
+      return {
+        condition: { xpath: '', operator: 'equals', value: '' },
+        thenIsStatic: true,
+        thenContent: '',
+        elseIsStatic: true,
+        elseContent: '',
+      }
+    case 'TaxSummary':
+      return {
+        taxTotalXpath: '//cac:TaxTotal/cac:TaxSubtotal',
+        percentXpath: 'cac:TaxCategory/cbc:Percent',
+        taxableAmountXpath: 'cbc:TaxableAmount',
+        taxAmountXpath: 'cbc:TaxAmount',
+        showPercent: true,
+      }
+    case 'GibKarekod':
+      return { qrWidth: 150, qrHeight: 150, qrAlignment: 'right' }
   }
 }
 
 interface EditorState {
   templateId: string | null
   templateName: string
+  xsltStoragePath: string | null
   sections: Section[]
   blocks: Record<string, Block>
   selectedBlockId: string | null
@@ -57,15 +79,18 @@ interface EditorState {
   // actions
   setTemplateId: (id: string | null) => void
   setTemplateName: (name: string) => void
+  setXsltStoragePath: (path: string | null) => void
   addBlock: (sectionId: string, type: BlockType, atIndex?: number) => void
   removeBlock: (sectionId: string, blockId: string) => void
   moveBlock: (fromSectionId: string, toSectionId: string, blockId: string, toIndex: number) => void
   updateBlockConfig: (blockId: string, config: Partial<BlockConfig['config']>) => void
+  updateBlockLayout: (blockId: string, layout: Partial<BlockLayout>) => void
   selectBlock: (blockId: string | null) => void
 
   addSection: (name?: string) => void
   removeSection: (sectionId: string) => void
   updateSection: (sectionId: string, patch: Partial<Pick<Section, 'name' | 'layout'>>) => void
+  reorderSections: (fromIndex: number, toIndex: number) => void
 
   loadTree: (tree: BlockTree) => void
   resetTree: () => void
@@ -84,6 +109,7 @@ function snapshot(state: Pick<EditorState, 'sections' | 'blocks'>) {
 export const useEditorStore = create<EditorState>((set, get) => ({
   templateId: null,
   templateName: 'Yeni Şablon',
+  xsltStoragePath: null,
   sections: [],
   blocks: {},
   selectedBlockId: null,
@@ -93,6 +119,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setTemplateId: (id) => set({ templateId: id }),
   setTemplateName: (name) => set({ templateName: name, isDirty: true }),
+  setXsltStoragePath: (path) => set({ xsltStoragePath: path }),
 
   // ---- helpers ----
 
@@ -103,7 +130,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     const prev = snapshot(state)
     const id = uuidv4()
-    const block: Block = { id, type, config: defaultConfig(type) }
+    const block: Block = { id, type, config: defaultConfig(type), layout: { ...DEFAULT_BLOCK_LAYOUT } }
 
     const newBlockIds = [...section.blockIds]
     if (atIndex !== undefined) {
@@ -191,6 +218,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }))
   },
 
+  updateBlockLayout(blockId, layoutPatch) {
+    const state = get()
+    const prev = snapshot(state)
+    const existing = state.blocks[blockId]
+    if (!existing) return
+
+    set((s) => ({
+      blocks: {
+        ...s.blocks,
+        [blockId]: {
+          ...existing,
+          layout: { ...DEFAULT_BLOCK_LAYOUT, ...existing.layout, ...layoutPatch },
+        },
+      },
+      isDirty: true,
+      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
+      future: [],
+    }))
+  },
+
   selectBlock(blockId) {
     set({ selectedBlockId: blockId })
   },
@@ -247,6 +294,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }))
   },
 
+  reorderSections(fromIndex, toIndex) {
+    const state = get()
+    const prev = snapshot(state)
+    const sections = [...state.sections]
+    const [moved] = sections.splice(fromIndex, 1)
+    sections.splice(toIndex, 0, moved)
+    set((s) => ({
+      sections,
+      isDirty: true,
+      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
+      future: [],
+    }))
+  },
+
   loadTree(tree) {
     set({
       sections: tree.sections,
@@ -262,6 +323,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       templateId: null,
       templateName: 'Yeni Şablon',
+      xsltStoragePath: null,
       sections: [],
       blocks: {},
       selectedBlockId: null,

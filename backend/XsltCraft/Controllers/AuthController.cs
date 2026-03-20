@@ -10,6 +10,7 @@ using XsltCraft.Application.DTO;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
+using XsltCraft.Infrastructure.Storage;
 
 namespace XsltCraft.Controllers;
 
@@ -174,6 +175,73 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
         await SetNewRefreshToken(user.Id);
 
         return Ok(new AuthResponse(accessToken));
+    }
+
+    // PUT /api/auth/profile  — display name ve/veya e-posta güncelle
+    [Authorize]
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var user = await db.Users.FindAsync(userId);
+        if (user is null) return NotFound();
+
+        if (request.DisplayName is not null)
+            user.DisplayName = request.DisplayName.Trim();
+
+        if (request.Email is not null)
+        {
+            var emailTrimmed = request.Email.Trim().ToLowerInvariant();
+            if (emailTrimmed != user.Email &&
+                await db.Users.AnyAsync(u => u.Email == emailTrimmed))
+                return Conflict(new { message = "Bu e-posta adresi zaten kullanılıyor." });
+
+            user.Email = emailTrimmed;
+        }
+
+        user.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(new MeResponse(user.Id, user.Email, user.DisplayName, user.Role.ToString()));
+    }
+
+    // DELETE /api/auth/account  — hesabı sil
+    [Authorize]
+    [HttpDelete("account")]
+    public async Task<IActionResult> DeleteAccount(
+        [FromServices] IStorageService storageService,
+        [FromServices] XsltCraft.Infrastructure.Persistence.AppDbContext dbCtx)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        // Kullanıcının asset dosyalarını storage'dan sil
+        var assets = await db.Assets.Where(a => a.OwnerId == userId).ToListAsync();
+        foreach (var asset in assets)
+        {
+            if (await storageService.ExistsAsync(asset.FilePath))
+                await storageService.DeleteAsync(asset.FilePath);
+        }
+
+        // Kullanıcının template XSLT cache dosyalarını storage'dan sil, template'leri DB'den sil
+        var templates = await db.Templates
+            .Where(t => t.OwnerId == userId && !t.IsFreeTheme)
+            .ToListAsync();
+        foreach (var tpl in templates)
+        {
+            if (!string.IsNullOrEmpty(tpl.XsltStoragePath)
+                && await storageService.ExistsAsync(tpl.XsltStoragePath))
+                await storageService.DeleteAsync(tpl.XsltStoragePath);
+        }
+        db.Templates.RemoveRange(templates);
+
+        // Kullanıcıyı sil — Assets cascade (DB), RefreshTokens cascade (DB)
+        var user = await db.Users.FindAsync(userId);
+        if (user is not null) db.Users.Remove(user);
+
+        await db.SaveChangesAsync();
+
+        Response.Cookies.Delete("refreshToken");
+        return NoContent();
     }
 
     // --- Helpers ---

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { Columns2, Columns3, AlignLeft } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
 import BlockCard from './BlockCard'
 import type { Section } from '../../types/template'
@@ -18,16 +20,32 @@ export default function SectionComponent({ section }: SectionComponentProps) {
   const removeBlock = useEditorStore((s) => s.removeBlock)
   const removeSection = useEditorStore((s) => s.removeSection)
   const updateSection = useEditorStore((s) => s.updateSection)
+  const updateBlockLayout = useEditorStore((s) => s.updateBlockLayout)
   const addBlock = useEditorStore((s) => s.addBlock)
 
-  const { setNodeRef, isOver } = useDroppable({
+  const {
+    attributes: sortAttrs,
+    listeners: sortListeners,
+    setNodeRef: setSortRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `sort-section-${section.id}`, data: { source: 'section', sectionId: section.id } })
+
+  const sortStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `section-${section.id}`,
     data: { sectionId: section.id },
   })
 
-  const sectionBlocks = section.blockIds
-    .map((id) => blocks[id])
-    .filter(Boolean)
+  const sectionBlocks = section.blockIds.map((id) => blocks[id]).filter(Boolean)
+  const isTwoCol = section.layout === 'two-column'
+  const isThreeCol = section.layout === 'three-column'
 
   function commitName() {
     if (nameInput.trim()) updateSection(section.id, { name: nameInput.trim() })
@@ -35,10 +53,36 @@ export default function SectionComponent({ section }: SectionComponentProps) {
     setIsEditing(false)
   }
 
+  function toggleLayout() {
+    const next =
+      section.layout === 'single-column' ? 'two-column' :
+      section.layout === 'two-column'    ? 'three-column' :
+      'single-column'
+    const widthMap = {
+      'single-column': 'full',
+      'two-column': '1/2',
+      'three-column': '1/3',
+    } as const
+    updateSection(section.id, { layout: next })
+    sectionBlocks.forEach((b) => {
+      updateBlockLayout(b.id, { width: widthMap[next] })
+    })
+  }
+
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div ref={setSortRef} style={sortStyle} className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
       {/* Section header */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200">
+      <div className="flex items-center gap-2 px-2 py-2 bg-gray-50 border-b border-gray-200">
+        <span
+          {...sortAttrs}
+          {...sortListeners}
+          className="cursor-grab text-gray-300 hover:text-gray-500 px-1 flex-shrink-0 select-none"
+          title="Bölümü taşı"
+          onClick={(e) => e.stopPropagation()}
+        >
+          ⠿
+        </span>
+
         {isEditing ? (
           <input
             autoFocus
@@ -46,7 +90,10 @@ export default function SectionComponent({ section }: SectionComponentProps) {
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
             onBlur={commitName}
-            onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') { setNameInput(section.name); setIsEditing(false) } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitName()
+              if (e.key === 'Escape') { setNameInput(section.name); setIsEditing(false) }
+            }}
           />
         ) : (
           <span
@@ -57,6 +104,26 @@ export default function SectionComponent({ section }: SectionComponentProps) {
             {section.name}
           </span>
         )}
+
+        {/* Layout toggle */}
+        <button
+          onClick={toggleLayout}
+          title={
+            isThreeCol ? 'Tek sütuna geç (tüm blokları tam genişlik yapar)' :
+            isTwoCol   ? 'Üç sütuna geç (tüm blokları ⅓ genişlik yapar)' :
+            'İki sütuna geç (tüm blokları ½ genişlik yapar)'
+          }
+          className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors ${
+            isThreeCol
+              ? 'border-purple-400 bg-purple-50 text-purple-700'
+              : isTwoCol
+              ? 'border-blue-400 bg-blue-50 text-blue-700'
+              : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+          }`}
+        >
+          {isThreeCol ? <Columns3 size={12} /> : isTwoCol ? <Columns2 size={12} /> : <AlignLeft size={12} />}
+          {isThreeCol ? '3 Sütun' : isTwoCol ? '2 Sütun' : '1 Sütun'}
+        </button>
 
         <span className="text-xs text-gray-400">{sectionBlocks.length} blok</span>
 
@@ -69,28 +136,43 @@ export default function SectionComponent({ section }: SectionComponentProps) {
         </button>
       </div>
 
-      {/* Drop zone */}
+      {/* Drop zone — always flex-wrap to mirror the XSLT table-based output */}
       <div
-        ref={setNodeRef}
-        className={`min-h-[56px] p-2 flex flex-col gap-1 transition-colors
-          ${isOver ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : 'bg-white'}`}
+        ref={setDropRef}
+        className={`min-h-[56px] p-2 flex flex-wrap content-start transition-colors ${
+          isOver ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : 'bg-white'
+        }`}
       >
-        <SortableContext
-          items={section.blockIds}
-          strategy={verticalListSortingStrategy}
-        >
-          {sectionBlocks.map((block) => (
-            <BlockCard
-              key={block.id}
-              block={block}
-              sectionId={section.id}
-              onRemove={() => removeBlock(section.id, block.id)}
-            />
-          ))}
+        <SortableContext items={section.blockIds} strategy={verticalListSortingStrategy}>
+          {sectionBlocks.map((block) => {
+            const w = block.layout?.width ?? 'full'
+            const a = block.layout?.alignment ?? 'left'
+
+            const widthClass =
+              w === '1/2' ? 'w-[calc(50%-4px)]' :
+              w === '1/3' ? 'w-[calc(33.333%-4px)]' :
+              w === '2/3' ? 'w-[calc(66.667%-4px)]' :
+              'w-full'
+
+            const alignClass =
+              a === 'center' ? 'mx-auto' :
+              a === 'right'  ? 'ml-auto' :
+              ''
+
+            return (
+              <div key={block.id} className={`${widthClass} ${alignClass} p-[2px]`}>
+                <BlockCard
+                  block={block}
+                  sectionId={section.id}
+                  onRemove={() => removeBlock(section.id, block.id)}
+                />
+              </div>
+            )
+          })}
         </SortableContext>
 
         {sectionBlocks.length === 0 && !isOver && (
-          <p className="text-xs text-gray-400 text-center py-3 select-none">
+          <p className="w-full text-xs text-gray-400 text-center py-3 select-none">
             Blok sürükle veya aşağıdan ekle
           </p>
         )}

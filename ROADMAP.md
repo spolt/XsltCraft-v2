@@ -1,6 +1,6 @@
 # XsltCraft — Geliştirme Yol Haritası
 
-**Son güncelleme:** 2026-03-17  
+**Son güncelleme:** 2026-03-20
 **Referans döküman:** `XsltCraft_PRD_v1_2.md`  
 **Faz sayısı:** 6  
 **Toplam tahmini süre:** 10–14 hafta
@@ -248,42 +248,42 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 
 ### Görev grubu 1 — Preview endpoint'i
 
-- [ ] `POST /api/preview` endpoint'ini yaz:
-  - [ ] Request: `{ sections, xmlContent, assets }`
-  - [ ] Backend: block tree → XSLT üret (in-memory, storage'a yazma)
-  - [ ] `XslCompiledTransform` ile XSLT'yi XML'e uygula → HTML üret
-  - [ ] Response: `{ html, generationTimeMs }`
-- [ ] `POST /api/preview/theme/:themeId` endpoint'ini yaz:
-  - [ ] DB'den `xsltStoragePath` oku
-  - [ ] `IStorageService.ReadAsync` ile `.xslt` dosyasını yükle
-  - [ ] XML'e uygula → HTML döndür
-- [ ] Hata yönetimi: geçersiz XML veya XSLT'de kullanıcıya anlamlı hata mesajı
+- [x] `POST /api/preview` endpoint'ini yaz:
+  - [x] Request: `{ sections, blocks, xmlContent, assets }`
+  - [x] Backend: block tree → XSLT üret (in-memory, storage'a yazma)
+  - [x] `XslCompiledTransform` ile XSLT'yi XML'e uygula → HTML üret
+  - [x] Response: `{ html, generationTimeMs }`
+- [x] `POST /api/preview/theme/:themeId` endpoint'ini yaz:
+  - [x] DB'den `xsltStoragePath` oku
+  - [x] `IStorageService.ReadAsync` ile `.xslt` dosyasını yükle
+  - [x] XML'e uygula → HTML döndür
+- [x] Hata yönetimi: geçersiz XML veya XSLT'de kullanıcıya anlamlı hata mesajı
 
 ### Görev grubu 2 — XML Tree Explorer (frontend)
 
-- [ ] XML yükleme: toolbar'a "XML Yükle" butonu, `DOMParser` ile client-side parse
-- [ ] `XmlTreeExplorer` bileşeni:
-  - [ ] Collapsible tree render'ı
-  - [ ] Namespace prefix'i göster, tam XPath'i internal olarak sakla
-  - [ ] Yaprak node'larda resolved değeri inline göster
-  - [ ] Tekrarlayan node'ları `[1]`, `[2]` indexiyle göster
-  - [ ] Node'a tıklayınca seçili block'un aktif binding alanına XPath yaz
-- [ ] `src/store/xmlStore.ts`: yüklü XML dosyaları listesi, aktif XML seçimi
+- [x] XML yükleme: toolbar'a "XML Yükle" butonu, `DOMParser` ile client-side parse
+- [x] `XmlTreeExplorer` bileşeni:
+  - [x] Collapsible tree render'ı
+  - [x] Namespace prefix'i göster, tam XPath'i internal olarak sakla
+  - [x] Yaprak node'larda resolved değeri inline göster
+  - [x] Tekrarlayan node'ları `[1]`, `[2]` indexiyle göster
+  - [x] Node'a tıklayınca seçili block'un aktif binding alanına XPath yaz
+- [x] `src/store/xmlStore.ts`: yüklü XML dosyaları listesi, aktif XML seçimi
 
 ### Görev grubu 3 — XPath binding UI
 
-- [ ] `PropertyPanel`'deki her bind edilebilir alana şunları ekle:
-  - [ ] XPath input alanı (elle düzenlenebilir)
-  - [ ] "Tree'den seç" butonu: XML tree'yi aktif hale getirir
-  - [ ] Resolved value gösterimi: yüklü XML'de XPath'in döndürdüğü değer
-  - [ ] Fallback alanı: XPath sonuç döndürmezse kullanılacak değer
+- [x] `PropertyPanel`'deki her bind edilebilir alana şunları ekle:
+  - [x] XPath input alanı (elle düzenlenebilir)
+  - [x] "Tree'den seç" butonu: XML tree'yi aktif hale getirir
+  - [x] Resolved value gösterimi: yüklü XML'de XPath'in döndürdüğü değer
+  - [x] Fallback alanı: XPath sonuç döndürmezse kullanılacak değer
 
 ### Görev grubu 4 — Canlı önizleme paneli
 
-- [ ] `PreviewPanel` bileşeni: sandboxed `<iframe>`, `srcdoc` ile HTML inject
-- [ ] Editor'da block tree değişince 1500ms debounce sonrası `POST /api/preview` çağır
-- [ ] Toolbar'a XML seçici dropdown ekle: birden fazla XML arasında geçiş
-- [ ] Yükleniyor göstergesi: preview yenilenirken spinner
+- [x] `PreviewPanel` bileşeni: sandboxed `<iframe>`, `srcdoc` ile HTML inject
+- [x] Editor'da block tree değişince 1500ms debounce sonrası `POST /api/preview` çağır
+- [x] Toolbar'a XML seçici dropdown ekle: birden fazla XML arasında geçiş
+- [x] Yükleniyor göstergesi: preview yenilenirken spinner
 
 ### Faz 4 tamamlanma kriterleri
 
@@ -304,23 +304,26 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 
 ### Görev grubu 1 — Asset upload
 
-- [ ] `POST /api/assets/upload` endpoint'i:
-  - [ ] `IFormFile` al, tip/boyut validasyonu yap (PNG, JPG, SVG — max 5MB)
-  - [ ] `IStorageService.WriteAsync` ile `assets/{userId}/{assetId}.{ext}` yoluna yaz
-  - [ ] `Asset` kaydını DB'ye ekle (`filePath` = storage yolu)
-  - [ ] Response: `{ id, url, storagePath, type, mimeType, sizeBytes }`
-- [ ] `GET /api/assets/:id/serve` endpoint'i: storage'dan dosyayı stream et
-- [ ] `DELETE /api/assets/:id` endpoint'i: storage'dan sil + DB kaydını kaldır
-- [ ] Frontend'de image block property panel'ine upload UI ekle
+- [x] `POST /api/assets/upload` endpoint'i:
+  - [x] `IFormFile` al, tip/boyut validasyonu yap (PNG, JPG, SVG — max 5MB)
+  - [x] `IStorageService.WriteAsync` ile `assets/{userId}/{assetId}.{ext}` yoluna yaz
+  - [x] `Asset` kaydını DB'ye ekle (`filePath` = storage yolu)
+  - [x] Response: `{ id, url, storagePath, type, mimeType, sizeBytes }`
+- [x] `GET /api/assets/:id/serve` endpoint'i: storage'dan dosyayı stream et
+- [x] `DELETE /api/assets/:id` endpoint'i: storage'dan sil + DB kaydını kaldır
+- [x] Frontend'de image block property panel'ine upload UI ekle
 
 ### Görev grubu 2 — Template CRUD tamamlama
 
-- [ ] `GET /api/templates/my` endpoint'i: kullanıcının kendi template'lerini listele
-- [ ] `POST /api/templates/:id/clone` endpoint'i: free theme'i klonla, yeni User Template oluştur
-- [ ] `DELETE /api/templates/:id` endpoint'i: owner kontrolü, DB'den sil
-- [ ] Frontend'de "My Templates" sayfasını yap: liste, rename, duplicate, delete
+- [x] `GET /api/templates/my` endpoint'i: kullanıcının kendi template'lerini listele
+- [x] `POST /api/templates/:id/clone` endpoint'i: free theme'i klonla, yeni User Template oluştur
+- [x] `DELETE /api/templates/:id` endpoint'i: owner kontrolü, DB'den sil
+- [x] Frontend'de "My Templates" sayfasını yap: liste, rename, duplicate, delete
 
 ### Görev grubu 3 — Ödeme entegrasyonu
+
+> ⏸ Ertelendi — ödeme entegrasyonu ilerleyen aşamada değerlendirilecek.
+> Şu an kullanıcı sanki ödeme yapmış gibi davranılıyor (owner = indirebilir).
 
 - [ ] Ödeme sağlayıcısını seç ve entegre et (iyzico veya Stripe)
 - [ ] `Payment` entity'sini `AppDbContext`'e ekle (PRD §16.4), migration çalıştır
@@ -331,22 +334,38 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
   - [ ] Onay e-postası gönder (yeniden indirme linki dahil)
 - [ ] `GET /api/payments/history` endpoint'i: kullanıcının ödeme geçmişi
 
-### Görev grubu 4 — Ödeme sonrası XSLT üretimi & indirme
+### Görev grubu 4 — XSLT üretimi & indirme
 
-- [ ] `GET /api/templates/:id/download` endpoint'ini tamamla:
-  - [ ] Ödeme kontrolü: free theme veya `Payment.status = completed` ise devam
-  - [ ] Block tree'den XSLT üret
-  - [ ] `IStorageService.WriteAsync` ile `templates/{templateId}/{timestamp}.xslt` yoluna yaz
-  - [ ] DB'de `Template.xsltStoragePath`'i güncelle
-  - [ ] Dosyayı stream olarak döndür (`Content-Disposition: attachment; filename="...xslt"`)
-  - [ ] Yeniden indirme: `xsltStoragePath` doluysa storage'dan doğrudan oku, yeniden üretme
-- [ ] Frontend'de Download butonu + ödeme modal'ı: fiyat göster, ödeme formu, success/error state
+- [x] `GET /api/templates/:id/download` endpoint'i tamamlandı:
+  - [x] Yetki: free theme (public) veya template sahibi (ödeme atlandı)
+  - [x] Block tree'den XSLT üret (`IXsltGeneratorService`)
+  - [x] `IStorageService.WriteAsync` ile `templates/{templateId}.xslt` yoluna yaz
+  - [x] DB'de `Template.xsltStoragePath`'i güncelle
+  - [x] Dosyayı stream olarak döndür (`Content-Disposition: attachment`)
+  - [x] Yeniden indirme: `xsltStoragePath` doluysa storage'dan doğrudan oku
+  - [x] `PUT /api/templates/:id` block tree güncellenince XSLT cache'i sıfırla
+- [x] Frontend'de Download butonu: kayıtlı template → backend endpoint, kayıtsız → anlık üretim
+
+### Görev grubu 4b — Geliştirici Modu (free theme XSLT editörü)
+
+- [x] `GET /api/preview/theme/:id/xslt-content` endpoint'i: storage'dan ham XSLT içeriğini metin olarak döndür
+- [x] `POST /api/preview/raw` endpoint'i: `{ xslt, xmlContent }` alır, XslCompiledTransform ile uygular, `{ html, generationTimeMs }` döndürür
+- [x] `fetchThemeXslt(templateId)` ve `previewFromRawXslt(xslt, xmlContent)` servis fonksiyonlarını ekle
+- [x] `/dev-mode/:templateId` sayfasını oluştur:
+  - [x] Sayfa açılışında theme XSLT'si otomatik yüklenir, Monaco Editor (XML modu, dark tema) ile görüntülenir
+  - [x] XML yoksa yükleme ekranı gösterilir (ThemeUsePage ile aynı UX)
+  - [x] `react-resizable-panels` ile sol (editör) / sağ (önizleme) 2 sütunlu, yeniden boyutlandırılabilir düzen
+  - [x] Kullanıcı XSLT'yi düzenleyince 1000ms debounce sonrası `POST /api/preview/raw` ile canlı önizleme güncellenir
+  - [x] XSLT/XML hataları toolbar altında gösterilir
+- [x] ThemeUsePage toolbar'ına "Geliştirici Modu" butonu ekle → `/dev-mode/:templateId`'ye yönlendir
+- [x] `/dev-mode/:templateId` route'unu App.tsx'e ekle (PrivateRoute altında, AppLayout dışında)
 
 ### Görev grubu 5 — Profil sayfası
 
-- [ ] `/profile` sayfası: display name düzenle, e-posta güncelle
-- [ ] "Satın alınan template'ler" listesi: her biri için yeniden indirme butonu
-- [ ] Hesap silme akışı (onay modal'ı ile)
+- [x] `/profile` sayfası: display name düzenle, e-posta güncelle (`PUT /api/auth/profile`)
+- [x] "Şablonlarım" listesi: her biri için yeniden indirme butonu (ödeme atlandı)
+- [x] Hesap silme akışı: "hesabımı sil" yazarak onay, storage temizliği, cascade DB silme (`DELETE /api/auth/account`)
+- [x] Navbar'da kullanıcı adı → `/profile` linki
 
 ### Faz 5 tamamlanma kriterleri
 

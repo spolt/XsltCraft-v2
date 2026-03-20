@@ -14,6 +14,7 @@ interface AuthState {
   login: (token: string, user: User) => void
   logout: () => void
   setAccessToken: (token: string) => void
+  updateUser: (patch: Partial<User>) => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -27,6 +28,9 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({ accessToken: null, user: null }),
 
       setAccessToken: (token) => set({ accessToken: token }),
+
+      updateUser: (patch) =>
+        set((state) => ({ user: state.user ? { ...state.user, ...patch } : null })),
     }),
     {
       name: 'xsltcraft-auth',

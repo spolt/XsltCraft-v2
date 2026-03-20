@@ -2,7 +2,7 @@
 
 import type { Block } from './blocks'
 
-export type SectionLayout = 'single-column' | 'two-column'
+export type SectionLayout = 'single-column' | 'two-column' | 'three-column'
 
 export interface Section {
   id: string

@@ -14,12 +14,14 @@ const CATEGORIES: { name: string; items: PaletteItem[] }[] = [
       { type: 'Text', label: 'Metin', icon: 'T' },
       { type: 'Heading', label: 'Başlık', icon: 'H' },
       { type: 'Paragraph', label: 'Paragraf', icon: '¶' },
+      { type: 'ConditionalText', label: 'Koşullu Metin', icon: '?' },
     ],
   },
   {
     name: 'Veri',
     items: [
       { type: 'Table', label: 'Tablo', icon: '⊞' },
+      { type: 'TaxSummary', label: 'KDV Özeti', icon: '%' },
       { type: 'DocumentInfo', label: 'Belge Bilgisi', icon: 'ⓘ' },
       { type: 'Totals', label: 'Toplamlar', icon: 'Σ' },
       { type: 'Notes', label: 'Notlar', icon: '✎' },
@@ -30,14 +32,16 @@ const CATEGORIES: { name: string; items: PaletteItem[] }[] = [
     name: 'Medya',
     items: [
       { type: 'Image', label: 'Görsel', icon: '🖼' },
-      { type: 'ETTN', label: 'ETTN / QR', icon: '⬡' },
+      { type: 'ETTN', label: 'Dinamik Karekod', icon: '⬡' },
+      { type: 'GibKarekod', label: 'GİB Karekod', icon: '⬡' },
     ],
   },
   {
     name: 'Düzen',
     items: [
       { type: 'ForEach', label: 'For-Each', icon: '↻' },
-      { type: 'Conditional', label: 'Koşul', icon: '⑂' },
+      { type: 'Conditional', label: 'Koşul Bloğu', icon: '⑂' },
+      { type: 'Variable', label: 'Değişken', icon: '$' },
       { type: 'Divider', label: 'Ayırıcı', icon: '—' },
       { type: 'Spacer', label: 'Boşluk', icon: '↕' },
     ],

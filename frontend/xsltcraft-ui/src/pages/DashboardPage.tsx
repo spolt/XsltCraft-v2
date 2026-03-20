@@ -1,47 +1,42 @@
-import { Link, useNavigate } from 'react-router-dom'
-import api from '../services/apiService'
+import { Link } from 'react-router-dom'
+import { FilePlus, BookOpen, FolderOpen } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 
 export default function DashboardPage() {
-  const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
-
-  const handleLogout = async () => {
-    await api.post('/api/auth/logout').catch(() => {})
-    logout()
-    navigate('/auth/login')
-  }
-
-  const isAdmin = user?.role === 'Admin'
+  const { user } = useAuthStore()
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-4">
-      <h1 className="text-3xl font-bold">Dashboard</h1>
-      {user && (
-        <p className="text-gray-400">
-          Hoş geldin, <span className="text-white">{user.displayName ?? user.email}</span>
-        </p>
-      )}
-      <Link
-        to="/templates"
-        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition"
-      >
-        Tema Kütüphanesi
-      </Link>
-      {isAdmin && (
+    <div className="max-w-3xl mx-auto px-6 py-10">
+      <h1 className="text-2xl font-semibold text-gray-800 mb-1">
+        Hoş geldin{user?.displayName ? `, ${user.displayName}` : ''} 👋
+      </h1>
+      <p className="text-gray-500 mb-8 text-sm">XsltCraft ile e-belge şablonlarını kolayca oluştur.</p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Link
-          to="/admin/themes"
-          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg text-sm transition"
+          to="/editor/new"
+          className="flex flex-col items-center gap-3 p-6 bg-white rounded-xl border border-gray-200 hover:border-blue-400 hover:shadow-sm transition-all group"
         >
-          Admin Paneli
+          <FilePlus size={32} className="text-blue-500 group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-medium text-gray-700">Yeni Şablon Oluştur</span>
         </Link>
-      )}
-      <button
-        onClick={handleLogout}
-        className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition"
-      >
-        Çıkış Yap
-      </button>
+
+        <Link
+          to="/templates?type=Invoice"
+          className="flex flex-col items-center gap-3 p-6 bg-white rounded-xl border border-gray-200 hover:border-blue-400 hover:shadow-sm transition-all group"
+        >
+          <BookOpen size={32} className="text-green-500 group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-medium text-gray-700">Tema Kütüphanesi</span>
+        </Link>
+
+        <Link
+          to="/drafts"
+          className="flex flex-col items-center gap-3 p-6 bg-white rounded-xl border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all group"
+        >
+          <FolderOpen size={32} className="text-gray-400 group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-medium text-gray-700">Taslaklarım</span>
+        </Link>
+      </div>
     </div>
   )
 }

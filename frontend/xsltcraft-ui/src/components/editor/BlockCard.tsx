@@ -15,9 +15,13 @@ const BLOCK_LABELS: Record<string, string> = {
   Totals: 'Toplamlar',
   Notes: 'Notlar',
   BankInfo: 'Banka Bilgisi',
-  ETTN: 'ETTN / QR',
+  ETTN: 'Dinamik Karekod',
+  GibKarekod: 'GİB Karekod',
   Divider: 'Ayırıcı',
   Spacer: 'Boşluk',
+  Variable: 'Değişken',
+  ConditionalText: 'Koşullu Metin',
+  TaxSummary: 'KDV Özeti',
 }
 
 const BLOCK_ICONS: Record<string, string> = {
@@ -33,8 +37,12 @@ const BLOCK_ICONS: Record<string, string> = {
   Notes: '✎',
   BankInfo: '₺',
   ETTN: '⬡',
+  GibKarekod: '⬡',
   Divider: '—',
   Spacer: '↕',
+  Variable: '$',
+  ConditionalText: '?',
+  TaxSummary: '%',
 }
 
 interface BlockCardProps {
@@ -89,6 +97,16 @@ export default function BlockCard({ block, sectionId, onRemove }: BlockCardProps
       {/* Label */}
       <span className={`text-sm flex-1 truncate ${isSelected ? 'text-blue-700 font-medium' : 'text-gray-700'}`}>
         {BLOCK_LABELS[block.type] ?? block.type}
+      </span>
+
+      {/* Layout badges */}
+      <span className="text-[10px] text-gray-400 font-mono flex-shrink-0 hidden group-hover:inline-flex items-center gap-1">
+        <span className="px-1 py-0.5 rounded bg-gray-100">
+          {block.layout?.width ?? 'full'}
+        </span>
+        <span className="px-1 py-0.5 rounded bg-gray-100">
+          {block.layout?.alignment === 'left' ? '◀' : block.layout?.alignment === 'right' ? '▶' : '▐▌'}
+        </span>
       </span>
 
       {/* Remove button */}
