@@ -33,13 +33,18 @@ export default function Canvas() {
   }, [handleKeyDown])
 
   return (
-    <main className="flex-1 overflow-y-auto bg-[#e8e8e8] p-4">
-      {/* A4 kağıt alanı */}
-      <div className="w-[794px] min-h-[1123px] mx-auto bg-white shadow-[0_4px_24px_rgba(0,0,0,0.10)] rounded-sm my-6 px-10 py-8 flex flex-col gap-4">
+    <main
+      className="flex-1 overflow-y-auto"
+      style={{ background: 'var(--color-surface-page)', padding: '24px 20px' }}
+    >
+      <div
+        className="mx-auto flex flex-col"
+        style={{ maxWidth: 600, gap: 8 }}
+      >
         {sections.length === 0 && (
-          <div className="text-center py-16 text-gray-400">
-            <p className="text-lg mb-2">Henüz bölüm yok</p>
-            <p className="text-sm">Aşağıdan bölüm ekleyin, ardından blok sürükleyin.</p>
+          <div className="text-center" style={{ padding: '64px 0', color: 'var(--color-text-muted)' }}>
+            <p style={{ fontSize: 13, marginBottom: 4 }}>Henüz bölüm yok</p>
+            <p style={{ fontSize: 11 }}>Aşağıdan bölüm ekleyin, ardından blok sürükleyin.</p>
           </div>
         )}
 
@@ -51,13 +56,31 @@ export default function Canvas() {
             <SectionComponent key={section.id} section={section} />
           ))}
         </SortableContext>
-      </div>
 
-      {/* + Bölüm ekle — A4 kutusunun dışında, altında */}
-      <div className="w-[794px] mx-auto mb-6">
+        {/* + Bölüm ekle */}
         <button
           onClick={() => addSection()}
-          className="w-full py-3 rounded-lg border-2 border-dashed border-gray-400 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+          style={{
+            width: '100%',
+            height: 36,
+            borderRadius: 6,
+            border: '1px dashed var(--color-border-default)',
+            background: 'transparent',
+            fontSize: 11,
+            color: 'var(--color-text-muted)',
+            cursor: 'pointer',
+            transition: 'border-color 150ms, color 150ms, background 150ms',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = 'var(--color-brand-primary)'
+            e.currentTarget.style.color = 'var(--color-brand-primary)'
+            e.currentTarget.style.background = 'var(--color-brand-light)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = 'var(--color-border-default)'
+            e.currentTarget.style.color = 'var(--color-text-muted)'
+            e.currentTarget.style.background = 'transparent'
+          }}
         >
           + Bölüm ekle
         </button>

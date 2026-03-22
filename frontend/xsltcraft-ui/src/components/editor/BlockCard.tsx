@@ -9,7 +9,7 @@ const BLOCK_LABELS: Record<string, string> = {
   Paragraph: 'Paragraf',
   Table: 'Tablo',
   ForEach: 'For-Each',
-  Conditional: 'Koşul',
+  Conditional: 'Koşul Bloğu',
   Image: 'Görsel',
   DocumentInfo: 'Belge Bilgisi',
   Totals: 'Toplamlar',
@@ -22,6 +22,11 @@ const BLOCK_LABELS: Record<string, string> = {
   Variable: 'Değişken',
   ConditionalText: 'Koşullu Metin',
   TaxSummary: 'KDV Özeti',
+  InvoiceLineTable: 'Fatura Satırları',
+  PartyInfo: 'Taraf Bilgisi',
+  InvoiceHeader: 'Fatura Başlığı',
+  InvoiceTotals: 'Fatura Dip Toplamları',
+  GibLogo: 'GİB LOGO',
 }
 
 const BLOCK_ICONS: Record<string, string> = {
@@ -29,20 +34,25 @@ const BLOCK_ICONS: Record<string, string> = {
   Heading: 'H',
   Paragraph: '¶',
   Table: '⊞',
-  ForEach: '↻',
-  Conditional: '⑂',
-  Image: '🖼',
-  DocumentInfo: 'ⓘ',
+  ForEach: '↺',
+  Conditional: '∨',
+  Image: '⬜',
+  DocumentInfo: '⊙',
   Totals: 'Σ',
   Notes: '✎',
   BankInfo: '₺',
-  ETTN: '⬡',
-  GibKarekod: '⬡',
+  ETTN: '◎',
+  GibKarekod: '◎',
   Divider: '—',
   Spacer: '↕',
   Variable: '$',
   ConditionalText: '?',
-  TaxSummary: '%',
+  TaxSummary: 'Σ',
+  InvoiceLineTable: '⊟',
+  PartyInfo: '⊞',
+  InvoiceHeader: '☰',
+  InvoiceTotals: '₸',
+  GibLogo: '⊕',
 }
 
 interface BlockCardProps {
@@ -70,50 +80,90 @@ export default function BlockCard({ block, sectionId, onRemove }: BlockCardProps
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{
+        ...style,
+        padding: '8px 12px',
+        borderRadius: 6,
+        border: isSelected ? '1.5px solid #185FA5' : '1.5px solid #B5D4F4',
+        background: isSelected ? '#D6E9F8' : '#EBF3FC',
+        boxShadow: isSelected ? '0 0 0 2px rgba(24,95,165,0.12)' : 'none',
+        cursor: 'pointer',
+        userSelect: 'none',
+        opacity: isDragging ? 0.4 : 1,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        transition: 'border-color 120ms, background 120ms',
+      }}
       onClick={() => selectBlock(block.id)}
-      className={`group flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer select-none transition-all
-        ${isDragging ? 'opacity-40 shadow-xl z-50' : ''}
-        ${isSelected
-          ? 'border-blue-500 bg-blue-50 shadow-sm'
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-        }`}
+      onMouseEnter={e => {
+        if (!isSelected) {
+          e.currentTarget.style.borderColor = '#378ADD'
+          e.currentTarget.style.background = '#E0EDF8'
+        }
+      }}
+      onMouseLeave={e => {
+        if (!isSelected) {
+          e.currentTarget.style.borderColor = '#B5D4F4'
+          e.currentTarget.style.background = '#EBF3FC'
+        }
+      }}
     >
       {/* Drag handle */}
       <span
         {...attributes}
         {...listeners}
-        className="cursor-grab text-gray-300 hover:text-gray-500 flex-shrink-0"
+        style={{ color: '#B5D4F4', cursor: 'grab', fontSize: 12, flexShrink: 0 }}
         onClick={(e) => e.stopPropagation()}
       >
         ⠿
       </span>
 
       {/* Icon */}
-      <span className="w-6 h-6 flex items-center justify-center text-xs font-mono bg-gray-100 rounded text-gray-500 flex-shrink-0">
+      <span
+        style={{
+          width: 22,
+          height: 22,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 11,
+          background: '#D6E9F8',
+          borderRadius: 4,
+          color: '#185FA5',
+          flexShrink: 0,
+        }}
+      >
         {BLOCK_ICONS[block.type] ?? '?'}
       </span>
 
       {/* Label */}
-      <span className={`text-sm flex-1 truncate ${isSelected ? 'text-blue-700 font-medium' : 'text-gray-700'}`}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: '#185FA5', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {BLOCK_LABELS[block.type] ?? block.type}
       </span>
 
-      {/* Layout badges */}
-      <span className="text-[10px] text-gray-400 font-mono flex-shrink-0 hidden group-hover:inline-flex items-center gap-1">
-        <span className="px-1 py-0.5 rounded bg-gray-100">
-          {block.layout?.width ?? 'full'}
-        </span>
-        <span className="px-1 py-0.5 rounded bg-gray-100">
-          {block.layout?.alignment === 'left' ? '◀' : block.layout?.alignment === 'right' ? '▶' : '▐▌'}
-        </span>
+      {/* Type badge */}
+      <span style={{ fontSize: 10, background: '#C5DDF4', color: '#5B9BD5', padding: '1px 6px', borderRadius: 3, flexShrink: 0 }}>
+        {block.type}
       </span>
 
       {/* Remove button */}
       <button
         onClick={(e) => { e.stopPropagation(); onRemove() }}
-        className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity text-sm leading-none px-1"
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: 11,
+          color: '#B5D4F4',
+          padding: '0 2px',
+          lineHeight: 1,
+          flexShrink: 0,
+          transition: 'color 120ms',
+        }}
         title="Bloğu kaldır"
+        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-danger)')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#B5D4F4')}
       >
         ✕
       </button>

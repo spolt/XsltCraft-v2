@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
-import { DEFAULT_BLOCK_LAYOUT } from '../types/blocks'
+import { DEFAULT_BLOCK_LAYOUT, DEFAULT_PARTY_FIELDS, DEFAULT_INVOICE_LINE_COLUMNS, DEFAULT_INVOICE_HEADER_FIELDS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../types/blocks'
 import type { Block, BlockType, BlockConfig, BlockLayout } from '../types/blocks'
 import type { BlockTree, Section } from '../types/template'
 
@@ -31,9 +31,9 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
     case 'Totals':
       return { rows: [], alignment: 'right' }
     case 'Notes':
-      return { iterateOver: '', staticLines: [] }
+      return { iterateOver: '/n1:Invoice/cbc:Note', prefix: 'Not: ', staticLines: [], bordered: true, borderColor: '#555555' }
     case 'BankInfo':
-      return {}
+      return { bankName: '', iban: '', ibanLabel: 'IBAN: ', bordered: true, borderColor: '#555555' }
     case 'ETTN':
       return { ettnXpath: '', showEttn: true, showQR: false, qrWidth: 80, qrHeight: 80, qrAlignment: 'right' }
     case 'Divider':
@@ -60,6 +60,43 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
       }
     case 'GibKarekod':
       return { qrWidth: 150, qrHeight: 150, qrAlignment: 'right' }
+    case 'PartyInfo':
+      return {
+        partyType: 'SupplierParty',
+        fields: DEFAULT_PARTY_FIELDS.map((f) => ({ ...f })),
+        title: 'SATICI',
+        showTitle: true,
+        bordered: true,
+        labelStyle: 'inline',
+      }
+    case 'InvoiceLineTable':
+      return {
+        iterateOver: '//cac:InvoiceLine',
+        columns: DEFAULT_INVOICE_LINE_COLUMNS.map((c) => ({ ...c })),
+        title: 'MAL HİZMET TABLOSU',
+        showTitle: false,
+        showHeader: true,
+        showRowNumber: true,
+        bordered: true,
+        headerBackgroundColor: '#E0E0E0',
+        alternateRowColor: '#F9F9F9',
+      }
+    case 'InvoiceHeader':
+      return {
+        fields: DEFAULT_INVOICE_HEADER_FIELDS.map((f) => ({ ...f })),
+        title: 'FATURA BİLGİLERİ',
+        showTitle: false,
+        bordered: true,
+        labelStyle: 'table',
+      }
+    case 'InvoiceTotals':
+      return {
+        fields: DEFAULT_INVOICE_TOTALS_FIELDS.map((f) => ({ ...f })),
+        showCurrency: true,
+        currencyXpath: '//cbc:DocumentCurrencyCode',
+      }
+    case 'GibLogo':
+      return { width: '80px', height: '80px', alignment: 'center' }
   }
 }
 
@@ -91,6 +128,7 @@ interface EditorState {
   removeSection: (sectionId: string) => void
   updateSection: (sectionId: string, patch: Partial<Pick<Section, 'name' | 'layout'>>) => void
   reorderSections: (fromIndex: number, toIndex: number) => void
+  duplicateSection: (sectionId: string) => void
 
   loadTree: (tree: BlockTree) => void
   resetTree: () => void
@@ -130,7 +168,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
     const prev = snapshot(state)
     const id = uuidv4()
-    const block: Block = { id, type, config: defaultConfig(type), layout: { ...DEFAULT_BLOCK_LAYOUT } }
+    const layoutWidth = section.layout === 'three-column' ? '1/3'
+      : section.layout === 'two-column' ? '1/2'
+      : 'full'
+    const block: Block = { id, type, config: defaultConfig(type), layout: { ...DEFAULT_BLOCK_LAYOUT, width: layoutWidth } }
 
     const newBlockIds = [...section.blockIds]
     if (atIndex !== undefined) {
@@ -302,6 +343,50 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     sections.splice(toIndex, 0, moved)
     set((s) => ({
       sections,
+      isDirty: true,
+      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
+      future: [],
+    }))
+  },
+
+  duplicateSection(sectionId) {
+    const state = get()
+    const prev = snapshot(state)
+    const source = state.sections.find((s) => s.id === sectionId)
+    if (!source) return
+
+    const newSectionId = uuidv4()
+    const newBlockIds: string[] = []
+    const newBlocks: Record<string, Block> = {}
+
+    for (const oldId of source.blockIds) {
+      const oldBlock = state.blocks[oldId]
+      if (!oldBlock) continue
+      const newId = uuidv4()
+      newBlockIds.push(newId)
+      newBlocks[newId] = {
+        id: newId,
+        type: oldBlock.type,
+        config: JSON.parse(JSON.stringify(oldBlock.config)),
+        layout: { ...oldBlock.layout },
+      }
+    }
+
+    const newSection: Section = {
+      id: newSectionId,
+      name: `${source.name} (kopya)`,
+      order: state.sections.length + 1,
+      layout: source.layout,
+      blockIds: newBlockIds,
+    }
+
+    const srcIndex = state.sections.findIndex((s) => s.id === sectionId)
+    const sections = [...state.sections]
+    sections.splice(srcIndex + 1, 0, newSection)
+
+    set((s) => ({
+      sections,
+      blocks: { ...s.blocks, ...newBlocks },
       isDirty: true,
       past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
       future: [],

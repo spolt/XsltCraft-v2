@@ -134,6 +134,9 @@ public sealed class ParagraphConfig
 {
     [JsonPropertyName("lines")]
     public List<ParagraphLine> Lines { get; set; } = [];
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
 }
 
 public sealed class TableColumn
@@ -243,6 +246,9 @@ public sealed class DocumentInfoConfig
 
     [JsonPropertyName("bordered")]
     public bool? Bordered { get; set; }
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
 }
 
 public sealed class TotalsRow
@@ -267,6 +273,9 @@ public sealed class TotalsConfig
 
     [JsonPropertyName("labelWidth")]
     public string? LabelWidth { get; set; }
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
 }
 
 public sealed class NotesConfig
@@ -276,18 +285,36 @@ public sealed class NotesConfig
 
     [JsonPropertyName("prefix")]
     public string? Prefix { get; set; }
+
+    [JsonPropertyName("bordered")]
+    public bool? Bordered { get; set; }
+
+    [JsonPropertyName("borderColor")]
+    public string? BorderColor { get; set; }
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
 }
 
 public sealed class BankInfoConfig
 {
-    [JsonPropertyName("bankNameXpath")]
-    public string? BankNameXpath { get; set; }
+    [JsonPropertyName("bankName")]
+    public string BankName { get; set; } = string.Empty;
 
-    [JsonPropertyName("ibanXpath")]
-    public string? IbanXpath { get; set; }
+    [JsonPropertyName("iban")]
+    public string Iban { get; set; } = string.Empty;
 
-    [JsonPropertyName("paymentTermsXpath")]
-    public string? PaymentTermsXpath { get; set; }
+    [JsonPropertyName("ibanLabel")]
+    public string? IbanLabel { get; set; }
+
+    [JsonPropertyName("bordered")]
+    public bool? Bordered { get; set; }
+
+    [JsonPropertyName("borderColor")]
+    public string? BorderColor { get; set; }
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
 }
 
 public sealed class EttnConfig
@@ -364,6 +391,63 @@ public sealed class ConditionalTextConfig
 
     [JsonPropertyName("elseContent")]
     public string ElseContent { get; set; } = string.Empty;
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
+}
+
+public sealed class GibLogoConfig
+{
+    [JsonPropertyName("width")]
+    public string? Width { get; set; }
+
+    [JsonPropertyName("height")]
+    public string? Height { get; set; }
+
+    [JsonPropertyName("alignment")]
+    public string Alignment { get; set; } = "center";
+}
+
+public sealed class InvoiceTotalsField
+{
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = string.Empty;
+
+    [JsonPropertyName("xpath")]
+    public string Xpath { get; set; } = string.Empty;
+
+    [JsonPropertyName("visible")]
+    public bool Visible { get; set; } = true;
+
+    [JsonPropertyName("highlight")]
+    public bool Highlight { get; set; }
+
+    [JsonPropertyName("order")]
+    public int Order { get; set; }
+
+    [JsonPropertyName("isCustom")]
+    public bool? IsCustom { get; set; }
+}
+
+public sealed class InvoiceTotalsConfig
+{
+    [JsonPropertyName("fields")]
+    public List<InvoiceTotalsField> Fields { get; set; } = [];
+
+    [JsonPropertyName("showCurrency")]
+    public bool ShowCurrency { get; set; } = true;
+
+    [JsonPropertyName("currencyXpath")]
+    public string CurrencyXpath { get; set; } = "//cbc:DocumentCurrencyCode";
+
+    [JsonPropertyName("labelWidth")]
+    public string? LabelWidth { get; set; }
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
 }
 
 public sealed class GibKarekodConfig
@@ -377,6 +461,154 @@ public sealed class GibKarekodConfig
     /// <summary>left | center | right. Varsayılan: right.</summary>
     [JsonPropertyName("qrAlignment")]
     public string QrAlignment { get; set; } = "right";
+}
+
+public sealed class PartyInfoField
+{
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = string.Empty;
+
+    [JsonPropertyName("relativeXpath")]
+    public string RelativeXpath { get; set; } = string.Empty;
+
+    [JsonPropertyName("visible")]
+    public bool Visible { get; set; } = true;
+
+    [JsonPropertyName("order")]
+    public int Order { get; set; }
+
+    [JsonPropertyName("isCustom")]
+    public bool? IsCustom { get; set; }
+}
+
+public sealed class PartyInfoConfig
+{
+    [JsonPropertyName("partyType")]
+    public string PartyType { get; set; } = "SupplierParty";
+
+    [JsonPropertyName("fields")]
+    public List<PartyInfoField> Fields { get; set; } = [];
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = string.Empty;
+
+    [JsonPropertyName("showTitle")]
+    public bool ShowTitle { get; set; } = true;
+
+    [JsonPropertyName("bordered")]
+    public bool Bordered { get; set; } = true;
+
+    [JsonPropertyName("labelStyle")]
+    public string LabelStyle { get; set; } = "table";
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
+}
+
+public sealed class InvoiceLineColumn
+{
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("header")]
+    public string Header { get; set; } = string.Empty;
+
+    [JsonPropertyName("relativeXpath")]
+    public string RelativeXpath { get; set; } = string.Empty;
+
+    [JsonPropertyName("width")]
+    public string? Width { get; set; }
+
+    /// <summary>text | currency | number | percent</summary>
+    [JsonPropertyName("format")]
+    public string? Format { get; set; }
+
+    [JsonPropertyName("visible")]
+    public bool Visible { get; set; } = true;
+
+    [JsonPropertyName("order")]
+    public int Order { get; set; }
+
+    [JsonPropertyName("isCustom")]
+    public bool? IsCustom { get; set; }
+}
+
+public sealed class InvoiceLineTableConfig
+{
+    [JsonPropertyName("iterateOver")]
+    public string IterateOver { get; set; } = "//cac:InvoiceLine";
+
+    [JsonPropertyName("columns")]
+    public List<InvoiceLineColumn> Columns { get; set; } = [];
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = string.Empty;
+
+    [JsonPropertyName("showTitle")]
+    public bool ShowTitle { get; set; }
+
+    [JsonPropertyName("showHeader")]
+    public bool ShowHeader { get; set; } = true;
+
+    [JsonPropertyName("showRowNumber")]
+    public bool ShowRowNumber { get; set; } = true;
+
+    [JsonPropertyName("bordered")]
+    public bool Bordered { get; set; } = true;
+
+    [JsonPropertyName("alternateRowColor")]
+    public string? AlternateRowColor { get; set; }
+
+    [JsonPropertyName("headerBackgroundColor")]
+    public string? HeaderBackgroundColor { get; set; }
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
+}
+
+public sealed class InvoiceHeaderField
+{
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = string.Empty;
+
+    [JsonPropertyName("xpath")]
+    public string Xpath { get; set; } = string.Empty;
+
+    [JsonPropertyName("visible")]
+    public bool Visible { get; set; } = true;
+
+    [JsonPropertyName("order")]
+    public int Order { get; set; }
+
+    [JsonPropertyName("isCustom")]
+    public bool? IsCustom { get; set; }
+}
+
+public sealed class InvoiceHeaderConfig
+{
+    [JsonPropertyName("fields")]
+    public List<InvoiceHeaderField> Fields { get; set; } = [];
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = string.Empty;
+
+    [JsonPropertyName("showTitle")]
+    public bool ShowTitle { get; set; }
+
+    [JsonPropertyName("bordered")]
+    public bool Bordered { get; set; } = true;
+
+    [JsonPropertyName("labelStyle")]
+    public string LabelStyle { get; set; } = "table";
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
 }
 
 public sealed class TaxSummaryConfig

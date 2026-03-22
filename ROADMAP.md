@@ -367,6 +367,16 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 - [x] Hesap silme akışı: "hesabımı sil" yazarak onay, storage temizliği, cascade DB silme (`DELETE /api/auth/account`)
 - [x] Navbar'da kullanıcı adı → `/profile` linki
 
+### Görev grubu 6 — Taraf Bilgisi blok tipi (PartyInfo)
+
+- [ ] `PartyInfo` TypeScript interface'leri ve sabit XPath tanımları (`blocks.ts`)
+- [ ] `PartyInfoField` & `PartyInfoConfig` C# DTO'ları (`BlockTreeModels.cs`)
+- [ ] Editor store default config (`editorStore.ts`)
+- [ ] Blok paletine "Taraf Bilgisi" ekleme (`BlockPalette.tsx`)
+- [ ] Property panel UI: taraf tipi seçimi, alan görünürlük toggle, etiket düzenleme, sıralama, özel alan ekleme (`PropertyPanel.tsx`)
+- [ ] XSLT generator: `GeneratePartyInfo` — 3 etiket stili (tablo/satır içi/gizli) desteği (`XsltGeneratorService.cs`)
+- [ ] Test: Satıcı/Alıcı bilgileri örnek e-Fatura XML ile önizlemede doğru görünür
+
 ### Faz 5 tamamlanma kriterleri
 
 | Kriter | Nasıl doğrulanır |

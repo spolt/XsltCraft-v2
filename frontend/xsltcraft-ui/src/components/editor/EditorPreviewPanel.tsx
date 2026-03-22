@@ -4,6 +4,7 @@ import { useXmlStore } from '../../store/xmlStore'
 import { previewFromBlockTree, previewFromStoredXslt } from '../../services/previewService'
 
 const DEBOUNCE_MS = 1500
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000'
 
 export default function EditorPreviewPanel() {
   const sections = useEditorStore((s) => s.sections)
@@ -35,7 +36,12 @@ export default function EditorPreviewPanel() {
         const result = useStoredXslt
           ? await previewFromStoredXslt(templateId!, activeXml.content)
           : await previewFromBlockTree(sections, blocks, activeXml.content)
-        setHtml(result.html)
+        // srcDoc iframe'lerinin base URL'i about:srcdoc olduğu için
+        // relative asset URL'leri (/api/assets/...) çalışmaz.
+        // <base> tag ekleyerek API sunucusuna yönlendiriyoruz.
+        const baseTag = `<base href="${API_BASE}"/>`
+        const patched = result.html.replace(/<head>/i, `<head>${baseTag}`)
+        setHtml(patched)
         setLastMs(result.generationTimeMs)
       } catch (e: unknown) {
         const msg =

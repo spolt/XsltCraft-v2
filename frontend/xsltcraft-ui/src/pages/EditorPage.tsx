@@ -384,25 +384,35 @@ export default function EditorPage() {
         onChange={handleXmlUpload}
       />
 
-      {/* Toolbar */}
-      <header className="h-12 flex items-center gap-2 px-4 bg-white border-b border-gray-200 flex-shrink-0">
-        <span className="text-base font-bold text-blue-600 tracking-tight select-none flex-shrink-0">
+      {/* Topbar */}
+      <header className="flex items-center gap-0 px-4 bg-white border-b flex-shrink-0" style={{ height: 48, borderColor: 'var(--color-border-default)' }}>
+        {/* Brand */}
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-brand-primary)', marginRight: 6, flexShrink: 0, userSelect: 'none' }}>
           XsltCraft
         </span>
 
+        {/* Separator */}
+        <span style={{ color: 'var(--color-border-default)', margin: '0 8px', flexShrink: 0 }}>—</span>
+
+        {/* Geri */}
         <button
           onClick={() => navigate('/dashboard')}
-          className="text-sm text-gray-500 hover:text-gray-700 flex-shrink-0"
+          style={{ fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, flexShrink: 0 }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-brand-primary)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
         >
-          ← Geri
+          ‹ Geri
         </button>
+
+        {/* Separator */}
+        <span style={{ color: 'var(--color-border-default)', margin: '0 8px', flexShrink: 0 }}>›</span>
 
         {/* Template adı — inline edit */}
         <div className="flex items-center gap-1 flex-1 min-w-0">
           {isEditingName ? (
             <input
               autoFocus
-              className="text-sm font-medium border border-blue-300 rounded px-2 py-0.5 outline-none w-64 focus:ring-1 focus:ring-blue-100"
+              style={{ fontSize: 13, fontWeight: 500, border: '0.5px solid var(--color-brand-primary)', borderRadius: 5, padding: '2px 8px', outline: 'none', width: 220, color: 'var(--color-text-primary)', background: 'var(--color-surface-card)' }}
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
               onBlur={commitName}
@@ -414,106 +424,111 @@ export default function EditorPage() {
           ) : (
             <button
               onClick={() => { setNameInput(templateName); setIsEditingName(true) }}
-              className="text-sm font-medium text-gray-700 hover:text-blue-600 truncate max-w-xs text-left"
+              style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               title="Adı düzenle"
             >
               {templateName}
             </button>
           )}
           {isDirty && !isSaving && (
-            <span className="text-xs text-amber-500 flex-shrink-0">● Kaydedilmedi</span>
+            <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>
+              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--color-danger)', flexShrink: 0 }} />
+              Kaydedilmedi
+            </span>
           )}
           {isSaving && (
-            <span className="text-xs text-gray-400 flex-shrink-0">Kaydediliyor…</span>
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', flexShrink: 0, marginLeft: 6 }}>Kaydediliyor…</span>
           )}
         </div>
 
         {saveError && (
-          <span className="text-xs text-red-500 flex-shrink-0">{saveError}</span>
+          <span style={{ fontSize: 11, color: 'var(--color-danger)', flexShrink: 0 }}>{saveError}</span>
         )}
-
         {xmlError && (
-          <span className="text-xs text-red-500 flex-shrink-0">{xmlError}</span>
+          <span style={{ fontSize: 11, color: 'var(--color-danger)', flexShrink: 0 }}>{xmlError}</span>
         )}
 
-        {/* XML yükleme butonu */}
-        <button
-          onClick={() => xmlInputRef.current?.click()}
-          className="px-2.5 py-1.5 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-50 flex-shrink-0"
-          title="XML dosyası yükle"
-        >
-          + XML
-        </button>
-
-        {/* XML seçici dropdown (birden fazla XML varsa) */}
-        {xmlFiles.length > 1 && (
-          <select
-            value={activeXmlId ?? ''}
-            onChange={(e) => setActiveXml(e.target.value)}
-            className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-700 outline-none focus:border-blue-400 flex-shrink-0 max-w-[140px]"
-            title="Aktif XML seç"
+        {/* Group 1: +XML | Undo | Redo */}
+        <div className="flex items-center flex-shrink-0" style={{ gap: 2 }}>
+          <button
+            onClick={() => xmlInputRef.current?.click()}
+            className="topbar-ghost-btn"
+            title="XML dosyası yükle"
           >
-            {xmlFiles.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        )}
+            + XML
+          </button>
 
-        {/* Aktif XML göstergesi (tek XML varsa) */}
-        {xmlFiles.length === 1 && (
-          <span className="text-xs text-gray-500 flex-shrink-0 max-w-[120px] truncate" title={xmlFiles[0].name}>
-            {xmlFiles[0].name}
-          </span>
-        )}
+          {xmlFiles.length > 1 && (
+            <select
+              value={activeXmlId ?? ''}
+              onChange={(e) => setActiveXml(e.target.value)}
+              className="topbar-ghost-btn"
+              style={{ paddingRight: 4 }}
+              title="Aktif XML seç"
+            >
+              {xmlFiles.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+          )}
+          {xmlFiles.length === 1 && (
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={xmlFiles[0].name}>
+              {xmlFiles[0].name}
+            </span>
+          )}
 
-        {/* Undo / Redo */}
-        <button
-          onClick={undo}
-          disabled={past.length === 0}
-          className="px-2 py-1 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-          title="Geri Al (Ctrl+Z)"
-        >
-          ↩
-        </button>
-        <button
-          onClick={redo}
-          disabled={future.length === 0}
-          className="px-2 py-1 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-          title="Yinele (Ctrl+Y)"
-        >
-          ↪
-        </button>
+          <button
+            onClick={undo}
+            disabled={past.length === 0}
+            className="topbar-ghost-btn"
+            title="Geri Al (Ctrl+Z)"
+          >
+            ↺
+          </button>
+          <button
+            onClick={redo}
+            disabled={future.length === 0}
+            className="topbar-ghost-btn"
+            title="Yinele (Ctrl+Y)"
+          >
+            ↻
+          </button>
+        </div>
 
-        {/* Önizle toggle */}
-        <button
-          onClick={() => setShowPreview((v) => !v)}
-          className={`px-2.5 py-1.5 text-xs rounded border flex-shrink-0 transition-colors ${
-            showPreview
-              ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
-              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-          }`}
-          title="Canlı önizlemeyi aç/kapat"
-        >
-          Önizle
-        </button>
+        {/* Divider */}
+        <div style={{ width: '0.5px', height: 20, background: 'var(--color-border-default)', margin: '0 2px', flexShrink: 0 }} />
 
-        {/* XSLT İndir */}
-        <button
-          onClick={handleDownload}
-          disabled={isDownloading || sections.length === 0}
-          className="px-2.5 py-1.5 text-xs rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-          title="XSLT dosyasını indir"
-        >
-          {isDownloading ? '…' : '↓ İndir'}
-        </button>
+        {/* Group 2: Önizle | İndir */}
+        <div className="flex items-center flex-shrink-0" style={{ gap: 2 }}>
+          <button
+            onClick={() => setShowPreview((v) => !v)}
+            className="topbar-ghost-btn"
+            style={showPreview ? { background: 'var(--color-brand-light)', color: 'var(--color-brand-primary)', borderColor: 'var(--color-brand-border)' } : {}}
+            title="Canlı önizlemeyi aç/kapat"
+          >
+            ⊙ Önizle
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={isDownloading || sections.length === 0}
+            className="topbar-ghost-btn"
+            title="XSLT dosyasını indir"
+          >
+            {isDownloading ? '…' : '↓ İndir'}
+          </button>
+        </div>
 
-        {/* Manuel Kaydet */}
+        {/* Divider */}
+        <div style={{ width: '0.5px', height: 20, background: 'var(--color-border-default)', margin: '0 2px', flexShrink: 0 }} />
+
+        {/* Group 3: Kaydet */}
         <button
           onClick={save}
           disabled={isSaving || !isDirty}
-          className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+          className="flex-shrink-0"
+          style={{ fontSize: 11, fontWeight: 500, padding: '0 12px', height: 30, borderRadius: 5, border: 'none', cursor: isSaving || !isDirty ? 'not-allowed' : 'pointer', background: 'var(--color-brand-primary)', color: '#fff', opacity: isSaving || !isDirty ? 0.5 : 1, transition: 'background 150ms' }}
+          onMouseEnter={e => { if (!isSaving && isDirty) e.currentTarget.style.background = 'var(--color-brand-hover)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--color-brand-primary)' }}
         >
           {isSaving ? 'Kaydediliyor…' : 'Kaydet'}
         </button>

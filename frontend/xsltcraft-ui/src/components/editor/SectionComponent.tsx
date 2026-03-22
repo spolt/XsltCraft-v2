@@ -22,6 +22,7 @@ export default function SectionComponent({ section }: SectionComponentProps) {
   const updateSection = useEditorStore((s) => s.updateSection)
   const updateBlockLayout = useEditorStore((s) => s.updateBlockLayout)
   const addBlock = useEditorStore((s) => s.addBlock)
+  const duplicateSection = useEditorStore((s) => s.duplicateSection)
 
   const {
     attributes: sortAttrs,
@@ -47,6 +48,8 @@ export default function SectionComponent({ section }: SectionComponentProps) {
   const isTwoCol = section.layout === 'two-column'
   const isThreeCol = section.layout === 'three-column'
 
+  const colLabel = isThreeCol ? '3 sütun' : isTwoCol ? '2 sütun' : '1 sütun'
+
   function commitName() {
     if (nameInput.trim()) updateSection(section.id, { name: nameInput.trim() })
     else setNameInput(section.name)
@@ -70,13 +73,32 @@ export default function SectionComponent({ section }: SectionComponentProps) {
   }
 
   return (
-    <div ref={setSortRef} style={sortStyle} className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div
+      ref={setSortRef}
+      style={{
+        ...sortStyle,
+        background: 'var(--color-surface-card)',
+        border: '0.5px solid #D3D1C7',
+        borderRadius: 8,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+        overflow: 'hidden',
+      }}
+    >
       {/* Section header */}
-      <div className="flex items-center gap-2 px-2 py-2 bg-gray-50 border-b border-gray-200">
+      <div
+        className="flex items-center"
+        style={{
+          padding: '8px 12px',
+          borderBottom: '0.5px solid #E8E6E0',
+          background: 'var(--color-surface-card)',
+          gap: 6,
+        }}
+      >
+        {/* Drag handle */}
         <span
           {...sortAttrs}
           {...sortListeners}
-          className="cursor-grab text-gray-300 hover:text-gray-500 px-1 flex-shrink-0 select-none"
+          style={{ color: '#C0BAB0', cursor: 'grab', fontSize: 13, flexShrink: 0, userSelect: 'none' }}
           title="Bölümü taşı"
           onClick={(e) => e.stopPropagation()}
         >
@@ -86,7 +108,18 @@ export default function SectionComponent({ section }: SectionComponentProps) {
         {isEditing ? (
           <input
             autoFocus
-            className="flex-1 text-sm font-medium bg-white border border-blue-300 rounded px-2 py-0.5 outline-none"
+            style={{
+              flex: 1,
+              fontSize: 11,
+              fontWeight: 500,
+              background: 'var(--color-surface-card)',
+              border: '0.5px solid var(--color-brand-primary)',
+              borderRadius: 4,
+              padding: '2px 6px',
+              outline: 'none',
+              color: 'var(--color-text-primary)',
+              fontFamily: 'inherit',
+            }}
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
             onBlur={commitName}
@@ -97,7 +130,7 @@ export default function SectionComponent({ section }: SectionComponentProps) {
           />
         ) : (
           <span
-            className="flex-1 text-sm font-semibold text-gray-700 cursor-text"
+            style={{ flex: 1, fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)', cursor: 'text' }}
             onDoubleClick={() => setIsEditing(true)}
             title="Çift tıkla — adı düzenle"
           >
@@ -105,43 +138,105 @@ export default function SectionComponent({ section }: SectionComponentProps) {
           </span>
         )}
 
-        {/* Layout toggle */}
+        {/* Layout toggle badge */}
         <button
           onClick={toggleLayout}
           title={
-            isThreeCol ? 'Tek sütuna geç (tüm blokları tam genişlik yapar)' :
-            isTwoCol   ? 'Üç sütuna geç (tüm blokları ⅓ genişlik yapar)' :
-            'İki sütuna geç (tüm blokları ½ genişlik yapar)'
+            isThreeCol ? 'Tek sütuna geç' :
+            isTwoCol   ? 'Üç sütuna geç' :
+            'İki sütuna geç'
           }
-          className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors ${
-            isThreeCol
-              ? 'border-purple-400 bg-purple-50 text-purple-700'
-              : isTwoCol
-              ? 'border-blue-400 bg-blue-50 text-blue-700'
-              : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
-          }`}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            height: 18,
+            padding: '0 6px',
+            fontSize: 10,
+            background: 'var(--color-surface-secondary)',
+            border: '0.5px solid var(--color-border-subtle)',
+            borderRadius: 4,
+            color: 'var(--color-text-muted)',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
         >
-          {isThreeCol ? <Columns3 size={12} /> : isTwoCol ? <Columns2 size={12} /> : <AlignLeft size={12} />}
-          {isThreeCol ? '3 Sütun' : isTwoCol ? '2 Sütun' : '1 Sütun'}
+          {isThreeCol ? <Columns3 size={10} /> : isTwoCol ? <Columns2 size={10} /> : <AlignLeft size={10} />}
+          {colLabel}
         </button>
 
-        <span className="text-xs text-gray-400">{sectionBlocks.length} blok</span>
+        {/* Blok sayısı badge */}
+        <span
+          style={{
+            fontSize: 10,
+            background: 'var(--color-surface-secondary)',
+            border: '0.5px solid var(--color-border-subtle)',
+            borderRadius: 4,
+            padding: '1px 6px',
+            color: 'var(--color-text-muted)',
+          }}
+        >
+          {sectionBlocks.length} blok
+        </span>
 
+        {/* Kopyala */}
+        <button
+          onClick={() => duplicateSection(section.id)}
+          title="Bölümü kopyala"
+          style={{
+            width: 22,
+            height: 22,
+            border: '0.5px solid var(--color-border-default)',
+            borderRadius: 4,
+            background: 'transparent',
+            color: 'var(--color-text-muted)',
+            cursor: 'pointer',
+            fontSize: 11,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-text-primary)'; e.currentTarget.style.background = 'var(--color-surface-secondary)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent' }}
+        >
+          ⧉
+        </button>
+
+        {/* Sil */}
         <button
           onClick={() => removeSection(section.id)}
-          className="text-gray-300 hover:text-red-500 transition-colors text-xs px-1"
           title="Bölümü sil"
+          style={{
+            width: 22,
+            height: 22,
+            border: '0.5px solid var(--color-border-default)',
+            borderRadius: 4,
+            background: 'transparent',
+            color: 'var(--color-text-muted)',
+            cursor: 'pointer',
+            fontSize: 11,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--color-danger)'; e.currentTarget.style.background = 'var(--color-danger-bg)'; e.currentTarget.style.borderColor = 'var(--color-danger)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--color-border-default)' }}
         >
           ✕
         </button>
       </div>
 
-      {/* Drop zone — always flex-wrap to mirror the XSLT table-based output */}
+      {/* Drop zone */}
       <div
         ref={setDropRef}
-        className={`min-h-[56px] p-2 flex flex-wrap content-start transition-colors ${
-          isOver ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : 'bg-white'
-        }`}
+        className="flex flex-wrap content-start"
+        style={{
+          minHeight: 56,
+          padding: 8,
+          background: isOver ? 'var(--color-brand-light)' : 'var(--color-surface-card)',
+          transition: 'background 150ms',
+          gap: 8,
+        }}
       >
         <SortableContext items={section.blockIds} strategy={verticalListSortingStrategy}>
           {sectionBlocks.map((block) => {
@@ -160,7 +255,7 @@ export default function SectionComponent({ section }: SectionComponentProps) {
               ''
 
             return (
-              <div key={block.id} className={`${widthClass} ${alignClass} p-[2px]`}>
+              <div key={block.id} className={`${widthClass} ${alignClass}`}>
                 <BlockCard
                   block={block}
                   sectionId={section.id}
@@ -172,7 +267,7 @@ export default function SectionComponent({ section }: SectionComponentProps) {
         </SortableContext>
 
         {sectionBlocks.length === 0 && !isOver && (
-          <p className="w-full text-xs text-gray-400 text-center py-3 select-none">
+          <p style={{ width: '100%', fontSize: 11, color: 'var(--color-text-muted)', textAlign: 'center', padding: '12px 0', userSelect: 'none' }}>
             Blok sürükle veya aşağıdan ekle
           </p>
         )}
@@ -202,21 +297,32 @@ function AddBlockRow({
   ]
 
   return (
-    <div className="border-t border-gray-100 px-2 py-1.5">
+    <div style={{ borderTop: '0.5px solid var(--color-border-default)', padding: '4px 8px' }}>
       {open ? (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap" style={{ gap: 4 }}>
           {QUICK_TYPES.map(({ type, label }) => (
             <button
               key={type}
               onClick={() => { onAdd(sectionId, type); setOpen(false) }}
-              className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50 hover:bg-blue-50 hover:border-blue-300 text-gray-600 hover:text-blue-700 transition-colors"
+              style={{
+                fontSize: 10,
+                padding: '2px 8px',
+                borderRadius: 4,
+                border: '0.5px solid var(--color-border-default)',
+                background: 'var(--color-surface-secondary)',
+                color: 'var(--color-text-secondary)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-brand-border)'; e.currentTarget.style.color = 'var(--color-brand-primary)'; e.currentTarget.style.background = 'var(--color-brand-light)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border-default)'; e.currentTarget.style.color = 'var(--color-text-secondary)'; e.currentTarget.style.background = 'var(--color-surface-secondary)' }}
             >
               + {label}
             </button>
           ))}
           <button
             onClick={() => setOpen(false)}
-            className="text-xs px-2 py-1 text-gray-400 hover:text-gray-600"
+            style={{ fontSize: 10, padding: '2px 6px', color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
           >
             İptal
           </button>
@@ -224,7 +330,20 @@ function AddBlockRow({
       ) : (
         <button
           onClick={() => setOpen(true)}
-          className="w-full text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 py-1 rounded transition-colors text-center"
+          style={{
+            width: '100%',
+            height: 30,
+            borderRadius: 6,
+            border: '1px dashed #D3D1C7',
+            background: 'transparent',
+            fontSize: 11,
+            color: 'var(--color-text-muted)',
+            cursor: 'pointer',
+            transition: 'border-color 150ms, color 150ms, background 150ms',
+            fontFamily: 'inherit',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--color-brand-primary)'; e.currentTarget.style.color = 'var(--color-brand-primary)'; e.currentTarget.style.background = '#EBF3FC' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#D3D1C7'; e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent' }}
         >
           + Blok ekle
         </button>
