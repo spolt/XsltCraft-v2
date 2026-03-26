@@ -134,6 +134,7 @@ export interface DocumentInfoRow {
 export interface DocumentInfoBlockConfig {
   rows: DocumentInfoRow[]
   bordered?: boolean
+  borderStyle?: 'solid' | 'dashed' | 'dotted'
   fontSize?: string
 }
 
@@ -159,6 +160,7 @@ export interface NotesBlockConfig {
   staticPosition?: 'before' | 'after'   // XPath notlarına göre sabit notların yeri
   bordered?: boolean
   borderColor?: string
+  borderStyle?: 'solid' | 'dashed' | 'dotted'
   fontSize?: string
 }
 
@@ -169,6 +171,7 @@ export interface BankInfoBlockConfig {
   ibanLabel?: string    // varsayılan "IBAN: "
   bordered?: boolean
   borderColor?: string
+  borderStyle?: 'solid' | 'dashed' | 'dotted'
   fontSize?: string
 }
 
@@ -256,6 +259,7 @@ export interface PartyInfoBlockConfig {
   title: string
   showTitle: boolean
   bordered: boolean
+  borderStyle?: 'solid' | 'dashed' | 'dotted'
   labelStyle: PartyLabelStyle
   fontSize?: string
 }
@@ -315,6 +319,7 @@ export interface InvoiceLineTableBlockConfig {
   showHeader: boolean
   showRowNumber: boolean
   bordered: boolean
+  borderStyle?: 'solid' | 'dashed' | 'dotted'
   alternateRowColor?: string
   headerBackgroundColor?: string
   fontSize?: string
@@ -352,6 +357,7 @@ export interface InvoiceHeaderBlockConfig {
   title: string
   showTitle: boolean
   bordered: boolean
+  borderStyle?: 'solid' | 'dashed' | 'dotted'
   labelStyle: InvoiceHeaderLabelStyle
   fontSize?: string
 }

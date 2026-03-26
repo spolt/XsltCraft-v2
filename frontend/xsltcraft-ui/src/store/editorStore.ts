@@ -25,15 +25,15 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         elseBlockIds: [],
       }
     case 'Image':
-      return { assetType: 'logo', alignment: 'center', editableOnFreeTheme: false }
+      return { assetType: 'logo', alignment: 'center', width: '100px', height: '80px', editableOnFreeTheme: false }
     case 'DocumentInfo':
       return { rows: [], fontSize: '11px' }
     case 'Totals':
       return { rows: [], alignment: 'right', fontSize: '11px' }
     case 'Notes':
-      return { iterateOver: '/n1:Invoice/cbc:Note', prefix: 'Not: ', staticLines: [], staticPosition: 'after', bordered: true, borderColor: '#555555', fontSize: '11px' }
+      return { iterateOver: '/n1:Invoice/cbc:Note', prefix: 'Not: ', staticLines: [], staticPosition: 'after', bordered: true, borderColor: '#555555', borderStyle: 'solid', fontSize: '11px' }
     case 'BankInfo':
-      return { bankName: '', iban: '', ibanLabel: 'IBAN: ', bordered: true, borderColor: '#555555', fontSize: '11px' }
+      return { bankName: '', iban: '', ibanLabel: 'IBAN: ', bordered: true, borderColor: '#555555', borderStyle: 'solid', fontSize: '11px' }
     case 'ETTN':
       return { ettnXpath: '', showEttn: true, showQR: false, qrWidth: 80, qrHeight: 80, qrAlignment: 'right' }
     case 'Divider':
@@ -68,6 +68,7 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         title: 'SATICI',
         showTitle: true,
         bordered: true,
+        borderStyle: 'solid',
         labelStyle: 'inline',
         fontSize: '11px',
       }
@@ -80,6 +81,7 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         showHeader: true,
         showRowNumber: true,
         bordered: true,
+        borderStyle: 'solid',
         headerBackgroundColor: '#E0E0E0',
         alternateRowColor: '#F9F9F9',
         fontSize: '11px',
@@ -90,6 +92,7 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         title: 'FATURA BİLGİLERİ',
         showTitle: false,
         bordered: true,
+        borderStyle: 'solid',
         labelStyle: 'table',
         fontSize: '11px',
       }

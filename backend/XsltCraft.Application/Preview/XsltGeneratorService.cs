@@ -111,9 +111,11 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                       table.dt th { border: 1px solid #333; padding: 3px 6px; background: #d0d0d0; font-weight: bold; text-align: center; overflow: hidden; }
                       table.dt td { border: 1px solid #555; padding: 3px 6px; word-break: break-word; overflow-wrap: break-word; overflow: hidden; }
                       /* document info table — key-value */
-                      table.di { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
+                      table.di, table.di-dashed, table.di-dotted { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
                       table.di td { border: 1px solid #555; padding: 2px 6px; }
-                      table.di td:first-child { font-weight: bold; white-space: nowrap; width: 40%; }
+                      table.di-dashed td { border: 1px dashed #555; padding: 2px 6px; }
+                      table.di-dotted td { border: 1px dotted #555; padding: 2px 6px; }
+                      table.di td:first-child, table.di-dashed td:first-child, table.di-dotted td:first-child { font-weight: bold; white-space: nowrap; width: 40%; }
                       table.di-plain { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
                       table.di-plain td { border: none; padding: 2px 6px; }
                       table.di-plain td:first-child { font-weight: bold; white-space: nowrap; width: 40%; }
@@ -154,7 +156,10 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
     }
 
     // ── Body builder ──────────────────────────────────────────────────────
-    // Consecutive same-width blocks are grouped into HTML <table> rows.
+    // Blocks are grouped into HTML <table> rows by summing fractional widths
+    // until they fill one full row (≈ 1.0). Mixed fractions (e.g. 2/3 + 1/3)
+    // are supported — a new row starts when the sum reaches 1 or a full-width
+    // block is encountered.
 
     private string BuildBody(BlockTreeDto tree)
     {
@@ -175,44 +180,77 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                 var cur = blockList[i];
                 var width = cur.Layout?.Width ?? "full";
 
-                if (width is "1/2" or "1/3" or "2/3")
-                {
-                    var frac = width;
-                    var run = new List<BlockDto>();
-                    while (i < blockList.Count && (blockList[i].Layout?.Width ?? "full") == frac)
-                        run.Add(blockList[i++]);
-
-                    int cols = frac switch { "1/3" => 3, "2/3" => 2, _ => 2 };
-                    string colWidthPct = frac switch { "1/3" => "33.333%", "2/3" => "50%", _ => "50%" };
-
-                    for (int j = 0; j < run.Count; j += cols)
-                    {
-                        sb.AppendLine("    <table class=\"lr\"><tbody><tr>");
-                        for (int k = j; k < j + cols; k++)
-                        {
-                            if (k < run.Count)
-                            {
-                                var b = run[k];
-                                sb.AppendLine($"      <td style=\"width:{colWidthPct};{TextAlignStyle(b.Layout?.Alignment)}\">{DispatchBlock(b, tree)}</td>");
-                            }
-                            else
-                            {
-                                sb.AppendLine($"      <td style=\"width:{colWidthPct}\"></td>");
-                            }
-                        }
-                        sb.AppendLine("    </tr></tbody></table>");
-                    }
-                }
-                else
+                if (width == "full")
                 {
                     var align = TextAlignStyle(cur.Layout?.Alignment);
                     sb.AppendLine($"    <div style=\"width:100%;{align}\">{DispatchBlock(cur, tree)}</div>");
                     i++;
                 }
+                else
+                {
+                    // Collect blocks until their widths sum to a full row (≈ 1.0)
+                    var row = new List<BlockDto>();
+                    double sum = 0;
+                    while (i < blockList.Count)
+                    {
+                        var b   = blockList[i];
+                        var bw  = b.Layout?.Width ?? "full";
+                        if (bw == "full") break;
+                        var fv  = FractionValue(bw);
+                        if (sum + fv > 1.001) break; // would overflow — start next row
+                        row.Add(b);
+                        sum += fv;
+                        i++;
+                        if (sum >= 0.999) break; // row is complete
+                    }
+
+                    // Split row into leading (left/center) and trailing (right-aligned) blocks
+                    // so the filler td is placed between them, not at the very end.
+                    int firstRightIdx = row.FindIndex(b => (b.Layout?.Alignment ?? "") == "right");
+                    var leading  = firstRightIdx >= 0 ? row.Take(firstRightIdx).ToList()  : row;
+                    var trailing = firstRightIdx >= 0 ? row.Skip(firstRightIdx).ToList()  : [];
+
+                    sb.AppendLine("    <table class=\"lr\"><tbody><tr>");
+                    foreach (var b in leading)
+                    {
+                        var colCss = FractionCss(b.Layout?.Width ?? "full");
+                        var talign = TextAlignStyle(b.Layout?.Alignment);
+                        sb.AppendLine($"      <td style=\"width:{colCss};{talign}\">{DispatchBlock(b, tree)}</td>");
+                    }
+                    // Filler goes between left blocks and right-aligned blocks (if row is not full)
+                    if (sum < 0.999)
+                    {
+                        var remPct = $"{(1.0 - sum) * 100:F3}%";
+                        sb.AppendLine($"      <td style=\"width:{remPct}\"></td>");
+                    }
+                    foreach (var b in trailing)
+                    {
+                        var colCss = FractionCss(b.Layout?.Width ?? "full");
+                        var talign = TextAlignStyle(b.Layout?.Alignment);
+                        sb.AppendLine($"      <td style=\"width:{colCss};{talign}\">{DispatchBlock(b, tree)}</td>");
+                    }
+                    sb.AppendLine("    </tr></tbody></table>");
+                }
             }
         }
         return sb.ToString();
     }
+
+    private static double FractionValue(string width) => width switch
+    {
+        "1/2" => 0.5,
+        "1/3" => 1.0 / 3,
+        "2/3" => 2.0 / 3,
+        _     => 1.0
+    };
+
+    private static string FractionCss(string width) => width switch
+    {
+        "1/2" => "50%",
+        "1/3" => "33.333%",
+        "2/3" => "66.667%",
+        _     => "100%"
+    };
 
     private static string TextAlignStyle(string? alignment) => alignment switch
     {
@@ -442,14 +480,15 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             "right"  => "text-align:right",
             _        => "text-align:left"
         };
-        var widthAttr  = !string.IsNullOrEmpty(cfg.Width)  ? $" width=\"{XmlEscape(cfg.Width)}\"" : string.Empty;
-        var heightAttr = !string.IsNullOrEmpty(cfg.Height) ? $" height=\"{XmlEscape(cfg.Height)}\"" : string.Empty;
-        var alt        = XmlEscape(cfg.AltText ?? cfg.AssetType);
-        var srcAttr    = !string.IsNullOrEmpty(cfg.AssetId)
+        var widthStyle  = !string.IsNullOrEmpty(cfg.Width)  ? $"width:{XmlEscape(cfg.Width)};"   : "max-width:100%;";
+        var heightStyle = !string.IsNullOrEmpty(cfg.Height) ? $"height:{XmlEscape(cfg.Height)};" : string.Empty;
+        var imgStyle    = $"display:inline-block;vertical-align:top;object-fit:contain;{widthStyle}{heightStyle}";
+        var alt         = XmlEscape(cfg.AltText ?? cfg.AssetType);
+        var srcAttr     = !string.IsNullOrEmpty(cfg.AssetId)
             ? $" src=\"/api/assets/{XmlAttr(cfg.AssetId)}/serve\""
             : string.Empty;
 
-        return $"    <div style=\"{alignStyle}\"><img{srcAttr}{widthAttr}{heightAttr} alt=\"{alt}\"/></div>";
+        return $"    <div style=\"{alignStyle};line-height:0;font-size:0;\"><img{srcAttr} style=\"{imgStyle}\" alt=\"{alt}\"/></div>";
     }
 
     // ── BLOCK-08: DocumentInfo ────────────────────────────────────────────
@@ -457,7 +496,9 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
     private static string GenerateDocumentInfo(BlockDto block)
     {
         var cfg = Deserialize<DocumentInfoConfig>(block.Config);
-        var tableClass = (cfg.Bordered ?? true) ? "di" : "di-plain";
+        var tableClass = (cfg.Bordered ?? true)
+            ? (cfg.BorderStyle ?? "solid") switch { "dashed" => "di-dashed", "dotted" => "di-dotted", _ => "di" }
+            : "di-plain";
         var sb = new StringBuilder();
         sb.AppendLine($"    <table class=\"{tableClass}\">");
         sb.AppendLine("      <tbody>");
@@ -506,9 +547,10 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var prefix = XmlEscape(cfg.Prefix ?? string.Empty);
         var bordered = cfg.Bordered == true;
         var borderColor = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderColor) ? "#555555" : cfg.BorderColor);
+        var borderStyle = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle);
         var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "inherit" : XmlEscape(cfg.FontSize);
         var outerStyle = bordered
-            ? $" style=\"border:1px solid {borderColor};padding:4px 8px;\""
+            ? $" style=\"border:1px {borderStyle} {borderColor};padding:4px 8px;\""
             : string.Empty;
         var pStyle = $"margin:0;line-height:1.6;font-size:{fontSize}";
 
@@ -552,8 +594,9 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var ibanLabel = XmlEscape(cfg.IbanLabel ?? "IBAN: ");
         var bordered = cfg.Bordered == true;
         var borderColor = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderColor) ? "#555555" : cfg.BorderColor);
+        var borderStyle = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle);
         var tableStyle = bordered
-            ? $"width:100%;border-collapse:collapse;border:1px solid {borderColor};"
+            ? $"width:100%;border-collapse:collapse;border:1px {borderStyle} {borderColor};"
             : "width:100%;border-collapse:collapse;";
         return
             $"""
@@ -870,9 +913,10 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             .OrderBy(f => f.Order)
             .ToList();
 
-        var fontSize  = string.IsNullOrWhiteSpace(cfg.FontSize) ? "9.5pt" : XmlEscape(cfg.FontSize);
-        var outerStyle = cfg.Bordered
-            ? " style=\"border:1px solid #555555;padding:4px 8px;\""
+        var fontSize    = string.IsNullOrWhiteSpace(cfg.FontSize) ? "9.5pt" : XmlEscape(cfg.FontSize);
+        var bdrStyle    = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle);
+        var outerStyle  = cfg.Bordered
+            ? $" style=\"border:1px {bdrStyle} #555555;padding:4px 8px;\""
             : string.Empty;
 
         var sb = new StringBuilder();
@@ -926,7 +970,8 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var fontSize    = string.IsNullOrWhiteSpace(cfg.FontSize) ? "9pt" : XmlEscape(cfg.FontSize);
         var headerBg    = string.IsNullOrWhiteSpace(cfg.HeaderBackgroundColor) ? "#E0E0E0" : XmlEscape(cfg.HeaderBackgroundColor);
         var altRowColor = string.IsNullOrWhiteSpace(cfg.AlternateRowColor)    ? "#F9F9F9" : XmlEscape(cfg.AlternateRowColor);
-        var borderAttr  = cfg.Bordered ? "1px solid #555555" : "none";
+        var bdrStyle    = string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : XmlEscape(cfg.BorderStyle);
+        var borderAttr  = cfg.Bordered ? $"1px {bdrStyle} #555555" : "none";
 
         var sb = new StringBuilder();
 
@@ -1136,8 +1181,9 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             .ToList();
 
         var fontSize   = string.IsNullOrWhiteSpace(cfg.FontSize) ? "9.5pt" : XmlEscape(cfg.FontSize);
+        var bdrStyle   = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle);
         var outerStyle = cfg.Bordered
-            ? " style=\"border:1px solid #555555;padding:4px 8px;\""
+            ? $" style=\"border:1px {bdrStyle} #555555;padding:4px 8px;\""
             : string.Empty;
 
         var sb = new StringBuilder();

@@ -683,6 +683,13 @@ function DocumentInfoPanel({ config, update }: { config: Config<'DocumentInfo'>;
   return (
     <>
     <Checkbox label="Kenarlıklı" checked={config.bordered ?? true} onChange={(v) => update({ bordered: v })} />
+    {(config.bordered ?? true) && (
+      <Field label="Kenarlık Stili">
+        <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
+          { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
+        ]} />
+      </Field>
+    )}
     <FontSizeField config={config} update={update} />
     <Field label="Satırlar">
       <div className="flex flex-col gap-2">
@@ -860,9 +867,16 @@ function NotesPanel({ config, update }: { config: Config<'Notes'>; update: Updat
 
       <Checkbox label="Dış kenarlık" checked={config.bordered ?? false} onChange={(v) => update({ bordered: v })} />
       {config.bordered && (
-        <Field label="Kenarlık Rengi">
-          <ColorInput value={config.borderColor ?? '#555555'} onChange={(v) => update({ borderColor: v })} />
-        </Field>
+        <>
+          <Field label="Kenarlık Stili">
+            <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
+              { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
+            ]} />
+          </Field>
+          <Field label="Kenarlık Rengi">
+            <ColorInput value={config.borderColor ?? '#555555'} onChange={(v) => update({ borderColor: v })} />
+          </Field>
+        </>
       )}
       <FontSizeField config={config} update={update} />
     </>
@@ -883,9 +897,16 @@ function BankInfoPanel({ config, update }: { config: Config<'BankInfo'>; update:
       </Field>
       <Checkbox label="Dış kenarlık" checked={config.bordered ?? true} onChange={(v) => update({ bordered: v })} />
       {config.bordered && (
-        <Field label="Kenarlık Rengi">
-          <ColorInput value={config.borderColor ?? '#555555'} onChange={(v) => update({ borderColor: v })} />
-        </Field>
+        <>
+          <Field label="Kenarlık Stili">
+            <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
+              { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
+            ]} />
+          </Field>
+          <Field label="Kenarlık Rengi">
+            <ColorInput value={config.borderColor ?? '#555555'} onChange={(v) => update({ borderColor: v })} />
+          </Field>
+        </>
       )}
       <FontSizeField config={config} update={update} />
     </>
@@ -1124,6 +1145,13 @@ function InvoiceHeaderPanel({ config, update }: { config: Config<'InvoiceHeader'
           <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Kenarlıklı</span>
         </label>
       </div>
+      {config.bordered && (
+        <Field label="Kenarlık Stili">
+          <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
+            { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
+          ]} />
+        </Field>
+      )}
       <Field label="Yazı Boyutu">
         <TextInput value={config.fontSize ?? ''} onChange={(v) => update({ fontSize: v })} placeholder="9pt" />
       </Field>
@@ -1613,6 +1641,13 @@ function PartyInfoPanel({ config, update }: { config: Config<'PartyInfo'>; updat
       </Field>
       <Checkbox label="Başlığı göster" checked={config.showTitle} onChange={(v) => update({ showTitle: v })} />
       <Checkbox label="Kenarlıklı" checked={config.bordered} onChange={(v) => update({ bordered: v })} />
+      {config.bordered && (
+        <Field label="Kenarlık Stili">
+          <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
+            { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
+          ]} />
+        </Field>
+      )}
       <Field label="Etiket Stili">
         <Select
           value={config.labelStyle}
@@ -1935,6 +1970,13 @@ function InvoiceLineTablePanel({ config, update }: { config: Config<'InvoiceLine
       <Checkbox label="Başlık satırı göster" checked={config.showHeader} onChange={(v) => update({ showHeader: v })} />
       <Checkbox label="Sıra No göster" checked={config.showRowNumber} onChange={(v) => update({ showRowNumber: v })} />
       <Checkbox label="Kenarlıklı" checked={config.bordered} onChange={(v) => update({ bordered: v })} />
+      {config.bordered && (
+        <Field label="Kenarlık Stili">
+          <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
+            { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
+          ]} />
+        </Field>
+      )}
       <Field label="Başlık arkaplanı">
         <ColorInput value={config.headerBackgroundColor ?? '#E0E0E0'} onChange={(v) => update({ headerBackgroundColor: v })} placeholder="#E0E0E0" />
       </Field>

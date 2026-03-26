@@ -229,7 +229,7 @@ export default function SectionComponent({ section }: SectionComponentProps) {
       {/* Drop zone */}
       <div
         ref={setDropRef}
-        className="flex flex-wrap content-start"
+        className={`flex flex-wrap content-start ${isTwoCol || isThreeCol ? 'justify-between' : ''}`}
         style={{
           minHeight: 56,
           padding: 8,

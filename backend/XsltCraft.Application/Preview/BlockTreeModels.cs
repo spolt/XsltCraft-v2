@@ -247,6 +247,9 @@ public sealed class DocumentInfoConfig
     [JsonPropertyName("bordered")]
     public bool? Bordered { get; set; }
 
+    [JsonPropertyName("borderStyle")]
+    public string? BorderStyle { get; set; }
+
     [JsonPropertyName("fontSize")]
     public string? FontSize { get; set; }
 }
@@ -298,6 +301,9 @@ public sealed class NotesConfig
     [JsonPropertyName("borderColor")]
     public string? BorderColor { get; set; }
 
+    [JsonPropertyName("borderStyle")]
+    public string? BorderStyle { get; set; }
+
     [JsonPropertyName("fontSize")]
     public string? FontSize { get; set; }
 }
@@ -318,6 +324,9 @@ public sealed class BankInfoConfig
 
     [JsonPropertyName("borderColor")]
     public string? BorderColor { get; set; }
+
+    [JsonPropertyName("borderStyle")]
+    public string? BorderStyle { get; set; }
 
     [JsonPropertyName("fontSize")]
     public string? FontSize { get; set; }
@@ -507,6 +516,9 @@ public sealed class PartyInfoConfig
     [JsonPropertyName("bordered")]
     public bool Bordered { get; set; } = true;
 
+    [JsonPropertyName("borderStyle")]
+    public string? BorderStyle { get; set; }
+
     [JsonPropertyName("labelStyle")]
     public string LabelStyle { get; set; } = "table";
 
@@ -565,6 +577,9 @@ public sealed class InvoiceLineTableConfig
     [JsonPropertyName("bordered")]
     public bool Bordered { get; set; } = true;
 
+    [JsonPropertyName("borderStyle")]
+    public string? BorderStyle { get; set; }
+
     [JsonPropertyName("alternateRowColor")]
     public string? AlternateRowColor { get; set; }
 
@@ -609,6 +624,9 @@ public sealed class InvoiceHeaderConfig
 
     [JsonPropertyName("bordered")]
     public bool Bordered { get; set; } = true;
+
+    [JsonPropertyName("borderStyle")]
+    public string? BorderStyle { get; set; }
 
     [JsonPropertyName("labelStyle")]
     public string LabelStyle { get; set; } = "table";
