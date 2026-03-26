@@ -9,11 +9,11 @@ const MAX_HISTORY = 20
 function defaultConfig(type: BlockType): BlockConfig['config'] {
   switch (type) {
     case 'Text':
-      return { isStatic: true, content: '' }
+      return { isStatic: true, content: '', fontSize: '11px' }
     case 'Heading':
-      return { level: 'H2', isStatic: true, content: '' }
+      return { level: 'H2', isStatic: true, content: '', fontSize: '11px' }
     case 'Paragraph':
-      return { lines: [] }
+      return { lines: [], fontSize: '11px' }
     case 'Table':
       return { iterateOver: '', columns: [], showHeader: true }
     case 'ForEach':
@@ -27,13 +27,13 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
     case 'Image':
       return { assetType: 'logo', alignment: 'center', editableOnFreeTheme: false }
     case 'DocumentInfo':
-      return { rows: [] }
+      return { rows: [], fontSize: '11px' }
     case 'Totals':
-      return { rows: [], alignment: 'right' }
+      return { rows: [], alignment: 'right', fontSize: '11px' }
     case 'Notes':
-      return { iterateOver: '/n1:Invoice/cbc:Note', prefix: 'Not: ', staticLines: [], bordered: true, borderColor: '#555555' }
+      return { iterateOver: '/n1:Invoice/cbc:Note', prefix: 'Not: ', staticLines: [], staticPosition: 'after', bordered: true, borderColor: '#555555', fontSize: '11px' }
     case 'BankInfo':
-      return { bankName: '', iban: '', ibanLabel: 'IBAN: ', bordered: true, borderColor: '#555555' }
+      return { bankName: '', iban: '', ibanLabel: 'IBAN: ', bordered: true, borderColor: '#555555', fontSize: '11px' }
     case 'ETTN':
       return { ettnXpath: '', showEttn: true, showQR: false, qrWidth: 80, qrHeight: 80, qrAlignment: 'right' }
     case 'Divider':
@@ -49,6 +49,7 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         thenContent: '',
         elseIsStatic: true,
         elseContent: '',
+        fontSize: '11px',
       }
     case 'TaxSummary':
       return {
@@ -68,6 +69,7 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         showTitle: true,
         bordered: true,
         labelStyle: 'inline',
+        fontSize: '11px',
       }
     case 'InvoiceLineTable':
       return {
@@ -80,6 +82,7 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         bordered: true,
         headerBackgroundColor: '#E0E0E0',
         alternateRowColor: '#F9F9F9',
+        fontSize: '11px',
       }
     case 'InvoiceHeader':
       return {
@@ -88,12 +91,14 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         showTitle: false,
         bordered: true,
         labelStyle: 'table',
+        fontSize: '11px',
       }
     case 'InvoiceTotals':
       return {
         fields: DEFAULT_INVOICE_TOTALS_FIELDS.map((f) => ({ ...f })),
         showCurrency: true,
         currencyXpath: '//cbc:DocumentCurrencyCode',
+        fontSize: '11px',
       }
     case 'GibLogo':
       return { width: '80px', height: '80px', alignment: 'center' }
@@ -216,6 +221,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get()
     const prev = snapshot(state)
 
+    const toSection = state.sections.find((s) => s.id === toSectionId)
+    const widthMap = {
+      'single-column': 'full',
+      'two-column': '1/2',
+      'three-column': '1/3',
+    } as const
+    const targetWidth = toSection ? widthMap[toSection.layout] : undefined
+
     set((s) => {
       const newSections = s.sections.map((sec) => {
         if (sec.id === fromSectionId && sec.id === toSectionId) {
@@ -233,8 +246,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         }
         return sec
       })
+
+      const existingBlock = s.blocks[blockId]
+      const updatedBlocks =
+        fromSectionId !== toSectionId && targetWidth && existingBlock
+          ? {
+              ...s.blocks,
+              [blockId]: {
+                ...existingBlock,
+                layout: { ...DEFAULT_BLOCK_LAYOUT, ...existingBlock.layout, width: targetWidth },
+              },
+            }
+          : s.blocks
+
       return {
         sections: newSections,
+        blocks: updatedBlocks,
         isDirty: true,
         past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
         future: [],

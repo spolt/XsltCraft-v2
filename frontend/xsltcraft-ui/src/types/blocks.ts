@@ -156,6 +156,7 @@ export interface NotesBlockConfig {
   iterateOver: string
   prefix?: string
   staticLines: string[]
+  staticPosition?: 'before' | 'after'   // XPath notlarına göre sabit notların yeri
   bordered?: boolean
   borderColor?: string
   fontSize?: string

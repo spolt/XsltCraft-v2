@@ -245,8 +245,8 @@ export default function SectionComponent({ section }: SectionComponentProps) {
 
             const widthClass =
               w === '1/2' ? 'w-[calc(50%-4px)]' :
-              w === '1/3' ? 'w-[calc(33.333%-4px)]' :
-              w === '2/3' ? 'w-[calc(66.667%-4px)]' :
+              w === '1/3' ? 'w-[calc(33.333%-5.334px)]' :
+              w === '2/3' ? 'w-[calc(66.667%-2.667px)]' :
               'w-full'
 
             const alignClass =

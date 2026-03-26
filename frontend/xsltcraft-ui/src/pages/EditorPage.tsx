@@ -13,7 +13,9 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  closestCorners,
+  pointerWithin,
+  closestCenter,
+  type CollisionDetection,
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
@@ -138,6 +140,14 @@ export default function EditorPage() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
+
+  // Pointer gerçekten o alan üzerindeyse onu seç; değilse en yakın merkezi kullan.
+  // closestCorners yerine bu kombinasyon, bölüm kaymasını önler.
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const within = pointerWithin(args)
+    if (within.length > 0) return within
+    return closestCenter(args)
+  }, [])
 
   function findSectionByBlockId(blockId: string): string | undefined {
     return sections.find((s) => s.blockIds.includes(blockId))?.id
@@ -537,7 +547,7 @@ export default function EditorPage() {
       {/* Editor layout */}
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}

@@ -506,17 +506,40 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var prefix = XmlEscape(cfg.Prefix ?? string.Empty);
         var bordered = cfg.Bordered == true;
         var borderColor = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderColor) ? "#555555" : cfg.BorderColor);
+        var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "inherit" : XmlEscape(cfg.FontSize);
         var outerStyle = bordered
             ? $" style=\"border:1px solid {borderColor};padding:4px 8px;\""
             : string.Empty;
-        return
-            $"""
-                <div{outerStyle}>
-                  <xsl:for-each select="{XmlAttr(cfg.IterateOver)}">
-                    <p style="margin:0;line-height:1.6"><strong>{prefix}</strong><xsl:value-of select="."/></p>
-                  </xsl:for-each>
-                </div>
-            """;
+        var pStyle = $"margin:0;line-height:1.6;font-size:{fontSize}";
+
+        var staticBefore = cfg.StaticPosition != "after";
+        var sb = new StringBuilder();
+        sb.AppendLine($"    <div{outerStyle}>");
+
+        // Sabit notlar — pozisyona göre
+        var staticSnippet = new StringBuilder();
+        foreach (var line in cfg.StaticLines)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            staticSnippet.AppendLine($"      <p style=\"{pStyle}\"><strong>{prefix}</strong>{XmlEscape(line)}</p>");
+        }
+
+        if (staticBefore)
+            sb.Append(staticSnippet);
+
+        // XPath notları
+        if (!string.IsNullOrWhiteSpace(cfg.IterateOver))
+        {
+            sb.AppendLine($"      <xsl:for-each select=\"{XmlAttr(cfg.IterateOver)}\">");
+            sb.AppendLine($"        <p style=\"{pStyle}\"><strong>{prefix}</strong><xsl:value-of select=\".\"/></p>");
+            sb.AppendLine("      </xsl:for-each>");
+        }
+
+        if (!staticBefore)
+            sb.Append(staticSnippet);
+
+        sb.Append("    </div>");
+        return sb.ToString();
     }
 
     // ── BLOCK-11: BankInfo ────────────────────────────────────────────────

@@ -286,6 +286,12 @@ public sealed class NotesConfig
     [JsonPropertyName("prefix")]
     public string? Prefix { get; set; }
 
+    [JsonPropertyName("staticLines")]
+    public List<string> StaticLines { get; set; } = [];
+
+    [JsonPropertyName("staticPosition")]
+    public string StaticPosition { get; set; } = "after";
+
     [JsonPropertyName("bordered")]
     public bool? Bordered { get; set; }
 

@@ -759,6 +759,23 @@ function TotalsPanel({ config, update }: { config: Config<'Totals'>; update: Upd
 }
 
 function NotesPanel({ config, update }: { config: Config<'Notes'>; update: UpdateFn }) {
+  const lines: string[] = config.staticLines ?? []
+  const position = config.staticPosition ?? 'after'
+
+  function updateLine(index: number, value: string) {
+    const next = [...lines]
+    next[index] = value
+    update({ staticLines: next })
+  }
+
+  function removeLine(index: number) {
+    update({ staticLines: lines.filter((_, i) => i !== index) })
+  }
+
+  function addLine() {
+    update({ staticLines: [...lines, ''] })
+  }
+
   return (
     <>
       <Field label="Her not için (XPath)">
@@ -767,6 +784,80 @@ function NotesPanel({ config, update }: { config: Config<'Notes'>; update: Updat
       <Field label="Önek">
         <TextInput value={config.prefix ?? ''} onChange={(v) => update({ prefix: v })} placeholder="Not: " />
       </Field>
+
+      {/* Sabit Notlar */}
+      <div style={{ borderTop: '0.5px solid var(--color-border-subtle)', paddingTop: 10, marginTop: 4 }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Sabit Notlar</span>
+          <button
+            onClick={addLine}
+            style={{
+              fontSize: 10, padding: '2px 8px', borderRadius: 4,
+              border: '0.5px solid var(--color-brand-border)',
+              background: 'var(--color-brand-light)', color: 'var(--color-brand-primary)',
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            + Not Ekle
+          </button>
+        </div>
+
+        {lines.length === 0 && (
+          <p style={{ fontSize: 10, color: 'var(--color-text-muted)', textAlign: 'center', padding: '6px 0' }}>
+            Henüz sabit not yok
+          </p>
+        )}
+
+        {lines.map((line, i) => (
+          <div key={i} className="flex items-center" style={{ gap: 4, marginBottom: 4 }}>
+            <input
+              value={line}
+              onChange={(e) => updateLine(i, e.target.value)}
+              placeholder={`Sabit not ${i + 1}`}
+              style={{
+                flex: 1, fontSize: 11, padding: '4px 6px',
+                border: '0.5px solid var(--color-border-default)', borderRadius: 4,
+                background: 'var(--color-surface-card)', color: 'var(--color-text-primary)',
+                outline: 'none', fontFamily: 'inherit',
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
+              onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-default)')}
+            />
+            <button
+              onClick={() => removeLine(i)}
+              title="Sil"
+              style={{
+                width: 20, height: 20, flexShrink: 0, border: 'none', background: 'none',
+                cursor: 'pointer', fontSize: 11, color: 'var(--color-text-muted)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-danger)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+
+        {lines.length > 0 && (
+          <Field label="Sabit notların yeri">
+            <select
+              value={position}
+              onChange={(e) => update({ staticPosition: e.target.value as 'before' | 'after' })}
+              style={{
+                width: '100%', fontSize: 11, padding: '4px 6px',
+                border: '0.5px solid var(--color-border-default)', borderRadius: 4,
+                background: 'var(--color-surface-card)', color: 'var(--color-text-primary)',
+                outline: 'none', fontFamily: 'inherit', cursor: 'pointer',
+              }}
+            >
+              <option value="before">XPath notlarından önce</option>
+              <option value="after">XPath notlarından sonra</option>
+            </select>
+          </Field>
+        )}
+      </div>
+
       <Checkbox label="Dış kenarlık" checked={config.bordered ?? false} onChange={(v) => update({ bordered: v })} />
       {config.bordered && (
         <Field label="Kenarlık Rengi">
