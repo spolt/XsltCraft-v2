@@ -82,13 +82,21 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                 <html>
                   <head>
                     <meta charset="UTF-8"/>
+                    <title>e-Belge</title>
             """;
 
         const string styles =
             """
                     <style>
                       * { box-sizing: border-box; }
-                      html, body { margin: 0; padding: 0; background: #d1d5db; font-family: Arial, sans-serif; font-size: 10pt; color: #111; }
+                      html { margin: 0; padding: 0; background: #d1d5db; }
+                      body {
+                        background-color: #FFFFFF;
+                        font-family: 'Tahoma', "Times New Roman", Times, serif;
+                        font-size: 11px;
+                        color: #000000;
+                        margin: 0; padding: 0;
+                      }
                       .page {
                         background: #ffffff;
                         width: 210mm;
@@ -126,19 +134,28 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                       table.tot td.val { text-align: right; white-space: nowrap; min-width: 120px; }
                       table.tot tr.hl td { font-weight: bold; background: #ffffcc; }
                       /* typography */
-                      h1 { font-size: 16pt; margin: 0 0 6px 0; }
-                      h2 { font-size: 13pt; margin: 0 0 4px 0; }
-                      h3 { font-size: 11pt; margin: 0 0 4px 0; }
-                      h4 { font-size: 10pt; margin: 0 0 4px 0; }
+                      h1, h2 { padding-bottom: 3px; padding-top: 3px; margin-bottom: 5px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; }
+                      h1 { font-size: 1.4em; text-transform: none; }
+                      h2 { font-size: 1em; color: brown; }
+                      h3 { font-size: 1em; color: #000000; text-align: justify; margin: 0; padding: 0; }
+                      h4 { font-size: 1.1em; font-style: bold; font-family: Arial, Helvetica, sans-serif; color: #000000; margin: 0; padding: 0; }
+                      hr { height: 2px; color: #000000; background-color: #000000; border-bottom: 1px solid #000000; }
                       p  { margin: 0 0 4px 0; line-height: 1.4; }
-                      hr { border: none; margin: 6px 0; }
+                      p, ul, ol { margin-top: 1.5em; }
+                      ul, ol { margin-left: 3em; }
+                      blockquote { margin-left: 3em; margin-right: 3em; font-style: italic; }
+                      a { text-decoration: none; color: #70A300; }
+                      a:hover { border: none; color: #70A300; }
+                      td { border-color: gray; }
+                      table { border-spacing: 0px; }
+                      #budgetContainerTable { border-width: 0px; border-spacing: 0px; border-style: inset; border-color: black; border-collapse: collapse; }
                     </style>
             """;
 
         const string bodyOpen =
             """
                   </head>
-                  <body>
+                  <body style="width:800px;">
                     <div class="page">
             """;
 
@@ -1174,51 +1191,291 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
     private static string GenerateInvoiceHeader(BlockDto block)
     {
-        var cfg = Deserialize<InvoiceHeaderConfig>(block.Config);
-        var fields = (cfg.Fields ?? new List<InvoiceHeaderField>())
-            .Where(f => f.Visible)
-            .OrderBy(f => f.Order)
-            .ToList();
+        var cfg      = Deserialize<InvoiceHeaderConfig>(block.Config);
+        var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "10.4px" : XmlEscape(cfg.FontSize);
+        var bdrStyle = string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle;
+        var outerStyle = cfg.Bordered ? $"border:1px {bdrStyle} #555555;padding:4px;" : string.Empty;
+        var cellBorder = cfg.Bordered ? $"border:1px {bdrStyle} #aaaaaa;" : string.Empty;
+        var scopeId    = "ih" + block.Id.Replace("-", string.Empty)[..8];
+        var scopeStyle = $"<style>.{scopeId} td {{ {cellBorder}padding:2px 4px; }}</style>";
 
-        var fontSize   = string.IsNullOrWhiteSpace(cfg.FontSize) ? "9.5pt" : XmlEscape(cfg.FontSize);
-        var bdrStyle   = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle);
-        var outerStyle = cfg.Bordered
-            ? $" style=\"border:1px {bdrStyle} #555555;padding:4px 8px;\""
-            : string.Empty;
-
-        var sb = new StringBuilder();
-        sb.AppendLine($"    <div{outerStyle}>");
-
-        if (cfg.ShowTitle && !string.IsNullOrWhiteSpace(cfg.Title))
-            sb.AppendLine($"      <p style=\"font-weight:bold;margin:0 0 4px 0;font-size:{fontSize}\">{XmlEscape(cfg.Title)}</p>");
-
-        if (cfg.LabelStyle == "inline")
+        // Custom user-added fields
+        var customSb = new StringBuilder();
+        foreach (var f in (cfg.Fields ?? []).Where(f => f.Visible && f.IsCustom == true).OrderBy(f => f.Order))
         {
-            foreach (var f in fields)
-            {
-                var label = XmlEscape(f.Label ?? string.Empty);
-                var xpath = XmlAttr(f.Xpath ?? string.Empty);
-                var labelPart = string.IsNullOrWhiteSpace(f.Label) ? string.Empty : $"<strong>{label}: </strong>";
-                sb.AppendLine($"      <p style=\"margin:0;font-size:{fontSize}\">{labelPart}<xsl:value-of select=\"{xpath}\"/></p>");
-            }
-        }
-        else // table (default)
-        {
-            sb.AppendLine($"      <table style=\"width:100%;border-collapse:collapse;font-size:{fontSize}\">");
-            foreach (var f in fields)
-            {
-                var label = XmlEscape(f.Label ?? string.Empty);
-                var xpath = XmlAttr(f.Xpath ?? string.Empty);
-                sb.AppendLine("        <tr>");
-                sb.AppendLine($"          <td style=\"font-weight:bold;padding:1px 4px;white-space:nowrap;width:40%;vertical-align:top\">{label}</td>");
-                sb.AppendLine($"          <td style=\"padding:1px 4px\"><xsl:value-of select=\"{xpath}\"/></td>");
-                sb.AppendLine("        </tr>");
-            }
-            sb.AppendLine("      </table>");
+            var lbl = XmlEscape(f.Label ?? string.Empty);
+            var xp  = XmlAttr(f.Xpath ?? string.Empty);
+            customSb.AppendLine(
+                $"        <tr style=\"height:13px;\"><td><span style=\"font-weight:bold;\"><xsl:text>{lbl}</xsl:text></span></td>" +
+                $"<td><xsl:value-of select=\"{xp}\"/></td></tr>");
         }
 
-        sb.AppendLine("    </div>");
-        return sb.ToString();
+        return $"""
+    <div style="{outerStyle}font-size:{fontSize}">
+      {scopeStyle}
+      <table class="{scopeId}" style="width:100%;border-collapse:collapse;">
+          <tbody>
+            <tr>
+              <td style="width: 50%;">
+                <span style="font-weight:bold;">
+                  <xsl:text>Özelleştirme No:</xsl:text>
+                </span>
+              </td>
+              <td style="width: 50%;">
+                <xsl:for-each select="n1:Invoice/cbc:CustomizationID">
+                  <xsl:apply-templates/>
+                </xsl:for-each>
+              </td>
+            </tr>
+        <tr style="height:13px;">
+          <td style="width: 50%;">
+            <span style="font-weight:bold;">
+              <xsl:text>Senaryo:</xsl:text>
+            </span>
+          </td>
+          <td style="width: 50%;">
+            <xsl:for-each select="n1:Invoice/cbc:ProfileID">
+              <xsl:apply-templates/>
+            </xsl:for-each>
+          </td>
+        </tr>
+        <xsl:if test="not(//n1:Invoice/cbc:ProfileID='EGIDERPUSULASI')">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Fatura Tipi:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:for-each select="n1:Invoice/cbc:InvoiceTypeCode">
+                <xsl:apply-templates/>
+              </xsl:for-each>
+            </td>
+          </tr>
+        </xsl:if>
+        <xsl:if test="//n1:Invoice/cbc:AccountingCost">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>İlave Fatura Tipi:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:for-each select="n1:Invoice/cbc:AccountingCost">
+                <xsl:apply-templates/>
+              </xsl:for-each>
+            </td>
+          </tr>
+        </xsl:if>
+        <tr style="height:13px;">
+          <td style="width: 50%;">
+            <xsl:choose>
+              <xsl:when test="//n1:Invoice/cbc:ProfileID='EGIDERPUSULASI'">
+                <span style="font-weight:bold;">
+                  <xsl:text>Pusula No:</xsl:text>
+                </span>
+              </xsl:when>
+              <xsl:otherwise>
+                <span style="font-weight:bold;">
+                  <xsl:text>Fatura No:</xsl:text>
+                </span>
+              </xsl:otherwise>
+            </xsl:choose>
+          </td>
+          <td style="width: 50%;">
+            <xsl:for-each select="n1:Invoice/cbc:ID">
+              <xsl:apply-templates/>
+            </xsl:for-each>
+          </td>
+        </tr>
+        <tr style="height:13px;">
+          <td style="width: 50%;">
+            <xsl:choose>
+              <xsl:when test="//n1:Invoice/cbc:ProfileID='EGIDERPUSULASI'">
+                <span style="font-weight:bold;">
+                  <xsl:text>Pusula Tarihi:</xsl:text>
+                </span>
+              </xsl:when>
+              <xsl:otherwise>
+                <span style="font-weight:bold;">
+                  <xsl:text>Fatura Tarihi:</xsl:text>
+                </span>
+              </xsl:otherwise>
+            </xsl:choose>
+          </td>
+          <td style="width: 50%;">
+            <xsl:for-each select="n1:Invoice/cbc:IssueDate">
+              <xsl:apply-templates select="."/>
+              <xsl:text>&#160;</xsl:text>
+              <xsl:value-of select="substring(../cbc:IssueTime,1,5)"/>
+            </xsl:for-each>
+          </td>
+        </tr>
+        <xsl:for-each select="//n1:Invoice/cac:AdditionalDocumentReference/cbc:DocumentTypeCode[text()='MUKELLEF_KODU' or text()='MUKELLEF_ADI' or text()='DOSYA_NO']">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:if test="../cbc:DocumentTypeCode='MUKELLEF_KODU'">
+                  <xsl:text>Mükellef Kodu:</xsl:text>
+                </xsl:if>
+                <xsl:if test="../cbc:DocumentTypeCode='MUKELLEF_ADI'">
+                  <xsl:text>Mükellef Adı:</xsl:text>
+                </xsl:if>
+                <xsl:if test="../cbc:DocumentTypeCode='DOSYA_NO'">
+                  <xsl:text>Dosya No:</xsl:text>
+                </xsl:if>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:value-of select="../cbc:DocumentType"/>
+            </td>
+          </tr>
+        </xsl:for-each>
+        <xsl:if test="(//n1:Invoice/cbc:AccountingCost) and (//n1:Invoice/cac:InvoicePeriod)">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Dönem Başlangıcı:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:for-each select="//n1:Invoice/cac:InvoicePeriod">
+                <xsl:apply-templates select="cbc:StartDate"/>
+              </xsl:for-each>
+            </td>
+          </tr>
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Dönem Bitişi:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:for-each select="//n1:Invoice/cac:InvoicePeriod">
+                <xsl:apply-templates select="cbc:EndDate"/>
+              </xsl:for-each>
+            </td>
+          </tr>
+        </xsl:if>
+        <xsl:for-each select="n1:Invoice/cac:DespatchDocumentReference">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>İrsaliye No:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:value-of select="cbc:ID"/>
+            </td>
+          </tr>
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>İrsaliye Tarihi:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:for-each select="cbc:IssueDate">
+                <xsl:apply-templates select="."/>
+              </xsl:for-each>
+            </td>
+          </tr>
+        </xsl:for-each>
+        <xsl:if test="//n1:Invoice/cbc:paymentDueDate">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Son Ödeme Tarihi:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:for-each select="n1:Invoice/cbc:paymentDueDate">
+                <xsl:apply-templates/>
+              </xsl:for-each>
+            </td>
+          </tr>
+        </xsl:if>
+        <xsl:if test="//n1:Invoice/cac:OrderReference">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Sipariş No:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:for-each select="n1:Invoice/cac:OrderReference/cbc:ID">
+                <xsl:apply-templates/>
+              </xsl:for-each>
+            </td>
+          </tr>
+        </xsl:if>
+        <xsl:if test="//n1:Invoice/cac:OrderReference/cbc:IssueDate">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Sipariş Tarihi:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:for-each select="n1:Invoice/cac:OrderReference/cbc:IssueDate">
+                <xsl:apply-templates select="."/>
+              </xsl:for-each>
+            </td>
+          </tr>
+        </xsl:if>
+        <xsl:for-each select="n1:Invoice/cac:ReceiptDocumentReference">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Mal Kabul No:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:value-of select="cbc:ID"/>
+            </td>
+          </tr>
+        </xsl:for-each>
+        <xsl:for-each select="n1:Invoice/cac:TaxRepresentativeParty/cac:PartyIdentification/cbc:ID[@schemeID='ARACIKURUMVKN']">
+          <tr>
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Aracı Kurum VKN:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:value-of select="."/>
+            </td>
+          </tr>
+          <tr>
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Aracı Kurum Unvan:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:value-of select="../../cac:PartyName/cbc:Name"/>
+            </td>
+          </tr>
+        </xsl:for-each>
+        <xsl:if test="//n1:Invoice/cac:PaymentMeans/cbc:PaymentDueDate">
+          <tr style="height:13px;">
+            <td style="width: 50%;">
+              <span style="font-weight:bold;">
+                <xsl:text>Ödeme Tarihi:</xsl:text>
+              </span>
+            </td>
+            <td style="width: 50%;">
+              <xsl:for-each select="n1:Invoice/cac:PaymentMeans/cbc:PaymentDueDate">
+                <xsl:value-of select="substring(.,9,2)"/>-<xsl:value-of select="substring(.,6,2)"/>-<xsl:value-of select="substring(.,1,4)"/>
+              </xsl:for-each>
+            </td>
+          </tr>
+        </xsl:if>
+        {customSb}
+          </tbody>
+        </table>
+    </div>
+""";
     }
 
     // ── BLOCK: InvoiceTotals ──────────────────────────────────────────────
@@ -1270,6 +1527,31 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             "right" => "margin:0 0 0 auto",
             _       => "margin:0 auto",
         };
-        return $"    <img src=\"{GibLogoBase64}\" alt=\"GIB Logo\" style=\"display:block;width:{width};height:{height};object-fit:contain;{marginStyle};\"/>";
+        var textAlign = cfg.Alignment switch
+        {
+            "left"  => "left",
+            "right" => "right",
+            _       => "center",
+        };
+        return $"""
+            <div style="display:inline-block;{marginStyle};text-align:{textAlign};">
+              <img src="{GibLogoBase64}" alt="GIB Logo" style="display:block;width:{width};height:{height};object-fit:contain;"/>
+              <h1 style="text-align:center;margin:2px 0 0 0;">
+                <span style="font-weight:bold;">
+                  <xsl:choose>
+                    <xsl:when test="//n1:Invoice/cbc:ProfileID='EARSIVFATURA' or //n1:Invoice/cbc:ProfileID='EBELGE'">
+                      <xsl:text>e-Arşiv Fatura</xsl:text>
+                    </xsl:when>
+                    <xsl:when test="//n1:Invoice/cbc:ProfileID='EGIDERPUSULASI'">
+                      <xsl:text>e-Gider Pusulası</xsl:text>
+                    </xsl:when>
+                    <xsl:otherwise>
+                      <xsl:text>e-FATURA</xsl:text>
+                    </xsl:otherwise>
+                  </xsl:choose>
+                </span>
+              </h1>
+            </div>
+            """;
     }
 }

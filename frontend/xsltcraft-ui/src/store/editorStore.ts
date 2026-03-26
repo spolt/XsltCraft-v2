@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
-import { DEFAULT_BLOCK_LAYOUT, DEFAULT_PARTY_FIELDS, DEFAULT_INVOICE_LINE_COLUMNS, DEFAULT_INVOICE_HEADER_FIELDS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../types/blocks'
+import { DEFAULT_BLOCK_LAYOUT, DEFAULT_PARTY_FIELDS, DEFAULT_INVOICE_LINE_COLUMNS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../types/blocks'
 import type { Block, BlockType, BlockConfig, BlockLayout } from '../types/blocks'
 import type { BlockTree, Section } from '../types/template'
 
@@ -88,13 +88,13 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
       }
     case 'InvoiceHeader':
       return {
-        fields: DEFAULT_INVOICE_HEADER_FIELDS.map((f) => ({ ...f })),
+        fields: [],
         title: 'FATURA BİLGİLERİ',
         showTitle: false,
         bordered: true,
         borderStyle: 'solid',
         labelStyle: 'table',
-        fontSize: '11px',
+        fontSize: '10.4px',
       }
     case 'InvoiceTotals':
       return {

@@ -24,6 +24,7 @@ export default function EditorPreviewPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastMs, setLastMs] = useState<number | null>(null)
+  const [expanded, setExpanded] = useState(false)
 
   // Debounced preview fetch
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function EditorPreviewPanel() {
   }, [sections, blocks, activeXml?.content, useStoredXslt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex flex-col border-l border-gray-200 bg-white" style={{ width: 420, flexShrink: 0 }}>
+    <div className="flex flex-col border-l border-gray-200 bg-white" style={{ width: expanded ? 860 : 420, flexShrink: 0 }}>
       {/* Header */}
       <div className="h-9 flex items-center gap-2 px-3 border-b border-gray-100 flex-shrink-0">
         <span className="text-xs font-medium text-gray-500 flex-1">Canlı Önizleme</span>
@@ -74,6 +75,13 @@ export default function EditorPreviewPanel() {
         {!activeXml && (
           <span className="text-xs text-amber-500">XML yüklenmedi</span>
         )}
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="px-2 py-0.5 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 flex-shrink-0"
+          title={expanded ? 'Daralt' : 'Genişlet'}
+        >
+          {expanded ? '⊟' : '⊞'}
+        </button>
         <button
           onClick={() => iframeRef.current?.contentWindow?.print()}
           disabled={!html}

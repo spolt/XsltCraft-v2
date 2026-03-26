@@ -5,7 +5,7 @@ import { uploadAsset, getAssetUrl, deleteAsset } from '../../services/assetServi
 import { evaluateXPathValue } from '../../utils/xmlUtils'
 import XmlTreeExplorer from './XmlTreeExplorer'
 import type { Block, BlockConfig, BlockAlignment, BlockWidth, PartyType, PartyLabelStyle, ColumnFormat_ILT, InvoiceHeaderField, InvoiceTotalsField } from '../../types/blocks'
-import { PARTY_TYPE_LABELS, DEFAULT_INVOICE_HEADER_FIELDS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../../types/blocks'
+import { PARTY_TYPE_LABELS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../../types/blocks'
 import { GIB_LOGO_BASE64 } from '../../assets/gibLogo'
 
 // ── Generic field helpers ─────────────────────────────────────────────────────
@@ -1066,16 +1066,15 @@ function ConditionalTextPanel({ config, update }: { config: Config<'ConditionalT
 // ── InvoiceHeader — Alan düzenleyici ─────────────────────────────────────────
 
 function InvoiceHeaderPanel({ config, update }: { config: Config<'InvoiceHeader'>; update: UpdateFn }) {
-  function updateField(index: number, patch: Partial<InvoiceHeaderField>) {
+  const customFields = config.fields.filter((f) => f.isCustom)
+
+  function updateCustomField(index: number, patch: Partial<InvoiceHeaderField>) {
     const fields = config.fields.map((f, i) => (i === index ? { ...f, ...patch } : f))
     update({ fields })
   }
 
-  function moveField(index: number, direction: -1 | 1) {
-    const target = index + direction
-    if (target < 0 || target >= config.fields.length) return
-    const fields = [...config.fields]
-    ;[fields[index], fields[target]] = [fields[target], fields[index]]
+  function removeCustomField(index: number) {
+    const fields = config.fields.filter((_, i) => i !== index)
     fields.forEach((f, i) => (f.order = i))
     update({ fields })
   }
@@ -1096,12 +1095,6 @@ function InvoiceHeaderPanel({ config, update }: { config: Config<'InvoiceHeader'
     })
   }
 
-  function removeField(index: number) {
-    const fields = config.fields.filter((_, i) => i !== index)
-    fields.forEach((f, i) => (f.order = i))
-    update({ fields })
-  }
-
   const sectionLabelStyle: React.CSSProperties = {
     fontSize: 9,
     fontWeight: 600,
@@ -1114,37 +1107,19 @@ function InvoiceHeaderPanel({ config, update }: { config: Config<'InvoiceHeader'
 
   return (
     <>
-      <Field label="Başlık">
-        <TextInput value={config.title} onChange={(v) => update({ title: v })} placeholder="FATURA BİLGİLERİ" />
-      </Field>
-      <div className="flex" style={{ gap: 12 }}>
-        <label className="flex items-center cursor-pointer" style={{ gap: 6 }}>
-          <span
-            style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 14, height: 14, borderRadius: 2,
-              border: config.showTitle ? '1.5px solid var(--color-brand-primary)' : '1.5px solid #A0A09A',
-              background: config.showTitle ? 'var(--color-brand-primary)' : 'var(--color-surface-card)',
-              fontSize: 9, color: '#fff', fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-            }}
-          >{config.showTitle ? '✓' : ''}</span>
-          <input type="checkbox" checked={config.showTitle} onChange={(e) => update({ showTitle: e.target.checked })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
-          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Başlığı göster</span>
-        </label>
-        <label className="flex items-center cursor-pointer" style={{ gap: 6 }}>
-          <span
-            style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 14, height: 14, borderRadius: 2,
-              border: config.bordered ? '1.5px solid var(--color-brand-primary)' : '1.5px solid #A0A09A',
-              background: config.bordered ? 'var(--color-brand-primary)' : 'var(--color-surface-card)',
-              fontSize: 9, color: '#fff', fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-            }}
-          >{config.bordered ? '✓' : ''}</span>
-          <input type="checkbox" checked={config.bordered} onChange={(e) => update({ bordered: e.target.checked })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
-          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Kenarlıklı</span>
-        </label>
-      </div>
+      <label className="flex items-center cursor-pointer" style={{ gap: 6 }}>
+        <span
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 14, height: 14, borderRadius: 2,
+            border: config.bordered ? '1.5px solid var(--color-brand-primary)' : '1.5px solid #A0A09A',
+            background: config.bordered ? 'var(--color-brand-primary)' : 'var(--color-surface-card)',
+            fontSize: 9, color: '#fff', fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+          }}
+        >{config.bordered ? '✓' : ''}</span>
+        <input type="checkbox" checked={config.bordered} onChange={(e) => update({ bordered: e.target.checked })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
+        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Kenarlıklı</span>
+      </label>
       {config.bordered && (
         <Field label="Kenarlık Stili">
           <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
@@ -1153,104 +1128,48 @@ function InvoiceHeaderPanel({ config, update }: { config: Config<'InvoiceHeader'
         </Field>
       )}
       <Field label="Yazı Boyutu">
-        <TextInput value={config.fontSize ?? ''} onChange={(v) => update({ fontSize: v })} placeholder="9pt" />
+        <TextInput value={config.fontSize ?? ''} onChange={(v) => update({ fontSize: v })} placeholder="11px" />
       </Field>
 
-      {/* Alan listesi */}
+      {/* Özel alanlar */}
       <div style={{ borderTop: '0.5px solid var(--color-border-default)', paddingTop: 8 }}>
-        <p style={sectionLabelStyle}>ALANLAR</p>
+        <p style={sectionLabelStyle}>ÖZEL ALANLAR</p>
         <div className="flex flex-col" style={{ gap: 3 }}>
-          {config.fields.map((field, i) => (
-            <div
-              key={field.key}
-              style={{
-                border: `0.5px solid ${field.visible ? 'var(--color-border-default)' : 'var(--color-border-subtle)'}`,
-                borderRadius: 5,
-                overflow: 'hidden',
-                opacity: field.visible ? 1 : 0.55,
-              }}
-            >
-              {/* Compact header */}
-              <div className="flex items-center" style={{ padding: '5px 8px', gap: 5, background: 'var(--color-surface-secondary)' }}>
-                {/* Görünürlük toggle */}
-                <button
-                  type="button"
-                  onClick={() => updateField(i, { visible: !field.visible })}
-                  style={{
-                    width: 14, height: 14, borderRadius: 2, flexShrink: 0,
-                    border: field.visible ? '1.5px solid var(--color-brand-primary)' : '1.5px solid #A0A09A',
-                    background: field.visible ? 'var(--color-brand-primary)' : 'var(--color-surface-card)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, color: '#fff', fontWeight: 700, cursor: 'pointer',
-                  }}
-                  title={field.visible ? 'Gizle' : 'Göster'}
-                >
-                  {field.visible ? '✓' : ''}
-                </button>
-
-                {/* Etiket */}
-                <input
-                  type="text"
-                  value={field.label}
-                  onChange={(e) => updateField(i, { label: e.target.value })}
-                  style={{
-                    flex: 1, minWidth: 0, fontSize: 11, fontFamily: 'inherit',
-                    border: 'none', background: 'transparent', outline: 'none',
-                    color: 'var(--color-text-primary)', fontWeight: 500,
-                  }}
-                  placeholder="Etiket"
-                />
-
-                {/* Sırala */}
-                <div className="flex" style={{ gap: 2 }}>
-                  <button type="button" onClick={() => moveField(i, -1)} disabled={i === 0}
-                    style={{ width: 18, height: 18, border: 'none', background: 'none', fontSize: 9, color: 'var(--color-text-muted)', cursor: 'pointer', opacity: i === 0 ? 0.3 : 1 }}>▲</button>
-                  <button type="button" onClick={() => moveField(i, 1)} disabled={i === config.fields.length - 1}
-                    style={{ width: 18, height: 18, border: 'none', background: 'none', fontSize: 9, color: 'var(--color-text-muted)', cursor: 'pointer', opacity: i === config.fields.length - 1 ? 0.3 : 1 }}>▼</button>
-                </div>
-
-                {/* Sil (sadece custom) */}
-                {field.isCustom && (
-                  <button type="button" onClick={() => removeField(i)}
-                    style={{ width: 18, height: 18, border: 'none', background: 'none', fontSize: 10, color: 'var(--color-danger)', cursor: 'pointer' }}>✕</button>
-                )}
-              </div>
-
-              {/* XPath (sadece custom için düzenlenebilir) */}
-              {field.isCustom ? (
-                <div style={{ padding: '4px 8px', background: 'var(--color-surface-card)' }}>
-                  <XPathInput
-                    value={field.xpath}
-                    onChange={(v) => updateField(i, { xpath: v })}
-                    placeholder="//cbc:..."
+          {customFields.map((field) => {
+            const absIdx = config.fields.indexOf(field)
+            return (
+              <div
+                key={field.key}
+                style={{ border: '0.5px solid var(--color-border-default)', borderRadius: 5, overflow: 'hidden' }}
+              >
+                <div className="flex items-center" style={{ padding: '5px 8px', gap: 5, background: 'var(--color-surface-secondary)' }}>
+                  <input
+                    type="text"
+                    value={field.label}
+                    onChange={(e) => updateCustomField(absIdx, { label: e.target.value })}
+                    style={{
+                      flex: 1, minWidth: 0, fontSize: 11, fontFamily: 'inherit',
+                      border: 'none', background: 'transparent', outline: 'none',
+                      color: 'var(--color-text-primary)', fontWeight: 500,
+                    }}
+                    placeholder="Etiket"
                   />
+                  <button type="button" onClick={() => removeCustomField(absIdx)}
+                    style={{ width: 18, height: 18, border: 'none', background: 'none', fontSize: 10, color: 'var(--color-danger)', cursor: 'pointer' }}>✕</button>
                 </div>
-              ) : (
-                <div style={{
-                  padding: '3px 8px', background: 'var(--color-surface-card)',
-                  fontSize: 10, fontFamily: 'monospace', color: 'var(--color-text-muted)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }} title={field.xpath}>
-                  {field.xpath}
+                <div style={{ padding: '4px 8px', background: 'var(--color-surface-card)' }}>
+                  <XPathInput value={field.xpath} onChange={(v) => updateCustomField(absIdx, { xpath: v })} placeholder="//cbc:..." />
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
-
-        {/* Reset + Özel ekle */}
-        <div className="flex items-center" style={{ marginTop: 8, gap: 8 }}>
+        <div style={{ marginTop: 8 }}>
           <button
             onClick={addCustomField}
             style={{ fontSize: 11, color: 'var(--color-brand-primary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
           >
             + Özel alan ekle
-          </button>
-          <button
-            onClick={() => update({ fields: DEFAULT_INVOICE_HEADER_FIELDS.map((f) => ({ ...f })) })}
-            style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, marginLeft: 'auto' }}
-          >
-            Sıfırla
           </button>
         </div>
       </div>
