@@ -33,8 +33,10 @@ public static class ServiceCollectionExtensions
         var storageProvider = configuration["Storage:Provider"] ?? "Local";
         if (storageProvider.Equals("Local", StringComparison.OrdinalIgnoreCase))
             services.AddScoped<IStorageService, LocalStorageService>();
+        else if (storageProvider.Equals("S3", StringComparison.OrdinalIgnoreCase))
+            services.AddSingleton<IStorageService, S3StorageService>();
         else
-            throw new InvalidOperationException($"Desteklenmeyen storage provider: '{storageProvider}'. Geçerli değerler: Local");
+            throw new InvalidOperationException($"Desteklenmeyen storage provider: '{storageProvider}'. Geçerli değerler: Local, S3");
 
         // -------------------------------------------------
         // Auth
