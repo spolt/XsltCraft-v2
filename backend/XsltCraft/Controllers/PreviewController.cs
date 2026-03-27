@@ -14,18 +14,27 @@ namespace XsltCraft.Api.Controllers;
 [Route("api/[controller]")]
 public class PreviewController : ControllerBase
 {
+    private const int MaxRawBodyBytes = 1 * 1024 * 1024;   // 1 MB — XSLT + XML toplamı
+    private const int MaxXsltBodyBytes = 512 * 1024;        // 512 KB — validate-xslt için
+
     private readonly IXsltGeneratorService _generator;
     private readonly IStorageService _storage;
     private readonly AppDbContext _db;
+    private readonly IWebHostEnvironment _env;
+    private readonly ILogger<PreviewController> _logger;
 
     public PreviewController(
         IXsltGeneratorService generator,
         IStorageService storage,
-        AppDbContext db)
+        AppDbContext db,
+        IWebHostEnvironment env,
+        ILogger<PreviewController> logger)
     {
         _generator = generator;
         _storage = storage;
         _db = db;
+        _env = env;
+        _logger = logger;
     }
 
     /// <summary>
@@ -63,7 +72,8 @@ public class PreviewController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(new { error = ex.Message });
+            _logger.LogError(ex, "Önizleme sırasında beklenmeyen hata.");
+            return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
         }
     }
 
@@ -115,7 +125,8 @@ public class PreviewController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(new { error = ex.Message });
+            _logger.LogError(ex, "Önizleme sırasında beklenmeyen hata.");
+            return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
         }
     }
 
@@ -144,8 +155,14 @@ public class PreviewController : ControllerBase
     /// Response: { html, generationTimeMs }
     /// </summary>
     [HttpPost("raw")]
+    [RequestSizeLimit(MaxRawBodyBytes)]
     public IActionResult PreviewRaw([FromBody] RawPreviewRequest request)
     {
+        if (System.Text.Encoding.UTF8.GetByteCount(request.Xslt) > MaxRawBodyBytes / 2)
+            return BadRequest(new { error = "XSLT içeriği çok büyük (maks. 512 KB)." });
+        if (System.Text.Encoding.UTF8.GetByteCount(request.XmlContent) > MaxRawBodyBytes / 2)
+            return BadRequest(new { error = "XML içeriği çok büyük (maks. 512 KB)." });
+
         var sw = Stopwatch.StartNew();
         try
         {
@@ -172,7 +189,8 @@ public class PreviewController : ControllerBase
         }
         catch (Exception ex)
         {
-            return BadRequest(new { error = ex.Message });
+            _logger.LogError(ex, "Önizleme sırasında beklenmeyen hata.");
+            return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
         }
     }
 
@@ -192,6 +210,7 @@ public class PreviewController : ControllerBase
 
     /// <summary>XSLT sözdizimini doğrular — geliştirici aracı.</summary>
     [HttpPost("validate-xslt")]
+    [RequestSizeLimit(MaxXsltBodyBytes)]
     public IActionResult ValidateXslt([FromBody] ValidateXsltRequest request)
     {
         try
@@ -213,7 +232,8 @@ public class PreviewController : ControllerBase
         }
         catch (Exception ex)
         {
-            return Ok(new { valid = false, error = ex.Message, line = 0, column = 0 });
+            _logger.LogError(ex, "XSLT doğrulama sırasında beklenmeyen hata.");
+            return Ok(new { valid = false, error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu.", line = 0, column = 0 });
         }
     }
 

@@ -35,6 +35,7 @@ export default function XsltEditorPreview({ html, onElementClick }: Props) {
     if (!onElementClick) return
 
     function handler(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return
       if (e.data?.type === 'xslt-preview-click' && e.data.text) {
         onElementClick!(e.data.text)
       }
