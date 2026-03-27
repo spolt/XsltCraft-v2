@@ -9,6 +9,8 @@ import AdminThemesPage from './pages/admin/AdminThemesPage'
 import EditorPage from './pages/EditorPage'
 import ThemeUsePage from './pages/ThemeUsePage'
 import DevModePage from './pages/DevModePage'
+import XsltEditorPage from './pages/XsltEditorPage'
+import MyXsltTemplatesPage from './pages/MyXsltTemplatesPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
 import AppLayout from './components/layout/AppLayout'
@@ -26,6 +28,7 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/templates" element={<TemplatesPage />} />
             <Route path="/drafts" element={<DraftsPage />} />
+            <Route path="/my-xslt-templates" element={<MyXsltTemplatesPage />} />
             <Route path="/profile" element={<ProfilePage />} />
           </Route>
           {/* Editor ve ThemeUse kendi layout'larını yönetir */}
@@ -33,6 +36,8 @@ export default function App() {
           <Route path="/editor/:templateId" element={<EditorPage />} />
           <Route path="/theme-use/:templateId" element={<ThemeUsePage />} />
           <Route path="/dev-mode/:templateId" element={<DevModePage />} />
+          <Route path="/xslt-editor" element={<XsltEditorPage />} />
+          <Route path="/xslt-editor/:templateId" element={<XsltEditorPage />} />
         </Route>
 
         <Route element={<AdminRoute />}>

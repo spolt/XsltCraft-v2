@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Template> Templates => Set<Template>();
     public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<UserXsltTemplate> UserXsltTemplates => Set<UserXsltTemplate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -64,6 +65,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(a => a.Owner)
                   .WithMany()
                   .HasForeignKey(a => a.OwnerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserXsltTemplate>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Name).HasMaxLength(255).IsRequired();
+            entity.Property(t => t.XsltContent).IsRequired();
+            entity.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            entity.Property(t => t.UpdatedAt).HasDefaultValueSql("NOW()");
+            entity.HasOne(t => t.Owner)
+                  .WithMany()
+                  .HasForeignKey(t => t.OwnerId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
     }

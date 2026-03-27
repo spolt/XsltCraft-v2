@@ -7,10 +7,16 @@ export type XsltError = {
   column: number
 }
 
+type EditorFns = {
+  goTo: (term: string) => void
+  insertTextAtLine: (lineNumber: number, text: string) => void
+}
+
 type Props = {
   value: string
   onChange: (value: string) => void
-  onEditorReady?: (goTo: (term: string) => void) => void
+  onEditorReady?: (fns: EditorFns) => void
+  onRequestImageInsert?: (lineNumber: number) => void
   errors?: XsltError[]
 }
 
@@ -193,7 +199,7 @@ function registerXsltCompletions(monaco: any) {
   })
 }
 
-export default function XsltEditor({ value, onChange, onEditorReady, errors }: Props) {
+export default function XsltEditor({ value, onChange, onEditorReady, onRequestImageInsert, errors }: Props) {
 
   const monacoRef = useRef<any>(null)
   const editorRef = useRef<any>(null)
@@ -206,26 +212,92 @@ export default function XsltEditor({ value, onChange, onEditorReady, errors }: P
   function handleMount(editor: any) {
     editorRef.current = editor
 
-    if (onEditorReady) {
-      onEditorReady((term: string) => {
-        const model = editor.getModel()
-        if (!model) return
-
-        const matches = model.findMatches(
-          term,
-          false,
-          false,
-          false,
-          null,
-          false
-        )
-
-        if (matches.length > 0) {
-          const { startLineNumber, startColumn } = matches[0].range
-          editor.revealLineInCenter(startLineNumber)
-          editor.setPosition({ lineNumber: startLineNumber, column: startColumn })
-          editor.focus()
+    // Context menu: Resim Ekle
+    editor.addAction({
+      id: 'xslt-insert-image',
+      label: 'Resim Ekle',
+      contextMenuGroupId: 'modification',
+      contextMenuOrder: 1,
+      run(ed: any) {
+        const pos = ed.getPosition()
+        if (pos && onRequestImageInsert) {
+          onRequestImageInsert(pos.lineNumber)
         }
+      },
+    })
+
+    // Auto-close XML tags: <td> → <td>|</td>
+    const SELF_CLOSING = new Set([
+      'area','base','br','col','embed','hr','img','input','link','meta',
+      'param','source','track','wbr',
+    ])
+
+    editor.onDidChangeModelContent((event: any) => {
+      const change = event.changes[0]
+      if (!change || change.text !== '>') return
+
+      const monaco = monacoRef.current
+      const model = editor.getModel()
+      const position = editor.getPosition()
+      if (!model || !position || !monaco) return
+
+      // Get text from line start to cursor to extract opening tag
+      const lineContent = model.getLineContent(position.lineNumber)
+      const textUpToCursor = lineContent.substring(0, position.column - 1)
+
+      // Match last opening tag: handles namespaces (xsl:for-each) and attributes
+      const tagMatch = textUpToCursor.match(/<([a-zA-Z][a-zA-Z0-9:._-]*)(?:\s[^>]*)?$/)
+      if (!tagMatch) return
+
+      const tagName = tagMatch[1]
+
+      // Skip self-closing tags, processing instructions and already self-closed tags
+      if (SELF_CLOSING.has(tagName.toLowerCase())) return
+      if (textUpToCursor.trimEnd().endsWith('/')) return  // user typed />
+      if (tagName.startsWith('?') || tagName.startsWith('!')) return
+
+      const closingTag = `</${tagName}>`
+      const insertAt = { lineNumber: position.lineNumber, column: position.column }
+
+      editor.executeEdits('auto-close-tag', [{
+        range: new monaco.Range(insertAt.lineNumber, insertAt.column, insertAt.lineNumber, insertAt.column),
+        text: closingTag,
+      }])
+
+      // Place cursor between opening and closing tags
+      editor.setPosition(insertAt)
+    })
+
+    if (onEditorReady) {
+      onEditorReady({
+        goTo: (term: string) => {
+          const model = editor.getModel()
+          if (!model) return
+
+          const matches = model.findMatches(term, false, false, false, null, false)
+
+          if (matches.length > 0) {
+            const { startLineNumber, startColumn } = matches[0].range
+            editor.revealLineInCenter(startLineNumber)
+            editor.setPosition({ lineNumber: startLineNumber, column: startColumn })
+            editor.focus()
+          }
+        },
+        insertTextAtLine: (lineNumber: number, text: string) => {
+          const monaco = monacoRef.current
+          const model = editor.getModel()
+          if (!model || !monaco) return
+
+          const lineContent = model.getLineContent(lineNumber)
+          const tagCloseIdx = lineContent.indexOf('>')
+          const insertCol = tagCloseIdx >= 0 ? tagCloseIdx + 2 : lineContent.length + 1
+
+          editor.executeEdits('insert-image', [{
+            range: new monaco.Range(lineNumber, insertCol, lineNumber, insertCol),
+            text: '\n' + text,
+          }])
+          editor.focus()
+        },
       })
     }
   }

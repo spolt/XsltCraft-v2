@@ -10,6 +10,8 @@ import {
   Shield,
   ChevronDown,
   ChevronRight,
+  Code2,
+  FileCode2,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -105,6 +107,26 @@ export default function Sidebar({ collapsed }: SidebarProps) {
         >
           <FolderOpen size={18} className="flex-shrink-0" />
           {!collapsed && <span>Taslaklarım</span>}
+        </Link>
+
+        {/* XSLT Editör */}
+        <Link
+          to="/xslt-editor"
+          className={`${itemBase} ${isActive('/xslt-editor') ? itemActive : itemInactive}`}
+          title="XSLT Editör"
+        >
+          <Code2 size={18} className="flex-shrink-0" />
+          {!collapsed && <span>XSLT Editör</span>}
+        </Link>
+
+        {/* Şablonlarım */}
+        <Link
+          to="/my-xslt-templates"
+          className={`${itemBase} ${isActive('/my-xslt-templates') ? itemActive : itemInactive}`}
+          title="Şablonlarım"
+        >
+          <FileCode2 size={18} className="flex-shrink-0" />
+          {!collapsed && <span>Şablonlarım</span>}
         </Link>
 
         {/* Admin - sadece admin kullanıcı */}
