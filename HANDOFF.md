@@ -1,7 +1,7 @@
 # XsltCraft — Geliştirici El Teslimi
 
-**Proje:** XsltCraft Low-Code XSLT Platform  
-**Tarih:** 2026-03-17  
+**Proje:** XsltCraft Low-Code XSLT Platform
+**Tarih:** 2026-03-27
 **Hazırlayan:** Semih Polat
 
 Bu döküman, projeyi teslim alan geliştiricinin ilk 30 dakikada ortamı ayağa kaldırıp ilk göreve başlayabilmesi için yazılmıştır.
@@ -24,9 +24,60 @@ PRD'yi en az bir kere baştan sona oku. Özellikle şu bölümlere dikkat et:
 
 ---
 
-## Ön gereksinimler
+## Mevcut durum (2026-03-27)
 
-Başlamadan önce şunların kurulu olduğundan emin ol:
+Faz 1–5 büyük ölçüde tamamlandı. Son olarak aşağıdaki özellikler ve güvenlik düzeltmeleri eklendi:
+
+### Son eklenen özellikler
+- **XSLT Editör** (`/xslt-editor`) — Kullanıcı kendi XSLT + XML dosyalarını yükler, Monaco Editor (dark tema) ile düzenler, canlı önizleme görür. Debounce'lu XSLT/XML doğrulama, önizleme → editör navigasyonu, Monaco sağ tık "Resim Ekle", otomatik XML tag kapatma.
+- **Şablonlarım** (`/my-xslt-templates`) — Kullanıcı kendi XSLT şablonlarını isimle kaydeder, listeler, yeniden açar, siler. Backend: `UserXsltTemplate` entity + CRUD API (`/api/user-xslt-templates`).
+- **Dashboard güncellemesi** — "XSLT Editör" ve "Şablonlarım" kartları eklendi.
+
+### Güvenlik hardening (Faz 6 — Güvenlik)
+Aşağıdaki açıklar kapatıldı ve commit'lendi:
+
+| # | Açık | Çözüm |
+|---|------|-------|
+| 1 | XXE Injection | Tüm `XmlReader.Create` ve `XmlDocument.Load` çağrılarına `DtdProcessing.Prohibit` + `XmlResolver=null` |
+| 2 | XSLT Injection | Tüm `transform.Load` çağrılarına `XsltSettings(enableScript:false, enableDocumentFunction:false)` |
+| 3 | Eksik Authorization | `RenderController` + `DocumentController` — `[Authorize]` class seviyesinde eklendi |
+| 4 | Asset IDOR | `AssetsController.Serve` — authenticated kullanıcı başkasının asset'ine erişirse `403` |
+| 5 | Thumbnail doğrulama eksik | `AdminController` — extension + MIME + 1 MB boyut kontrolü |
+| 6 | PostMessage origin | `XsltEditorPreview.tsx` — `e.origin !== window.location.origin` kontrolü |
+| 7 | Request boyut limiti yok | `PreviewRaw` → `[RequestSizeLimit(1 MB)]`, `ValidateXslt` → `512 KB` |
+| 8 | Exception sızıntısı | Generic `catch` bloklarında prod → generic mesaj + `LogError`, dev → `ex.Message` |
+| 9 | Dev config secret | `appsettings.Development.json` zaten `.gitignore`'da — tracked değil |
+
+### Açık kalan Faz 5 görevleri
+- `PartyInfo` block tipi (ROADMAP.md Faz 5 Görev grubu 6) — başlanmadı
+- Ödeme entegrasyonu ertelenmiş durumda
+
+---
+
+## Klasör yapısı
+
+```
+xsltcraft/
+├── backend/
+│   ├── XsltCraft/              ← ASP.NET Core Web API
+│   ├── XsltCraft.Application/  ← Servisler, DTO'lar, interface'ler
+│   ├── XsltCraft.Domain/       ← Entity'ler
+│   ├── XsltCraft.Infrastructure/ ← EF Core, Storage, XSLT engine
+│   ├── XsltCraft.Tests/
+│   └── XsltCraft.slnx
+├── frontend/
+│   └── xsltcraft-ui/           ← React 19 + TypeScript + Vite
+├── storage/
+│   ├── themes/
+│   └── assets/
+├── docker-compose.yml
+├── ROADMAP.md
+└── XsltCraft_PRD_v1_2.md
+```
+
+---
+
+## Ön gereksinimler
 
 | Araç | Versiyon | Kontrol |
 |------|----------|---------|
@@ -47,13 +98,18 @@ cd xsltcraft
 # 2. PostgreSQL'i ayağa kaldır
 docker compose up -d
 
-# 3. Backend'i çalıştır
-cd apps/backend
-dotnet restore
-dotnet run --project XsltCraft.Api
+# 3. Backend config dosyasını oluştur
+cp backend/XsltCraft/appsettings.Development.example.json \
+   backend/XsltCraft/appsettings.Development.json
+# appsettings.Development.json'ı kendi değerlerinle doldur (aşağıya bak)
 
-# 4. Frontend'i çalıştır (yeni terminal)
-cd apps/frontend
+# 4. Backend'i çalıştır (migration otomatik uygulanır)
+cd backend
+dotnet restore
+dotnet run --project XsltCraft
+
+# 5. Frontend'i çalıştır (yeni terminal)
+cd frontend/xsltcraft-ui
 npm install
 npm run dev
 ```
@@ -67,11 +123,11 @@ Başarılıysa:
 
 ## Ortam değişkenleri
 
-Backend `apps/backend/XsltCraft.Api/appsettings.Development.json` dosyasını kullanır. Repodan gelen örnek dosyayı kopyala ve doldur:
+`backend/XsltCraft/appsettings.Development.json` dosyası `.gitignore`'da — repodan gelmez. Örnek dosyadan oluştur:
 
 ```bash
-cp apps/backend/XsltCraft.Api/appsettings.Development.example.json \
-   apps/backend/XsltCraft.Api/appsettings.Development.json
+cp backend/XsltCraft/appsettings.Development.example.json \
+   backend/XsltCraft/appsettings.Development.json
 ```
 
 Doldurulması gereken alanlar:
@@ -94,11 +150,42 @@ Doldurulması gereken alanlar:
   "Storage": {
     "Provider": "Local",
     "LocalBasePath": "../../../storage"
-  }
+  },
+  "AllowedOrigins": [
+    "http://localhost:5173"
+  ]
 }
 ```
 
-> Google OAuth şimdilik gerekli değil. Faz 1'in ilk görev gruplarını `ClientId` olmadan tamamlayabilirsin; OAuth'u sonraya bırak.
+> Google OAuth şimdilik gerekli değil — `ClientId` olmadan çalışır, sadece Google ile giriş butonu çalışmaz.
+
+---
+
+## EF Core migration
+
+Yeni migration eklemek gerekirse:
+
+```bash
+cd backend
+dotnet ef migrations add <MigrationAdi> \
+  --project XsltCraft.Infrastructure \
+  --startup-project XsltCraft
+```
+
+Migration'lar uygulama başlarken `Program.cs` tarafından otomatik uygulanır.
+
+---
+
+## Nereden başlıyorum?
+
+**Şu an Faz 5 sonu / Faz 6 başındayız.**
+
+Öncelikli açık görevler:
+
+1. **PartyInfo block tipi** — ROADMAP.md, Faz 5 Görev grubu 6 altındaki tüm checkbox'lar boş. Frontend + backend + XSLT generator birlikte tamamlanması gerekiyor.
+2. **Faz 6 — S3 geçişi** — `S3StorageService` implementasyonu. `IStorageService` arayüzü hazır, sadece yeni implementasyon yazılacak.
+3. **Rate limiting** — Auth endpoint'lerine brute force koruması (ROADMAP Faz 6 Görev grubu 2).
+4. **Production altyapısı** — ROADMAP Faz 6 Görev grubu 4.
 
 ---
 
@@ -106,50 +193,23 @@ Doldurulması gereken alanlar:
 
 ```
 main        ← production-ready, her faz sonunda merge edilir
-develop     ← aktif geliştirme branch'i
+develop     ← aktif geliştirme branch'i (şu an kullanılmıyor, main üzerinde çalışılıyor)
 feature/*   ← bireysel görevler için açılır
 ```
 
-Yeni bir göreve başlarken:
-
-```bash
-git checkout develop
-git pull
-git checkout -b feature/faz-1-jwt-service
-# ... çalış ...
-git push origin feature/faz-1-jwt-service
-# PR aç: feature → develop
-```
-
-Faz tamamlanınca `develop → main` PR'ı açılır ve review edilir.
-
 ---
 
-## Nereden başlıyorum?
+## Pre-commit hook
 
-**Şu an Faz 1'deyiz.**
+`Hooks/pre-commit` dosyası aktif. Her commit'te şunları kontrol eder:
+1. Hassas dosya yok (`.env`, credentials vb.)
+2. Secret pattern yok
+3. XSLT dosyası commit'lenmiyor
+4. `console.log` yok (frontend)
+5. Hardcoded URL yok
+6. Branch ismi geçerli
 
-ROADMAP.md'yi aç, "Faz 1 — Görev grubu 1" altındaki ilk checkbox'tan başla:
-
-> ☐ `xsltcraft/` kök dizininde repo oluştur, `README.md` ve `.gitignore` ekle
-
-Görevleri tamamladıkça checkbox'ları işaretle ve commit'le.
-
----
-
-## Önemli mimari kararlar (PRD'den özet)
-
-**XSLT dosyaları veritabanına yazılmaz.**  
-Tüm `.xslt` ve görsel dosyalar `storage/` klasörüne (ya da prod'da S3'e) yazılır. Veritabanı yalnızca bu dosyaların yolunu (`storagePath`) tutar. Dosya içeriğini hiçbir zaman bir DB kolonu olarak sakla.
-
-**Preview storage'a yazmaz.**  
-`POST /api/preview` endpoint'i XSLT'yi in-memory üretir, XML'e uygular, HTML döndürür. Storage'a yazma yalnızca ödeme tamamlandıktan sonra (`/download` endpoint'inde) gerçekleşir.
-
-**Storage DI ile soyutlanmıştır.**  
-`IStorageService` arayüzünü kullan; `LocalStorageService` veya `S3StorageService`'i doğrudan `new` ile örnekleme. Servis, `Program.cs`'te konfigürasyona göre inject edilir.
-
-**Monorepo, iki bağımsız proje.**  
-`apps/frontend` ve `apps/backend` birbirinden bağımsız build ve run edilir. Ortak tip tanımları `apps/frontend/src/types/` altındaki TypeScript interface'leri ile backend DTO'ları arasında manuel olarak senkronize tutulur.
+Hook hata verirse nedeni çöz, `--no-verify` kullanma.
 
 ---
 
@@ -160,23 +220,53 @@ Tüm `.xslt` ve görsel dosyalar `storage/` klasörüne (ya da prod'da S3'e) yaz
 dotnet tool install --global dotnet-ef
 ```
 
-**PostgreSQL bağlantısı reddediliyor:**  
-`docker compose up -d` çalıştırıldıktan sonra birkaç saniye bekle, container tam ayağa kalkmadan önce bağlantı kurulamaz.
+**PostgreSQL bağlantısı reddediliyor:**
+`docker compose up -d` çalıştırıldıktan sonra birkaç saniye bekle.
 
-**`storage/` klasörü yok hatası:**  
-Repo kökünde `storage/themes/` ve `storage/assets/` klasörlerini oluştur:
+**`storage/` klasörü yok hatası:**
 ```bash
 mkdir -p storage/themes storage/assets
 ```
 
-**CORS hatası (frontend → API):**  
-`appsettings.Development.json`'da CORS origin'inin `http://localhost:5173` olarak ayarlandığından emin ol.
+**CORS hatası (frontend → API):**
+`appsettings.Development.json`'da `AllowedOrigins` içinde `http://localhost:5173` olduğundan emin ol.
+
+**Saxon XSLT (Free theme render):**
+`XsltTemplateRenderer.RenderAsync` free theme render'ı için Saxon HE kullanır. Paket `XsltCraft.Infrastructure.csproj`'ta kayıtlı, `dotnet restore` ile gelir.
+
+---
+
+## Önemli mimari kararlar
+
+**XSLT dosyaları veritabanına yazılmaz.**
+Tüm `.xslt` ve görsel dosyalar `storage/` klasörüne yazılır. DB yalnızca `storagePath` tutar.
+
+**Preview storage'a yazmaz.**
+`POST /api/preview` ve `POST /api/preview/raw` tamamen in-memory çalışır.
+
+**Storage DI ile soyutlanmıştır.**
+`IStorageService` kullan; `LocalStorageService` veya `S3StorageService`'i doğrudan `new` ile örnekleme.
+
+**UserXsltTemplate içeriği DB'ye yazılır.**
+Bu entity XSLT + XML içeriğini doğrudan DB'de tutar (`text` kolon) — storage'a yazılmaz. Boyut küçük tutulmalı; büyük dosyalar için storage'a geçiş değerlendirilebilir.
+
+**Security hardening tamamlandı.**
+Tüm XML/XSLT parsing noktaları XXE ve injection korumasıyla güncellendi. Yeni eklenen her XML/XSLT okuma noktasında aynı pattern'i kullan:
+```csharp
+// XML okuma
+var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+using var reader = XmlReader.Create(new StringReader(content), settings);
+
+// XSLT yükleme
+var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
+transform.Load(reader, xsltSettings, new XmlUrlResolver());
+```
 
 ---
 
 ## Soru için
 
-Bir şey anlamadıysan ya da PRD'de belirsiz bir nokta gördüysen önce ilgili PRD bölümünü tekrar oku. Hâlâ netleşmediyse Semih'e sor — belirsizlikleri açık bırakma, tahminle ilerleme.
+Bir şey anlamadıysan ya da PRD'de belirsiz bir nokta gördüysen önce ilgili PRD bölümünü tekrar oku. Hâlâ netleşmediyse Semih'e sor.
 
 ---
 
