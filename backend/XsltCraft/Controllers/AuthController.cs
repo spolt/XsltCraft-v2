@@ -4,6 +4,7 @@ using Google.Apis.Auth;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Application.DTO;
@@ -23,6 +24,7 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
 
     // POST /api/auth/register
     [HttpPost("register")]
+    [EnableRateLimiting("auth-register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         if (await db.Users.AnyAsync(u => u.Email == request.Email))
@@ -46,6 +48,7 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
 
     // POST /api/auth/login
     [HttpPost("login")]
+    [EnableRateLimiting("auth-sensitive")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
@@ -62,6 +65,7 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
 
     // POST /api/auth/refresh
     [HttpPost("refresh")]
+    [EnableRateLimiting("auth-sensitive")]
     public async Task<IActionResult> Refresh()
     {
         var rawToken = Request.Cookies[RefreshTokenCookie];
@@ -124,6 +128,7 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
 
     // POST /api/auth/google
     [HttpPost("google")]
+    [EnableRateLimiting("auth-sensitive")]
     public async Task<IActionResult> Google([FromBody] GoogleAuthRequest request)
     {
         var clientId = configuration["Google:ClientId"];

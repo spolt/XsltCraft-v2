@@ -15,7 +15,7 @@ export interface TemplateDetail {
   documentType: 'Invoice' | 'Despatch'
   isFreeTheme: boolean
   blockTree: string | null
-  xsltStoragePath: string | null
+  hasStoredXslt: boolean
   thumbnailUrl: string | null
   createdAt: string
   updatedAt: string

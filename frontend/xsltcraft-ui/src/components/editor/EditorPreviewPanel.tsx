@@ -10,13 +10,13 @@ export default function EditorPreviewPanel() {
   const sections = useEditorStore((s) => s.sections)
   const blocks = useEditorStore((s) => s.blocks)
   const templateId = useEditorStore((s) => s.templateId)
-  const xsltStoragePath = useEditorStore((s) => s.xsltStoragePath)
+  const hasStoredXslt = useEditorStore((s) => s.hasStoredXslt)
   const xmlFiles = useXmlStore((s) => s.xmlFiles)
   const activeXmlId = useXmlStore((s) => s.activeXmlId)
   const activeXml = xmlFiles.find((f) => f.id === activeXmlId)
 
   // Storage XSLT modu: block tree boş ama free theme XSLT'si var (klon senaryosu)
-  const useStoredXslt = !!xsltStoragePath && sections.length === 0 && !!templateId
+  const useStoredXslt = hasStoredXslt && sections.length === 0 && !!templateId
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
 

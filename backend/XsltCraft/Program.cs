@@ -1,6 +1,8 @@
 using System.Text;
+using System.Threading.RateLimiting;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -13,6 +15,29 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddXsltCraft(builder.Configuration);
+
+builder.Services.AddRateLimiter(opts =>
+{
+    opts.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Login / refresh / google: 10 istek / dakika / IP
+    opts.AddFixedWindowLimiter("auth-sensitive", o =>
+    {
+        o.PermitLimit = 10;
+        o.Window = TimeSpan.FromMinutes(1);
+        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        o.QueueLimit = 0;
+    });
+
+    // Register: 5 istek / 10 dakika / IP
+    opts.AddFixedWindowLimiter("auth-register", o =>
+    {
+        o.PermitLimit = 5;
+        o.Window = TimeSpan.FromMinutes(10);
+        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        o.QueueLimit = 0;
+    });
+});
 
 // JWT Authentication
 var jwtSection = builder.Configuration.GetSection("Jwt");
@@ -37,6 +62,14 @@ builder.Services.AddCors(options =>
     options.AddPolicy("dev", policy =>
     {
         policy.WithOrigins(builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173"])
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+
+    options.AddPolicy("prod", policy =>
+    {
+        policy.WithOrigins(builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [])
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -84,7 +117,8 @@ if (app.Environment.IsDevelopment())
 }
 
 // UseCors MUST come before UseRouting when using named policies with endpoint routing
-app.UseCors("dev");
+app.UseCors(app.Environment.IsDevelopment() ? "dev" : "prod");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

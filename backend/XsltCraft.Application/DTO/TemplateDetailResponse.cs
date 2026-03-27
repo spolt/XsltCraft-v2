@@ -7,7 +7,7 @@ public sealed class TemplateDetailResponse
     public string DocumentType { get; set; } = string.Empty;
     public bool IsFreeTheme { get; set; }
     public string? BlockTree { get; set; }
-    public string? XsltStoragePath { get; set; }
+    public bool HasStoredXslt { get; set; }
     public string? ThumbnailUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

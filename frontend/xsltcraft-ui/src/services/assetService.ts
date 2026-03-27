@@ -3,7 +3,6 @@ import api from './apiService'
 export interface AssetResponse {
   id: string
   url: string
-  storagePath: string
   type: string
   mimeType: string
   sizeBytes: number

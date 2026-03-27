@@ -111,7 +111,7 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
 interface EditorState {
   templateId: string | null
   templateName: string
-  xsltStoragePath: string | null
+  hasStoredXslt: boolean
   sections: Section[]
   blocks: Record<string, Block>
   selectedBlockId: string | null
@@ -124,7 +124,7 @@ interface EditorState {
   // actions
   setTemplateId: (id: string | null) => void
   setTemplateName: (name: string) => void
-  setXsltStoragePath: (path: string | null) => void
+  setHasStoredXslt: (val: boolean) => void
   addBlock: (sectionId: string, type: BlockType, atIndex?: number) => void
   removeBlock: (sectionId: string, blockId: string) => void
   moveBlock: (fromSectionId: string, toSectionId: string, blockId: string, toIndex: number) => void
@@ -155,7 +155,7 @@ function snapshot(state: Pick<EditorState, 'sections' | 'blocks'>) {
 export const useEditorStore = create<EditorState>((set, get) => ({
   templateId: null,
   templateName: 'Yeni Şablon',
-  xsltStoragePath: null,
+  hasStoredXslt: false,
   sections: [],
   blocks: {},
   selectedBlockId: null,
@@ -165,7 +165,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setTemplateId: (id) => set({ templateId: id }),
   setTemplateName: (name) => set({ templateName: name, isDirty: true }),
-  setXsltStoragePath: (path) => set({ xsltStoragePath: path }),
+  setHasStoredXslt: (val) => set({ hasStoredXslt: val }),
 
   // ---- helpers ----
 
@@ -438,7 +438,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       templateId: null,
       templateName: 'Yeni Şablon',
-      xsltStoragePath: null,
+      hasStoredXslt: false,
       sections: [],
       blocks: {},
       selectedBlockId: null,

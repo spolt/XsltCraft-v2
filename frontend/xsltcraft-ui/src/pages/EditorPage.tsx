@@ -114,7 +114,7 @@ export default function EditorPage() {
   const loadTree        = useEditorStore((s) => s.loadTree)
   const setTemplateId      = useEditorStore((s) => s.setTemplateId)
   const setTemplateName    = useEditorStore((s) => s.setTemplateName)
-  const setXsltStoragePath = useEditorStore((s) => s.setXsltStoragePath)
+  const setHasStoredXslt = useEditorStore((s) => s.setHasStoredXslt)
 
   // XML store
   const xmlFiles    = useXmlStore((s) => s.xmlFiles)
@@ -270,7 +270,7 @@ export default function EditorPage() {
         setTemplateId(tpl.id)
         setTemplateName(tpl.name)
         setNameInput(tpl.name)
-        setXsltStoragePath(tpl.xsltStoragePath ?? null)
+        setHasStoredXslt(tpl.hasStoredXslt)
 
         if (tpl.blockTree) {
           try {

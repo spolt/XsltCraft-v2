@@ -396,18 +396,18 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 
 ### Görev grubu 1 — S3StorageService
 
-- [ ] `S3StorageService` implementasyonunu yaz (`AWSSDK.S3` veya `Minio` paketi ile)
-- [ ] `appsettings.Production.json`'a `Storage:Provider: "S3"`, `S3BucketName`, `S3Region` ekle
+- [x] `S3StorageService` implementasyonunu yaz (`AWSSDK.S3` veya `Minio` paketi ile)
+- [x] `appsettings.Production.json`'a `Storage:Provider: "S3"`, `S3BucketName`, `S3Region` ekle
 - [ ] TR bölge datacenter'ında S3-uyumlu depo oluştur (KVKK gereği)
 - [ ] Tüm Faz 2–5 storage işlemlerini `S3StorageService` ile test et
 
 ### Görev grubu 2 — Güvenlik hardening
 
-- [ ] Storage URL'leri frontend'e doğrudan açılmıyor — tüm dosya erişimi backend üzerinden
-- [ ] `.xslt` upload için MIME type + içerik validasyonu (sadece geçerli XSLT XML)
-- [ ] Rate limiting ekle: auth endpoint'leri için (brute force koruması)
-- [ ] CORS konfigürasyonunu production domain'e göre kısıtla
-- [ ] Tüm endpoint'lerde `[Authorize]` attribute eksiklerini gözden geçir
+- [x] Storage URL'leri frontend'e doğrudan açılmıyor — tüm dosya erişimi backend üzerinden
+- [x] `.xslt` upload için MIME type + içerik validasyonu (sadece geçerli XSLT XML)
+- [x] Rate limiting ekle: auth endpoint'leri için (brute force koruması)
+- [x] CORS konfigürasyonunu production domain'e göre kısıtla
+- [x] Tüm endpoint'lerde `[Authorize]` attribute eksiklerini gözden geçir
 - [ ] Payment webhook imza doğrulamasını production key'leriyle test et
 
 ### Görev grubu 3 — NFR testleri & performans

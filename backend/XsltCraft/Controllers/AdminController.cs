@@ -1,3 +1,5 @@
+using System.Xml;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +30,7 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         IFormFile file,
         IFormFile? thumbnailFile = null)
     {
-        var validationError = ValidateXsltFile(file);
+        var validationError = await ValidateXsltFileAsync(file);
         if (validationError is not null)
             return BadRequest(new { message = validationError });
 
@@ -95,7 +97,7 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
 
         if (file is not null)
         {
-            var validationError = ValidateXsltFile(file);
+            var validationError = await ValidateXsltFileAsync(file);
             if (validationError is not null)
                 return BadRequest(new { message = validationError });
 
@@ -159,7 +161,10 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         return null;
     }
 
-    private static string? ValidateXsltFile(IFormFile file)
+    private static readonly string[] AllowedXsltMimeTypes =
+        ["application/xslt+xml", "text/xml", "application/xml", "application/octet-stream"];
+
+    private static async Task<string?> ValidateXsltFileAsync(IFormFile file)
     {
         if (file.Length == 0)
             return "Dosya boş olamaz.";
@@ -171,7 +176,40 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         if (!ext.Equals(".xslt", StringComparison.OrdinalIgnoreCase))
             return "Yalnızca .xslt uzantılı dosyalar kabul edilir.";
 
-        return null;
+        if (!AllowedXsltMimeTypes.Contains(file.ContentType.ToLowerInvariant()))
+            return "Geçersiz MIME türü.";
+
+        // XML içerik doğrulaması — XXE korumalı
+        try
+        {
+            using var reader = new StreamReader(file.OpenReadStream());
+            var content = await reader.ReadToEndAsync();
+
+            var xmlSettings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null
+            };
+            using var xmlReader = XmlReader.Create(new StringReader(content), xmlSettings);
+
+            while (xmlReader.Read())
+            {
+                if (xmlReader.NodeType != XmlNodeType.Element) continue;
+
+                const string xsltNamespace = "http://www.w3.org/1999/XSL/Transform";
+                if (xmlReader.NamespaceURI != xsltNamespace ||
+                    xmlReader.LocalName is not ("stylesheet" or "transform"))
+                    return "Dosya geçerli bir XSLT şablonu değil (xsl:stylesheet root elementi bulunamadı).";
+
+                return null; // geçerli XSLT
+            }
+
+            return "Dosya boş veya geçersiz içerik barındırıyor.";
+        }
+        catch (XmlException)
+        {
+            return "Dosya geçerli bir XML/XSLT içermiyor.";
+        }
     }
 
     private static FreeThemeResponse ToResponse(Template t) => new()

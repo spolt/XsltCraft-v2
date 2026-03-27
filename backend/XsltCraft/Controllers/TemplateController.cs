@@ -135,7 +135,7 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
             DocumentType = template.DocumentType.ToString(),
             IsFreeTheme = template.IsFreeTheme,
             BlockTree = template.BlockTree,
-            XsltStoragePath = template.XsltStoragePath,
+            HasStoredXslt = template.XsltStoragePath is not null,
             ThumbnailUrl = template.ThumbnailUrl,
             CreatedAt = template.CreatedAt,
             UpdatedAt = template.UpdatedAt
@@ -217,7 +217,7 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
             DocumentType = template.DocumentType.ToString(),
             IsFreeTheme = template.IsFreeTheme,
             BlockTree = template.BlockTree,
-            XsltStoragePath = template.XsltStoragePath,
+            HasStoredXslt = template.XsltStoragePath is not null,
             ThumbnailUrl = template.ThumbnailUrl,
             CreatedAt = template.CreatedAt,
             UpdatedAt = template.UpdatedAt
@@ -287,7 +287,7 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
             DocumentType = clone.DocumentType.ToString(),
             IsFreeTheme = false,
             BlockTree = clone.BlockTree,
-            XsltStoragePath = clone.XsltStoragePath,
+            HasStoredXslt = clone.XsltStoragePath is not null,
             CreatedAt = clone.CreatedAt,
             UpdatedAt = clone.UpdatedAt
         });

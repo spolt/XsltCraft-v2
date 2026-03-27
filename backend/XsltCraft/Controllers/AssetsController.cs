@@ -61,7 +61,6 @@ public class AssetsController(AppDbContext db, IStorageService storage) : Contro
         {
             id = assetId,
             url = $"/api/assets/{assetId}/serve",
-            storagePath = relativePath,
             type = assetTypeEnum.ToString(),
             mimeType = file.ContentType,
             sizeBytes = file.Length
