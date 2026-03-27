@@ -87,7 +87,6 @@ export default function XsltEditorPage() {
   const insertTextAtLineRef = useRef<((lineNumber: number, text: string) => void) | null>(null)
   const imageFileInputRef = useRef<HTMLInputElement>(null)
   const pendingInsertLineRef = useRef<number | null>(null)
-  const iframeRef = useRef<HTMLIFrameElement>(null)
 
   // ─── Load saved template ────────────────────────────────────────────────────
   useEffect(() => {
@@ -410,7 +409,7 @@ export default function XsltEditorPage() {
           </div>
         )}
 
-        <PanelGroup direction="horizontal" className="flex-1 overflow-hidden">
+        <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
           <Panel defaultSize={50} minSize={20}>
             <div className="h-full flex flex-col">
               <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0">

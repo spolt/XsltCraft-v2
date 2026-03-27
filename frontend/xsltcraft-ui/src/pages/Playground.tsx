@@ -89,7 +89,7 @@ if(component === "xslt"){
 return <XsltEditor
   value={xslt}
   onChange={setXslt}
-  onEditorReady={(goTo) => { editorGoToRef.current = goTo }}
+  onEditorReady={(fns) => { editorGoToRef.current = fns.goTo }}
   errors={xsltErrors}
 />
 }

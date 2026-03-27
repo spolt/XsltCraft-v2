@@ -281,7 +281,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => ({
       blocks: {
         ...s.blocks,
-        [blockId]: { ...existing, config: { ...existing.config, ...config } },
+        [blockId]: { ...existing, config: { ...existing.config, ...config } as BlockConfig['config'] },
       },
       isDirty: true,
       past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
