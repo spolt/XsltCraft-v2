@@ -197,8 +197,10 @@ public class PreviewController : ControllerBase
         try
         {
             var transform = new XslCompiledTransform();
-            using var reader = XmlReader.Create(new StringReader(request.Xslt));
-            transform.Load(reader);
+            var xsltReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+            using var reader = XmlReader.Create(new StringReader(request.Xslt), xsltReaderSettings);
+            var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
+            transform.Load(reader, xsltSettings, new XmlUrlResolver());
             return Ok(new { valid = true });
         }
         catch (XsltException ex)
@@ -221,11 +223,15 @@ public class PreviewController : ControllerBase
     private static string ApplyXsltWithParams(string xslt, string xmlContent, string? logoUrl, string? signatureUrl)
     {
         var transform = new XslCompiledTransform();
-        using var xsltReader = XmlReader.Create(new StringReader(xslt));
-        transform.Load(xsltReader);
+        var xsltReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+        using var xsltReader = XmlReader.Create(new StringReader(xslt), xsltReaderSettings);
+        var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
+        transform.Load(xsltReader, xsltSettings, new XmlUrlResolver());
 
-        var xmlDoc = new XmlDocument();
-        xmlDoc.LoadXml(xmlContent);
+        var xmlReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+        var xmlDoc = new XmlDocument { XmlResolver = null };
+        using var xmlReader = XmlReader.Create(new StringReader(xmlContent), xmlReaderSettings);
+        xmlDoc.Load(xmlReader);
 
         var args = new XsltArgumentList();
         if (!string.IsNullOrEmpty(logoUrl))

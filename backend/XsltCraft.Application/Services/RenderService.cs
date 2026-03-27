@@ -1,4 +1,5 @@
-﻿using System.Xml;
+﻿using System.IO;
+using System.Xml;
 using XsltCraft.Application.Interfaces;
 
 namespace XsltCraft.Application.Services;
@@ -23,8 +24,10 @@ public class RenderService
 
     public async Task<string> RenderPreviewAsync(string xml, string xslt)
     {
-        var xmlDoc = new XmlDocument();
-        xmlDoc.LoadXml(xml);
+        var xmlReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+        var xmlDoc = new XmlDocument { XmlResolver = null };
+        using var xmlReader = XmlReader.Create(new StringReader(xml), xmlReaderSettings);
+        xmlDoc.Load(xmlReader);
 
         return await _renderer.RenderPreviewAsync(xslt, xmlDoc);
     }

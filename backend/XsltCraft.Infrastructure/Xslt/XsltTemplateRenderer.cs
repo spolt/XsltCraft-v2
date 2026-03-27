@@ -21,8 +21,10 @@ public class XsltTemplateRenderer : IXsltTemplateRenderer
     {
         var transform = new XslCompiledTransform();
 
-        using var xsltReader = XmlReader.Create(new StringReader(xslt));
-        transform.Load(xsltReader);
+        var xsltReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+        using var xsltReader = XmlReader.Create(new StringReader(xslt), xsltReaderSettings);
+        var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
+        transform.Load(xsltReader, xsltSettings, new XmlUrlResolver());
 
         using var sw = new StringWriter();
         transform.Transform(xml, null, sw);
@@ -52,7 +54,8 @@ public class XsltTemplateRenderer : IXsltTemplateRenderer
         var executable = compiler.Compile(xsltReader);
         var transformer = executable.Load();
 
-        using var xmlReader = XmlReader.Create(new StringReader(xml.OuterXml));
+        var xmlReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+        using var xmlReader = XmlReader.Create(new StringReader(xml.OuterXml), xmlReaderSettings);
         var inputNode = processor.NewDocumentBuilder().Build(xmlReader);
         transformer.InitialContextNode = inputNode;
 

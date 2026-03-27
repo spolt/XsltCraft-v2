@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using System.Xml;
 using XsltCraft.Application.Interfaces;
 
@@ -6,6 +7,7 @@ namespace XsltCraft.Api.Controllers
 {
     [ApiController]
     [Route("api/render")]
+    [Authorize]
     public class RenderController : ControllerBase
     {
         private readonly ITemplateRepository _repo;
@@ -24,8 +26,10 @@ namespace XsltCraft.Api.Controllers
         {
             var xml = await new StreamReader(Request.Body).ReadToEndAsync();
 
-            var doc = new XmlDocument();
-            doc.LoadXml(xml);
+            var xmlReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+            var doc = new XmlDocument { XmlResolver = null };
+            using var xmlReader = XmlReader.Create(new StringReader(xml), xmlReaderSettings);
+            doc.Load(xmlReader);
 
             var result = await _renderer.RenderAsync(templateId, doc);
 

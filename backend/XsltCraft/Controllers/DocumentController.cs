@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using XsltCraft.Application.Interfaces;
 
 namespace XsltCraft.Api.Controllers
 {
     [ApiController]
     [Route("api/document")]
+    [Authorize]
     public class DocumentController : ControllerBase
     {
         private readonly IDocumentEngine _engine;

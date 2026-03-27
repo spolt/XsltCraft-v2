@@ -2,6 +2,7 @@ using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
@@ -67,7 +68,8 @@ public class AssetsController(AppDbContext db, IStorageService storage) : Contro
         });
     }
 
-    // GET /api/assets/{id}/serve — XSLT içi <img> tag'larından erişilebilmesi için auth zorunlu değil
+    // GET /api/assets/{id}/serve — XSLT içi <img> tag'larından erişilebilmesi için auth zorunlu değil.
+    // Ancak kimlik doğrulanmış kullanıcı başkasının asset'ine erişemez.
     [HttpGet("{id:guid}/serve")]
     [AllowAnonymous]
     public async Task<IActionResult> Serve(Guid id)
@@ -75,6 +77,10 @@ public class AssetsController(AppDbContext db, IStorageService storage) : Contro
         var asset = await db.Assets.FindAsync(id);
         if (asset is null)
             return NotFound();
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userIdClaim is not null && Guid.TryParse(userIdClaim, out var userId) && asset.OwnerId != userId)
+            return Forbid();
 
         if (!await storage.ExistsAsync(asset.FilePath))
             return NotFound(new { message = "Dosya storage'da bulunamadı." });

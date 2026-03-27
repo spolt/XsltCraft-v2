@@ -15,9 +15,10 @@ namespace XsltCraft.Infrastructure.Xslt
             {
                 var transform = new XslCompiledTransform();
 
-                using var reader = XmlReader.Create(new StringReader(xslt));
-
-                transform.Load(reader);
+                var readerSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+                using var reader = XmlReader.Create(new StringReader(xslt), readerSettings);
+                var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
+                transform.Load(reader, xsltSettings, new XmlUrlResolver());
 
                 return transform;
             });

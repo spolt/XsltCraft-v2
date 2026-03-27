@@ -15,6 +15,10 @@ namespace XsltCraft.Controllers;
 public class AdminController(AppDbContext db, IStorageService storage) : ControllerBase
 {
     private const long MaxFileSizeBytes = 2 * 1024 * 1024; // 2 MB
+    private const long MaxThumbnailSizeBytes = 1 * 1024 * 1024; // 1 MB
+
+    private static readonly string[] AllowedThumbnailExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg"];
+    private static readonly string[] AllowedThumbnailMimeTypes = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
 
     // POST /api/admin/themes
     [HttpPost("themes")]
@@ -40,7 +44,12 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         string? thumbnailUrl = null;
         if (thumbnailFile is not null)
         {
-            var thumbPath = $"themes/thumbnails/{themeId}{Path.GetExtension(thumbnailFile.FileName)}";
+            var thumbError = ValidateThumbnailFile(thumbnailFile);
+            if (thumbError is not null)
+                return BadRequest(new { message = thumbError });
+
+            var thumbExt = Path.GetExtension(thumbnailFile.FileName).ToLowerInvariant();
+            var thumbPath = $"themes/thumbnails/{themeId}{thumbExt}";
             await using var thumbStream = thumbnailFile.OpenReadStream();
             await storage.WriteAsync(thumbStream, thumbPath, thumbnailFile.ContentType);
             thumbnailUrl = thumbPath;
@@ -131,6 +140,24 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
     }
 
     // -------------------------------------------------------
+
+    private static string? ValidateThumbnailFile(IFormFile file)
+    {
+        if (file.Length == 0)
+            return "Thumbnail dosyası boş olamaz.";
+
+        if (file.Length > MaxThumbnailSizeBytes)
+            return "Thumbnail boyutu 1 MB sınırını aşıyor.";
+
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!AllowedThumbnailExtensions.Contains(ext))
+            return "Thumbnail için yalnızca PNG, JPG, GIF ve SVG dosyaları kabul edilir.";
+
+        if (!AllowedThumbnailMimeTypes.Contains(file.ContentType.ToLowerInvariant()))
+            return "Geçersiz thumbnail MIME türü.";
+
+        return null;
+    }
 
     private static string? ValidateXsltFile(IFormFile file)
     {
