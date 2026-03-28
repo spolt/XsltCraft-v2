@@ -203,24 +203,6 @@ See [ROADMAP.md](./ROADMAP.md) for detailed task breakdowns.
 
 ---
 
-## Contributing
-
-This project uses a **Gitflow-based workflow**:
-
-- `main` — production-ready only; no direct pushes
-- `develop` — integration branch; all features merge here via PR
-- `feat/`, `fix/` — short-lived branches off `develop`
-- `release/` — cut from `develop` when a phase is complete; merges to `main` + tag
-
-Commit message format follows [Conventional Commits](https://www.conventionalcommits.org):
-
-```
-feat(editor): add drag-drop block reordering
-fix(auth): resolve JWT expiry on refresh
-chore(deps): bump EF Core to 10.0.1
-```
-
----
 
 ## License
 
