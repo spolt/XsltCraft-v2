@@ -13,10 +13,13 @@ import {
   AlignCenter,
   AlignRight,
   Code2,
+  Download,
+  BookmarkCheck,
 } from 'lucide-react'
-import { getTemplate } from '../services/templateService'
-import { previewFromStoredXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
+import { getTemplate, downloadTemplate } from '../services/templateService'
+import { previewFromStoredXslt, fetchThemeXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
 import { uploadAsset } from '../services/assetService'
+import { createUserXsltTemplate } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
@@ -189,6 +192,9 @@ export default function ThemeUsePage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [lastMs, setLastMs] = useState<number | null>(null)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   useEffect(() => {
@@ -224,6 +230,29 @@ export default function ThemeUsePage() {
     }, DEBOUNCE_MS)
     return () => clearTimeout(t)
   }, [xmlContent, logo, signature, bankInfo, templateId])
+
+  async function handleDownload() {
+    if (!templateId || isDownloading) return
+    setIsDownloading(true)
+    try {
+      await downloadTemplate(templateId, templateName)
+    } catch { alert('İndirme başarısız.') }
+    finally { setIsDownloading(false) }
+  }
+
+  async function handleSave() {
+    if (!templateId || isSaving) return
+    setIsSaving(true)
+    try {
+      const xslt = await fetchThemeXslt(templateId)
+      await createUserXsltTemplate({ name: templateName, xsltContent: xslt, xmlContent })
+      setSaveSuccess(true)
+      setTimeout(() => {
+        navigate('/my-xslt-templates')
+      }, 800)
+    } catch { alert('Kaydetme başarısız.') }
+    finally { setIsSaving(false) }
+  }
 
   function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -291,6 +320,26 @@ export default function ThemeUsePage() {
             title="XSLT editörünü aç"
           >
             <Code2 size={13} />Geliştirici Modu
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={isDownloading || !html}
+            className="flex items-center gap-1.5 text-xs text-gray-600 border border-gray-200 rounded px-3 py-1 hover:bg-gray-50 disabled:opacity-40"
+            title="XSLT dosyasını indir"
+          >
+            <Download size={13} />{isDownloading ? '…' : 'İndir'}
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || saveSuccess || !html}
+            className={`flex items-center gap-1.5 text-xs border rounded px-3 py-1 transition-colors disabled:opacity-40 ${
+              saveSuccess
+                ? 'text-green-700 border-green-300 bg-green-50'
+                : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+            title="Şablonlarıma kaydet"
+          >
+            <BookmarkCheck size={13} />{saveSuccess ? 'Kaydedildi' : isSaving ? '…' : 'Kaydet'}
           </button>
           {!editMode
             ? <button onClick={() => setEditMode(true)} className="flex items-center gap-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-3 py-1">
