@@ -79,9 +79,10 @@ export default function TemplatesPage() {
     <div className="flex h-full overflow-hidden">
       {/* ── Sol panel: tema listesi ── */}
       <div
-        className="overflow-y-auto border-r border-gray-200 px-6 py-8 transition-all duration-300"
-        style={{ width: selectedTheme ? 360 : '100%', flexShrink: 0 }}
+        className={`overflow-y-auto px-6 py-8 transition-all duration-300 ${selectedTheme ? 'border-r border-gray-200' : 'flex-1'}`}
+        style={selectedTheme ? { width: 360, flexShrink: 0 } : {}}
       >
+        <div className={selectedTheme ? undefined : 'max-w-5xl mx-auto'}>
         <h1 className="text-xl font-semibold text-gray-800 mb-1">{title}</h1>
         <p className="text-gray-500 text-sm mb-6">
           Hazır şablonlardan birini seçerek başlayın.
@@ -102,6 +103,7 @@ export default function TemplatesPage() {
             ))}
           </div>
         )}
+        </div>
       </div>
 
       {/* ── Sağ panel: önizleme ── */}
