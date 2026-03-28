@@ -33,8 +33,8 @@ public class S3StorageService : IStorageService, IDisposable
         var region = configuration["Storage:S3Region"]
             ?? throw new InvalidOperationException("Storage:S3Region yapılandırılmamış.");
 
-        var accessKey  = configuration["Storage:S3AccessKey"];
-        var secretKey  = configuration["Storage:S3SecretKey"];
+        var accessKey = configuration["Storage:S3AccessKey"];
+        var secretKey = configuration["Storage:S3SecretKey"];
         var serviceUrl = configuration["Storage:S3ServiceUrl"];
 
         var s3Config = new AmazonS3Config
@@ -45,7 +45,7 @@ public class S3StorageService : IStorageService, IDisposable
         // MinIO veya özel S3-uyumlu endpoint kullanılıyorsa
         if (!string.IsNullOrWhiteSpace(serviceUrl))
         {
-            s3Config.ServiceURL  = serviceUrl;
+            s3Config.ServiceURL = serviceUrl;
             s3Config.ForcePathStyle = true; // MinIO path-style erişim gerektirir
         }
 
@@ -62,8 +62,8 @@ public class S3StorageService : IStorageService, IDisposable
 
         var request = new PutObjectRequest
         {
-            BucketName  = _bucketName,
-            Key         = relativePath,
+            BucketName = _bucketName,
+            Key = relativePath,
             InputStream = content,
             ContentType = contentType
         };

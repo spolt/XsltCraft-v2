@@ -125,22 +125,40 @@ public class PreviewCriteriaTests
             ],
             Blocks = new Dictionary<string, BlockDto>
             {
-                ["b1"] = new BlockDto { Id = "b1", Type = "Heading",
-                    Config = El(new { level = "H1", isStatic = true, content = "E-FATURA" }) },
+                ["b1"] = new BlockDto
+                {
+                    Id = "b1",
+                    Type = "Heading",
+                    Config = El(new { level = "H1", isStatic = true, content = "E-FATURA" })
+                },
 
-                ["b2"] = new BlockDto { Id = "b2", Type = "DocumentInfo",
-                    Config = El(new { rows = new object[]
+                ["b2"] = new BlockDto
+                {
+                    Id = "b2",
+                    Type = "DocumentInfo",
+                    Config = El(new
+                    {
+                        rows = new object[]
                     {
                         new { label = "Fatura No",   xpath = "//cbc:ID" },
                         new { label = "Tarih",        xpath = "//cbc:IssueDate" },
                         new { label = "Tür",          xpath = "//cbc:InvoiceTypeCode" },
                         new { label = "Para Birimi",  xpath = "//cbc:DocumentCurrencyCode" },
-                    }}) },
+                    }
+                    })
+                },
 
-                ["b3"] = new BlockDto { Id = "b3", Type = "Divider",
-                    Config = El(new { style = "solid", color = "#CCCCCC", thickness = "1px" }) },
+                ["b3"] = new BlockDto
+                {
+                    Id = "b3",
+                    Type = "Divider",
+                    Config = El(new { style = "solid", color = "#CCCCCC", thickness = "1px" })
+                },
 
-                ["b4"] = new BlockDto { Id = "b4", Type = "Table",
+                ["b4"] = new BlockDto
+                {
+                    Id = "b4",
+                    Type = "Table",
                     Config = El(new
                     {
                         iterateOver = "//cac:InvoiceLine",
@@ -152,18 +170,31 @@ public class PreviewCriteriaTests
                             new { header = "Miktar",  xpath = "cbc:InvoicedQuantity", width = "15%" },
                             new { header = "Tutar",   xpath = "cbc:LineExtensionAmount", width = "20%" },
                         }
-                    }) },
+                    })
+                },
 
-                ["b5"] = new BlockDto { Id = "b5", Type = "Totals",
-                    Config = El(new { alignment = "right", rows = new object[]
+                ["b5"] = new BlockDto
+                {
+                    Id = "b5",
+                    Type = "Totals",
+                    Config = El(new
+                    {
+                        alignment = "right",
+                        rows = new object[]
                     {
                         new { label = "KDV Matrahı",  xpath = "//cac:LegalMonetaryTotal/cbc:TaxExclusiveAmount", highlight = false },
                         new { label = "KDV",          xpath = "//cac:TaxTotal/cbc:TaxAmount", highlight = false },
                         new { label = "ÖDENECEK",     xpath = "//cac:LegalMonetaryTotal/cbc:PayableAmount", highlight = true },
-                    }}) },
+                    }
+                    })
+                },
 
-                ["b6"] = new BlockDto { Id = "b6", Type = "ETTN",
-                    Config = El(new { ettnXpath = "//cbc:UUID", showQR = false }) },
+                ["b6"] = new BlockDto
+                {
+                    Id = "b6",
+                    Type = "ETTN",
+                    Config = El(new { ettnXpath = "//cbc:UUID", showQR = false })
+                },
             }
         };
     }
@@ -271,7 +302,8 @@ public class PreviewCriteriaTests
             {
                 ["b1"] = new BlockDto
                 {
-                    Id = "b1", Type = "Conditional",
+                    Id = "b1",
+                    Type = "Conditional",
                     Config = El(new
                     {
                         condition = new { xpath = "//cbc:InvoiceTypeCode", @operator = "equals", value = "TEMELFATURA" },

@@ -210,10 +210,10 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                     double sum = 0;
                     while (i < blockList.Count)
                     {
-                        var b   = blockList[i];
-                        var bw  = b.Layout?.Width ?? "full";
+                        var b = blockList[i];
+                        var bw = b.Layout?.Width ?? "full";
                         if (bw == "full") break;
-                        var fv  = FractionValue(bw);
+                        var fv = FractionValue(bw);
                         if (sum + fv > 1.001) break; // would overflow — start next row
                         row.Add(b);
                         sum += fv;
@@ -224,8 +224,8 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                     // Split row into leading (left/center) and trailing (right-aligned) blocks
                     // so the filler td is placed between them, not at the very end.
                     int firstRightIdx = row.FindIndex(b => (b.Layout?.Alignment ?? "") == "right");
-                    var leading  = firstRightIdx >= 0 ? row.Take(firstRightIdx).ToList()  : row;
-                    var trailing = firstRightIdx >= 0 ? row.Skip(firstRightIdx).ToList()  : [];
+                    var leading = firstRightIdx >= 0 ? row.Take(firstRightIdx).ToList() : row;
+                    var trailing = firstRightIdx >= 0 ? row.Skip(firstRightIdx).ToList() : [];
 
                     sb.AppendLine("    <table class=\"lr\"><tbody><tr>");
                     foreach (var b in leading)
@@ -258,7 +258,7 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         "1/2" => 0.5,
         "1/3" => 1.0 / 3,
         "2/3" => 2.0 / 3,
-        _     => 1.0
+        _ => 1.0
     };
 
     private static string FractionCss(string width) => width switch
@@ -266,14 +266,14 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         "1/2" => "50%",
         "1/3" => "33.333%",
         "2/3" => "66.667%",
-        _     => "100%"
+        _ => "100%"
     };
 
     private static string TextAlignStyle(string? alignment) => alignment switch
     {
         "center" => "text-align:center;",
-        "right"  => "text-align:right;",
-        _        => ""
+        "right" => "text-align:right;",
+        _ => ""
     };
 
     private string GenerateBlock(BlockDto block, BlockTreeDto tree) => DispatchBlock(block, tree);
@@ -284,30 +284,30 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
     {
         return block.Type switch
         {
-            "Text"         => GenerateText(block),
-            "Heading"      => GenerateHeading(block),
-            "Paragraph"    => GenerateParagraph(block),
-            "Table"        => GenerateTable(block),
-            "ForEach"      => GenerateForEach(block, tree),
-            "Conditional"  => GenerateConditional(block, tree),
-            "Image"        => GenerateImage(block),
+            "Text" => GenerateText(block),
+            "Heading" => GenerateHeading(block),
+            "Paragraph" => GenerateParagraph(block),
+            "Table" => GenerateTable(block),
+            "ForEach" => GenerateForEach(block, tree),
+            "Conditional" => GenerateConditional(block, tree),
+            "Image" => GenerateImage(block),
             "DocumentInfo" => GenerateDocumentInfo(block),
-            "Totals"       => GenerateTotals(block),
-            "Notes"        => GenerateNotes(block),
-            "BankInfo"     => GenerateBankInfo(block),
-            "ETTN"         => GenerateETTN(block),
-            "Divider"         => GenerateDivider(block),
-            "Spacer"          => GenerateSpacer(block),
-            "Variable"        => GenerateVariable(block),
+            "Totals" => GenerateTotals(block),
+            "Notes" => GenerateNotes(block),
+            "BankInfo" => GenerateBankInfo(block),
+            "ETTN" => GenerateETTN(block),
+            "Divider" => GenerateDivider(block),
+            "Spacer" => GenerateSpacer(block),
+            "Variable" => GenerateVariable(block),
             "ConditionalText" => GenerateConditionalText(block),
-            "TaxSummary"      => GenerateTaxSummary(block),
-            "GibKarekod"      => GenerateGibKarekod(block),
-            "InvoiceTotals"   => GenerateInvoiceTotals(block),
-            "GibLogo"         => GenerateGibLogo(block),
-            "PartyInfo"       => GeneratePartyInfo(block),
-            "InvoiceLineTable"=> GenerateInvoiceLineTable(block),
-            "InvoiceHeader"   => GenerateInvoiceHeader(block),
-            _                 => $"<!-- unknown block type: {XmlEscape(block.Type)} -->"
+            "TaxSummary" => GenerateTaxSummary(block),
+            "GibKarekod" => GenerateGibKarekod(block),
+            "InvoiceTotals" => GenerateInvoiceTotals(block),
+            "GibLogo" => GenerateGibLogo(block),
+            "PartyInfo" => GeneratePartyInfo(block),
+            "InvoiceLineTable" => GenerateInvoiceLineTable(block),
+            "InvoiceHeader" => GenerateInvoiceHeader(block),
+            _ => $"<!-- unknown block type: {XmlEscape(block.Type)} -->"
         };
     }
 
@@ -475,14 +475,14 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
         return cond.Operator switch
         {
-            "equals"      => $"{xpath} = '{val}'",
-            "notEquals"   => $"{xpath} != '{val}'",
-            "contains"    => $"contains({xpath}, '{val}')",
+            "equals" => $"{xpath} = '{val}'",
+            "notEquals" => $"{xpath} != '{val}'",
+            "contains" => $"contains({xpath}, '{val}')",
             "greaterThan" => $"number({xpath}) > {val}",
-            "lessThan"    => $"number({xpath}) < {val}",
-            "exists"      => xpath,
-            "notExists"   => $"not({xpath})",
-            _             => xpath
+            "lessThan" => $"number({xpath}) < {val}",
+            "exists" => xpath,
+            "notExists" => $"not({xpath})",
+            _ => xpath
         };
     }
 
@@ -494,14 +494,14 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var alignStyle = cfg.Alignment switch
         {
             "center" => "text-align:center",
-            "right"  => "text-align:right",
-            _        => "text-align:left"
+            "right" => "text-align:right",
+            _ => "text-align:left"
         };
-        var widthStyle  = !string.IsNullOrEmpty(cfg.Width)  ? $"width:{XmlEscape(cfg.Width)};"   : "max-width:100%;";
+        var widthStyle = !string.IsNullOrEmpty(cfg.Width) ? $"width:{XmlEscape(cfg.Width)};" : "max-width:100%;";
         var heightStyle = !string.IsNullOrEmpty(cfg.Height) ? $"height:{XmlEscape(cfg.Height)};" : string.Empty;
-        var imgStyle    = $"display:inline-block;vertical-align:top;object-fit:contain;{widthStyle}{heightStyle}";
-        var alt         = XmlEscape(cfg.AltText ?? cfg.AssetType);
-        var srcAttr     = !string.IsNullOrEmpty(cfg.AssetId)
+        var imgStyle = $"display:inline-block;vertical-align:top;object-fit:contain;{widthStyle}{heightStyle}";
+        var alt = XmlEscape(cfg.AltText ?? cfg.AssetType);
+        var srcAttr = !string.IsNullOrEmpty(cfg.AssetId)
             ? $" src=\"/api/assets/{XmlAttr(cfg.AssetId)}/serve\""
             : string.Empty;
 
@@ -644,7 +644,7 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
         if (cfg.ShowQR)
         {
-            var qrWidth  = cfg.QrWidth  > 0 ? cfg.QrWidth  : 80;
+            var qrWidth = cfg.QrWidth > 0 ? cfg.QrWidth : 80;
             var qrHeight = cfg.QrHeight > 0 ? cfg.QrHeight : 80;
             var flexJustify = QrFlexJustify(cfg.QrAlignment);
 
@@ -680,7 +680,7 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
     {
         var cfg = Deserialize<GibKarekodConfig>(block.Config);
         var safeId = Regex.Replace(block.Id, "[^a-zA-Z0-9]", "");
-        var qrWidth  = cfg.QrWidth  > 0 ? cfg.QrWidth  : 150;
+        var qrWidth = cfg.QrWidth > 0 ? cfg.QrWidth : 150;
         var qrHeight = cfg.QrHeight > 0 ? cfg.QrHeight : 150;
         var flexJustify = QrFlexJustify(cfg.QrAlignment);
 
@@ -802,9 +802,9 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var cfg = Deserialize<DividerConfig>(block.Config);
         var style = new StringBuilder();
         style.Append($"border-top-style:{XmlEscape(cfg.Style)};");
-        if (!string.IsNullOrEmpty(cfg.Color))        style.Append($"border-color:{XmlEscape(cfg.Color)};");
-        if (!string.IsNullOrEmpty(cfg.Thickness))    style.Append($"border-top-width:{XmlEscape(cfg.Thickness)};");
-        if (!string.IsNullOrEmpty(cfg.MarginTop))    style.Append($"margin-top:{XmlEscape(cfg.MarginTop)};");
+        if (!string.IsNullOrEmpty(cfg.Color)) style.Append($"border-color:{XmlEscape(cfg.Color)};");
+        if (!string.IsNullOrEmpty(cfg.Thickness)) style.Append($"border-top-width:{XmlEscape(cfg.Thickness)};");
+        if (!string.IsNullOrEmpty(cfg.MarginTop)) style.Append($"margin-top:{XmlEscape(cfg.MarginTop)};");
         if (!string.IsNullOrEmpty(cfg.MarginBottom)) style.Append($"margin-bottom:{XmlEscape(cfg.MarginBottom)};");
         return $"    <hr style=\"{style}\"/>";
     }
@@ -844,8 +844,8 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
     private static string QrFlexJustify(string? alignment) => alignment switch
     {
         "center" => "center",
-        "left"   => "flex-start",
-        _        => "flex-end"
+        "left" => "flex-start",
+        _ => "flex-end"
     };
 
     /// <summary>Inline style attribute from text style properties (returns empty string if no styles).</summary>
@@ -918,11 +918,11 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var cfg = Deserialize<PartyInfoConfig>(block.Config);
         var partyRoot = cfg.PartyType switch
         {
-            "CustomerParty"         => "//cac:AccountingCustomerParty/cac:Party",
+            "CustomerParty" => "//cac:AccountingCustomerParty/cac:Party",
             "DespatchSupplierParty" => "//cac:DespatchSupplierParty/cac:Party",
             "DeliveryCustomerParty" => "//cac:DeliveryCustomerParty/cac:Party",
-            "BuyerCustomerParty"    => "//cac:BuyerCustomerParty/cac:Party",
-            _                       => "//cac:AccountingSupplierParty/cac:Party",
+            "BuyerCustomerParty" => "//cac:BuyerCustomerParty/cac:Party",
+            _ => "//cac:AccountingSupplierParty/cac:Party",
         };
 
         var fields = (cfg.Fields ?? new List<PartyInfoField>())
@@ -930,9 +930,9 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             .OrderBy(f => f.Order)
             .ToList();
 
-        var fontSize    = string.IsNullOrWhiteSpace(cfg.FontSize) ? "9.5pt" : XmlEscape(cfg.FontSize);
-        var bdrStyle    = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle);
-        var outerStyle  = cfg.Bordered
+        var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "9.5pt" : XmlEscape(cfg.FontSize);
+        var bdrStyle = XmlEscape(string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle);
+        var outerStyle = cfg.Bordered
             ? $" style=\"border:1px {bdrStyle} #555555;padding:4px 8px;\""
             : string.Empty;
 
@@ -984,11 +984,11 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             .OrderBy(c => c.Order)
             .ToList();
 
-        var fontSize    = string.IsNullOrWhiteSpace(cfg.FontSize) ? "9pt" : XmlEscape(cfg.FontSize);
-        var headerBg    = string.IsNullOrWhiteSpace(cfg.HeaderBackgroundColor) ? "#E0E0E0" : XmlEscape(cfg.HeaderBackgroundColor);
-        var altRowColor = string.IsNullOrWhiteSpace(cfg.AlternateRowColor)    ? "#F9F9F9" : XmlEscape(cfg.AlternateRowColor);
-        var bdrStyle    = string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : XmlEscape(cfg.BorderStyle);
-        var borderAttr  = cfg.Bordered ? $"1px {bdrStyle} #555555" : "none";
+        var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "9pt" : XmlEscape(cfg.FontSize);
+        var headerBg = string.IsNullOrWhiteSpace(cfg.HeaderBackgroundColor) ? "#E0E0E0" : XmlEscape(cfg.HeaderBackgroundColor);
+        var altRowColor = string.IsNullOrWhiteSpace(cfg.AlternateRowColor) ? "#F9F9F9" : XmlEscape(cfg.AlternateRowColor);
+        var bdrStyle = string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : XmlEscape(cfg.BorderStyle);
+        var borderAttr = cfg.Bordered ? $"1px {bdrStyle} #555555" : "none";
 
         var sb = new StringBuilder();
 
@@ -1026,7 +1026,7 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
         foreach (var col in columns)
         {
-            var xpathAttr   = XmlAttr(col.RelativeXpath ?? string.Empty);
+            var xpathAttr = XmlAttr(col.RelativeXpath ?? string.Empty);
             var cellContent = GetColumnCellContent(col.Format ?? "text", xpathAttr);
             var align = col.Format is "currency" or "number" or "percent" or "percentDirect" or "quantityWithUnit"
                 ? "text-align:right;" : string.Empty;
@@ -1191,12 +1191,12 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
     private static string GenerateInvoiceHeader(BlockDto block)
     {
-        var cfg      = Deserialize<InvoiceHeaderConfig>(block.Config);
+        var cfg = Deserialize<InvoiceHeaderConfig>(block.Config);
         var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "10.4px" : XmlEscape(cfg.FontSize);
         var bdrStyle = string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle;
         var outerStyle = cfg.Bordered ? $"border:1px {bdrStyle} #555555;padding:4px;" : string.Empty;
         var cellBorder = cfg.Bordered ? $"border:1px {bdrStyle} #aaaaaa;" : string.Empty;
-        var scopeId    = "ih" + block.Id.Replace("-", string.Empty)[..8];
+        var scopeId = "ih" + block.Id.Replace("-", string.Empty)[..8];
         var scopeStyle = $"<style>.{scopeId} td {{ {cellBorder}padding:2px 4px; }}</style>";
 
         // Custom user-added fields
@@ -1204,7 +1204,7 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         foreach (var f in (cfg.Fields ?? []).Where(f => f.Visible && f.IsCustom == true).OrderBy(f => f.Order))
         {
             var lbl = XmlEscape(f.Label ?? string.Empty);
-            var xp  = XmlAttr(f.Xpath ?? string.Empty);
+            var xp = XmlAttr(f.Xpath ?? string.Empty);
             customSb.AppendLine(
                 $"        <tr style=\"height:13px;\"><td><span style=\"font-weight:bold;\"><xsl:text>{lbl}</xsl:text></span></td>" +
                 $"<td><xsl:value-of select=\"{xp}\"/></td></tr>");
@@ -1519,19 +1519,19 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
     private static string GenerateGibLogo(BlockDto block)
     {
         var cfg = Deserialize<GibLogoConfig>(block.Config);
-        var width  = string.IsNullOrWhiteSpace(cfg.Width)  ? "80px" : XmlEscape(cfg.Width);
+        var width = string.IsNullOrWhiteSpace(cfg.Width) ? "80px" : XmlEscape(cfg.Width);
         var height = string.IsNullOrWhiteSpace(cfg.Height) ? "80px" : XmlEscape(cfg.Height);
         var marginStyle = cfg.Alignment switch
         {
-            "left"  => "margin:0 auto 0 0",
+            "left" => "margin:0 auto 0 0",
             "right" => "margin:0 0 0 auto",
-            _       => "margin:0 auto",
+            _ => "margin:0 auto",
         };
         var textAlign = cfg.Alignment switch
         {
-            "left"  => "left",
+            "left" => "left",
             "right" => "right",
-            _       => "center",
+            _ => "center",
         };
         return $"""
             <div style="display:inline-block;{marginStyle};text-align:{textAlign};">

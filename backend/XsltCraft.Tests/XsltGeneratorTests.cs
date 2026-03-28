@@ -117,7 +117,8 @@ public class XsltGeneratorTests
             {
                 ["b1"] = new BlockDto
                 {
-                    Id = "b1", Type = "ForEach",
+                    Id = "b1",
+                    Type = "ForEach",
                     Config = JsonSerializer.SerializeToElement(new
                     {
                         iterateOver = "//cac:InvoiceLine",
@@ -126,7 +127,8 @@ public class XsltGeneratorTests
                 },
                 ["b2"] = new BlockDto
                 {
-                    Id = "b2", Type = "Text",
+                    Id = "b2",
+                    Type = "Text",
                     Config = JsonSerializer.SerializeToElement(new { isStatic = true, content = "satır" })
                 }
             }
@@ -137,13 +139,13 @@ public class XsltGeneratorTests
     // ── BLOCK-06: Conditional ─────────────────────────────────────────────
 
     [Theory]
-    [InlineData("equals",     "TEMELFATURA")]
-    [InlineData("notEquals",  "TEMELFATURA")]
-    [InlineData("contains",   "FATURA")]
-    [InlineData("greaterThan","100")]
-    [InlineData("lessThan",   "100")]
-    [InlineData("exists",     "")]
-    [InlineData("notExists",  "")]
+    [InlineData("equals", "TEMELFATURA")]
+    [InlineData("notEquals", "TEMELFATURA")]
+    [InlineData("contains", "FATURA")]
+    [InlineData("greaterThan", "100")]
+    [InlineData("lessThan", "100")]
+    [InlineData("exists", "")]
+    [InlineData("notExists", "")]
     public void Conditional_AllOperators_GenerateValidXslt(string op, string val)
         => AssertValid(SingleBlock("Conditional", new
         {
@@ -156,7 +158,7 @@ public class XsltGeneratorTests
     public void Conditional_WithElse_GeneratesValidXslt()
         => AssertValid(SingleBlock("Conditional", new
         {
-            condition  = new { xpath = "//cbc:InvoiceTypeCode", @operator = "equals", value = "TEMELFATURA" },
+            condition = new { xpath = "//cbc:InvoiceTypeCode", @operator = "equals", value = "TEMELFATURA" },
             thenBlockIds = Array.Empty<string>(),
             elseBlockIds = new[] { "nonexistent" }
         }));
@@ -217,8 +219,8 @@ public class XsltGeneratorTests
     public void BankInfo_GeneratesValidXslt()
         => AssertValid(SingleBlock("BankInfo", new
         {
-            bankNameXpath   = "//cac:PaymentMeans/cac:PayeeFinancialAccount/cac:FinancialInstitutionBranch/cac:FinancialInstitution/cbc:Name",
-            ibanXpath       = "//cac:PaymentMeans/cac:PayeeFinancialAccount/cbc:ID",
+            bankNameXpath = "//cac:PaymentMeans/cac:PayeeFinancialAccount/cac:FinancialInstitutionBranch/cac:FinancialInstitution/cbc:Name",
+            ibanXpath = "//cac:PaymentMeans/cac:PayeeFinancialAccount/cbc:ID",
             paymentTermsXpath = "//cac:PaymentTerms/cbc:Note"
         }));
 

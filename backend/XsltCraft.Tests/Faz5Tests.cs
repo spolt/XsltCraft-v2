@@ -23,15 +23,15 @@ public class Faz5Tests
     private const long MaxAssetBytes = 5 * 1024 * 1024; // 5 MB
 
     [Theory]
-    [InlineData(".png",  true)]
-    [InlineData(".jpg",  true)]
+    [InlineData(".png", true)]
+    [InlineData(".jpg", true)]
     [InlineData(".jpeg", true)]
-    [InlineData(".svg",  true)]
-    [InlineData(".PNG",  false)] // case-sensitive (controller ToLower uygular)
-    [InlineData(".gif",  false)]
-    [InlineData(".exe",  false)]
+    [InlineData(".svg", true)]
+    [InlineData(".PNG", false)] // case-sensitive (controller ToLower uygular)
+    [InlineData(".gif", false)]
+    [InlineData(".exe", false)]
     [InlineData(".xslt", false)]
-    [InlineData(".pdf",  false)]
+    [InlineData(".pdf", false)]
     public void AssetUpload_ExtensionValidation(string extension, bool shouldBeAllowed)
         => Assert.Equal(shouldBeAllowed, AllowedAssetExtensions.Contains(extension));
 
@@ -58,10 +58,10 @@ public class Faz5Tests
     // ═══════════════════════════════════════════════════════════════════════════
 
     [Theory]
-    [InlineData("Fatura Şablonu",        "Fatura Şablonu (kopya)")]
-    [InlineData("Template A",            "Template A (kopya)")]
-    [InlineData("e-Arşiv v2",            "e-Arşiv v2 (kopya)")]
-    [InlineData("Şablon (kopya)",        "Şablon (kopya) (kopya)")] // kopyadan kopya
+    [InlineData("Fatura Şablonu", "Fatura Şablonu (kopya)")]
+    [InlineData("Template A", "Template A (kopya)")]
+    [InlineData("e-Arşiv v2", "e-Arşiv v2 (kopya)")]
+    [InlineData("Şablon (kopya)", "Şablon (kopya) (kopya)")] // kopyadan kopya
     public void TemplateClone_NameSuffix(string originalName, string expectedName)
         => Assert.Equal(expectedName, $"{originalName} (kopya)");
 
@@ -193,18 +193,18 @@ public class Faz5Tests
     // ═══════════════════════════════════════════════════════════════════════════
 
     [Theory]
-    [InlineData("lessThan",   "100")]
-    [InlineData("greaterThan","100")]
-    [InlineData("equals",     "TEMELFATURA")]
-    [InlineData("notEquals",  "TEMELFATURA")]
-    [InlineData("contains",   "FATURA")]
-    [InlineData("exists",     "")]
-    [InlineData("notExists",  "")]
+    [InlineData("lessThan", "100")]
+    [InlineData("greaterThan", "100")]
+    [InlineData("equals", "TEMELFATURA")]
+    [InlineData("notEquals", "TEMELFATURA")]
+    [InlineData("contains", "FATURA")]
+    [InlineData("exists", "")]
+    [InlineData("notExists", "")]
     public void Conditional_AllOperators_XsltCompiles(string op, string val)
     {
         var tree = SingleBlock("Conditional", new
         {
-            condition    = new { xpath = "//cbc:InvoiceTypeCode", @operator = op, value = val },
+            condition = new { xpath = "//cbc:InvoiceTypeCode", @operator = op, value = val },
             thenBlockIds = Array.Empty<string>(),
             elseBlockIds = Array.Empty<string>()
         });
@@ -220,14 +220,14 @@ public class Faz5Tests
 
     [Theory]
     [InlineData("  Ali Veli  ", "Ali Veli")]
-    [InlineData("Test",         "Test")]
-    [InlineData("  ",           "")]
+    [InlineData("Test", "Test")]
+    [InlineData("  ", "")]
     public void ProfileUpdate_DisplayNameTrimmed(string raw, string expected)
         => Assert.Equal(expected, raw.Trim());
 
     [Theory]
     [InlineData("Ali@EXAMPLE.COM", "ali@example.com")]
-    [InlineData("user@Test.Org",   "user@test.org")]
+    [InlineData("user@Test.Org", "user@test.org")]
     public void ProfileUpdate_EmailNormalized(string raw, string expected)
         => Assert.Equal(expected, raw.Trim().ToLowerInvariant());
 
@@ -284,20 +284,27 @@ public class Faz5Tests
             {
                 ["b-h1"] = new BlockDto
                 {
-                    Id = "b-h1", Type = "Heading",
+                    Id = "b-h1",
+                    Type = "Heading",
                     Config = JsonSerializer.SerializeToElement(new
-                        { level = "H1", content = "FATURA", isStatic = true })
+                    { level = "H1", content = "FATURA", isStatic = true })
                 },
                 ["b-img"] = new BlockDto
                 {
-                    Id = "b-img", Type = "Image",
+                    Id = "b-img",
+                    Type = "Image",
                     Config = JsonSerializer.SerializeToElement(new
-                        { assetId = (string?)null, assetType = "logo", alignment = "left",
-                          editableOnFreeTheme = false })
+                    {
+                        assetId = (string?)null,
+                        assetType = "logo",
+                        alignment = "left",
+                        editableOnFreeTheme = false
+                    })
                 },
                 ["b-table"] = new BlockDto
                 {
-                    Id = "b-table", Type = "Table",
+                    Id = "b-table",
+                    Type = "Table",
                     Config = JsonSerializer.SerializeToElement(new
                     {
                         iterateOver = "//cac:InvoiceLine",
@@ -311,7 +318,8 @@ public class Faz5Tests
                 },
                 ["b-totals"] = new BlockDto
                 {
-                    Id = "b-totals", Type = "Totals",
+                    Id = "b-totals",
+                    Type = "Totals",
                     Config = JsonSerializer.SerializeToElement(new
                     {
                         alignment = "right",
@@ -325,15 +333,17 @@ public class Faz5Tests
                 },
                 ["b-bank"] = new BlockDto
                 {
-                    Id = "b-bank", Type = "BankInfo",
+                    Id = "b-bank",
+                    Type = "BankInfo",
                     Config = JsonSerializer.SerializeToElement(new
-                        { bankNameXpath = "//cbc:Name", ibanXpath = "//cbc:ID", paymentTermsXpath = "" })
+                    { bankNameXpath = "//cbc:Name", ibanXpath = "//cbc:ID", paymentTermsXpath = "" })
                 },
                 ["b-div"] = new BlockDto
                 {
-                    Id = "b-div", Type = "Divider",
+                    Id = "b-div",
+                    Type = "Divider",
                     Config = JsonSerializer.SerializeToElement(new
-                        { style = "solid", color = "#CCCCCC", thickness = "1px" })
+                    { style = "solid", color = "#CCCCCC", thickness = "1px" })
                 },
             }
         };

@@ -279,8 +279,8 @@ public class PreviewController : ControllerBase
         static string JustifyContent(string? align) => align switch
         {
             "center" => "center",
-            "right"  => "flex-end",
-            _        => "flex-start",
+            "right" => "flex-end",
+            _ => "flex-start",
         };
 
         // Img inline style: explicit px if provided, otherwise auto; always max-width:100%
@@ -291,7 +291,7 @@ public class PreviewController : ControllerBase
 
         static string BuildSetCall(string[] ids, string url, int? w, int? h, string? align)
         {
-            var jc    = JustifyContent(align);
+            var jc = JustifyContent(align);
             var style = ImgStyle(w, h);
             // Use flexbox on the container so alignment works regardless of img display type
             var fn = $"function(el){{" +
