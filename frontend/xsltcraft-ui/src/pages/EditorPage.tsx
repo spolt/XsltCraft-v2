@@ -37,6 +37,7 @@ import {
 import { generateXslt } from '../services/previewService'
 import type { BlockTree } from '../types/template'
 import type { BlockType } from '../types/blocks'
+import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 const AUTOSAVE_DELAY_MS = 30_000
 
@@ -261,6 +262,8 @@ export default function EditorPage() {
   useEffect(() => {
     if (!routeTemplateId) {
       resetTree()
+      useXmlStore.setState({ xmlFiles: [], activeXmlId: null })
+      addXmlFile('varsayilan-fatura.xml', defaultInvoiceXml)
       return
     }
 

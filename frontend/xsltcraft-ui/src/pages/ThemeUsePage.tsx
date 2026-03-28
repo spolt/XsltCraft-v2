@@ -18,6 +18,7 @@ import { getTemplate } from '../services/templateService'
 import { previewFromStoredXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
 import { uploadAsset } from '../services/assetService'
 import { useAuthStore } from '../store/authStore'
+import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 const DEBOUNCE_MS = 1200
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000'
@@ -174,7 +175,7 @@ export default function ThemeUsePage() {
   const navigate = useNavigate()
 
   const [templateName, setTemplateName] = useState('Hazır Tema')
-  const [xmlContent, setXmlContent] = useState<string | null>(null)
+  const [xmlContent, setXmlContent] = useState<string>(defaultInvoiceXml)
   const [editMode, setEditMode] = useState(false)
 
   const [logo, setLogo] = useState<ImgState>(defaultImg())
@@ -261,33 +262,6 @@ export default function ThemeUsePage() {
     setBankInfo((p) => p.map((r, i) => (i === idx ? { ...r, [field]: value } : r)))
   }
 
-  // ─── Phase 1: XML upload ──────────────────────────────────────────────────────
-  if (!xmlContent) {
-    return (
-      <div className="h-screen flex overflow-hidden bg-gray-50">
-        <EditorSidebar />
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-4">
-          <div className="text-center">
-            <p className="text-xs text-gray-400 mb-1">
-              <button onClick={() => navigate('/templates')} className="hover:text-blue-600 transition-colors">← Tema Kütüphanesi</button>
-            </p>
-            <h1 className="text-xl font-semibold text-gray-800 mb-1">{templateName}</h1>
-            <p className="text-sm text-gray-500">Önizleme için bir XML dosyası yükleyin.</p>
-          </div>
-          <label className="cursor-pointer flex flex-col items-center gap-3 border-2 border-dashed border-blue-300 rounded-xl px-14 py-10 bg-white hover:border-blue-400 hover:bg-blue-50 transition-colors">
-            <svg className="w-10 h-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-            <span className="text-sm font-medium text-blue-600">XML Dosyası Yükle</span>
-            <span className="text-xs text-gray-400">.xml — fatura veya irsaliye</span>
-            <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={handleXmlFile} />
-          </label>
-        </div>
-      </div>
-    )
-  }
-
-  // ─── Phase 2 / 3 ─────────────────────────────────────────────────────────────
   return (
     <div className="h-screen flex overflow-hidden bg-gray-50">
       <EditorSidebar />

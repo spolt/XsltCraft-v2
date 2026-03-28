@@ -7,16 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.2.0] - 2026-03-28
+
 ### Added
-- Initial repository setup
+- Varsayılan UBL 2.1 e-Fatura XML örneği eklendi (`default-invoice.xml`)
+- ThemeUsePage: Kullanıcıdan XML beklenmeden doğrudan önizleme açılıyor
+- EditorPage (Yeni Şablon): Sayfa açılışında XML store varsayılan fatura ile önyükleniyor
+- CI pipeline: `ci.yml` ve `release.yml` workflow'ları eklendi
 
 ### Changed
+- ThemeUsePage artık Phase-1 XML yükleme ekranını atlar; "XML Değiştir" butonu toolbar'da kalır
+- EditorPage yeni şablon modunda XML store her açılışta sıfırlanır ve varsayılan XML yüklenir
 
 ### Fixed
-
-### Removed
+- Frontend lint hataları giderildi (24 error → 0)
+- CI'da frontend `working-directory` yolu düzeltildi
+- `dotnet format` whitespace uyumsuzlukları düzeltildi
 
 ### Security
+- pre-commit hook: `.github/workflows/` dizini secret taramasından muaf tutuldu
 
 ---
 
