@@ -84,6 +84,10 @@ while IFS= read -r file; do
   if echo "$file" | grep -qE "\.(md|txt|rst)$"; then
     continue
   fi
+  # CI workflow dosyaları test kimlik bilgisi içerebilir — atla
+  if echo "$file" | grep -qE "^\.github/workflows/"; then
+    continue
+  fi
   # Sadece metin dosyalarını tara
   for pattern in "${SECRET_PATTERNS[@]}"; do
     matches=$(git diff --cached -U0 -- "$file" 2>/dev/null \
