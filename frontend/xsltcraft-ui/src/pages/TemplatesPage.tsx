@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
-import { cloneTemplate, getFreeThemes, getDownloadUrl, type FreeTheme } from '../services/templateService'
+import { cloneTemplate, getFreeThemes, type FreeTheme } from '../services/templateService'
 import { previewFromStoredXslt } from '../services/previewService'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
@@ -190,31 +190,39 @@ function ThemeCard({
           : 'border-gray-200 shadow-sm hover:shadow-md hover:border-blue-200'
       }`}
     >
-      <div className="flex-1">
-        <span className="inline-block text-xs font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 mb-2">
-          {DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}
-        </span>
-        <h2 className="text-sm font-semibold text-gray-800">{theme.name}</h2>
-      </div>
-
-      {!compact && (
-        <div className="flex gap-2">
+      {compact ? (
+        /* Önizleme açıkken: badge+isim sola, "Seç" sağa */
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <span className="inline-block text-xs font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 mb-1">
+              {DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}
+            </span>
+            <h2 className="text-sm font-semibold text-gray-800 truncate">{theme.name}</h2>
+          </div>
           <button
             onClick={handleUse}
             disabled={cloning}
-            className="flex-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-3 py-2 transition-colors"
+            className="flex-shrink-0 text-xs font-medium text-blue-600 border border-blue-500 hover:bg-blue-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-3 py-1.5 transition-colors"
           >
-            {cloning ? 'Kopyalanıyor…' : 'Bu temayı kullan'}
+            {cloning ? '…' : 'Seç'}
           </button>
-          <a
-            href={getDownloadUrl(theme.id)}
-            download
-            onClick={(e) => e.stopPropagation()}
-            className="text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
-          >
-            İndir
-          </a>
         </div>
+      ) : (
+        /* Normal mod: badge + isim üstte, "Ön İzleme" butonu altta */
+        <>
+          <div>
+            <span className="inline-block text-xs font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 mb-2">
+              {DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}
+            </span>
+            <h2 className="text-sm font-semibold text-gray-800">{theme.name}</h2>
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); onSelect() }}
+            className="w-full text-sm font-medium text-blue-600 border border-blue-500 hover:bg-blue-600 hover:text-white rounded-lg px-3 py-1.5 transition-colors"
+          >
+            Ön İzleme
+          </button>
+        </>
       )}
     </div>
   )
