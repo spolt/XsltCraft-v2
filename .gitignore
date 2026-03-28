@@ -62,5 +62,8 @@ Thumbs.db
 /node_modules/
 /package-lock.json
 
+# PRD v2 (internal doc)
+XsltCraft_PRD_v2.md
+
 # Claude Code memory & session data
 .claude/
