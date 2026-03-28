@@ -1,0 +1,69 @@
+services:
+  db:
+    image: postgres:16
+    container_name: xsltcraft_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: xsltcraft
+      POSTGRES_USER: xsltcraft
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xsltcraft"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xsltcraft_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: xsltcraft_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=xsltcraft;Username=xsltcraft;Password=${POSTGRES_PASSWORD}"
+      Jwt__SecretKey: ${JWT_SECRET_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      Google__ClientId: ${GOOGLE_CLIENT_ID}
+      Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
+      Storage__Provider: ${STORAGE_PROVIDER:-Local}
+      Storage__LocalBasePath: /app/storage
+      Admin__Email: ${ADMIN_EMAIL}
+      Admin__Password: ${ADMIN_PASSWORD}
+    volumes:
+      - storage_data:/app/storage
+    ports:
+      - "5000:5000"
+    networks:
+      - xsltcraft_net
+
+  frontend:
+    build:
+      context: ./frontend/xsltcraft-ui
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://45.43.154.111:5000}
+    container_name: xsltcraft_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - xsltcraft_net
+
+volumes:
+  postgres_data:
+  storage_data:
+
+networks:
+  xsltcraft_net:
+    driver: bridge
