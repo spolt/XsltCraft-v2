@@ -64,6 +64,7 @@ export default function XsltEditorPreview({ html, onElementClick }: Props) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function printPreview(iframeEl: HTMLIFrameElement | null) {
   iframeEl?.contentWindow?.print()
 }

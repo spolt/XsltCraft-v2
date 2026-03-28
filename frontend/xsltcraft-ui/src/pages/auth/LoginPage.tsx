@@ -24,8 +24,9 @@ export default function LoginPage() {
       })
       login(data.accessToken, me.data)
       navigate('/dashboard')
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? 'Giriş başarısız.')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setError(msg ?? 'Giriş başarısız.')
     } finally {
       setLoading(false)
     }
@@ -44,8 +45,9 @@ export default function LoginPage() {
       })
       login(data.accessToken, me.data)
       navigate('/dashboard')
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? 'Google ile giriş başarısız.')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setError(msg ?? 'Google ile giriş başarısız.')
     } finally {
       setLoading(false)
     }

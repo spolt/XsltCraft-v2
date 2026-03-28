@@ -1,11 +1,12 @@
 import { useState } from "react"
+import type React from "react"
 import LogoDialog from "./LogoDialog"
 
 type XmlStatus = "empty" | "loaded" | "invalid"
 type XsltStatus = "valid" | "invalid" | "checking"
 
 type Props = {
-  onXmlUpload: (e: any) => void
+  onXmlUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
   onLogoUpload: (base64: string, mimeType: string, width: number, height: number) => void
   onSignatureUpload: (base64: string, mimeType: string, width: number, height: number) => void
   onSave: () => void

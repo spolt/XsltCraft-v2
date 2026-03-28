@@ -15,7 +15,6 @@ export default function TemplatesPage() {
   const typeFilter = searchParams.get('type') // 'Invoice' | 'Despatch' | null
 
   useEffect(() => {
-    setLoading(true)
     getFreeThemes()
       .then(setThemes)
       .catch(() => setError('Temalar yüklenirken bir hata oluştu.'))

@@ -204,7 +204,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get()
     const prev = snapshot(state)
 
-    const { [blockId]: _removed, ...remainingBlocks } = state.blocks
+    const { [blockId]: _, ...remainingBlocks } = state.blocks
 
     set((s) => ({
       blocks: remainingBlocks,

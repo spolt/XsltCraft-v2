@@ -72,15 +72,13 @@ function XPathInput({
   const [resolved, setResolved] = useState('')
 
   useEffect(() => {
-    if (!activeXml || !value.trim()) {
-      setResolved('')
-      return
-    }
     const t = setTimeout(() => {
-      setResolved(evaluateXPathValue(activeXml.content, value))
+      setResolved(
+        activeXml && value.trim() ? evaluateXPathValue(activeXml.content, value) : ''
+      )
     }, 300)
     return () => clearTimeout(t)
-  }, [activeXml?.content, value]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeXml, value])
 
   return (
     <div className="flex flex-col" style={{ gap: 2 }}>

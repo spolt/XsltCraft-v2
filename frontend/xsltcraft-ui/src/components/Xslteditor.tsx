@@ -1,4 +1,5 @@
-import Editor from "@monaco-editor/react"
+import Editor, { type Monaco } from "@monaco-editor/react"
+import type { editor as MonacoEditor } from "monaco-editor"
 import { useRef, useEffect } from "react"
 
 export type XsltError = {
@@ -97,7 +98,7 @@ const xpathFunctions: { label: string; detail: string; snippet: string }[] = [
 
 let completionRegistered = false
 
-function registerXsltCompletions(monaco: any) {
+function registerXsltCompletions(monaco: Monaco) {
   if (completionRegistered) return
   completionRegistered = true
 
@@ -107,6 +108,7 @@ function registerXsltCompletions(monaco: any) {
   monaco.languages.registerCompletionItemProvider("xml", {
     triggerCharacters: ["<", ":"],
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideCompletionItems(model: any, position: any) {
       const wordInfo = model.getWordUntilPosition(position)
       const lineContent = model.getLineContent(position.lineNumber)
@@ -141,6 +143,7 @@ function registerXsltCompletions(monaco: any) {
         endColumn: wordInfo.endColumn,
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const suggestions: any[] = []
 
       // Inside attribute value (select="...", test="...", match="...") → XPath functions
@@ -201,15 +204,15 @@ function registerXsltCompletions(monaco: any) {
 
 export default function XsltEditor({ value, onChange, onEditorReady, onRequestImageInsert, errors }: Props) {
 
-  const monacoRef = useRef<any>(null)
-  const editorRef = useRef<any>(null)
+  const monacoRef = useRef<Monaco | null>(null)
+  const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
 
-  function handleBeforeMount(monaco: any) {
+  function handleBeforeMount(monaco: Monaco) {
     monacoRef.current = monaco
     registerXsltCompletions(monaco)
   }
 
-  function handleMount(editor: any) {
+  function handleMount(editor: MonacoEditor.IStandaloneCodeEditor) {
     editorRef.current = editor
 
     // Context menu: Resim Ekle
@@ -218,7 +221,7 @@ export default function XsltEditor({ value, onChange, onEditorReady, onRequestIm
       label: 'Resim Ekle',
       contextMenuGroupId: 'modification',
       contextMenuOrder: 1,
-      run(ed: any) {
+      run(ed: MonacoEditor.ICodeEditor) {
         const pos = ed.getPosition()
         if (pos && onRequestImageInsert) {
           onRequestImageInsert(pos.lineNumber)
@@ -232,7 +235,7 @@ export default function XsltEditor({ value, onChange, onEditorReady, onRequestIm
       'param','source','track','wbr',
     ])
 
-    editor.onDidChangeModelContent((event: any) => {
+    editor.onDidChangeModelContent((event: MonacoEditor.IModelContentChangedEvent) => {
       const change = event.changes[0]
       if (!change || change.text !== '>') return
 

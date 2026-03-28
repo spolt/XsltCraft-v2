@@ -149,7 +149,7 @@ export default function XmlTreeExplorer() {
 
   const tree = useMemo(
     () => (activeXml ? parseXmlToTree(activeXml.content) : null),
-    [activeXml?.content] // eslint-disable-line react-hooks/exhaustive-deps
+    [activeXml]
   )
 
   if (!activeXml) {

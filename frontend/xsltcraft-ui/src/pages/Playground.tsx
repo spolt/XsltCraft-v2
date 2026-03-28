@@ -1,5 +1,6 @@
-import { Layout, Model } from "flexlayout-react"
+import { Layout, Model, type TabNode } from "flexlayout-react"
 import { useState, useEffect, useRef } from "react"
+import type React from "react"
 
 import TemplateList from "../components/TemplateList"
 import { getTemplateFile, validateXslt, transformPreview } from "../api/templateApi"
@@ -77,7 +78,7 @@ async function handleFileSelect(templateId: string, fileName: string) {
   setXslt(data.content)
 }
 
-function factory(node:any){
+function factory(node: TabNode){
 
 const component = node.getComponent()
 
@@ -127,13 +128,13 @@ async function runTransform(xmlInput: string, xsltInput: string) {
   }
 }
 
-function handleXmlUpload(e: any) {
-  const file = e.target.files[0]
+function handleXmlUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  const file = e.target.files?.[0]
   if (!file) return
 
   const reader = new FileReader()
-  reader.onload = (event: any) => {
-    const xmlContent = event.target.result as string
+  reader.onload = (event: ProgressEvent<FileReader>) => {
+    const xmlContent = event.target?.result as string
 
     // Validate XML
     const parser = new DOMParser()
@@ -203,9 +204,8 @@ useEffect(() => {
 useEffect(() => {
   if (validateDebounceRef.current) clearTimeout(validateDebounceRef.current)
 
-  setXsltStatus("checking")
-
   validateDebounceRef.current = setTimeout(async () => {
+    setXsltStatus("checking")
     try {
       const result = await validateXslt(xslt)
 

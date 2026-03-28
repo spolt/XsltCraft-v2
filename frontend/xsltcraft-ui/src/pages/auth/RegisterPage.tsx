@@ -31,8 +31,9 @@ export default function RegisterPage() {
     try {
       await api.post('/api/auth/register', { email, password, displayName })
       navigate('/auth/login', { state: { registered: true } })
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? 'Kayıt başarısız.')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setError(msg ?? 'Kayıt başarısız.')
     } finally {
       setLoading(false)
     }

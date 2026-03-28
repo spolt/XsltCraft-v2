@@ -157,7 +157,7 @@ export default function EditorPage() {
     setActiveDndId(String(active.id))
   }
 
-  function handleDragOver({ over: _over }: DragOverEvent) {
+  function handleDragOver(_event: DragOverEvent) {
     // reserved for future highlight logic
   }
 
