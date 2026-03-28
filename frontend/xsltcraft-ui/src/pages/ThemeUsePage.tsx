@@ -13,15 +13,112 @@ import {
   AlignCenter,
   AlignRight,
   Code2,
+  Download,
+  BookmarkCheck,
 } from 'lucide-react'
 import { getTemplate } from '../services/templateService'
-import { previewFromStoredXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
-import { uploadAsset } from '../services/assetService'
+import { previewFromStoredXslt, fetchThemeXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
+import { createUserXsltTemplate } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 const DEBOUNCE_MS = 1200
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000'
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => resolve(e.target!.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+// ─── XSLT injection helpers (DevModePage ile aynı mantık) ────────────────────
+const OVERRIDE_START = '<!-- DEV-MODE-OVERRIDES:START -->'
+const OVERRIDE_END   = '<!-- DEV-MODE-OVERRIDES:END -->'
+
+function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function buildInjection(logo: ImgState, signature: ImgState, bankInfo: BankInfoItem[]): string {
+  const parts: string[] = []
+  const hasLogo = !!logo.url
+  const hasSig  = !!signature.url
+
+  if (hasLogo || hasSig) {
+    const parseNum = (s: string) => { const n = parseInt(s); return isNaN(n) ? null : n }
+    const lines = [
+      `<script>(function(){`,
+      `  function jc(a){return a==='center'?'center':a==='right'?'flex-end':'flex-start';}`,
+      `  function setImg(ids,url,w,h,align){`,
+      `    ids.forEach(function(id){`,
+      `      var el=document.getElementById(id);if(!el)return;`,
+      `      el.style.cssText='display:flex;justify-content:'+jc(align)+';align-items:center;';`,
+      `      var img=document.createElement('img');`,
+      `      img.src=url;`,
+      `      img.style.cssText=(w?'width:'+w+'px;':'width:auto;')+(h?'height:'+h+'px;':'height:auto;')+'max-width:100%;object-fit:contain;display:block;';`,
+      `      el.innerHTML='';el.appendChild(img);`,
+      `    });`,
+      `  }`,
+      `  window.addEventListener('load',function(){`,
+    ]
+    if (hasLogo) {
+      const w = parseNum(logo.width)
+      const h = parseNum(logo.height)
+      const safeUrl = logo.url.replace(/&/g, '&amp;').replace(/'/g, '%27')
+      lines.push(`    setImg(['company_logo','companyLogo'],'${safeUrl}',${w ?? 'null'},${h ?? 'null'},'${logo.alignment}');`)
+    }
+    if (hasSig) {
+      const w = parseNum(signature.width)
+      const h = parseNum(signature.height)
+      const safeUrl = signature.url.replace(/&/g, '&amp;').replace(/'/g, '%27')
+      lines.push(`    setImg(['imza','companyKase'],'${safeUrl}',${w ?? 'null'},${h ?? 'null'},'${signature.alignment}');`)
+    }
+    lines.push(`  });`, `})();</script>`)
+    parts.push(lines.join('\n'))
+  }
+
+  const validBanks = bankInfo.filter(b => b.bankName || b.iban)
+  if (validBanks.length > 0) {
+    const rows = validBanks
+      .map(b =>
+        `      <tr>` +
+        `<td style="padding:6px 10px;border:1px solid #ddd">${escapeXml(b.bankName)}</td>` +
+        `<td style="padding:6px 10px;border:1px solid #ddd;font-family:monospace">${escapeXml(b.iban)}</td>` +
+        `</tr>`,
+      )
+      .join('\n')
+    parts.push(
+      `<div style="font-family:Arial,sans-serif;font-size:12px;margin:16px 0;page-break-inside:avoid">\n` +
+      `  <table style="width:100%;border-collapse:collapse">\n` +
+      `    <thead><tr>\n` +
+      `      <th style="text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd">Banka Adı</th>\n` +
+      `      <th style="text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd">IBAN</th>\n` +
+      `    </tr></thead>\n` +
+      `    <tbody>\n${rows}\n    </tbody>\n` +
+      `  </table>\n</div>`,
+    )
+  }
+
+  if (parts.length === 0) return ''
+  return `${OVERRIDE_START}\n${parts.join('\n')}\n${OVERRIDE_END}`
+}
+
+function applyInjection(xslt: string, injection: string): string {
+  const si = xslt.indexOf(OVERRIDE_START)
+  const ei = xslt.indexOf(OVERRIDE_END)
+  if (si >= 0 && ei >= 0) {
+    if (!injection) return xslt.slice(0, si).trimEnd() + '\n' + xslt.slice(ei + OVERRIDE_END.length).trimStart()
+    return xslt.slice(0, si) + injection + xslt.slice(ei + OVERRIDE_END.length)
+  }
+  if (!injection) return xslt
+  const bodyClose = xslt.lastIndexOf('</body>')
+  if (bodyClose >= 0) return xslt.slice(0, bodyClose) + injection + '\n' + xslt.slice(bodyClose)
+  const tmpl = xslt.lastIndexOf('</xsl:template>')
+  if (tmpl >= 0) return xslt.slice(0, tmpl) + injection + '\n' + xslt.slice(tmpl)
+  return xslt + '\n' + injection
+}
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function EditorSidebar() {
@@ -175,6 +272,8 @@ export default function ThemeUsePage() {
   const navigate = useNavigate()
 
   const [templateName, setTemplateName] = useState('Hazır Tema')
+  const [xslt, setXslt] = useState('')
+  const xsltReadyRef = useRef(false)
   const [xmlContent, setXmlContent] = useState<string>(defaultInvoiceXml)
   const [editMode, setEditMode] = useState(false)
 
@@ -189,12 +288,29 @@ export default function ThemeUsePage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [lastMs, setLastMs] = useState<number | null>(null)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
+  // Tema adını ve XSLT içeriğini yükle
   useEffect(() => {
     if (!templateId) return
     getTemplate(templateId).then((t) => setTemplateName(t.name)).catch(() => {})
+    fetchThemeXslt(templateId)
+      .then((content) => {
+        setXslt(content)
+        xsltReadyRef.current = true
+      })
+      .catch(() => {})
   }, [templateId])
+
+  // Logo/imza/IBAN değişince enjeksiyonu XSLT'e göm
+  useEffect(() => {
+    if (!xsltReadyRef.current) return
+    const injection = buildInjection(logo, signature, bankInfo)
+    setXslt((prev) => applyInjection(prev, injection))
+  }, [logo, signature, bankInfo])
 
   // Debounced preview
   useEffect(() => {
@@ -225,6 +341,32 @@ export default function ThemeUsePage() {
     return () => clearTimeout(t)
   }, [xmlContent, logo, signature, bankInfo, templateId])
 
+  function handleDownload() {
+    if (!xslt || isDownloading) return
+    setIsDownloading(true)
+    try {
+      const blob = new Blob([xslt], { type: 'application/xslt+xml' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `${templateName.replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  async function handleSave() {
+    if (!xslt || isSaving) return
+    setIsSaving(true)
+    try {
+      await createUserXsltTemplate({ name: templateName, xsltContent: xslt, xmlContent })
+      setSaveSuccess(true)
+      setTimeout(() => { navigate('/my-xslt-templates') }, 800)
+    } catch { alert('Kaydetme başarısız.') }
+    finally { setIsSaving(false) }
+  }
+
   function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -239,8 +381,8 @@ export default function ThemeUsePage() {
     if (!file) return
     setLogoUploading(true)
     try {
-      const asset = await uploadAsset(file, 'Logo')
-      setLogo((prev) => ({ ...prev, url: `${API_BASE}${asset.url}` }))
+      const dataUrl = await readAsDataUrl(file)
+      setLogo((prev) => ({ ...prev, url: dataUrl }))
     } catch { alert('Logo yüklenemedi.') }
     finally { setLogoUploading(false); e.target.value = '' }
   }
@@ -250,8 +392,8 @@ export default function ThemeUsePage() {
     if (!file) return
     setSignatureUploading(true)
     try {
-      const asset = await uploadAsset(file, 'Signature')
-      setSignature((prev) => ({ ...prev, url: `${API_BASE}${asset.url}` }))
+      const dataUrl = await readAsDataUrl(file)
+      setSignature((prev) => ({ ...prev, url: dataUrl }))
     } catch { alert('İmza yüklenemedi.') }
     finally { setSignatureUploading(false); e.target.value = '' }
   }
@@ -291,6 +433,26 @@ export default function ThemeUsePage() {
             title="XSLT editörünü aç"
           >
             <Code2 size={13} />Geliştirici Modu
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={isDownloading || !xslt}
+            className="flex items-center gap-1.5 text-xs text-gray-600 border border-gray-200 rounded px-3 py-1 hover:bg-gray-50 disabled:opacity-40"
+            title="XSLT dosyasını indir"
+          >
+            <Download size={13} />{isDownloading ? '…' : 'İndir'}
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving || saveSuccess || !xslt}
+            className={`flex items-center gap-1.5 text-xs border rounded px-3 py-1 transition-colors disabled:opacity-40 ${
+              saveSuccess
+                ? 'text-green-700 border-green-300 bg-green-50'
+                : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+            }`}
+            title="Şablonlarıma kaydet"
+          >
+            <BookmarkCheck size={13} />{saveSuccess ? 'Kaydedildi' : isSaving ? '…' : 'Kaydet'}
           </button>
           {!editMode
             ? <button onClick={() => setEditMode(true)} className="flex items-center gap-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-3 py-1">
