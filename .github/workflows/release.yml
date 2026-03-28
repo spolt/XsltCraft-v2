@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Release version: ${VERSION}"
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          # Remove 'v' prefix for changelog lookup
+          VERSION_NO_V=${VERSION#v}
+          
+          # Extract section from CHANGELOG.md between version headers
+          CHANGELOG=$(awk "/^## \[$VERSION_NO_V\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md)
+          
+          # If section not found, use placeholder
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="See CHANGELOG.md for details."
+          fi
+          
+          # Save to file (multi-line output)
+          echo "$CHANGELOG" > /tmp/changelog.txt
+          cat /tmp/changelog.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          body_path: /tmp/changelog.txt
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log release
+        run: |
+          echo "✅ Released: ${{ steps.version.outputs.version }}"
+          echo "📝 Tag: ${{ github.ref }}"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }}"
