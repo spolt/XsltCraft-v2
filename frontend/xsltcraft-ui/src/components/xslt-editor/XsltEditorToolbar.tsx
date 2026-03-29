@@ -43,72 +43,72 @@ export default function XsltEditorToolbar({
   onSave,
   onPrint,
 }: Props) {
-  const btnBase = 'flex items-center gap-1.5 text-xs border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 transition-colors'
+  const btnBase = 'flex items-center gap-1.5 text-sm border border-gray-600 rounded px-3 py-1.5 hover:bg-gray-800 transition-colors'
 
   return (
-    <div className="h-10 border-b border-gray-700 bg-gray-900 flex items-center gap-2 px-4 flex-shrink-0">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors mr-1" title="Geri dön">
-        <ArrowLeft size={13} />
+    <div className="h-12 border-b border-gray-700 bg-gray-900 flex items-center gap-2 px-4 flex-shrink-0">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors mr-1" title="Geri dön">
+        <ArrowLeft size={15} />
       </button>
 
-      <span className="text-sm font-medium text-gray-200 flex-1 truncate">
+      <span className="text-base font-medium text-gray-200 flex-1 truncate">
         {templateName || 'XSLT Editör'}
         {isDirty && <span className="text-gray-500 ml-1">*</span>}
       </span>
 
       {/* Loading / timing */}
       {previewLoading && (
-        <span className="text-xs text-blue-400 flex items-center gap-1">
-          <span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        <span className="text-sm text-blue-400 flex items-center gap-1">
+          <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
           Derleniyor
         </span>
       )}
-      {!previewLoading && lastMs !== null && <span className="text-xs text-gray-500">{lastMs} ms</span>}
+      {!previewLoading && lastMs !== null && <span className="text-sm text-gray-500">{lastMs} ms</span>}
 
       {/* Validation status */}
       {xsltValid !== null && (
-        <span className={`flex items-center gap-1 text-xs ${xsltValid ? 'text-green-400' : 'text-red-400'}`} title={xsltValid ? 'XSLT geçerli' : 'XSLT hatası'}>
-          {xsltValid ? <CheckCircle2 size={13} /> : <TriangleAlert size={13} />}
+        <span className={`flex items-center gap-1 text-sm ${xsltValid ? 'text-green-400' : 'text-red-400'}`} title={xsltValid ? 'XSLT geçerli' : 'XSLT hatası'}>
+          {xsltValid ? <CheckCircle2 size={15} /> : <TriangleAlert size={15} />}
           <span className="hidden sm:inline">XSLT</span>
         </span>
       )}
       {xmlValid !== null && (
-        <span className={`flex items-center gap-1 text-xs ${xmlValid ? 'text-green-400' : 'text-red-400'}`} title={xmlValid ? 'XML geçerli' : 'XML hatası'}>
-          {xmlValid ? <CheckCircle2 size={13} /> : <TriangleAlert size={13} />}
+        <span className={`flex items-center gap-1 text-sm ${xmlValid ? 'text-green-400' : 'text-red-400'}`} title={xmlValid ? 'XML geçerli' : 'XML hatası'}>
+          {xmlValid ? <CheckCircle2 size={15} /> : <TriangleAlert size={15} />}
           <span className="hidden sm:inline">XML</span>
         </span>
       )}
 
       {/* Upload buttons */}
       <label className={`${btnBase} text-gray-400 cursor-pointer`} title="XSLT dosyası yükle">
-        <FileCode2 size={13} />
+        <FileCode2 size={15} />
         <span className="hidden sm:inline">XSLT</span>
-        <Upload size={11} />
+        <Upload size={13} />
         <input type="file" accept=".xsl,.xslt" className="hidden" onChange={onUploadXslt} />
       </label>
 
       <label className={`${btnBase} text-gray-400 cursor-pointer`} title="XML dosyası yükle">
-        <FileText size={13} />
+        <FileText size={15} />
         <span className="hidden sm:inline">XML</span>
-        <Upload size={11} />
+        <Upload size={13} />
         <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={onUploadXml} />
       </label>
 
       {/* Download */}
       <button onClick={onDownload} disabled={!hasXslt} className={`${btnBase} text-gray-400 disabled:opacity-30`} title="XSLT indir">
-        <Download size={13} />
+        <Download size={15} />
         <span className="hidden sm:inline">İndir</span>
       </button>
 
       {/* Save */}
-      <button onClick={onSave} disabled={!hasXslt} className="flex items-center gap-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-3 py-1 disabled:opacity-30 transition-colors" title="Kaydet">
-        <Save size={13} />
+      <button onClick={onSave} disabled={!hasXslt} className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-3 py-1.5 disabled:opacity-30 transition-colors" title="Kaydet">
+        <Save size={15} />
         <span className="hidden sm:inline">Kaydet</span>
       </button>
 
       {/* Print */}
       <button onClick={onPrint} disabled={!hasXml || !hasXslt} className={`${btnBase} text-gray-400 disabled:opacity-30`} title="Yazdır">
-        <Printer size={14} />
+        <Printer size={16} />
       </button>
     </div>
   )

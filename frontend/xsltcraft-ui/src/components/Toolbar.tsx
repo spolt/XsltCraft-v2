@@ -37,7 +37,7 @@ export default function Toolbar({ onXmlUpload, onLogoUpload, onSignatureUpload, 
   return (
     <div
       style={{
-        height: 48,
+        height: 56,
         background: "var(--xc-bg-toolbar)",
         borderBottom: "1px solid var(--xc-border)",
         boxShadow: "var(--xc-shadow-sm)",
