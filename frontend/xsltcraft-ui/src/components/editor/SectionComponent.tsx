@@ -73,7 +73,7 @@ export default function SectionComponent({ section }: SectionComponentProps) {
         updateBlockLayout(b.id, { width, col: assignedCol })
       } else {
         // Single-col: clear col assignment
-        const { col: _col, ...rest } = b.layout ?? {}
+        const { col: _col, width: _width, ...rest } = b.layout ?? {}
         updateBlockLayout(b.id, { width: 'full', ...rest, col: undefined })
       }
     })
