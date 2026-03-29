@@ -443,11 +443,13 @@ export type BlockConfig =
 // ── Blok düzeni (hizalama + genişlik) ──────────────────────────────────────
 
 export type BlockAlignment = 'left' | 'center' | 'right'
-export type BlockWidth = 'full' | '1/2' | '1/3' | '2/3'
+export type BlockWidth = 'full' | '1/2' | '1/3' | '2/3' | '2/5' | '3/10'
 
 export interface BlockLayout {
   alignment: BlockAlignment
   width: BlockWidth
+  /** Çok sütunlu bölümlerde 0 tabanlı sütun indeksi (0, 1, 2). Atanmamışsa 0 kabul edilir. */
+  col?: number
 }
 
 export const DEFAULT_BLOCK_LAYOUT: BlockLayout = { alignment: 'left', width: 'full' }

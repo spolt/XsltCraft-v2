@@ -39,6 +39,10 @@ public sealed class BlockLayoutDto
 
     [JsonPropertyName("alignment")]
     public string Alignment { get; set; } = "left"; // left | center | right
+
+    /// <summary>Çok sütunlu bölümlerde 0 tabanlı sütun indeksi. Null ise sıralı yerleşim kullanılır.</summary>
+    [JsonPropertyName("col")]
+    public int? Col { get; set; }
 }
 
 public sealed class BlockDto

@@ -12,6 +12,8 @@ export default function MyXsltTemplatesPage() {
   const [templates, setTemplates] = useState<UserXsltTemplateSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkConfirm, setBulkConfirm] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -34,6 +36,11 @@ export default function MyXsltTemplatesPage() {
     try {
       await deleteUserXsltTemplate(id)
       setTemplates((prev) => prev.filter((t) => t.id !== id))
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
     } catch {
       alert('Silme başarısız.')
     }
@@ -45,6 +52,36 @@ export default function MyXsltTemplatesPage() {
       setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, name: updated.name, updatedAt: updated.updatedAt } : t)))
     } catch {
       alert('Yeniden adlandırma başarısız.')
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (selectedIds.size === templates.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(templates.map((t) => t.id)))
+    }
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...selectedIds]
+    try {
+      await Promise.all(ids.map((id) => deleteUserXsltTemplate(id)))
+      setTemplates((prev) => prev.filter((t) => !ids.includes(t.id)))
+      setSelectedIds(new Set())
+    } catch {
+      alert('Toplu silme sırasında hata oluştu.')
+    } finally {
+      setBulkConfirm(false)
     }
   }
 
@@ -64,6 +101,9 @@ export default function MyXsltTemplatesPage() {
     )
   }
 
+  const allSelected = templates.length > 0 && selectedIds.size === templates.length
+  const someSelected = selectedIds.size > 0
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -80,20 +120,67 @@ export default function MyXsltTemplatesPage() {
         </Link>
       </div>
 
+      {someSelected && (
+        <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+          <span className="text-sm text-blue-700 font-medium flex-1">
+            {selectedIds.size} şablon seçildi
+          </span>
+          {bulkConfirm ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-red-600 font-medium">Emin misin?</span>
+              <button
+                onClick={handleBulkDelete}
+                className="font-medium text-red-600 hover:text-red-700"
+              >
+                Evet
+              </button>
+              <span className="text-gray-300">/</span>
+              <button
+                onClick={() => setBulkConfirm(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                Hayır
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setBulkConfirm(true)}
+              className="flex items-center gap-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              <Trash2 size={14} />
+              Seçilenleri Sil
+            </button>
+          )}
+        </div>
+      )}
+
       {templates.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="flex flex-col gap-2">
-          {templates.map((t) => (
-            <TemplateRow
-              key={t.id}
-              template={t}
-              onOpen={() => navigate(`/xslt-editor/${t.id}`)}
-              onDelete={handleDelete}
-              onRename={handleRename}
+        <>
+          <div className="flex items-center gap-3 px-4 py-2 mb-1">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleAll}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 accent-blue-600 cursor-pointer"
             />
-          ))}
-        </div>
+            <span className="text-xs text-gray-400 select-none">Tümünü seç</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {templates.map((t) => (
+              <TemplateRow
+                key={t.id}
+                template={t}
+                selected={selectedIds.has(t.id)}
+                onToggleSelect={toggleSelect}
+                onOpen={() => navigate(`/xslt-editor/${t.id}`)}
+                onDelete={handleDelete}
+                onRename={handleRename}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
@@ -121,11 +208,15 @@ function EmptyState() {
 
 function TemplateRow({
   template,
+  selected,
+  onToggleSelect,
   onOpen,
   onDelete,
   onRename,
 }: {
   template: UserXsltTemplateSummary
+  selected: boolean
+  onToggleSelect: (id: string) => void
   onOpen: () => void
   onDelete: (id: string) => void
   onRename: (id: string, name: string) => void
@@ -145,7 +236,18 @@ function TemplateRow({
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+    <div
+      className={`flex items-center gap-3 px-4 py-3 bg-white border rounded-xl transition-colors ${
+        selected ? 'border-blue-300 bg-blue-50/40' : 'border-gray-200 hover:border-gray-300'
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={() => onToggleSelect(template.id)}
+        className="w-4 h-4 rounded border-gray-300 text-blue-600 accent-blue-600 cursor-pointer flex-shrink-0"
+      />
+
       <div className="flex-1 min-w-0 flex items-center gap-2">
         {editing ? (
           <div className="flex items-center gap-1 flex-1">

@@ -9,7 +9,7 @@ public interface IXsltGeneratorService
     /// Başarıda (Xslt: string, Error: null),
     /// hata durumunda (Xslt: null, Error: mesaj).
     /// </returns>
-    (string? Xslt, string? Error) Generate(BlockTreeDto tree);
+    (string? Xslt, string? Error) Generate(BlockTreeDto tree, Dictionary<string, string>? assetBase64 = null);
 
     /// <summary>
     /// JSON string'den BlockTreeDto deserialize eder, ardından Generate çağırır.
