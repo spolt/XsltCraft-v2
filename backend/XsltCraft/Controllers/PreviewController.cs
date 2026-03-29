@@ -43,7 +43,7 @@ public class PreviewController : ControllerBase
     /// Response: { html, generationTimeMs }
     /// </summary>
     [HttpPost]
-    public IActionResult Preview([FromBody] PreviewRequest request)
+    public async Task<IActionResult> Preview([FromBody] PreviewRequest request)
     {
         var sw = Stopwatch.StartNew();
         try
@@ -54,7 +54,8 @@ public class PreviewController : ControllerBase
                 Blocks = request.Blocks,
             };
 
-            var (xslt, genError) = _generator.Generate(tree);
+            var assetBase64 = await BuildAssetBase64Async(request.Blocks);
+            var (xslt, genError) = _generator.Generate(tree, assetBase64);
             if (xslt is null)
                 return BadRequest(new { error = genError });
 
@@ -199,10 +200,11 @@ public class PreviewController : ControllerBase
     /// Response: raw XSLT text (application/xslt+xml)
     /// </summary>
     [HttpPost("xslt")]
-    public IActionResult GenerateXslt([FromBody] PreviewRequest request)
+    public async Task<IActionResult> GenerateXslt([FromBody] PreviewRequest request)
     {
         var tree = new BlockTreeDto { Sections = request.Sections, Blocks = request.Blocks };
-        var (xslt, error) = _generator.Generate(tree);
+        var assetBase64 = await BuildAssetBase64Async(request.Blocks);
+        var (xslt, error) = _generator.Generate(tree, assetBase64);
         if (xslt is null)
             return BadRequest(new { error });
         return Content(xslt, "application/xslt+xml");
@@ -235,6 +237,50 @@ public class PreviewController : ControllerBase
             _logger.LogError(ex, "XSLT doğrulama sırasında beklenmeyen hata.");
             return Ok(new { valid = false, error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu.", line = 0, column = 0 });
         }
+    }
+
+    /// <summary>
+    /// Image bloklarındaki assetId'leri storage'dan okuyup base64 data URI'ya çevirir.
+    /// Bulunamayan veya hata veren asset'ler atlanır (URL fallback).
+    /// </summary>
+    private async Task<Dictionary<string, string>> BuildAssetBase64Async(Dictionary<string, BlockDto> blocks)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        var assetIds = blocks.Values
+            .Where(b => b.Type == "Image" && b.Config.ValueKind == System.Text.Json.JsonValueKind.Object)
+            .Select(b =>
+            {
+                try
+                {
+                    var cfg = System.Text.Json.JsonSerializer.Deserialize<ImageAssetIdOnly>(
+                        b.Config.GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    return cfg?.AssetId;
+                }
+                catch { return null; }
+            })
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct()
+            .ToList();
+
+        foreach (var id in assetIds)
+        {
+            if (!Guid.TryParse(id, out var guid)) continue;
+            try
+            {
+                var asset = await _db.Assets.FindAsync(guid);
+                if (asset is null || !await _storage.ExistsAsync(asset.FilePath)) continue;
+
+                await using var stream = await _storage.ReadAsync(asset.FilePath);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                var b64 = Convert.ToBase64String(ms.ToArray());
+                result[id!] = $"data:{asset.MimeType};base64,{b64}";
+            }
+            catch { /* skip — GenerateImage will fall back to URL */ }
+        }
+
+        return result;
     }
 
     private static string ApplyXslt(string xslt, string xmlContent)
@@ -351,4 +397,10 @@ public class PreviewController : ControllerBase
 public class ValidateXsltRequest
 {
     public string Xslt { get; set; } = "";
+}
+
+file sealed class ImageAssetIdOnly
+{
+    [System.Text.Json.Serialization.JsonPropertyName("assetId")]
+    public string? AssetId { get; set; }
 }

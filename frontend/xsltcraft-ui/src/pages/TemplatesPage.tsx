@@ -33,12 +33,14 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     if (!selectedTheme) return
-    setPreviewHtml('')
-    setPreviewLoading(true)
-    previewFromStoredXslt(selectedTheme.id, defaultInvoiceXml)
-      .then((res) => setPreviewHtml(res.html))
-      .catch(() => setPreviewHtml('<html><body style="display:flex;align-items:center;justify-content:center;height:100%;color:#ef4444;font-family:sans-serif;font-size:13px">Önizleme alınamadı.</body></html>'))
-      .finally(() => setPreviewLoading(false))
+    let cancelled = false
+    Promise.resolve()
+      .then(() => { if (!cancelled) { setPreviewHtml(''); setPreviewLoading(true) } })
+      .then(() => previewFromStoredXslt(selectedTheme.id, defaultInvoiceXml))
+      .then((res) => { if (!cancelled) setPreviewHtml(res.html) })
+      .catch(() => { if (!cancelled) setPreviewHtml('<html><body style="display:flex;align-items:center;justify-content:center;height:100%;color:#ef4444;font-family:sans-serif;font-size:13px">Önizleme alınamadı.</body></html>') })
+      .finally(() => { if (!cancelled) setPreviewLoading(false) })
+    return () => { cancelled = true }
   }, [selectedTheme])
 
   async function handleUse() {

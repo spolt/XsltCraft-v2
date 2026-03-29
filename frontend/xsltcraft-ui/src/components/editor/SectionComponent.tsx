@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -21,6 +21,7 @@ export default function SectionComponent({ section }: SectionComponentProps) {
   const removeSection = useEditorStore((s) => s.removeSection)
   const updateSection = useEditorStore((s) => s.updateSection)
   const updateBlockLayout = useEditorStore((s) => s.updateBlockLayout)
+  const moveBlockToCol = useEditorStore((s) => s.moveBlockToCol)
   const addBlock = useEditorStore((s) => s.addBlock)
   const duplicateSection = useEditorStore((s) => s.duplicateSection)
 
@@ -61,14 +62,20 @@ export default function SectionComponent({ section }: SectionComponentProps) {
       section.layout === 'single-column' ? 'two-column' :
       section.layout === 'two-column'    ? 'three-column' :
       'single-column'
-    const widthMap = {
-      'single-column': 'full',
-      'two-column': '1/2',
-      'three-column': '1/3',
-    } as const
+    const isNextMultiCol = next === 'two-column' || next === 'three-column'
     updateSection(section.id, { layout: next })
-    sectionBlocks.forEach((b) => {
-      updateBlockLayout(b.id, { width: widthMap[next] })
+    sectionBlocks.forEach((b, idx) => {
+      if (isNextMultiCol) {
+        const assignedCol = b.layout?.col ?? idx % (next === 'three-column' ? 3 : 2)
+        const width = next === 'three-column'
+          ? (assignedCol === 0 ? '2/5' : '3/10')
+          : '1/2'
+        updateBlockLayout(b.id, { width, col: assignedCol })
+      } else {
+        // Single-col: clear col assignment
+        const { col: _col, ...rest } = b.layout ?? {}
+        updateBlockLayout(b.id, { width: 'full', ...rest, col: undefined })
+      }
     })
   }
 
@@ -229,41 +236,82 @@ export default function SectionComponent({ section }: SectionComponentProps) {
       {/* Drop zone */}
       <div
         ref={setDropRef}
-        className={`flex flex-wrap content-start ${isTwoCol || isThreeCol ? 'justify-between' : ''}`}
         style={{
           minHeight: 56,
           padding: 8,
           background: isOver ? 'var(--color-brand-light)' : 'var(--color-surface-card)',
           transition: 'background 150ms',
-          gap: 8,
         }}
       >
         <SortableContext items={section.blockIds} strategy={verticalListSortingStrategy}>
-          {sectionBlocks.map((block) => {
-            const w = block.layout?.width ?? 'full'
-            const a = block.layout?.alignment ?? 'left'
-
-            const widthClass =
-              w === '1/2' ? 'w-[calc(50%-4px)]' :
-              w === '1/3' ? 'w-[calc(33.333%-5.334px)]' :
-              w === '2/3' ? 'w-[calc(66.667%-2.667px)]' :
-              'w-full'
-
-            const alignClass =
-              a === 'center' ? 'mx-auto' :
-              a === 'right'  ? 'ml-auto' :
-              ''
-
-            return (
-              <div key={block.id} className={`${widthClass} ${alignClass}`}>
+          {isTwoCol || isThreeCol ? (
+            // Sütun gruplu görünüm
+            <div style={{ display: 'flex', gap: 6 }}>
+              {Array.from({ length: isThreeCol ? 3 : 2 }, (_, ci) => {
+                const colBlocks = sectionBlocks.filter((b) => (b.layout?.col ?? 0) === ci)
+                const maxCol = isThreeCol ? 2 : 1
+                return (
+                  <ColDropZone
+                    key={ci}
+                    sectionId={section.id}
+                    colIdx={ci}
+                  >
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 6, letterSpacing: 0.5, userSelect: 'none' }}>
+                      SÜTUN {ci + 1}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {colBlocks.map((block) => (
+                        <div key={block.id}>
+                          <BlockCard
+                            block={block}
+                            sectionId={section.id}
+                            onRemove={() => removeBlock(section.id, block.id)}
+                          />
+                          <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
+                            {ci > 0 && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); moveBlockToCol(block.id, ci - 1) }}
+                                style={{ fontSize: 9, padding: '1px 6px', border: '0.5px solid var(--color-border-default)', borderRadius: 3, background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1.6 }}
+                                title={`Sütun ${ci}'e taşı`}
+                              >
+                                ← S{ci}
+                              </button>
+                            )}
+                            {ci < maxCol && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); moveBlockToCol(block.id, ci + 1) }}
+                                style={{ fontSize: 9, padding: '1px 6px', border: '0.5px solid var(--color-border-default)', borderRadius: 3, background: 'transparent', color: 'var(--color-text-muted)', cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1.6 }}
+                                title={`Sütun ${ci + 2}'ye taşı`}
+                              >
+                                S{ci + 2} →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {colBlocks.length === 0 && (
+                        <p style={{ fontSize: 10, color: '#C8C6C0', textAlign: 'center', padding: '8px 0', userSelect: 'none' }}>
+                          Boş
+                        </p>
+                      )}
+                    </div>
+                  </ColDropZone>
+                )
+              })}
+            </div>
+          ) : (
+            // Tek sütun: düz liste
+            <div className="flex flex-col" style={{ gap: 8 }}>
+              {sectionBlocks.map((block) => (
                 <BlockCard
+                  key={block.id}
                   block={block}
                   sectionId={section.id}
                   onRemove={() => removeBlock(section.id, block.id)}
                 />
-              </div>
-            )
-          })}
+              ))}
+            </div>
+          )}
         </SortableContext>
 
         {sectionBlocks.length === 0 && !isOver && (
@@ -275,6 +323,38 @@ export default function SectionComponent({ section }: SectionComponentProps) {
 
       {/* Add block shortcut */}
       <AddBlockRow sectionId={section.id} onAdd={addBlock} />
+    </div>
+  )
+}
+
+function ColDropZone({
+  sectionId,
+  colIdx,
+  children,
+}: {
+  sectionId: string
+  colIdx: number
+  children: React.ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `colzone-${sectionId}-${colIdx}`,
+    data: { type: 'colzone', sectionId, colIdx },
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        flex: 1,
+        minWidth: 0,
+        border: isOver ? '1.5px dashed var(--color-brand-primary)' : '1px dashed #D0CEC8',
+        borderRadius: 6,
+        padding: 6,
+        background: isOver ? 'var(--color-brand-light)' : 'var(--color-surface-secondary)',
+        transition: 'border-color 120ms, background 120ms',
+      }}
+    >
+      {children}
     </div>
   )
 }

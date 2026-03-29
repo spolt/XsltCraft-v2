@@ -125,7 +125,8 @@ interface EditorState {
   setTemplateId: (id: string | null) => void
   setTemplateName: (name: string) => void
   setHasStoredXslt: (val: boolean) => void
-  addBlock: (sectionId: string, type: BlockType, atIndex?: number) => void
+  addBlock: (sectionId: string, type: BlockType, atIndex?: number, col?: number) => void
+  moveBlockToCol: (blockId: string, col: number) => void
   removeBlock: (sectionId: string, blockId: string) => void
   moveBlock: (fromSectionId: string, toSectionId: string, blockId: string, toIndex: number) => void
   updateBlockConfig: (blockId: string, config: Partial<BlockConfig['config']>) => void
@@ -169,17 +170,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   // ---- helpers ----
 
-  addBlock(sectionId, type, atIndex) {
+  addBlock(sectionId, type, atIndex, col) {
     const state = get()
     const section = state.sections.find((s) => s.id === sectionId)
     if (!section) return
 
     const prev = snapshot(state)
     const id = uuidv4()
-    const layoutWidth = section.layout === 'three-column' ? '1/3'
+    const isMultiCol = section.layout === 'three-column' || section.layout === 'two-column'
+    const resolvedCol = isMultiCol ? (col ?? 0) : undefined
+    const layoutWidth = section.layout === 'three-column'
+      ? (resolvedCol === 0 ? '2/5' : '3/10')
       : section.layout === 'two-column' ? '1/2'
       : 'full'
-    const block: Block = { id, type, config: defaultConfig(type), layout: { ...DEFAULT_BLOCK_LAYOUT, width: layoutWidth } }
+    const layoutCol = resolvedCol
+    const block: Block = { id, type, config: defaultConfig(type), layout: { ...DEFAULT_BLOCK_LAYOUT, width: layoutWidth, ...(layoutCol !== undefined ? { col: layoutCol } : {}) } }
 
     const newBlockIds = [...section.blockIds]
     if (atIndex !== undefined) {
@@ -251,13 +256,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       })
 
       const existingBlock = s.blocks[blockId]
+      const isTargetMultiCol = toSection?.layout === 'three-column' || toSection?.layout === 'two-column'
       const updatedBlocks =
         fromSectionId !== toSectionId && targetWidth && existingBlock
           ? {
               ...s.blocks,
               [blockId]: {
                 ...existingBlock,
-                layout: { ...DEFAULT_BLOCK_LAYOUT, ...existingBlock.layout, width: targetWidth },
+                layout: {
+                  ...DEFAULT_BLOCK_LAYOUT,
+                  ...existingBlock.layout,
+                  width: targetWidth,
+                  ...(isTargetMultiCol ? { col: 0 } : { col: undefined }),
+                },
               },
             }
           : s.blocks
@@ -302,6 +313,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           ...existing,
           layout: { ...DEFAULT_BLOCK_LAYOUT, ...existing.layout, ...layoutPatch },
         },
+      },
+      isDirty: true,
+      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
+      future: [],
+    }))
+  },
+
+  moveBlockToCol(blockId, col) {
+    const state = get()
+    const prev = snapshot(state)
+    const existing = state.blocks[blockId]
+    if (!existing) return
+    const ownerSection = state.sections.find((s) => s.blockIds.includes(blockId))
+    const newWidth = ownerSection?.layout === 'three-column'
+      ? (col === 0 ? '2/5' : '3/10')
+      : existing.layout.width
+    set((s) => ({
+      blocks: {
+        ...s.blocks,
+        [blockId]: { ...existing, layout: { ...existing.layout, col, width: newWidth } },
       },
       isDirty: true,
       past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],

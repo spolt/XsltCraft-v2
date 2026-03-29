@@ -103,8 +103,9 @@ export default function EditorPage() {
   const templateName = useEditorStore((s) => s.templateName)
   const sections     = useEditorStore((s) => s.sections)
   const blocks       = useEditorStore((s) => s.blocks)
-  const addBlock     = useEditorStore((s) => s.addBlock)
-  const moveBlock    = useEditorStore((s) => s.moveBlock)
+  const addBlock        = useEditorStore((s) => s.addBlock)
+  const moveBlock       = useEditorStore((s) => s.moveBlock)
+  const moveBlockToCol  = useEditorStore((s) => s.moveBlockToCol)
   const isDirty      = useEditorStore((s) => s.isDirty)
   const past         = useEditorStore((s) => s.past)
   const future       = useEditorStore((s) => s.future)
@@ -178,6 +179,31 @@ export default function EditorPage() {
       return
     }
     const overIdStr = String(over.id)
+    const overData = over.data.current as { type?: string; sectionId?: string; colIdx?: number } | undefined
+
+    // Sütun drop zone'u (colzone-{sectionId}-{ci})
+    if (overData?.type === 'colzone') {
+      const toSectionId = overData.sectionId!
+      const colIdx = overData.colIdx!
+
+      if (activeData?.source === 'palette') {
+        addBlock(toSectionId, activeData.blockType!, undefined, colIdx)
+        return
+      }
+
+      if (activeData?.source === 'canvas') {
+        const blockId = activeData.blockId!
+        const fromSectionId = activeData.sectionId ?? findSectionByBlockId(blockId)
+        if (!fromSectionId) return
+        if (fromSectionId !== toSectionId) {
+          const toSection = sections.find((s) => s.id === toSectionId)!
+          moveBlock(fromSectionId, toSectionId, blockId, toSection.blockIds.length)
+        }
+        moveBlockToCol(blockId, colIdx)
+        return
+      }
+      return
+    }
 
     // Palette → Canvas
     if (activeData?.source === 'palette') {
