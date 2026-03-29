@@ -410,56 +410,56 @@ export default function ThemeUsePage() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="h-10 border-b border-gray-200 bg-white flex items-center gap-2 px-4 flex-shrink-0">
-          <span className="text-sm font-medium text-gray-700 flex-1 truncate">{templateName}</span>
+        <div className="h-12 border-b border-gray-200 bg-white flex items-center gap-2 px-4 flex-shrink-0">
+          <span className="text-base font-medium text-gray-700 flex-1 truncate">{templateName}</span>
           {previewLoading && (
-            <span className="text-xs text-blue-500 flex items-center gap-1">
-              <span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-blue-500 flex items-center gap-1">
+              <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
               Yükleniyor
             </span>
           )}
-          {!previewLoading && lastMs !== null && <span className="text-xs text-gray-400">{lastMs} ms</span>}
-          <label className="cursor-pointer text-xs text-gray-500 border border-gray-200 rounded px-2 py-1 hover:bg-gray-50">
+          {!previewLoading && lastMs !== null && <span className="text-sm text-gray-400">{lastMs} ms</span>}
+          <label className="cursor-pointer text-sm text-gray-500 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50">
             XML Değiştir
             <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={handleXmlFile} />
           </label>
           <button onClick={() => iframeRef.current?.contentWindow?.print()} disabled={!html}
-            className="text-gray-500 border border-gray-200 rounded p-1 hover:bg-gray-50 disabled:opacity-30" title="Yazdır">
-            <Printer size={14} />
+            className="text-gray-500 border border-gray-200 rounded p-1.5 hover:bg-gray-50 disabled:opacity-30" title="Yazdır">
+            <Printer size={16} />
           </button>
           <button
             onClick={() => navigate(`/dev-mode/${templateId}`)}
-            className="flex items-center gap-1.5 text-xs text-gray-600 border border-gray-200 rounded px-3 py-1 hover:bg-gray-50"
+            className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50"
             title="XSLT editörünü aç"
           >
-            <Code2 size={13} />Geliştirici Modu
+            <Code2 size={15} />Geliştirici Modu
           </button>
           <button
             onClick={handleDownload}
             disabled={isDownloading || !xslt}
-            className="flex items-center gap-1.5 text-xs text-gray-600 border border-gray-200 rounded px-3 py-1 hover:bg-gray-50 disabled:opacity-40"
+            className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40"
             title="XSLT dosyasını indir"
           >
-            <Download size={13} />{isDownloading ? '…' : 'İndir'}
+            <Download size={15} />{isDownloading ? '…' : 'İndir'}
           </button>
           <button
             onClick={handleSave}
             disabled={isSaving || saveSuccess || !xslt}
-            className={`flex items-center gap-1.5 text-xs border rounded px-3 py-1 transition-colors disabled:opacity-40 ${
+            className={`flex items-center gap-1.5 text-sm border rounded px-3 py-1.5 transition-colors disabled:opacity-40 ${
               saveSuccess
                 ? 'text-green-700 border-green-300 bg-green-50'
                 : 'text-gray-600 border-gray-200 hover:bg-gray-50'
             }`}
             title="Şablonlarıma kaydet"
           >
-            <BookmarkCheck size={13} />{saveSuccess ? 'Kaydedildi' : isSaving ? '…' : 'Kaydet'}
+            <BookmarkCheck size={15} />{saveSuccess ? 'Kaydedildi' : isSaving ? '…' : 'Kaydet'}
           </button>
           {!editMode
-            ? <button onClick={() => setEditMode(true)} className="flex items-center gap-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-3 py-1">
-                <Settings2 size={13} />Düzenle
+            ? <button onClick={() => setEditMode(true)} className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-3 py-1.5">
+                <Settings2 size={15} />Düzenle
               </button>
-            : <button onClick={() => setEditMode(false)} className="flex items-center gap-1.5 text-xs text-gray-600 border border-gray-200 rounded px-3 py-1 hover:bg-gray-50">
-                <X size={13} />Kapat
+            : <button onClick={() => setEditMode(false)} className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50">
+                <X size={15} />Kapat
               </button>
           }
         </div>
