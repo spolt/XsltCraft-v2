@@ -131,6 +131,11 @@ async function runTransform(xmlInput: string, xsltInput: string) {
 function handleXmlUpload(e: React.ChangeEvent<HTMLInputElement>) {
   const file = e.target.files?.[0]
   if (!file) return
+  if (file.size > 1 * 1024 * 1024) {
+    alert('XML dosyası 1 MB\'dan büyük olamaz.')
+    e.target.value = ''
+    return
+  }
 
   const reader = new FileReader()
   reader.onload = (event: ProgressEvent<FileReader>) => {

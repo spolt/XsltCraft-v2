@@ -370,6 +370,11 @@ export default function ThemeUsePage() {
   function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 1 * 1024 * 1024) {
+      alert('XML dosyası 1 MB\'dan büyük olamaz.')
+      e.target.value = ''
+      return
+    }
     const reader = new FileReader()
     reader.onload = (ev) => setXmlContent(ev.target?.result as string)
     reader.readAsText(file, 'utf-8')
