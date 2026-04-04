@@ -1,5 +1,5 @@
 import Editor, { type Monaco } from "@monaco-editor/react"
-import type { editor as MonacoEditor } from "monaco-editor"
+import type { editor as MonacoEditor, languages as MonacoLanguages } from "monaco-editor"
 import { useRef, useEffect } from "react"
 import xmlFormatter from 'xml-formatter'
 
@@ -180,9 +180,9 @@ function registerXsltCompletions(monaco: Monaco) {
     foldingProviderRegistered = true
 
     monaco.languages.registerFoldingRangeProvider('xml', {
-      provideFoldingRanges(model) {
+      provideFoldingRanges(model: MonacoEditor.ITextModel) {
         const lineCount = model.getLineCount()
-        const ranges: monaco.languages.FoldingRange[] = []
+        const ranges: MonacoLanguages.FoldingRange[] = []
         const stack: { tag: string; line: number }[] = []
 
         for (let i = 1; i <= lineCount; i++) {
