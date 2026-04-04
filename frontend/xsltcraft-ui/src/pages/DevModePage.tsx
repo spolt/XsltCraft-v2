@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
-import Editor from '@monaco-editor/react'
+import XsltEditor from '../components/Xslteditor'
 import {
   LayoutDashboard,
   BookOpen,
@@ -18,6 +18,7 @@ import {
   AlignCenter,
   AlignRight,
   Download,
+  WandSparkles,
 } from 'lucide-react'
 import { getTemplate } from '../services/templateService'
 import { fetchThemeXslt, previewFromRawXslt, type BankInfoItem, type Alignment } from '../services/previewService'
@@ -258,6 +259,8 @@ export default function DevModePage() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   // Tracks whether initial XSLT has been loaded (so injection effect doesn't fire too early)
   const xsltReadyRef = useRef(false)
+  const toggleCommentRef = useRef<(() => void) | null>(null)
+  const formatDocumentRef = useRef<(() => void) | null>(null)
 
   // Load template name + XSLT on mount
   useEffect(() => {
@@ -310,6 +313,11 @@ export default function DevModePage() {
   function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 1 * 1024 * 1024) {
+      alert('XML dosyası 1 MB\'dan büyük olamaz.')
+      e.target.value = ''
+      return
+    }
     const reader = new FileReader()
     reader.onload = (ev) => setXmlContent(ev.target?.result as string)
     reader.readAsText(file, 'utf-8')
@@ -447,30 +455,45 @@ export default function DevModePage() {
           <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
             <Panel defaultSize={50} minSize={20}>
               <div className="h-full flex flex-col">
-                <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0">
+                <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between">
                   <span className="text-xs text-gray-400 font-mono uppercase tracking-wide">XSLT Editörü</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => toggleCommentRef.current?.()}
+                      className="h-6 px-2 flex items-center justify-center rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-xs font-mono transition-colors"
+                      title="Yorum Satırı Ekle / Kaldır (Ctrl+Shift+C)"
+                    >
+                      {'<!--'}
+                    </button>
+                    <button
+                      onClick={() => formatDocumentRef.current?.()}
+                      className="h-6 px-2 flex items-center gap-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-xs transition-colors"
+                      title="Belgeyi Biçimlendir (Shift+Alt+F)"
+                    >
+                      <WandSparkles size={12} />
+                    </button>
+                  </div>
                 </div>
                 {loadingXslt ? (
                   <div className="flex-1 flex items-center justify-center bg-gray-900">
                     <span className="text-xs text-gray-500">XSLT yükleniyor…</span>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-hidden">
-                    <Editor
-                      height="100%"
-                      defaultLanguage="xml"
-                      theme="vs-dark"
+                  <div className="flex-1 overflow-hidden relative">
+                    <XsltEditor
                       value={xslt}
-                      onChange={(v) => setXslt(v ?? '')}
+                      onChange={(v) => setXslt(v)}
+                      onEditorReady={({ toggleComment, formatDocument }) => {
+                        toggleCommentRef.current = toggleComment
+                        formatDocumentRef.current = formatDocument
+                      }}
                       options={{
                         fontSize: 12,
                         minimap: { enabled: true },
                         wordWrap: 'off',
                         scrollBeyondLastLine: false,
                         automaticLayout: true,
-                        tabSize: 2,
                         lineNumbers: 'on',
-                        folding: true,
                         renderLineHighlight: 'line',
                       }}
                     />

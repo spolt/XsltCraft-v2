@@ -11,6 +11,7 @@ import {
   FileCode2,
   Upload,
   TriangleAlert,
+  WandSparkles,
 } from 'lucide-react'
 import XsltEditor from '../components/Xslteditor'
 import XsltEditorToolbar from '../components/xslt-editor/XsltEditorToolbar'
@@ -85,6 +86,8 @@ export default function XsltEditorPage() {
   // Refs
   const goToRef = useRef<((term: string) => void) | null>(null)
   const insertTextAtLineRef = useRef<((lineNumber: number, text: string) => void) | null>(null)
+  const toggleCommentRef = useRef<(() => void) | null>(null)
+  const formatDocumentRef = useRef<(() => void) | null>(null)
   const imageFileInputRef = useRef<HTMLInputElement>(null)
   const pendingInsertLineRef = useRef<number | null>(null)
 
@@ -121,6 +124,11 @@ export default function XsltEditorPage() {
   function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 1 * 1024 * 1024) {
+      alert('XML dosyası 1 MB\'dan büyük olamaz.')
+      e.target.value = ''
+      return
+    }
     const reader = new FileReader()
     reader.onload = (ev) => {
       const content = ev.target?.result as string
@@ -398,6 +406,7 @@ export default function XsltEditorPage() {
           onUploadXslt={handleXsltFile}
           onUploadXml={handleXmlFile}
           onDownload={handleDownload}
+          onFormat={() => formatDocumentRef.current?.()}
           onSave={() => setShowSaveDialog(true)}
           onPrint={handlePrint}
         />
@@ -412,16 +421,34 @@ export default function XsltEditorPage() {
         <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
           <Panel defaultSize={50} minSize={20}>
             <div className="h-full flex flex-col">
-              <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0">
+              <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between">
                 <span className="text-xs text-gray-400 font-mono uppercase tracking-wide">XSLT Editörü</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => toggleCommentRef.current?.()}
+                    className="h-6 px-2 flex items-center justify-center rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-xs font-mono transition-colors"
+                    title="Yorum Satırı Ekle / Kaldır (Ctrl+Shift+C)"
+                  >
+                    {'<!--'}
+                  </button>
+                  <button
+                    onClick={() => formatDocumentRef.current?.()}
+                    className="h-6 px-2 flex items-center gap-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-xs transition-colors"
+                    title="Belgeyi Biçimlendir (Shift+Alt+F)"
+                  >
+                    <WandSparkles size={12} />
+                  </button>
+                </div>
               </div>
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 overflow-hidden relative">
                 <XsltEditor
                   value={xsltContent}
                   onChange={(v) => { setXsltContent(v); setIsDirty(true) }}
-                  onEditorReady={({ goTo, insertTextAtLine }) => {
+                  onEditorReady={({ goTo, insertTextAtLine, toggleComment, formatDocument }) => {
                     goToRef.current = goTo
                     insertTextAtLineRef.current = insertTextAtLine
+                    toggleCommentRef.current = toggleComment
+                    formatDocumentRef.current = formatDocument
                   }}
                   onRequestImageInsert={handleRequestImageInsert}
                   errors={xsltErrors}
