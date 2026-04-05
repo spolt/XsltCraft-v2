@@ -394,12 +394,19 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 **Tahmini süre:** 3–5 gün  
 **Faz sonu çıktısı:** Production deploy — S3 üzerinde çalışan, KVKK uyumlu, ölçeklenebilir sistem.
 
-### Görev grubu 1 — S3StorageService
+### Görev grubu 1 — S3StorageService (MinIO)
 
-- [x] `S3StorageService` implementasyonunu yaz (`AWSSDK.S3` veya `Minio` paketi ile)
+- [x] `S3StorageService` implementasyonunu yaz — MinIO dahil tüm S3-uyumlu depoları destekler
 - [x] `appsettings.Production.json`'a `Storage:Provider: "S3"`, `S3BucketName`, `S3Region` ekle
-- [ ] TR bölge datacenter'ında S3-uyumlu depo oluştur (KVKK gereği)
-- [ ] Tüm Faz 2–5 storage işlemlerini `S3StorageService` ile test et
+- [x] `docker-compose.yml`'e MinIO servisi ve bucket init container'ı ekle (port 9000/9001)
+- [x] `appsettings.Development.example.json`'a MinIO local dev konfigürasyonu ekle
+- [x] `S3StorageService`'i MinIO üzerinde uçtan uca test et:
+  - [x] `POST /api/admin/themes` → MinIO'ya XSLT yazar (HTTP 201)
+  - [x] `GET /api/templates/{id}/download` → MinIO'dan okur (HTTP 200)
+  - [x] `POST /api/assets/upload` → MinIO'ya resim yazar (HTTP 200)
+  - [x] `GET /api/assets/{id}/serve` → MinIO'dan resim okur (HTTP 200)
+  - [x] `DELETE /api/assets/{id}` → MinIO'dan siler (HTTP 204)
+- [ ] Production: TR bölge datacenter'ında MinIO veya S3-uyumlu depo oluştur (KVKK gereği)
 
 ### Görev grubu 2 — Güvenlik hardening
 
