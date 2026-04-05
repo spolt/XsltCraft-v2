@@ -14,8 +14,8 @@ namespace XsltCraft.Api.Controllers;
 [Route("api/[controller]")]
 public class PreviewController : ControllerBase
 {
-    private const int MaxRawBodyBytes = 1 * 1024 * 1024;   // 1 MB — XSLT + XML toplamı
-    private const int MaxXsltBodyBytes = 512 * 1024;        // 512 KB — validate-xslt için
+    private const int MaxRawBodyBytes = 10 * 1024 * 1024;   // 10 MB — XSLT + XML toplamı
+    private const int MaxXsltBodyBytes = 1024 * 1024;        // 1 MB — validate-xslt için
 
     private readonly IXsltGeneratorService _generator;
     private readonly IStorageService _storage;

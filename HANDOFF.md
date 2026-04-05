@@ -95,20 +95,24 @@ xsltcraft/
 git clone <repo-url>
 cd xsltcraft
 
-# 2. PostgreSQL'i ayağa kaldır
+# 2. Docker ortam değişkenlerini oluştur
+cp .env.example .env
+# .env içindeki şifreleri değiştir (varsayılanlar dev için yeterli, prod'da mutlaka değiştir)
+
+# 3. PostgreSQL + MinIO'yu ayağa kaldır
 docker compose up -d
 
-# 3. Backend config dosyasını oluştur
+# 4. Backend config dosyasını oluştur
 cp backend/XsltCraft/appsettings.Development.example.json \
    backend/XsltCraft/appsettings.Development.json
 # appsettings.Development.json'ı kendi değerlerinle doldur (aşağıya bak)
 
-# 4. Backend'i çalıştır (migration otomatik uygulanır)
+# 5. Backend'i çalıştır (migration otomatik uygulanır)
 cd backend
 dotnet restore
 dotnet run --project XsltCraft
 
-# 5. Frontend'i çalıştır (yeni terminal)
+# 6. Frontend'i çalıştır (yeni terminal)
 cd frontend/xsltcraft-ui
 npm install
 npm run dev
@@ -118,6 +122,8 @@ Başarılıysa:
 - API: `http://localhost:5000`
 - Frontend: `http://localhost:5173`
 - PostgreSQL: `localhost:5432`
+- MinIO S3 API: `http://localhost:9000`
+- MinIO Web Console: `http://localhost:9001` (kullanıcı adı/şifre: `.env` dosyasındaki değerler)
 
 ---
 
@@ -157,7 +163,38 @@ Doldurulması gereken alanlar:
 }
 ```
 
+**MinIO ile storage test etmek istiyorsan** `Storage` bloğunu şununla değiştir (önce `docker compose up -d`):
+
+```json
+"Storage": {
+  "Provider": "S3",
+  "S3BucketName": "xsltcraft",
+  "S3Region": "us-east-1",
+  "S3ServiceUrl": "http://localhost:9000",
+  "S3AccessKey": "<.env'deki MINIO_ROOT_USER>",
+  "S3SecretKey": "<.env'deki MINIO_ROOT_PASSWORD>"
+}
+```
+
 > Google OAuth şimdilik gerekli değil — `ClientId` olmadan çalışır, sadece Google ile giriş butonu çalışmaz.
+
+### Docker ortam değişkenleri (.env)
+
+`.env` dosyası `.gitignore`'da — repodan gelmez. `.env.example`'dan oluştur:
+
+```bash
+cp .env.example .env
+```
+
+`.env` içeriği:
+
+```
+POSTGRES_PASSWORD=xsltcraft_dev_password
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin123
+```
+
+> **Dev ortamı için** varsayılan değerler yeterli. **Production'da** tüm şifreleri güçlü değerlerle değiştir.
 
 ---
 
@@ -183,8 +220,8 @@ Migration'lar uygulama başlarken `Program.cs` tarafından otomatik uygulanır.
 Öncelikli açık görevler:
 
 1. **PartyInfo block tipi** — ROADMAP.md, Faz 5 Görev grubu 6 altındaki tüm checkbox'lar boş. Frontend + backend + XSLT generator birlikte tamamlanması gerekiyor.
-2. **Faz 6 — S3 geçişi** — `S3StorageService` implementasyonu. `IStorageService` arayüzü hazır, sadece yeni implementasyon yazılacak.
-3. **Rate limiting** — Auth endpoint'lerine brute force koruması (ROADMAP Faz 6 Görev grubu 2).
+2. **Faz 6 — S3/MinIO geçişi** — ✅ `S3StorageService` tamamlandı ve MinIO üzerinde uçtan uca test edildi. Kalan: production ortamı için TR bölge MinIO/S3 kurulumu (KVKK gereği).
+3. **Rate limiting** — ✅ Auth endpoint'lerinde uygulandı (ROADMAP Faz 6 Görev grubu 2).
 4. **Production altyapısı** — ROADMAP Faz 6 Görev grubu 4.
 
 ---
@@ -222,6 +259,12 @@ dotnet tool install --global dotnet-ef
 
 **PostgreSQL bağlantısı reddediliyor:**
 `docker compose up -d` çalıştırıldıktan sonra birkaç saniye bekle.
+
+**`.env` dosyası bulunamadı / değişkenler boş:**
+`cp .env.example .env` yaptığından emin ol. `docker compose config` komutu ile değişkenlerin doğru çözümlendiğini doğrulayabilirsin.
+
+**MinIO bucket yok hatası:**
+`minio-init` container'ı bir kere çalışıp çıkar. `docker compose up -d` sonrası `docker logs xsltcraft_minio_init` ile bucket oluşturulduğunu doğrula. "Bucket hazır." satırı görünmüyorsa `docker compose up minio-init` ile yeniden çalıştır.
 
 **`storage/` klasörü yok hatası:**
 ```bash
