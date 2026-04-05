@@ -16,7 +16,44 @@ services:
       retries: 5
     networks:
       - xsltcraft_net
-
+ 
+  minio:
+    image: minio/minio:latest
+    container_name: xsltcraft_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xsltcraft_net
+ 
+  minio-init:
+    image: minio/mc:latest
+    container_name: xsltcraft_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      mc mb local/xsltcraft --ignore-existing;
+      echo Bucket hazir.;
+      "
+    restart: "no"
+    networks:
+      - xsltcraft_net
+ 
   backend:
     build:
       context: ./backend
@@ -26,6 +63,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=xsltcraft;Username=xsltcraft;Password=${POSTGRES_PASSWORD}"
@@ -34,23 +73,26 @@ services:
       Jwt__Audience: ${JWT_AUDIENCE}
       Google__ClientId: ${GOOGLE_CLIENT_ID}
       Google__ClientSecret: ${GOOGLE_CLIENT_SECRET}
-      Storage__Provider: ${STORAGE_PROVIDER:-Local}
-      Storage__LocalBasePath: /app/storage
+      Storage__Provider: S3
+      Storage__S3BucketName: xsltcraft
+      Storage__S3Region: us-east-1
+      Storage__S3ServiceUrl: http://minio:9000
+      Storage__S3AccessKey: ${MINIO_ROOT_USER}
+      Storage__S3SecretKey: ${MINIO_ROOT_PASSWORD}
       Admin__Email: ${ADMIN_EMAIL}
       Admin__Password: ${ADMIN_PASSWORD}
-    volumes:
-      - storage_data:/app/storage
     ports:
       - "5000:5000"
     networks:
       - xsltcraft_net
-
+ 
   frontend:
     build:
       context: ./frontend/xsltcraft-ui
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-http://45.43.154.111:5000}
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
     container_name: xsltcraft_frontend
     restart: unless-stopped
     depends_on:
@@ -59,11 +101,12 @@ services:
       - "80:80"
     networks:
       - xsltcraft_net
-
+ 
 volumes:
   postgres_data:
+  minio_data:
   storage_data:
-
+ 
 networks:
   xsltcraft_net:
     driver: bridge
