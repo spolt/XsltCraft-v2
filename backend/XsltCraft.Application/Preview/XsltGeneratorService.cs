@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
+using System.Globalization;
 using System.Xml.Xsl;
 
 namespace XsltCraft.Application.Preview;
@@ -58,11 +59,182 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         }
     }
 
+    // ── V2 generator ──────────────────────────────────────────────
+
+    public (string? Xslt, string? Error) GenerateV2(BlockTreeV2Dto tree, Dictionary<string, string>? assetBase64 = null)
+    {
+        _assetBase64 = assetBase64 ?? [];
+        try
+        {
+            // Create a BlockTreeDto adapter so existing DispatchBlock/Generate* methods work unchanged
+            var treeAdapter = new BlockTreeDto { Blocks = tree.Blocks };
+            var body = BuildBodyV2(tree, treeAdapter);
+
+            var hasQr = tree.Blocks.Values.Any(b =>
+                b.Type == "GibKarekod" ||
+                (b.Type == "ETTN" && Deserialize<EttnConfig>(b.Config).ShowQR));
+
+            var xslt = WrapStylesheet(body, hasQr, isV2: true);
+            var validationError = Validate(xslt);
+            return validationError is null ? (xslt, null) : (null, validationError);
+        }
+        catch (Exception ex)
+        {
+            return (null, $"XSLT üretim hatası: {ex.Message}");
+        }
+    }
+
+    private string BuildBodyV2(BlockTreeV2Dto tree, BlockTreeDto treeAdapter)
+    {
+        // Collect child block IDs (ForEach children, Conditional branches) — exclude from top-level render
+        var childIds = new HashSet<string>();
+        foreach (var block in tree.Blocks.Values)
+        {
+            if (block.Type == "ForEach")
+            {
+                var cfg = Deserialize<ForEachConfig>(block.Config);
+                foreach (var id in cfg.Children) childIds.Add(id);
+            }
+            else if (block.Type == "Conditional")
+            {
+                var cfg = Deserialize<ConditionalConfig>(block.Config);
+                foreach (var id in cfg.ThenBlockIds) childIds.Add(id);
+                foreach (var id in cfg.ElseBlockIds) childIds.Add(id);
+            }
+        }
+
+        var allBlocks = tree.Blocks.Values
+            .Where(b => !childIds.Contains(b.Id) && b.GridLayout is not null)
+            .ToList();
+
+        // z-index = 0 → normal flow (row-grouped, auto-height safe)
+        // z-index > 0 → position:absolute overlay (exact X/Y, higher z-index on top)
+        var flowBlocks = allBlocks
+            .Where(b => (b.GridLayout!.ZIndex ?? 0) == 0)
+            .OrderBy(b => b.GridLayout!.Y)
+            .ThenBy(b => b.GridLayout!.X)
+            .ToList();
+
+        var overlayBlocks = allBlocks
+            .Where(b => (b.GridLayout!.ZIndex ?? 0) > 0)
+            .OrderBy(b => b.GridLayout!.ZIndex ?? 0)
+            .ToList();
+
+        var sb = new StringBuilder();
+
+        // ── Flow blocks (z=0) ────────────────────────────────────────────────
+        var rows = GroupIntoRows(flowBlocks);
+        double prevRowBottom = 0;
+        foreach (var row in rows)
+        {
+            var rowMinY = row.Min(b => b.GridLayout!.Y);
+            var marginTop = Math.Max(0, rowMinY - prevRowBottom);
+            RenderV2Row(sb, row, marginTop, treeAdapter);
+            var rowMaxBottom = row.Max(b => b.GridLayout!.Y + b.GridLayout!.Height);
+            prevRowBottom = rowMaxBottom;
+        }
+
+        // ── Overlay blocks (z>0) — absolute positioned on top of the page ───
+        foreach (var block in overlayBlocks)
+        {
+            var gl = block.GridLayout!;
+            var heightStyle = gl.AutoHeight
+                ? string.Empty
+                : FormattableString.Invariant($"height:{gl.Height:F1}mm;overflow:hidden;");
+            var posStyle = FormattableString.Invariant(
+                $"position:absolute;left:{gl.X:F1}mm;top:{gl.Y:F1}mm;width:{gl.Width:F1}mm;{heightStyle}z-index:{gl.ZIndex ?? 1};");
+            sb.AppendLine($"    <div style=\"{posStyle}\">{DispatchBlock(block, treeAdapter)}</div>");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Groups blocks into rows: two blocks belong to the same row when their Y-ranges
+    /// overlap by more than 5mm. Blocks stacked vertically (even with small gaps or
+    /// minimal touching) go into separate rows. Each row is sorted by X.
+    /// </summary>
+    private static List<List<BlockDto>> GroupIntoRows(List<BlockDto> blocks, double minOverlapMm = 5.0)
+    {
+        var rows = new List<List<BlockDto>>();
+
+        foreach (var block in blocks)
+        {
+            var gl = block.GridLayout!;
+            var blockTop = gl.Y;
+            var blockBottom = gl.Y + gl.Height;
+
+            // Find an existing row whose Y-range overlaps this block's range by at least minOverlapMm
+            List<BlockDto>? matched = null;
+            foreach (var row in rows)
+            {
+                var rowTop = row.Min(b => b.GridLayout!.Y);
+                var rowBottom = row.Max(b => b.GridLayout!.Y + b.GridLayout!.Height);
+                var overlap = Math.Min(blockBottom, rowBottom) - Math.Max(blockTop, rowTop);
+                if (overlap >= minOverlapMm)
+                {
+                    matched = row;
+                    break;
+                }
+            }
+
+            if (matched is not null)
+                matched.Add(block);
+            else
+                rows.Add([block]);
+        }
+
+        // Sort each row's blocks by X
+        foreach (var row in rows)
+            row.Sort((a, b) => a.GridLayout!.X.CompareTo(b.GridLayout!.X));
+
+        // Sort rows by their minimum Y
+        rows.Sort((a, b) => a.Min(x => x.GridLayout!.Y).CompareTo(b.Min(x => x.GridLayout!.Y)));
+
+        return rows;
+    }
+
+    private void RenderV2Row(StringBuilder sb, List<BlockDto> row, double marginTopMm, BlockTreeDto treeAdapter)
+    {
+        var marginStyle = FormattableString.Invariant($"margin-top:{marginTopMm:F1}mm;");
+
+        if (row.Count == 1)
+        {
+            var block = row[0];
+            var gl = block.GridLayout!;
+            var heightStyle = gl.AutoHeight
+                ? string.Empty
+                : FormattableString.Invariant($"height:{gl.Height:F1}mm;overflow:hidden;");
+            var style = FormattableString.Invariant(
+                $"position:relative;{marginStyle}margin-left:{gl.X:F1}mm;width:{gl.Width:F1}mm;{heightStyle}");
+            sb.AppendLine($"    <div style=\"{style}\">{DispatchBlock(block, treeAdapter)}</div>");
+        }
+        else
+        {
+            // Flex row — blocks sorted by X
+            sb.AppendLine(FormattableString.Invariant($"    <div style=\"display:flex;align-items:flex-start;{marginStyle}\">"));
+            double prevXEnd = 0;
+            foreach (var block in row)
+            {
+                var gl = block.GridLayout!;
+                var gap = Math.Max(0, gl.X - prevXEnd);
+                var heightStyle = gl.AutoHeight
+                    ? string.Empty
+                    : FormattableString.Invariant($"height:{gl.Height:F1}mm;overflow:hidden;");
+                var style = FormattableString.Invariant(
+                    $"flex-shrink:0;margin-left:{gap:F1}mm;width:{gl.Width:F1}mm;{heightStyle}");
+                sb.AppendLine($"      <div style=\"{style}\">{DispatchBlock(block, treeAdapter)}</div>");
+                prevXEnd = gl.X + gl.Width;
+            }
+            sb.AppendLine("    </div>");
+        }
+    }
+
     // ── Stylesheet wrapper ────────────────────────────────────────────────
     // NOT: CSS içindeki { ve } karakterleri ile C# string interpolasyonu çakışmasını
     // önlemek için metni parçalara bölüp birleştiriyoruz.
 
-    private static string WrapStylesheet(string body, bool includeQrLib = false)
+    private static string WrapStylesheet(string body, bool includeQrLib = false, bool isV2 = false)
     {
         var qrScript = includeQrLib
             ? "    <script src=\"https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js\"></script>\n"
@@ -173,7 +345,22 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             </xsl:stylesheet>
             """;
 
-        return header + qrScript + styles + "\n" + bodyOpen + "\n" + body + "\n" + footer;
+        var v2StyleOverride = isV2
+            ? """
+
+                    <style>
+                      .page {
+                        position: relative !important;
+                        min-height: 297mm !important;
+                        height: auto !important;
+                        padding: 0 !important;
+                        overflow: hidden !important;
+                      }
+                    </style>
+"""
+            : string.Empty;
+
+        return header + qrScript + styles + v2StyleOverride + "\n" + bodyOpen + "\n" + body + "\n" + footer;
     }
 
     // ── Body builder ──────────────────────────────────────────────────────
@@ -553,7 +740,8 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         };
         var widthStyle = !string.IsNullOrEmpty(cfg.Width) ? $"width:{XmlEscape(cfg.Width)};" : "max-width:100%;";
         var heightStyle = !string.IsNullOrEmpty(cfg.Height) ? $"height:{XmlEscape(cfg.Height)};" : string.Empty;
-        var imgStyle = $"display:inline-block;vertical-align:top;object-fit:contain;{widthStyle}{heightStyle}";
+        var opacityStyle = cfg.Opacity is int op && op < 100 ? FormattableString.Invariant($"opacity:{op / 100.0:F2};") : string.Empty;
+        var imgStyle = $"display:inline-block;vertical-align:top;object-fit:contain;{widthStyle}{heightStyle}{opacityStyle}";
         var alt = XmlEscape(cfg.AltText ?? cfg.AssetType);
 
         string srcAttr;
@@ -742,9 +930,10 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var qrWidth = cfg.QrWidth > 0 ? cfg.QrWidth : 150;
         var qrHeight = cfg.QrHeight > 0 ? cfg.QrHeight : 150;
         var flexJustify = QrFlexJustify(cfg.QrAlignment);
+        var qrOpacity = cfg.Opacity is int qop && qop < 100 ? FormattableString.Invariant($"opacity:{qop / 100.0:F2};") : string.Empty;
 
         var sb = new StringBuilder();
-        sb.AppendLine("    <div class=\"ettn\">");
+        sb.AppendLine($"    <div class=\"ettn\" style=\"{qrOpacity}\">");
 
         // Hidden div — GİB JSON payload
         sb.AppendLine("      <div id=\"qrvalue\" style=\"visibility: hidden; height: 20px;width: 20px; ; display:none\">");
@@ -1591,8 +1780,9 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             "right" => "right",
             _ => "center",
         };
+        var logoOpacity = cfg.Opacity is int lop && lop < 100 ? FormattableString.Invariant($"opacity:{lop / 100.0:F2};") : string.Empty;
         return $"""
-            <div style="display:inline-block;{marginStyle};text-align:{textAlign};">
+            <div style="display:inline-block;{marginStyle};text-align:{textAlign};{logoOpacity}">
               <img src="{GibLogoBase64}" alt="GIB Logo" style="display:block;width:{width};height:{height};object-fit:contain;"/>
               <h1 style="text-align:center;margin:2px 0 0 0;">
                 <span style="font-weight:bold;">

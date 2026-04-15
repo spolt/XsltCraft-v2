@@ -2,67 +2,78 @@ import { useState, useMemo } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import type { BlockType } from '../../types/blocks'
 
+interface BlockPaletteProps {
+  isOpen: boolean
+}
+
 interface PaletteItem {
+  id: string
   type: BlockType
   label: string
   icon: string
+  configOverride?: Record<string, unknown>
 }
 
 const CATEGORIES: { name: string; items: PaletteItem[] }[] = [
   {
     name: 'HAZIR BLOKLAR',
     items: [
-      { type: 'PartyInfo', label: 'Taraf Bilgisi (Satıcı-Alıcı)', icon: '⊞' },
-      { type: 'InvoiceHeader', label: 'Fatura Başlığı', icon: '☰' },
-      { type: 'InvoiceLineTable', label: 'Fatura Satırları', icon: '⊟' },
-      { type: 'InvoiceTotals', label: 'Fatura Dip Toplamları', icon: '₸' },
-      { type: 'Notes', label: 'Notlar', icon: '✎' },
-      { type: 'BankInfo', label: 'Banka Bilgisi', icon: '₺' },
+      {
+        id: 'SupplierInfo', type: 'PartyInfo', label: 'Satıcı Bilgileri', icon: '⊞',
+        configOverride: { partyType: 'SupplierParty', title: 'SATICI' },
+      },
+      {
+        id: 'BuyerInfo', type: 'PartyInfo', label: 'Alıcı Bilgileri', icon: '⊞',
+        configOverride: { partyType: 'CustomerParty', title: 'ALICI' },
+      },
+      { id: 'InvoiceHeader',    type: 'InvoiceHeader',    label: 'Fatura Başlığı',       icon: '☰' },
+      { id: 'InvoiceLineTable', type: 'InvoiceLineTable', label: 'Fatura Satırları',      icon: '⊟' },
+      { id: 'InvoiceTotals',    type: 'InvoiceTotals',    label: 'Fatura Dip Toplamları', icon: '₸' },
+      { id: 'Notes',            type: 'Notes',            label: 'Notlar',                icon: '✎' },
+      { id: 'BankInfo',         type: 'BankInfo',         label: 'Banka Bilgisi',         icon: '₺' },
     ],
   },
   {
     name: 'METİN',
     items: [
-      { type: 'Text', label: 'Metin', icon: 'T' },
-      { type: 'Heading', label: 'Başlık', icon: 'H' },
-      { type: 'Paragraph', label: 'Paragraf', icon: '¶' },
-      { type: 'ConditionalText', label: 'Koşullu Metin', icon: '?' },
+      { id: 'Text',            type: 'Text',            label: 'Metin',         icon: 'T' },
+      { id: 'Heading',         type: 'Heading',         label: 'Başlık',        icon: 'H' },
+      { id: 'Paragraph',       type: 'Paragraph',       label: 'Paragraf',      icon: '¶' },
+      { id: 'ConditionalText', type: 'ConditionalText', label: 'Koşullu Metin', icon: '?' },
     ],
   },
   {
     name: 'VERİ',
     items: [
-      { type: 'Table', label: 'Tablo', icon: '⊞' },
-      { type: 'TaxSummary', label: 'KDV Özeti', icon: 'Σ' },
-      { type: 'DocumentInfo', label: 'Belge Bilgisi', icon: '⊙' },
-      { type: 'Totals', label: 'Toplamlar', icon: 'Σ' },
+      { id: 'Table',        type: 'Table',        label: 'Tablo',         icon: '⊞' },
+      { id: 'DocumentInfo', type: 'DocumentInfo', label: 'Belge Bilgisi', icon: '⊙' },
     ],
   },
   {
     name: 'MEDYA',
     items: [
-      { type: 'Image', label: 'Görsel', icon: '⬜' },
-      { type: 'ETTN', label: 'Dinamik Karekod', icon: '◎' },
-      { type: 'GibKarekod', label: 'GİB Karekod', icon: '◎' },
-      { type: 'GibLogo', label: 'GİB LOGO', icon: '⊕' },
+      { id: 'Image',      type: 'Image',      label: 'Görsel',          icon: '⬜' },
+      { id: 'ETTN',       type: 'ETTN',       label: 'Dinamik Karekod', icon: '◎' },
+      { id: 'GibKarekod', type: 'GibKarekod', label: 'GİB Karekod',    icon: '◎' },
+      { id: 'GibLogo',    type: 'GibLogo',    label: 'GİB Logo',        icon: '⊕' },
     ],
   },
   {
     name: 'DÜZEN',
     items: [
-      { type: 'ForEach', label: 'For-Each', icon: '↺' },
-      { type: 'Conditional', label: 'Koşul Bloğu', icon: '∨' },
-      { type: 'Variable', label: 'Değişken', icon: '$' },
-      { type: 'Divider', label: 'Ayırıcı', icon: '—' },
-      { type: 'Spacer', label: 'Boşluk', icon: '↕' },
+      { id: 'ForEach',    type: 'ForEach',    label: 'For-Each',    icon: '↺' },
+      { id: 'Conditional',type: 'Conditional',label: 'Koşul Bloğu', icon: '∨' },
+      { id: 'Variable',   type: 'Variable',   label: 'Değişken',    icon: '$' },
+      { id: 'Divider',    type: 'Divider',    label: 'Ayırıcı',     icon: '—' },
+      { id: 'Spacer',     type: 'Spacer',     label: 'Boşluk',      icon: '↕' },
     ],
   },
 ]
 
 function DraggablePaletteItem({ item }: { item: PaletteItem }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `palette-${item.type}`,
-    data: { source: 'palette', blockType: item.type },
+    id: `palette-${item.id}`,
+    data: { source: 'palette', blockType: item.type, configOverride: item.configOverride },
   })
 
   return (
@@ -70,35 +81,39 @@ function DraggablePaletteItem({ item }: { item: PaletteItem }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className="flex items-center cursor-grab select-none"
+      className="select-none"
       style={{
-        gap: 6,
-        padding: '5px 12px',
-        fontSize: 11,
-        color: 'var(--color-text-secondary)',
-        borderRadius: 0,
-        opacity: isDragging ? 0.5 : 1,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 8px',
+        borderRadius: 6,
+        fontSize: 12,
+        color: '#2C2C2A',
+        cursor: 'grab',
         transition: 'background 120ms',
+        opacity: isDragging ? 0.5 : 1,
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.background = 'var(--color-surface-secondary)'
-        e.currentTarget.style.color = 'var(--color-text-primary)'
+        e.currentTarget.style.background = '#EBF3FC'
       }}
       onMouseLeave={e => {
         e.currentTarget.style.background = 'transparent'
-        e.currentTarget.style.color = 'var(--color-text-secondary)'
       }}
     >
       <span
-        className="flex items-center justify-center flex-shrink-0"
         style={{
-          width: 20,
-          height: 20,
-          fontSize: 10,
-          border: '0.5px solid var(--color-border-default)',
+          width: 24,
+          height: 24,
           borderRadius: 4,
-          background: 'var(--color-surface-card)',
-          color: 'var(--color-text-secondary)',
+          background: '#EBF3FC',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 11,
+          fontWeight: 700,
+          color: '#185FA5',
+          flexShrink: 0,
         }}
       >
         {item.icon}
@@ -108,7 +123,7 @@ function DraggablePaletteItem({ item }: { item: PaletteItem }) {
   )
 }
 
-export default function BlockPalette() {
+export default function BlockPalette({ isOpen }: BlockPaletteProps) {
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {
@@ -120,20 +135,22 @@ export default function BlockPalette() {
     })).filter((cat) => cat.items.length > 0)
   }, [search])
 
+  if (!isOpen) return null
+
   return (
     <aside
-      className="flex-shrink-0 flex flex-col overflow-hidden"
       style={{
-        width: 168,
-        background: 'var(--color-surface-card)',
-        borderRight: '0.5px solid var(--color-border-default)',
+        flexShrink: 0,
+        width: 180,
+        background: '#fff',
+        borderRight: '1px solid #E0DDD8',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
       }}
     >
-      {/* Header */}
-      <div style={{ padding: '10px 12px 6px', borderBottom: '0.5px solid var(--color-border-default)', flexShrink: 0 }}>
-        <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-text-muted)', marginBottom: 6 }}>
-          BLOKLAR
-        </p>
+      {/* Search */}
+      <div style={{ padding: '12px 8px 8px', flexShrink: 0 }}>
         <input
           type="text"
           placeholder="⌕ Ara..."
@@ -141,32 +158,40 @@ export default function BlockPalette() {
           onChange={(e) => setSearch(e.target.value)}
           style={{
             width: '100%',
-            height: 26,
+            height: 28,
             fontSize: 11,
             padding: '0 8px',
             boxSizing: 'border-box',
-            background: 'var(--color-surface-secondary)',
-            border: '0.5px solid var(--color-border-default)',
+            background: '#F9F8F6',
+            border: '1px solid #E0DDD8',
             borderRadius: 5,
             outline: 'none',
-            color: 'var(--color-text-primary)',
+            color: '#2C2C2A',
             fontFamily: 'inherit',
           }}
-          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
-          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-default)')}
+          onFocus={e => (e.currentTarget.style.borderColor = '#185FA5')}
+          onBlur={e => (e.currentTarget.style.borderColor = '#E0DDD8')}
         />
       </div>
 
       {/* Block list */}
-      <div className="overflow-y-auto flex-1" style={{ paddingBottom: 8 }}>
-        {filtered.map((cat) => (
+      <div style={{ overflowY: 'auto', flex: 1, paddingBottom: 8 }}>
+        {filtered.map((cat, catIndex) => (
           <div key={cat.name}>
-            <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-text-muted)', padding: '10px 12px 3px' }}>
+            <p style={{
+              fontSize: 10,
+              letterSpacing: '1px',
+              color: '#888780',
+              padding: catIndex === 0 ? '4px 12px 4px' : '12px 12px 4px',
+              fontWeight: 600,
+            }}>
               {cat.name}
             </p>
-            {cat.items.map((item) => (
-              <DraggablePaletteItem key={item.type} item={item} />
-            ))}
+            <div style={{ padding: '0 4px' }}>
+              {cat.items.map((item) => (
+                <DraggablePaletteItem key={item.id} item={item} />
+              ))}
+            </div>
           </div>
         ))}
       </div>

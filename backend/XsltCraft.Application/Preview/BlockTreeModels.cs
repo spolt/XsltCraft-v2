@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace XsltCraft.Application.Preview;
 
-// ── Top-level tree ──────────────────────────────────────────────────────────
+// ── Top-level tree (V1 — section-based) ─────────────────────────────────────
 
 public sealed class BlockTreeDto
 {
@@ -12,6 +12,40 @@ public sealed class BlockTreeDto
 
     [JsonPropertyName("blocks")]
     public Dictionary<string, BlockDto> Blocks { get; set; } = [];
+}
+
+// ── Top-level tree (V2 — grid-based A4 canvas) ─────────────────────────────
+
+public sealed class BlockTreeV2Dto
+{
+    [JsonPropertyName("version")]
+    public int Version { get; set; } = 2;
+
+    [JsonPropertyName("blocks")]
+    public Dictionary<string, BlockDto> Blocks { get; set; } = [];
+}
+
+// ── Grid layout for V2 blocks (absolute positioning in mm) ──────────────────
+
+public sealed class GridBlockLayoutDto
+{
+    [JsonPropertyName("x")]
+    public double X { get; set; }
+
+    [JsonPropertyName("y")]
+    public double Y { get; set; }
+
+    [JsonPropertyName("width")]
+    public double Width { get; set; }
+
+    [JsonPropertyName("height")]
+    public double Height { get; set; }
+
+    [JsonPropertyName("zIndex")]
+    public int? ZIndex { get; set; }
+
+    [JsonPropertyName("autoHeight")]
+    public bool AutoHeight { get; set; }
 }
 
 public sealed class SectionDto
@@ -58,6 +92,9 @@ public sealed class BlockDto
 
     [JsonPropertyName("layout")]
     public BlockLayoutDto? Layout { get; set; }
+
+    [JsonPropertyName("gridLayout")]
+    public GridBlockLayoutDto? GridLayout { get; set; }
 }
 
 // ── Per-block config helpers ────────────────────────────────────────────────
@@ -232,6 +269,9 @@ public sealed class ImageConfig
 
     [JsonPropertyName("editableOnFreeTheme")]
     public bool EditableOnFreeTheme { get; set; }
+
+    [JsonPropertyName("opacity")]
+    public int? Opacity { get; set; } // 0-100, null = 100
 }
 
 public sealed class DocumentInfoRow
@@ -425,6 +465,9 @@ public sealed class GibLogoConfig
 
     [JsonPropertyName("alignment")]
     public string Alignment { get; set; } = "center";
+
+    [JsonPropertyName("opacity")]
+    public int? Opacity { get; set; } // 0-100, null = 100
 }
 
 public sealed class InvoiceTotalsField
@@ -480,6 +523,9 @@ public sealed class GibKarekodConfig
     /// <summary>left | center | right. Varsayılan: right.</summary>
     [JsonPropertyName("qrAlignment")]
     public string QrAlignment { get; set; } = "right";
+
+    [JsonPropertyName("opacity")]
+    public int? Opacity { get; set; } // 0-100, null = 100
 }
 
 public sealed class PartyInfoField

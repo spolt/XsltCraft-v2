@@ -123,6 +123,7 @@ export interface ImageBlockConfig {
   height?: string
   alignment: Alignment
   editableOnFreeTheme: boolean
+  opacity?: number // 0-100
 }
 
 // BLOCK-08: DocumentInfo
@@ -222,6 +223,7 @@ export interface GibKarekodBlockConfig {
   qrWidth: number
   qrHeight: number
   qrAlignment: 'left' | 'center' | 'right'
+  opacity?: number // 0-100
 }
 
 // BLOCK-17: TaxSummary (KDV özet tablosu — Türk e-Fatura)
@@ -382,6 +384,7 @@ export interface GibLogoBlockConfig {
   width?: string
   height?: string
   alignment: 'left' | 'center' | 'right'
+  opacity?: number // 0-100
 }
 
 // BLOCK-22: InvoiceTotals (Fatura dip toplamları — hazır UBL XPath'li)
@@ -440,7 +443,7 @@ export type BlockConfig =
   | { type: 'InvoiceTotals'; config: InvoiceTotalsBlockConfig }
   | { type: 'GibLogo'; config: GibLogoBlockConfig }
 
-// ── Blok düzeni (hizalama + genişlik) ──────────────────────────────────────
+// ── Blok düzeni (hizalama + genişlik) — V1 (section-based) ───────────────────
 
 export type BlockAlignment = 'left' | 'center' | 'right'
 export type BlockWidth = 'full' | '1/2' | '1/3' | '2/3' | '2/5' | '3/10'
@@ -459,4 +462,42 @@ export interface Block {
   type: BlockType
   config: BlockConfig['config']
   layout: BlockLayout
+}
+
+// ── V2 Grid Block (A4 canvas, absolute positioning in mm) ────────────────────
+
+import type { GridBlockLayout } from './template'
+
+export interface GridBlock {
+  id: string
+  type: BlockType
+  config: BlockConfig['config']
+  gridLayout: GridBlockLayout
+}
+
+/** Her blok tipi için varsayılan boyutlar (mm cinsinden) */
+export const DEFAULT_BLOCK_SIZE: Record<BlockType, { width: number; height: number; autoHeight: boolean }> = {
+  Text:             { width: 182, height: 10,  autoHeight: true },
+  Heading:          { width: 182, height: 12,  autoHeight: true },
+  Paragraph:        { width: 182, height: 25,  autoHeight: true },
+  Table:            { width: 182, height: 60,  autoHeight: true },
+  ForEach:          { width: 182, height: 40,  autoHeight: true },
+  Conditional:      { width: 182, height: 30,  autoHeight: true },
+  Image:            { width: 40,  height: 30,  autoHeight: true },
+  DocumentInfo:     { width: 90,  height: 40,  autoHeight: true },
+  Totals:           { width: 90,  height: 50,  autoHeight: true },
+  Notes:            { width: 182, height: 30,  autoHeight: true },
+  BankInfo:         { width: 90,  height: 25,  autoHeight: true },
+  ETTN:             { width: 40,  height: 40,  autoHeight: true },
+  Divider:          { width: 182, height: 10,  autoHeight: false },
+  Spacer:           { width: 182, height: 10,  autoHeight: false },
+  Variable:         { width: 80,  height: 10,  autoHeight: true },
+  ConditionalText:  { width: 182, height: 15,  autoHeight: true },
+  TaxSummary:       { width: 90,  height: 50,  autoHeight: true },
+  GibKarekod:       { width: 40,  height: 40,  autoHeight: false },
+  PartyInfo:        { width: 90,  height: 55,  autoHeight: true },
+  InvoiceLineTable: { width: 182, height: 80,  autoHeight: true },
+  InvoiceHeader:    { width: 90,  height: 50,  autoHeight: true },
+  InvoiceTotals:    { width: 90,  height: 50,  autoHeight: true },
+  GibLogo:          { width: 30,  height: 30,  autoHeight: false },
 }

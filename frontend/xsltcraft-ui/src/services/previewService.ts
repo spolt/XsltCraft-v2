@@ -1,6 +1,5 @@
 import api from './apiService'
-import type { Section } from '../types/template'
-import type { Block } from '../types/blocks'
+import type { GridBlock } from '../types/blocks'
 
 export interface PreviewResponse {
   html: string
@@ -8,12 +7,11 @@ export interface PreviewResponse {
 }
 
 export async function previewFromBlockTree(
-  sections: Section[],
-  blocks: Record<string, Block>,
+  blocks: Record<string, GridBlock>,
   xmlContent: string,
 ): Promise<PreviewResponse> {
   const { data } = await api.post<PreviewResponse>('/api/preview', {
-    sections,
+    version: 2,
     blocks,
     xmlContent,
   })
@@ -21,12 +19,11 @@ export async function previewFromBlockTree(
 }
 
 export async function generateXslt(
-  sections: Section[],
-  blocks: Record<string, Block>,
+  blocks: Record<string, GridBlock>,
 ): Promise<string> {
   const { data } = await api.post<string>(
     '/api/preview/xslt',
-    { sections, blocks, xmlContent: '' },
+    { version: 2, blocks, xmlContent: '' },
     { responseType: 'text' },
   )
   return data
