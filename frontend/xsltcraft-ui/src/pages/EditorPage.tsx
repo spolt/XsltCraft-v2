@@ -1,32 +1,20 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
-import {
-  LayoutDashboard,
-  BookOpen,
-  FilePlus,
-  FolderOpen,
-  Shield,
-} from 'lucide-react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   DndContext,
   DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
-  pointerWithin,
-  closestCenter,
-  type CollisionDetection,
   type DragStartEvent,
   type DragEndEvent,
-  type DragOverEvent,
 } from '@dnd-kit/core'
-import { arrayMove } from '@dnd-kit/sortable'
 import BlockPalette from '../components/editor/BlockPalette'
 import Canvas from '../components/editor/Canvas'
+import { CANVAS_DROPPABLE_ID, canvasPageRef, canvasScaleRef } from '../components/editor/canvasRefs'
 import PropertyPanel from '../components/editor/PropertyPanel'
 import EditorPreviewPanel from '../components/editor/EditorPreviewPanel'
 import { useEditorStore } from '../store/editorStore'
-import { useAuthStore } from '../store/authStore'
 import { useXmlStore } from '../store/xmlStore'
 import {
   getTemplate,
@@ -35,87 +23,31 @@ import {
   downloadTemplate,
 } from '../services/templateService'
 import { generateXslt } from '../services/previewService'
-import type { BlockTree } from '../types/template'
+import type { BlockTree, BlockTreeV1 } from '../types/template'
 import type { BlockType } from '../types/blocks'
+import { migrateV1toV2 } from '../utils/treeMigration'
+import { snapToGrid, clampToPage, pxToMm } from '../utils/gridSnap'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 const AUTOSAVE_DELAY_MS = 30_000
-
-function EditorSidebar() {
-  const { user } = useAuthStore()
-  const location = useLocation()
-
-  const isActive = (path: string) => location.pathname === path
-
-  const itemBase =
-    'flex items-center justify-center w-9 h-9 rounded-lg transition-colors'
-  const itemActive = 'bg-blue-50 text-blue-700'
-  const itemInactive = 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-
-  return (
-    <div className="w-12 border-r border-gray-200 bg-white py-2 flex flex-col gap-1 items-center flex-shrink-0">
-      <Link
-        to="/dashboard"
-        className={`${itemBase} ${isActive('/dashboard') ? itemActive : itemInactive}`}
-        title="Dashboard"
-      >
-        <LayoutDashboard size={18} />
-      </Link>
-      <Link
-        to="/templates"
-        className={`${itemBase} ${isActive('/templates') ? itemActive : itemInactive}`}
-        title="Tema Kütüphanesi"
-      >
-        <BookOpen size={18} />
-      </Link>
-      <Link
-        to="/editor/new"
-        className={`${itemBase} ${isActive('/editor/new') ? itemActive : itemInactive}`}
-        title="Yeni Şablon Oluştur"
-      >
-        <FilePlus size={18} />
-      </Link>
-      <Link
-        to="/drafts"
-        className={`${itemBase} ${isActive('/drafts') ? itemActive : itemInactive}`}
-        title="Taslaklarım"
-      >
-        <FolderOpen size={18} />
-      </Link>
-      {user?.role === 'Admin' && (
-        <Link
-          to="/admin/themes"
-          className={`${itemBase} ${isActive('/admin/themes') ? itemActive : itemInactive}`}
-          title="Admin Paneli"
-        >
-          <Shield size={18} />
-        </Link>
-      )}
-    </div>
-  )
-}
 
 export default function EditorPage() {
   const { templateId: routeTemplateId } = useParams<{ templateId?: string }>()
   const navigate = useNavigate()
 
-  const templateId   = useEditorStore((s) => s.templateId)
-  const templateName = useEditorStore((s) => s.templateName)
-  const sections     = useEditorStore((s) => s.sections)
-  const blocks       = useEditorStore((s) => s.blocks)
+  const templateId      = useEditorStore((s) => s.templateId)
+  const templateName    = useEditorStore((s) => s.templateName)
+  const blocks          = useEditorStore((s) => s.blocks)
   const addBlock        = useEditorStore((s) => s.addBlock)
-  const moveBlock       = useEditorStore((s) => s.moveBlock)
-  const moveBlockToCol  = useEditorStore((s) => s.moveBlockToCol)
-  const isDirty      = useEditorStore((s) => s.isDirty)
-  const past         = useEditorStore((s) => s.past)
-  const future       = useEditorStore((s) => s.future)
-  const undo         = useEditorStore((s) => s.undo)
-  const redo         = useEditorStore((s) => s.redo)
-  const resetTree    = useEditorStore((s) => s.resetTree)
-  const reorderSections = useEditorStore((s) => s.reorderSections)
+  const isDirty         = useEditorStore((s) => s.isDirty)
+  const past            = useEditorStore((s) => s.past)
+  const future          = useEditorStore((s) => s.future)
+  const undo            = useEditorStore((s) => s.undo)
+  const redo            = useEditorStore((s) => s.redo)
+  const resetTree       = useEditorStore((s) => s.resetTree)
   const loadTree        = useEditorStore((s) => s.loadTree)
-  const setTemplateId      = useEditorStore((s) => s.setTemplateId)
-  const setTemplateName    = useEditorStore((s) => s.setTemplateName)
+  const setTemplateId   = useEditorStore((s) => s.setTemplateId)
+  const setTemplateName = useEditorStore((s) => s.setTemplateName)
   const setHasStoredXslt = useEditorStore((s) => s.setHasStoredXslt)
 
   // XML store
@@ -124,149 +56,89 @@ export default function EditorPage() {
   const addXmlFile  = useXmlStore((s) => s.addXmlFile)
   const setActiveXml = useXmlStore((s) => s.setActiveXml)
 
-  const [isLoading, setIsLoading]       = useState(false)
-  const [isSaving, setIsSaving]         = useState(false)
+  const [isLoading, setIsLoading]         = useState(false)
+  const [isSaving, setIsSaving]           = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
-  const [saveError, setSaveError]       = useState<string | null>(null)
+  const [saveError, setSaveError]         = useState<string | null>(null)
   const [isEditingName, setIsEditingName] = useState(false)
-  const [nameInput, setNameInput]   = useState(templateName)
-  const [showPreview, setShowPreview] = useState(false)
-  const [xmlError, setXmlError] = useState<string | null>(null)
+  const [nameInput, setNameInput]         = useState(templateName)
+  const [showPreview, setShowPreview]     = useState(false)
+  const [xmlError, setXmlError]           = useState<string | null>(null)
+  const [paletteOpen, setPaletteOpen]     = useState(() => window.innerWidth >= 900)
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const xmlInputRef = useRef<HTMLInputElement>(null)
+  const xmlInputRef      = useRef<HTMLInputElement>(null)
 
-  // ── DnD ──────────────────────────────────────────────────────────────────────
+  // ── Kaydedilmemiş değişiklik uyarısı ────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) { e.preventDefault(); e.returnValue = '' }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
+
+  const handleNavigate = useCallback((path: string) => {
+    if (isDirty && !window.confirm('Kaydedilmemiş değişiklikler var. Sayfadan ayrılmak istiyor musun?')) return
+    navigate(path)
+  }, [isDirty, navigate])
+
+  // ── DnD (sadece palet -> canvas icin) ────────────────────────────────────────
   const [activeId, setActiveDndId] = useState<string | null>(null)
+  const dragStartPointerRef = useRef<{ clientX: number; clientY: number } | null>(null)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   )
 
-  // Pointer gerçekten o alan üzerindeyse onu seç; değilse en yakın merkezi kullan.
-  // closestCorners yerine bu kombinasyon, bölüm kaymasını önler.
-  const collisionDetection: CollisionDetection = useCallback((args) => {
-    const within = pointerWithin(args)
-    if (within.length > 0) return within
-    return closestCenter(args)
-  }, [])
-
-  function findSectionByBlockId(blockId: string): string | undefined {
-    return sections.find((s) => s.blockIds.includes(blockId))?.id
-  }
-
-  function handleDragStart({ active }: DragStartEvent) {
+  function handleDragStart({ active, activatorEvent }: DragStartEvent) {
     setActiveDndId(String(active.id))
+    const pe = activatorEvent as PointerEvent
+    dragStartPointerRef.current = { clientX: pe.clientX, clientY: pe.clientY }
   }
 
-  function handleDragOver(_event: DragOverEvent) {
-    // reserved for future highlight logic
-  }
-
-  function handleDragEnd({ active, over }: DragEndEvent) {
+  function handleDragEnd({ active, over, delta }: DragEndEvent) {
     setActiveDndId(null)
-    if (!over) return
 
-    const activeData = active.data.current as { source: string; blockType?: BlockType; blockId?: string; sectionId?: string }
+    const activeData = active.data.current as { source: string; blockType?: BlockType; configOverride?: Record<string, unknown> } | undefined
+    if (activeData?.source !== 'palette') return
 
-    // Section reorder
-    if (activeData?.source === 'section') {
-      const fromIndex = sections.findIndex((s) => `sort-section-${s.id}` === String(active.id))
-      const toIndex = sections.findIndex((s) => `sort-section-${s.id}` === String(over.id))
-      if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
-        reorderSections(fromIndex, toIndex)
-      }
-      return
+    const blockType = activeData.blockType!
+    const configOverride = activeData.configOverride
+
+    // Drop hedefi canvas degil ise yoksay
+    if (!over || over.id !== CANVAS_DROPPABLE_ID) return
+
+    // Pointer pozisyonunu hesapla: dragStart + delta
+    const start = dragStartPointerRef.current
+    if (!start || !canvasPageRef.current) return
+
+    const finalX = start.clientX + delta.x
+    const finalY = start.clientY + delta.y
+    const rect = canvasPageRef.current.getBoundingClientRect()
+    const scale = canvasScaleRef.current
+
+    const xMm = pxToMm(finalX - rect.left, scale)
+    const yMm = pxToMm(finalY - rect.top, scale)
+
+    const snapped = {
+      x: snapToGrid(xMm),
+      y: snapToGrid(yMm),
     }
-    const overIdStr = String(over.id)
-    const overData = over.data.current as { type?: string; sectionId?: string; colIdx?: number } | undefined
-
-    // Sütun drop zone'u (colzone-{sectionId}-{ci})
-    if (overData?.type === 'colzone') {
-      const toSectionId = overData.sectionId!
-      const colIdx = overData.colIdx!
-
-      if (activeData?.source === 'palette') {
-        addBlock(toSectionId, activeData.blockType!, undefined, colIdx)
-        return
-      }
-
-      if (activeData?.source === 'canvas') {
-        const blockId = activeData.blockId!
-        const fromSectionId = activeData.sectionId ?? findSectionByBlockId(blockId)
-        if (!fromSectionId) return
-        if (fromSectionId !== toSectionId) {
-          const toSection = sections.find((s) => s.id === toSectionId)!
-          moveBlock(fromSectionId, toSectionId, blockId, toSection.blockIds.length)
-        }
-        moveBlockToCol(blockId, colIdx)
-        return
-      }
-      return
-    }
-
-    // Palette → Canvas
-    if (activeData?.source === 'palette') {
-      const blockType = activeData.blockType!
-      if (overIdStr.startsWith('section-')) {
-        addBlock(overIdStr.replace('section-', ''), blockType)
-        return
-      }
-      const targetSectionId = findSectionByBlockId(overIdStr)
-      if (targetSectionId) {
-        const section = sections.find((s) => s.id === targetSectionId)!
-        addBlock(targetSectionId, blockType, section.blockIds.indexOf(overIdStr))
-      }
-      return
-    }
-
-    // Canvas → Canvas
-    if (activeData?.source === 'canvas') {
-      const blockId = activeData.blockId!
-      const fromSectionId = activeData.sectionId ?? findSectionByBlockId(blockId)
-      if (!fromSectionId) return
-
-      let toSectionId: string | undefined
-      let toIndex: number
-
-      if (overIdStr.startsWith('section-')) {
-        toSectionId = overIdStr.replace('section-', '')
-        toIndex = sections.find((s) => s.id === toSectionId)!.blockIds.length
-      } else {
-        toSectionId = findSectionByBlockId(overIdStr)
-        if (!toSectionId) return
-        const toSection = sections.find((s) => s.id === toSectionId)!
-        toIndex = toSection.blockIds.indexOf(overIdStr)
-
-        if (fromSectionId === toSectionId) {
-          const fromSection = sections.find((s) => s.id === fromSectionId)!
-          const oldIndex = fromSection.blockIds.indexOf(blockId)
-          if (oldIndex !== toIndex) {
-            const newIds = arrayMove(fromSection.blockIds, oldIndex, toIndex)
-            newIds.forEach((id, idx) => {
-              if (id === blockId) moveBlock(fromSectionId, toSectionId!, blockId, idx)
-            })
-          }
-          return
-        }
-      }
-
-      if (toSectionId) moveBlock(fromSectionId, toSectionId, blockId, toIndex)
-    }
+    const clamped = clampToPage(snapped.x, snapped.y, 30, 20)
+    addBlock(blockType, { x: clamped.x, y: clamped.y }, configOverride)
   }
 
   const activePaletteType = activeId?.startsWith('palette-')
     ? (activeId.replace('palette-', '') as BlockType)
     : null
-  const activeCanvasBlock = activeId && !activeId.startsWith('palette-') ? blocks[activeId] : null
 
   // ── XML yükleme ──────────────────────────────────────────────────────────────
-
   function handleXmlUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 1 * 1024 * 1024) {
-      alert('XML dosyası 1 MB\'dan büyük olamaz.')
+      alert("XML dosyası 1 MB'dan büyük olamaz.")
       e.target.value = ''
       return
     }
@@ -274,8 +146,7 @@ export default function EditorPage() {
     reader.onload = (ev) => {
       const content = ev.target?.result as string
       const doc = new DOMParser().parseFromString(content, 'application/xml')
-      const parseError = doc.getElementsByTagName('parsererror')
-      if (parseError.length > 0) {
+      if (doc.getElementsByTagName('parsererror').length > 0) {
         setXmlError(`"${file.name}" geçerli bir XML dosyası değil.`)
         setTimeout(() => setXmlError(null), 4000)
         return
@@ -284,12 +155,10 @@ export default function EditorPage() {
       addXmlFile(file.name, content)
     }
     reader.readAsText(file)
-    // Reset input so the same file can be re-uploaded
     e.target.value = ''
   }
 
   // ── Template yükleme ─────────────────────────────────────────────────────────
-
   useEffect(() => {
     if (!routeTemplateId) {
       resetTree()
@@ -308,13 +177,21 @@ export default function EditorPage() {
 
         if (tpl.blockTree) {
           try {
-            const tree: BlockTree = JSON.parse(tpl.blockTree)
-            loadTree(tree)
+            const raw: BlockTree = JSON.parse(tpl.blockTree)
+
+            // V1 mi V2 mi?
+            if (!('version' in raw) || (raw as { version?: number }).version !== 2) {
+              // V1 → migrate
+              const v2 = migrateV1toV2(raw as BlockTreeV1)
+              loadTree(v2)
+            } else {
+              loadTree(raw as import('../types/template').BlockTreeV2)
+            }
           } catch {
-            loadTree({ sections: [], blocks: {} })
+            loadTree({ version: 2, blocks: {} })
           }
         } else {
-          loadTree({ sections: [], blocks: {} })
+          loadTree({ version: 2, blocks: {} })
         }
       })
       .catch(() => setSaveError('Template yüklenemedi.'))
@@ -322,19 +199,16 @@ export default function EditorPage() {
   }, [routeTemplateId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Kaydetme ─────────────────────────────────────────────────────────────────
-
   const serializeTree = useCallback((): string => {
-    return JSON.stringify({ sections, blocks } satisfies BlockTree)
-  }, [sections, blocks])
+    return JSON.stringify({ version: 2, blocks })
+  }, [blocks])
 
   const save = useCallback(async () => {
     if (isSaving) return
     setSaveError(null)
     setIsSaving(true)
-
     try {
       const blockTreeJson = serializeTree()
-
       if (!templateId) {
         const created = await createTemplate({
           name: templateName,
@@ -344,12 +218,8 @@ export default function EditorPage() {
         setTemplateId(created.id)
         navigate(`/editor/${created.id}`, { replace: true })
       } else {
-        await updateTemplate(templateId, {
-          name: templateName,
-          blockTree: blockTreeJson,
-        })
+        await updateTemplate(templateId, { name: templateName, blockTree: blockTreeJson })
       }
-
       useEditorStore.setState({ isDirty: false })
     } catch {
       setSaveError('Kayıt başarısız. Tekrar deneyin.')
@@ -358,28 +228,25 @@ export default function EditorPage() {
     }
   }, [isSaving, templateId, templateName, serializeTree, navigate]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Otomatik kaydetme (30 sn debounce) ───────────────────────────────────────
-
+  // ── Otomatik kaydetme ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isDirty) return
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(() => { save() }, AUTOSAVE_DELAY_MS)
     return () => { if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current) }
-  }, [isDirty, sections, blocks, templateName]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isDirty, blocks, templateName]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── XSLT indirme ─────────────────────────────────────────────────────────
-
+  // ── XSLT indirme ─────────────────────────────────────────────────────────────
   const handleDownload = useCallback(async () => {
-    if (isDownloading || sections.length === 0) return
+    const hasBlocks = Object.keys(blocks).length > 0
+    if (isDownloading || !hasBlocks) return
     setIsDownloading(true)
     setSaveError(null)
     try {
       if (templateId) {
-        // Kayıtlı template: backend endpoint (üretir + storage'a yazar + cache)
         await downloadTemplate(templateId, templateName)
       } else {
-        // Kaydedilmemiş template: anlık istemci-taraflı üretim
-        const xslt = await generateXslt(sections, blocks)
+        const xslt = await generateXslt(blocks)
         const blob = new Blob([xslt], { type: 'application/xslt+xml' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -396,10 +263,9 @@ export default function EditorPage() {
     } finally {
       setIsDownloading(false)
     }
-  }, [isDownloading, templateId, sections, blocks, templateName])
+  }, [isDownloading, templateId, blocks, templateName])
 
-  // ── Template adı düzenleme ───────────────────────────────────────────────────
-
+  // ── Template adı düzenleme ────────────────────────────────────────────────────
   function commitName() {
     const trimmed = nameInput.trim()
     if (trimmed) setTemplateName(trimmed)
@@ -407,8 +273,7 @@ export default function EditorPage() {
     setIsEditingName(false)
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────────
-
+  // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
@@ -417,46 +282,51 @@ export default function EditorPage() {
     )
   }
 
+  const hasBlocks = Object.keys(blocks).length > 0
+
+  const GHOST_BTN: React.CSSProperties = {
+    padding: '6px 12px', borderRadius: 6, fontSize: 12,
+    border: '1px solid #D3D1C7', background: '#fff', cursor: 'pointer',
+    color: '#5F5E5A', transition: 'all 150ms', whiteSpace: 'nowrap',
+    display: 'inline-flex', alignItems: 'center', height: 32,
+  }
+  const PRIMARY_BTN: React.CSSProperties = {
+    padding: '6px 16px', borderRadius: 6, fontSize: 12,
+    border: '1px solid #185FA5', background: '#185FA5',
+    color: '#fff', cursor: isSaving || !isDirty ? 'not-allowed' : 'pointer',
+    opacity: isSaving || !isDirty ? 0.45 : 1, whiteSpace: 'nowrap',
+    display: 'inline-flex', alignItems: 'center', height: 32, flexShrink: 0,
+  }
+
   return (
-    <div className="h-screen flex flex-col bg-gray-100">
-      {/* Hidden XML file input */}
-      <input
-        ref={xmlInputRef}
-        type="file"
-        accept=".xml"
-        className="hidden"
-        onChange={handleXmlUpload}
-      />
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#F1F0EC' }}>
+      {/* Gizli XML dosya input'u */}
+      <input ref={xmlInputRef} type="file" accept=".xml" className="hidden" onChange={handleXmlUpload} />
 
       {/* Topbar */}
-      <header className="flex items-center gap-0 px-4 bg-white border-b flex-shrink-0" style={{ height: 48, borderColor: 'var(--color-border-default)' }}>
-        {/* Brand */}
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-brand-primary)', marginRight: 6, flexShrink: 0, userSelect: 'none' }}>
-          XsltCraft
-        </span>
+      <header style={{ height: 48, background: '#fff', borderBottom: '1px solid #E0DDD8', display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0 }}>
+        {/* Logo */}
+        <span style={{ fontWeight: 700, color: '#185FA5', fontSize: 14, flexShrink: 0 }}>XsltCraft</span>
+        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
 
-        {/* Separator */}
-        <span style={{ color: 'var(--color-border-default)', margin: '0 8px', flexShrink: 0 }}>—</span>
+        {/* Palette toggle */}
+        <button onClick={() => setPaletteOpen(v => !v)} style={GHOST_BTN} title="Blok listesini aç/kapat">
+          ☰
+        </button>
+        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
 
         {/* Geri */}
-        <button
-          onClick={() => navigate('/dashboard')}
-          style={{ fontSize: 12, color: 'var(--color-text-secondary)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, flexShrink: 0 }}
-          onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-brand-primary)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-        >
+        <button onClick={() => handleNavigate('/dashboard')} style={GHOST_BTN}>
           ‹ Geri
         </button>
+        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
 
-        {/* Separator */}
-        <span style={{ color: 'var(--color-border-default)', margin: '0 8px', flexShrink: 0 }}>›</span>
-
-        {/* Template adı — inline edit */}
-        <div className="flex items-center gap-1 flex-1 min-w-0">
+        {/* Template adı */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
           {isEditingName ? (
             <input
               autoFocus
-              style={{ fontSize: 13, fontWeight: 500, border: '0.5px solid var(--color-brand-primary)', borderRadius: 5, padding: '2px 8px', outline: 'none', width: 220, color: 'var(--color-text-primary)', background: 'var(--color-surface-card)' }}
+              style={{ fontSize: 13, fontWeight: 500, border: '1px solid #185FA5', borderRadius: 5, padding: '2px 8px', outline: 'none', width: 220, color: '#2C2C2A', background: '#fff', height: 28, boxSizing: 'border-box' }}
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
               onBlur={commitName}
@@ -468,112 +338,73 @@ export default function EditorPage() {
           ) : (
             <button
               onClick={() => { setNameInput(templateName); setIsEditingName(true) }}
-              style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              style={{ fontSize: 13, fontWeight: 500, color: '#2C2C2A', background: 'none', border: 'none', cursor: 'pointer', padding: 0, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
               title="Adı düzenle"
             >
               {templateName}
             </button>
           )}
           {isDirty && !isSaving && (
-            <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>
-              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--color-danger)', flexShrink: 0 }} />
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, fontSize: 11, color: '#888780' }}>
+              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#E53E3E', flexShrink: 0 }} />
               Kaydedilmedi
             </span>
           )}
           {isSaving && (
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', flexShrink: 0, marginLeft: 6 }}>Kaydediliyor…</span>
+            <span style={{ fontSize: 11, color: '#888780', flexShrink: 0 }}>Kaydediliyor…</span>
           )}
         </div>
 
-        {saveError && (
-          <span style={{ fontSize: 11, color: 'var(--color-danger)', flexShrink: 0 }}>{saveError}</span>
-        )}
-        {xmlError && (
-          <span style={{ fontSize: 11, color: 'var(--color-danger)', flexShrink: 0 }}>{xmlError}</span>
-        )}
+        {saveError && <span style={{ fontSize: 11, color: '#E53E3E', flexShrink: 0 }}>{saveError}</span>}
+        {xmlError  && <span style={{ fontSize: 11, color: '#E53E3E', flexShrink: 0 }}>{xmlError}</span>}
 
-        {/* Group 1: +XML | Undo | Redo */}
-        <div className="flex items-center flex-shrink-0" style={{ gap: 2 }}>
-          <button
-            onClick={() => xmlInputRef.current?.click()}
-            className="topbar-ghost-btn"
-            title="XML dosyası yükle"
-          >
+        {/* XML upload */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <button onClick={() => xmlInputRef.current?.click()} style={GHOST_BTN} title="XML dosyası yükle">
             + XML
           </button>
-
           {xmlFiles.length > 1 && (
-            <select
-              value={activeXmlId ?? ''}
-              onChange={(e) => setActiveXml(e.target.value)}
-              className="topbar-ghost-btn"
-              style={{ paddingRight: 4 }}
-              title="Aktif XML seç"
-            >
-              {xmlFiles.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}</option>
-              ))}
+            <select value={activeXmlId ?? ''} onChange={(e) => setActiveXml(e.target.value)} style={{ ...GHOST_BTN, paddingRight: 4 }}>
+              {xmlFiles.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
             </select>
           )}
           {xmlFiles.length === 1 && (
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={xmlFiles[0].name}>
+            <span style={{ fontSize: 11, color: '#888780', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={xmlFiles[0].name}>
               {xmlFiles[0].name}
             </span>
           )}
-
-          <button
-            onClick={undo}
-            disabled={past.length === 0}
-            className="topbar-ghost-btn"
-            title="Geri Al (Ctrl+Z)"
-          >
-            ↺
-          </button>
-          <button
-            onClick={redo}
-            disabled={future.length === 0}
-            className="topbar-ghost-btn"
-            title="Yinele (Ctrl+Y)"
-          >
-            ↻
-          </button>
         </div>
+        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
 
-        {/* Divider */}
-        <div style={{ width: '0.5px', height: 20, background: 'var(--color-border-default)', margin: '0 2px', flexShrink: 0 }} />
+        {/* Undo/Redo */}
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <button onClick={undo} disabled={past.length === 0} style={{ ...GHOST_BTN, opacity: past.length === 0 ? 0.4 : 1, cursor: past.length === 0 ? 'not-allowed' : 'pointer' }} title="Geri Al (Ctrl+Z)">Geri Al</button>
+          <button onClick={redo} disabled={future.length === 0} style={{ ...GHOST_BTN, opacity: future.length === 0 ? 0.4 : 1, cursor: future.length === 0 ? 'not-allowed' : 'pointer' }} title="Yinele (Ctrl+Y)">Yinele</button>
+        </div>
+        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
 
-        {/* Group 2: Önizle | İndir */}
-        <div className="flex items-center flex-shrink-0" style={{ gap: 2 }}>
+        {/* Preview + Download */}
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           <button
-            onClick={() => setShowPreview((v) => !v)}
-            className="topbar-ghost-btn"
-            style={showPreview ? { background: 'var(--color-brand-light)', color: 'var(--color-brand-primary)', borderColor: 'var(--color-brand-border)' } : {}}
+            onClick={() => setShowPreview(v => !v)}
+            style={{ ...GHOST_BTN, ...(showPreview ? { borderColor: '#185FA5', color: '#185FA5' } : {}) }}
             title="Canlı önizlemeyi aç/kapat"
           >
-            ⊙ Önizle
+            Önizle
           </button>
           <button
             onClick={handleDownload}
-            disabled={isDownloading || sections.length === 0}
-            className="topbar-ghost-btn"
+            disabled={isDownloading || !hasBlocks}
+            style={{ ...GHOST_BTN, opacity: isDownloading || !hasBlocks ? 0.4 : 1, cursor: isDownloading || !hasBlocks ? 'not-allowed' : 'pointer' }}
             title="XSLT dosyasını indir"
           >
             {isDownloading ? '…' : '↓ İndir'}
           </button>
         </div>
+        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
 
-        {/* Divider */}
-        <div style={{ width: '0.5px', height: 20, background: 'var(--color-border-default)', margin: '0 2px', flexShrink: 0 }} />
-
-        {/* Group 3: Kaydet */}
-        <button
-          onClick={save}
-          disabled={isSaving || !isDirty}
-          className="flex-shrink-0"
-          style={{ fontSize: 11, fontWeight: 500, padding: '0 12px', height: 30, borderRadius: 5, border: 'none', cursor: isSaving || !isDirty ? 'not-allowed' : 'pointer', background: 'var(--color-brand-primary)', color: '#fff', opacity: isSaving || !isDirty ? 0.5 : 1, transition: 'background 150ms' }}
-          onMouseEnter={e => { if (!isSaving && isDirty) e.currentTarget.style.background = 'var(--color-brand-hover)' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--color-brand-primary)' }}
-        >
+        {/* Save */}
+        <button onClick={save} disabled={isSaving || !isDirty} style={PRIMARY_BTN}>
           {isSaving ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
       </header>
@@ -581,28 +412,33 @@ export default function EditorPage() {
       {/* Editor layout */}
       <DndContext
         sensors={sensors}
-        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex flex-1 overflow-hidden">
-          <EditorSidebar />
-          <BlockPalette />
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          <BlockPalette isOpen={paletteOpen} />
           <Canvas />
           {showPreview && <EditorPreviewPanel />}
           <PropertyPanel />
         </div>
 
+        {/* Suruklenirken gosterilen overlay (sadece paletten) */}
         <DragOverlay>
           {activePaletteType && (
-            <div className="px-3 py-2 rounded-md border border-blue-400 bg-white shadow-xl text-sm text-gray-700 opacity-90">
+            <div
+              style={{
+                padding: '6px 12px',
+                borderRadius: 6,
+                border: '1.5px solid #B5D4F4',
+                background: 'rgba(235,243,252,0.9)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                fontSize: 11,
+                fontWeight: 500,
+                color: '#185FA5',
+                cursor: 'grabbing',
+              }}
+            >
               {activePaletteType}
-            </div>
-          )}
-          {activeCanvasBlock && (
-            <div className="px-3 py-2 rounded-md border border-blue-400 bg-white shadow-xl text-sm text-gray-700 opacity-90">
-              {activeCanvasBlock.type}
             </div>
           )}
         </DragOverlay>

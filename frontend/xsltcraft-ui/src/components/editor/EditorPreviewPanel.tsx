@@ -7,7 +7,6 @@ const DEBOUNCE_MS = 1500
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000'
 
 export default function EditorPreviewPanel() {
-  const sections = useEditorStore((s) => s.sections)
   const blocks = useEditorStore((s) => s.blocks)
   const templateId = useEditorStore((s) => s.templateId)
   const hasStoredXslt = useEditorStore((s) => s.hasStoredXslt)
@@ -16,7 +15,7 @@ export default function EditorPreviewPanel() {
   const activeXml = xmlFiles.find((f) => f.id === activeXmlId)
 
   // Storage XSLT modu: block tree boş ama free theme XSLT'si var (klon senaryosu)
-  const useStoredXslt = hasStoredXslt && sections.length === 0 && !!templateId
+  const useStoredXslt = hasStoredXslt && Object.keys(blocks).length === 0 && !!templateId
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
@@ -36,7 +35,7 @@ export default function EditorPreviewPanel() {
       try {
         const result = useStoredXslt
           ? await previewFromStoredXslt(templateId!, activeXml.content)
-          : await previewFromBlockTree(sections, blocks, activeXml.content)
+          : await previewFromBlockTree(blocks, activeXml.content)
         // srcDoc iframe'lerinin base URL'i about:srcdoc olduğu için
         // relative asset URL'leri (/api/assets/...) çalışmaz.
         // <base> tag ekleyerek API sunucusuna yönlendiriyoruz.
@@ -56,7 +55,7 @@ export default function EditorPreviewPanel() {
     }, DEBOUNCE_MS)
 
     return () => clearTimeout(t)
-  }, [sections, blocks, activeXml?.content, useStoredXslt]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [blocks, activeXml?.content, useStoredXslt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col border-l border-gray-200 bg-white" style={{ width: expanded ? 860 : 420, flexShrink: 0 }}>

@@ -4,8 +4,15 @@ namespace XsltCraft.Application.DTO;
 
 public class PreviewRequest
 {
+    /// <summary>Block tree formatı: null/1 = V1 (section-based), 2 = V2 (grid-based).</summary>
+    public int? Version { get; set; }
+
+    // V1 fields
     public List<SectionDto> Sections { get; set; } = [];
+
+    // Shared: both V1 and V2 use this
     public Dictionary<string, BlockDto> Blocks { get; set; } = [];
+
     public string XmlContent { get; set; } = "";
     // Assets: Faz 5'te doldurulacak — şimdilik kabul et, kullanma
     public object? Assets { get; set; }

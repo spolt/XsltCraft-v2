@@ -4,7 +4,7 @@ import { useXmlStore } from '../../store/xmlStore'
 import { uploadAsset, getAssetUrl, deleteAsset } from '../../services/assetService'
 import { evaluateXPathValue } from '../../utils/xmlUtils'
 import XmlTreeExplorer from './XmlTreeExplorer'
-import type { Block, BlockConfig, BlockAlignment, BlockWidth, PartyType, PartyLabelStyle, ColumnFormat_ILT, InvoiceHeaderField, InvoiceTotalsField } from '../../types/blocks'
+import type { GridBlock, BlockConfig, PartyType, PartyLabelStyle, ColumnFormat_ILT, InvoiceHeaderField, InvoiceTotalsField } from '../../types/blocks'
 import { PARTY_TYPE_LABELS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../../types/blocks'
 import { GIB_LOGO_BASE64 } from '../../assets/gibLogo'
 
@@ -268,82 +268,76 @@ function Checkbox({
   )
 }
 
-// ── Layout controls ───────────────────────────────────────────────────────────
+// ── Grid pozisyon / boyut kontrolleri (V2) ────────────────────────────────────
 
-function LayoutControls({ block }: { block: Block }) {
-  const updateBlockLayout = useEditorStore((s) => s.updateBlockLayout)
+function GridPositionControls({ block }: { block: GridBlock }) {
+  const updateBlockGridLayout = useEditorStore((s) => s.updateBlockGridLayout)
+  const gl = block.gridLayout
 
-  const widths: { value: BlockWidth; label: string }[] = [
-    { value: 'full', label: 'Tam' },
-    { value: '1/2', label: '1/2' },
-    { value: '1/3', label: '1/3' },
-    { value: '2/3', label: '2/3' },
-    { value: '2/5', label: '2/5' },
-    { value: '3/10', label: '3/10' },
-  ]
-
-  const alignments: { value: BlockAlignment; label: string }[] = [
-    { value: 'left', label: '◀' },
-    { value: 'center', label: '▐▌' },
-    { value: 'right', label: '▶' },
-  ]
-
-  const currentWidth = block.layout?.width ?? 'full'
-  const currentAlignment = block.layout?.alignment ?? 'left'
-
-  function segBtnStyle(active: boolean) {
-    return {
-      flex: 1,
-      height: 28,
-      fontSize: 10,
-      fontFamily: 'inherit',
-      border: active ? '0.5px solid var(--color-brand-border)' : '0.5px solid var(--color-border-subtle)',
-      borderRadius: 5,
-      background: active ? '#EBF3FC' : 'transparent',
-      color: active ? 'var(--color-brand-primary)' : 'var(--color-text-secondary)',
-      fontWeight: active ? 500 : 400,
-      cursor: 'pointer',
-      transition: 'all 120ms',
-    } as React.CSSProperties
+  function numInput(
+    label: string,
+    value: number,
+    onChange: (v: number) => void,
+  ) {
+    return (
+      <div className="flex flex-col" style={{ gap: 2 }}>
+        <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--color-text-muted)' }}>{label}</span>
+        <input
+          type="number"
+          value={Math.round(value * 10) / 10}
+          step={5}
+          onChange={(e) => {
+            const n = parseFloat(e.target.value)
+            if (!isNaN(n)) onChange(n)
+          }}
+          style={{
+            width: '100%',
+            height: 26,
+            fontSize: 11,
+            padding: '0 6px',
+            border: '0.5px solid var(--color-border-subtle)',
+            borderRadius: 4,
+            background: 'var(--color-surface-secondary)',
+            color: 'var(--color-text-primary)',
+            outline: 'none',
+            fontFamily: 'inherit',
+            boxSizing: 'border-box',
+          }}
+          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
+          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-subtle)')}
+        />
+      </div>
+    )
   }
 
   return (
-    <div className="flex flex-col" style={{ gap: 6, paddingBottom: 8, borderBottom: '0.5px solid var(--color-border-default)' }}>
-      <div>
-        <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-text-muted)', marginBottom: 4 }}>GENİŞLİK</p>
-        <div className="flex" style={{ gap: 3 }}>
-          {widths.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => updateBlockLayout(block.id, { width: value })}
-              style={segBtnStyle(currentWidth === value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+    <div style={{ paddingBottom: 8, borderBottom: '0.5px solid var(--color-border-default)' }}>
+      <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-text-muted)', marginBottom: 6 }}>
+        POZİSYON &amp; BOYUT (mm)
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        {numInput('X (sol)', gl.x, (v) => updateBlockGridLayout(block.id, { x: v }))}
+        {numInput('Y (üst)', gl.y, (v) => updateBlockGridLayout(block.id, { y: v }))}
+        {numInput('Genişlik', gl.width, (v) => updateBlockGridLayout(block.id, { width: v }))}
+        {numInput('Yükseklik', gl.height, (v) => updateBlockGridLayout(block.id, { height: v }))}
+        {numInput('Z-index', gl.zIndex ?? 0, (v) => updateBlockGridLayout(block.id, { zIndex: Math.max(0, v) }))}
       </div>
-      <div>
-        <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-text-muted)', marginBottom: 4 }}>HİZALAMA</p>
-        <div className="flex" style={{ gap: 3 }}>
-          {alignments.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => updateBlockLayout(block.id, { alignment: value })}
-              style={segBtnStyle(currentAlignment === value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={gl.autoHeight ?? false}
+          onChange={(e) => updateBlockGridLayout(block.id, { autoHeight: e.target.checked })}
+          style={{ accentColor: 'var(--color-brand-primary)' }}
+        />
+        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Otomatik yükseklik</span>
+      </label>
     </div>
   )
 }
 
 // ── Block-type-specific sub-panels ────────────────────────────────────────────
 
-type Config<T extends Block['type']> = Extract<BlockConfig, { type: T }>['config']
+type Config<T extends BlockConfig['type']> = Extract<BlockConfig, { type: T }>['config']
 type UpdateFn = (patch: Partial<BlockConfig['config']>) => void
 
 function TextStyleFields({ config, update }: { config: Config<'Text'> | Config<'Heading'>; update: UpdateFn }) {
@@ -672,6 +666,16 @@ function ImagePanel({ config, update }: { config: Config<'Image'>; update: Updat
       <Field label="Yükseklik"><TextInput value={config.height ?? ''} onChange={(v) => update({ height: v })} placeholder="80px" /></Field>
       <Field label="Alt metni"><TextInput value={config.altText ?? ''} onChange={(v) => update({ altText: v })} placeholder="Logo" /></Field>
       <Checkbox label="Ücretsiz temada düzenlenebilir" checked={config.editableOnFreeTheme} onChange={(v) => update({ editableOnFreeTheme: v })} />
+      <Field label="Saydamlık (0–100)">
+        <input
+          type="number" min={0} max={100} step={5}
+          value={config.opacity ?? 100}
+          onChange={(e) => update({ opacity: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
+          style={{ width: '100%', height: 28, fontSize: 11, padding: '0 8px', boxSizing: 'border-box', border: '0.5px solid var(--color-border-subtle)', borderRadius: 5, background: 'var(--color-surface-secondary)', color: 'var(--color-text-primary)', outline: 'none', fontFamily: 'inherit' }}
+          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
+          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-subtle)')}
+        />
+      </Field>
     </>
   )
 }
@@ -1417,6 +1421,16 @@ function GibLogoPanel({ config, update }: { config: Config<'GibLogo'>; update: U
           ]}
         />
       </Field>
+      <Field label="Saydamlık (0–100)">
+        <input
+          type="number" min={0} max={100} step={5}
+          value={config.opacity ?? 100}
+          onChange={(e) => update({ opacity: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
+          style={{ width: '100%', height: 28, fontSize: 11, padding: '0 8px', boxSizing: 'border-box', border: '0.5px solid var(--color-border-subtle)', borderRadius: 5, background: 'var(--color-surface-secondary)', color: 'var(--color-text-primary)', outline: 'none', fontFamily: 'inherit' }}
+          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
+          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-subtle)')}
+        />
+      </Field>
     </>
   )
 }
@@ -1452,6 +1466,16 @@ function GibKarekodPanel({ config, update }: { config: Config<'GibKarekod'>; upd
             { value: 'center', label: 'Orta' },
             { value: 'right', label: 'Sağ' },
           ]}
+        />
+      </Field>
+      <Field label="Saydamlık (0–100)">
+        <input
+          type="number" min={0} max={100} step={5}
+          value={config.opacity ?? 100}
+          onChange={(e) => update({ opacity: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
+          style={{ width: '100%', height: 28, fontSize: 11, padding: '0 8px', boxSizing: 'border-box', border: '0.5px solid var(--color-border-subtle)', borderRadius: 5, background: 'var(--color-surface-secondary)', color: 'var(--color-text-primary)', outline: 'none', fontFamily: 'inherit' }}
+          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
+          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-subtle)')}
         />
       </Field>
     </>
@@ -1936,7 +1960,7 @@ function PropertiesContent() {
         <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{block.type}</p>
       </div>
       <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-        <LayoutControls block={block} />
+        <GridPositionControls block={block} />
         {block.type === 'Text' && <TextPanel config={cfg} update={update} />}
         {block.type === 'Heading' && <HeadingPanel config={cfg} update={update} />}
         {block.type === 'Paragraph' && <ParagraphPanel config={cfg} update={update} />}
@@ -1977,7 +2001,7 @@ export default function PropertyPanel() {
     <aside
       className="flex-shrink-0 flex flex-col overflow-hidden"
       style={{
-        width: isXmlTab ? 400 : 220,
+        width: isXmlTab ? 400 : 280,
         background: 'var(--color-surface-card)',
         borderLeft: '0.5px solid var(--color-border-default)',
         transition: 'width 200ms ease',

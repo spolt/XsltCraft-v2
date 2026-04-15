@@ -1,10 +1,14 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
-import { DEFAULT_BLOCK_LAYOUT, DEFAULT_PARTY_FIELDS, DEFAULT_INVOICE_LINE_COLUMNS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../types/blocks'
-import type { Block, BlockType, BlockConfig, BlockLayout } from '../types/blocks'
-import type { BlockTree, Section } from '../types/template'
+import { DEFAULT_BLOCK_SIZE, DEFAULT_PARTY_FIELDS, DEFAULT_INVOICE_LINE_COLUMNS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../types/blocks'
+import type { BlockType, BlockConfig, GridBlock } from '../types/blocks'
+import type { GridBlockLayout, BlockTreeV2 } from '../types/template'
 
 const MAX_HISTORY = 20
+
+/** A4 sayfa boyutlari (mm) */
+export const PAGE_WIDTH_MM = 210
+export const PAGE_HEIGHT_MM = 297
 
 function defaultConfig(type: BlockType): BlockConfig['config'] {
   switch (type) {
@@ -112,55 +116,57 @@ interface EditorState {
   templateId: string | null
   templateName: string
   hasStoredXslt: boolean
-  sections: Section[]
-  blocks: Record<string, Block>
+  blocks: Record<string, GridBlock>
   selectedBlockId: string | null
   isDirty: boolean
 
+  // Sürükleme sırasında kılavuz çizgisi (UI-only, undo dışı)
+  dragGuide: { x: number; y: number } | null
+  setDragGuide: (guide: { x: number; y: number } | null) => void
+
   // undo/redo
-  past: Array<{ sections: Section[]; blocks: Record<string, Block> }>
-  future: Array<{ sections: Section[]; blocks: Record<string, Block> }>
+  past: Array<{ blocks: Record<string, GridBlock> }>
+  future: Array<{ blocks: Record<string, GridBlock> }>
 
   // actions
   setTemplateId: (id: string | null) => void
   setTemplateName: (name: string) => void
   setHasStoredXslt: (val: boolean) => void
-  addBlock: (sectionId: string, type: BlockType, atIndex?: number, col?: number) => void
-  moveBlockToCol: (blockId: string, col: number) => void
-  removeBlock: (sectionId: string, blockId: string) => void
-  moveBlock: (fromSectionId: string, toSectionId: string, blockId: string, toIndex: number) => void
+
+  addBlock: (type: BlockType, position: { x: number; y: number }, configOverride?: Record<string, unknown>) => void
+  removeBlock: (blockId: string) => void
+  moveBlock: (blockId: string, position: { x: number; y: number }) => void
+  resizeBlock: (blockId: string, size: { width: number; height: number }) => void
+  updateBlockGridLayout: (blockId: string, patch: Partial<GridBlockLayout>) => void
   updateBlockConfig: (blockId: string, config: Partial<BlockConfig['config']>) => void
-  updateBlockLayout: (blockId: string, layout: Partial<BlockLayout>) => void
+  duplicateBlock: (blockId: string) => void
   selectBlock: (blockId: string | null) => void
+  bringForward: (blockId: string) => void
+  sendBackward: (blockId: string) => void
 
-  addSection: (name?: string) => void
-  removeSection: (sectionId: string) => void
-  updateSection: (sectionId: string, patch: Partial<Pick<Section, 'name' | 'layout'>>) => void
-  reorderSections: (fromIndex: number, toIndex: number) => void
-  duplicateSection: (sectionId: string) => void
-
-  loadTree: (tree: BlockTree) => void
+  loadTree: (tree: BlockTreeV2) => void
   resetTree: () => void
 
   undo: () => void
   redo: () => void
 }
 
-function snapshot(state: Pick<EditorState, 'sections' | 'blocks'>) {
+function snapshot(state: Pick<EditorState, 'blocks'>) {
   return {
-    sections: JSON.parse(JSON.stringify(state.sections)),
     blocks: JSON.parse(JSON.stringify(state.blocks)),
   }
 }
+
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   templateId: null,
   templateName: 'Yeni Şablon',
   hasStoredXslt: false,
-  sections: [],
   blocks: {},
   selectedBlockId: null,
   isDirty: false,
+  dragGuide: null,
+  setDragGuide: (guide) => set({ dragGuide: guide }),
   past: [],
   future: [],
 
@@ -168,36 +174,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setTemplateName: (name) => set({ templateName: name, isDirty: true }),
   setHasStoredXslt: (val) => set({ hasStoredXslt: val }),
 
-  // ---- helpers ----
+  // ---- Block actions ----
 
-  addBlock(sectionId, type, atIndex, col) {
+  addBlock(type, position, configOverride?) {
     const state = get()
-    const section = state.sections.find((s) => s.id === sectionId)
-    if (!section) return
-
     const prev = snapshot(state)
     const id = uuidv4()
-    const isMultiCol = section.layout === 'three-column' || section.layout === 'two-column'
-    const resolvedCol = isMultiCol ? (col ?? 0) : undefined
-    const layoutWidth = section.layout === 'three-column'
-      ? (resolvedCol === 0 ? '2/5' : '3/10')
-      : section.layout === 'two-column' ? '1/2'
-      : 'full'
-    const layoutCol = resolvedCol
-    const block: Block = { id, type, config: defaultConfig(type), layout: { ...DEFAULT_BLOCK_LAYOUT, width: layoutWidth, ...(layoutCol !== undefined ? { col: layoutCol } : {}) } }
-
-    const newBlockIds = [...section.blockIds]
-    if (atIndex !== undefined) {
-      newBlockIds.splice(atIndex, 0, id)
-    } else {
-      newBlockIds.push(id)
+    const defaults = DEFAULT_BLOCK_SIZE[type]
+    const block: GridBlock = {
+      id,
+      type,
+      config: configOverride
+        ? { ...defaultConfig(type), ...configOverride }
+        : defaultConfig(type),
+      gridLayout: {
+        x: position.x,
+        y: position.y,
+        width: defaults.width,
+        height: defaults.height,
+        zIndex: 0,
+        autoHeight: defaults.autoHeight,
+      },
     }
 
     set((s) => ({
       blocks: { ...s.blocks, [id]: block },
-      sections: s.sections.map((sec) =>
-        sec.id === sectionId ? { ...sec, blockIds: newBlockIds } : sec
-      ),
       selectedBlockId: id,
       isDirty: true,
       past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
@@ -205,19 +206,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }))
   },
 
-  removeBlock(sectionId, blockId) {
+  removeBlock(blockId) {
     const state = get()
     const prev = snapshot(state)
-
     const { [blockId]: _, ...remainingBlocks } = state.blocks
 
     set((s) => ({
       blocks: remainingBlocks,
-      sections: s.sections.map((sec) =>
-        sec.id === sectionId
-          ? { ...sec, blockIds: sec.blockIds.filter((id) => id !== blockId) }
-          : sec
-      ),
       selectedBlockId: s.selectedBlockId === blockId ? null : s.selectedBlockId,
       isDirty: true,
       past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
@@ -225,62 +220,64 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }))
   },
 
-  moveBlock(fromSectionId, toSectionId, blockId, toIndex) {
+  moveBlock(blockId, position) {
     const state = get()
     const prev = snapshot(state)
+    const existing = state.blocks[blockId]
+    if (!existing) return
 
-    const toSection = state.sections.find((s) => s.id === toSectionId)
-    const widthMap = {
-      'single-column': 'full',
-      'two-column': '1/2',
-      'three-column': '1/3',
-    } as const
-    const targetWidth = toSection ? widthMap[toSection.layout] : undefined
+    set((s) => ({
+      blocks: {
+        ...s.blocks,
+        [blockId]: {
+          ...existing,
+          gridLayout: { ...existing.gridLayout, x: position.x, y: position.y },
+        },
+      },
+      isDirty: true,
+      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
+      future: [],
+    }))
+  },
 
-    set((s) => {
-      const newSections = s.sections.map((sec) => {
-        if (sec.id === fromSectionId && sec.id === toSectionId) {
-          const ids = sec.blockIds.filter((id) => id !== blockId)
-          ids.splice(toIndex, 0, blockId)
-          return { ...sec, blockIds: ids }
-        }
-        if (sec.id === fromSectionId) {
-          return { ...sec, blockIds: sec.blockIds.filter((id) => id !== blockId) }
-        }
-        if (sec.id === toSectionId) {
-          const ids = [...sec.blockIds]
-          ids.splice(toIndex, 0, blockId)
-          return { ...sec, blockIds: ids }
-        }
-        return sec
-      })
+  resizeBlock(blockId, size) {
+    const state = get()
+    const prev = snapshot(state)
+    const existing = state.blocks[blockId]
+    if (!existing) return
 
-      const existingBlock = s.blocks[blockId]
-      const isTargetMultiCol = toSection?.layout === 'three-column' || toSection?.layout === 'two-column'
-      const updatedBlocks =
-        fromSectionId !== toSectionId && targetWidth && existingBlock
-          ? {
-              ...s.blocks,
-              [blockId]: {
-                ...existingBlock,
-                layout: {
-                  ...DEFAULT_BLOCK_LAYOUT,
-                  ...existingBlock.layout,
-                  width: targetWidth,
-                  ...(isTargetMultiCol ? { col: 0 } : { col: undefined }),
-                },
-              },
-            }
-          : s.blocks
+    set((s) => ({
+      blocks: {
+        ...s.blocks,
+        [blockId]: {
+          ...existing,
+          gridLayout: { ...existing.gridLayout, width: size.width, height: size.height },
+        },
+      },
+      isDirty: true,
+      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
+      future: [],
+    }))
+  },
 
-      return {
-        sections: newSections,
-        blocks: updatedBlocks,
-        isDirty: true,
-        past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
-        future: [],
-      }
-    })
+  updateBlockGridLayout(blockId, patch) {
+    const state = get()
+    const prev = snapshot(state)
+    const existing = state.blocks[blockId]
+    if (!existing) return
+
+    set((s) => ({
+      blocks: {
+        ...s.blocks,
+        [blockId]: {
+          ...existing,
+          gridLayout: { ...existing.gridLayout, ...patch },
+        },
+      },
+      isDirty: true,
+      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
+      future: [],
+    }))
   },
 
   updateBlockConfig(blockId, config) {
@@ -300,40 +297,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }))
   },
 
-  updateBlockLayout(blockId, layoutPatch) {
+  duplicateBlock(blockId) {
     const state = get()
     const prev = snapshot(state)
     const existing = state.blocks[blockId]
     if (!existing) return
 
-    set((s) => ({
-      blocks: {
-        ...s.blocks,
-        [blockId]: {
-          ...existing,
-          layout: { ...DEFAULT_BLOCK_LAYOUT, ...existing.layout, ...layoutPatch },
-        },
+    const newId = uuidv4()
+    const newBlock: GridBlock = {
+      id: newId,
+      type: existing.type,
+      config: JSON.parse(JSON.stringify(existing.config)),
+      gridLayout: {
+        ...existing.gridLayout,
+        x: Math.min(existing.gridLayout.x + 5, PAGE_WIDTH_MM - existing.gridLayout.width),
+        y: Math.min(existing.gridLayout.y + 5, PAGE_HEIGHT_MM - existing.gridLayout.height),
       },
-      isDirty: true,
-      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
-      future: [],
-    }))
-  },
+    }
 
-  moveBlockToCol(blockId, col) {
-    const state = get()
-    const prev = snapshot(state)
-    const existing = state.blocks[blockId]
-    if (!existing) return
-    const ownerSection = state.sections.find((s) => s.blockIds.includes(blockId))
-    const newWidth = ownerSection?.layout === 'three-column'
-      ? (col === 0 ? '2/5' : '3/10')
-      : existing.layout.width
     set((s) => ({
-      blocks: {
-        ...s.blocks,
-        [blockId]: { ...existing, layout: { ...existing.layout, col, width: newWidth } },
-      },
+      blocks: { ...s.blocks, [newId]: newBlock },
+      selectedBlockId: newId,
       isDirty: true,
       past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
       future: [],
@@ -344,110 +328,47 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ selectedBlockId: blockId })
   },
 
-  addSection(name) {
+  bringForward(blockId) {
     const state = get()
+    const existing = state.blocks[blockId]
+    if (!existing) return
+
+    const maxZ = Math.max(0, ...Object.values(state.blocks).map((b) => b.gridLayout.zIndex ?? 0))
+    const currentZ = existing.gridLayout.zIndex ?? 0
+    if (currentZ >= maxZ && maxZ > 0) return
+
     const prev = snapshot(state)
-    const id = uuidv4()
-    const order = state.sections.length + 1
-    const section: Section = {
-      id,
-      name: name ?? `Bölüm ${order}`,
-      order,
-      layout: 'single-column',
-      blockIds: [],
-    }
     set((s) => ({
-      sections: [...s.sections, section],
+      blocks: {
+        ...s.blocks,
+        [blockId]: {
+          ...existing,
+          gridLayout: { ...existing.gridLayout, zIndex: currentZ + 1 },
+        },
+      },
       isDirty: true,
       past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
       future: [],
     }))
   },
 
-  removeSection(sectionId) {
+  sendBackward(blockId) {
     const state = get()
+    const existing = state.blocks[blockId]
+    if (!existing) return
+
+    const currentZ = existing.gridLayout.zIndex ?? 0
+    if (currentZ <= 0) return
+
     const prev = snapshot(state)
-    const section = state.sections.find((s) => s.id === sectionId)
-    if (!section) return
-
-    const remainingBlocks = { ...state.blocks }
-    for (const blockId of section.blockIds) {
-      delete remainingBlocks[blockId]
-    }
-
     set((s) => ({
-      sections: s.sections.filter((sec) => sec.id !== sectionId),
-      blocks: remainingBlocks,
-      selectedBlockId: section.blockIds.includes(s.selectedBlockId ?? '')
-        ? null
-        : s.selectedBlockId,
-      isDirty: true,
-      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
-      future: [],
-    }))
-  },
-
-  updateSection(sectionId, patch) {
-    set((s) => ({
-      sections: s.sections.map((sec) =>
-        sec.id === sectionId ? { ...sec, ...patch } : sec
-      ),
-      isDirty: true,
-    }))
-  },
-
-  reorderSections(fromIndex, toIndex) {
-    const state = get()
-    const prev = snapshot(state)
-    const sections = [...state.sections]
-    const [moved] = sections.splice(fromIndex, 1)
-    sections.splice(toIndex, 0, moved)
-    set((s) => ({
-      sections,
-      isDirty: true,
-      past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
-      future: [],
-    }))
-  },
-
-  duplicateSection(sectionId) {
-    const state = get()
-    const prev = snapshot(state)
-    const source = state.sections.find((s) => s.id === sectionId)
-    if (!source) return
-
-    const newSectionId = uuidv4()
-    const newBlockIds: string[] = []
-    const newBlocks: Record<string, Block> = {}
-
-    for (const oldId of source.blockIds) {
-      const oldBlock = state.blocks[oldId]
-      if (!oldBlock) continue
-      const newId = uuidv4()
-      newBlockIds.push(newId)
-      newBlocks[newId] = {
-        id: newId,
-        type: oldBlock.type,
-        config: JSON.parse(JSON.stringify(oldBlock.config)),
-        layout: { ...oldBlock.layout },
-      }
-    }
-
-    const newSection: Section = {
-      id: newSectionId,
-      name: `${source.name} (kopya)`,
-      order: state.sections.length + 1,
-      layout: source.layout,
-      blockIds: newBlockIds,
-    }
-
-    const srcIndex = state.sections.findIndex((s) => s.id === sectionId)
-    const sections = [...state.sections]
-    sections.splice(srcIndex + 1, 0, newSection)
-
-    set((s) => ({
-      sections,
-      blocks: { ...s.blocks, ...newBlocks },
+      blocks: {
+        ...s.blocks,
+        [blockId]: {
+          ...existing,
+          gridLayout: { ...existing.gridLayout, zIndex: currentZ - 1 },
+        },
+      },
       isDirty: true,
       past: [...s.past.slice(-(MAX_HISTORY - 1)), prev],
       future: [],
@@ -456,7 +377,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   loadTree(tree) {
     set({
-      sections: tree.sections,
       blocks: tree.blocks,
       selectedBlockId: null,
       isDirty: false,
@@ -470,7 +390,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       templateId: null,
       templateName: 'Yeni Şablon',
       hasStoredXslt: false,
-      sections: [],
       blocks: {},
       selectedBlockId: null,
       isDirty: false,
@@ -480,27 +399,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   undo() {
-    const { past, sections, blocks, future } = get()
+    const { past, blocks, future } = get()
     if (past.length === 0) return
     const prev = past[past.length - 1]
     set({
-      sections: prev.sections,
       blocks: prev.blocks,
       past: past.slice(0, -1),
-      future: [snapshot({ sections, blocks }), ...future.slice(0, MAX_HISTORY - 1)],
+      future: [snapshot({ blocks }), ...future.slice(0, MAX_HISTORY - 1)],
       isDirty: true,
     })
   },
 
   redo() {
-    const { future, sections, blocks, past } = get()
+    const { future, blocks, past } = get()
     if (future.length === 0) return
     const next = future[0]
     set({
-      sections: next.sections,
       blocks: next.blocks,
       future: future.slice(1),
-      past: [...past.slice(-(MAX_HISTORY - 1)), snapshot({ sections, blocks })],
+      past: [...past.slice(-(MAX_HISTORY - 1)), snapshot({ blocks })],
       isDirty: true,
     })
   },

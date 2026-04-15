@@ -48,14 +48,21 @@ public class PreviewController : ControllerBase
         var sw = Stopwatch.StartNew();
         try
         {
-            var tree = new BlockTreeDto
-            {
-                Sections = request.Sections,
-                Blocks = request.Blocks,
-            };
-
             var assetBase64 = await BuildAssetBase64Async(request.Blocks);
-            var (xslt, genError) = _generator.Generate(tree, assetBase64);
+            string? xslt;
+            string? genError;
+
+            if (request.Version == 2)
+            {
+                var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks };
+                (xslt, genError) = _generator.GenerateV2(treeV2, assetBase64);
+            }
+            else
+            {
+                var tree = new BlockTreeDto { Sections = request.Sections, Blocks = request.Blocks };
+                (xslt, genError) = _generator.Generate(tree, assetBase64);
+            }
+
             if (xslt is null)
                 return BadRequest(new { error = genError });
 
@@ -202,9 +209,21 @@ public class PreviewController : ControllerBase
     [HttpPost("xslt")]
     public async Task<IActionResult> GenerateXslt([FromBody] PreviewRequest request)
     {
-        var tree = new BlockTreeDto { Sections = request.Sections, Blocks = request.Blocks };
         var assetBase64 = await BuildAssetBase64Async(request.Blocks);
-        var (xslt, error) = _generator.Generate(tree, assetBase64);
+        string? xslt;
+        string? error;
+
+        if (request.Version == 2)
+        {
+            var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks };
+            (xslt, error) = _generator.GenerateV2(treeV2, assetBase64);
+        }
+        else
+        {
+            var tree = new BlockTreeDto { Sections = request.Sections, Blocks = request.Blocks };
+            (xslt, error) = _generator.Generate(tree, assetBase64);
+        }
+
         if (xslt is null)
             return BadRequest(new { error });
         return Content(xslt, "application/xslt+xml");
