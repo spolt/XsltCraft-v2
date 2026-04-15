@@ -10,7 +10,8 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core'
 import BlockPalette from '../components/editor/BlockPalette'
-import Canvas, { CANVAS_DROPPABLE_ID, canvasPageRef, canvasScaleRef } from '../components/editor/Canvas'
+import Canvas from '../components/editor/Canvas'
+import { CANVAS_DROPPABLE_ID, canvasPageRef, canvasScaleRef } from '../components/editor/canvasRefs'
 import PropertyPanel from '../components/editor/PropertyPanel'
 import EditorPreviewPanel from '../components/editor/EditorPreviewPanel'
 import { useEditorStore } from '../store/editorStore'

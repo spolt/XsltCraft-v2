@@ -1,19 +1,11 @@
-import { useCallback, useEffect, useRef, useState, createRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore } from '../../store/editorStore'
 import GridBlockItem from './GridBlockItem'
 import { PAGE_WIDTH_MM, PAGE_HEIGHT_MM } from '../../store/editorStore'
+import { CANVAS_DROPPABLE_ID, canvasPageRef, canvasScaleRef } from './canvasRefs'
 
 const GRID_SIZE_PX_PER_5MM = 5 // 5mm grid
-
-export const CANVAS_DROPPABLE_ID = 'grid-canvas'
-
-/**
- * Module-level ref'ler — EditorPage'in drop koordinat hesaplamasi icin.
- * Canvas bileseninin mount ettiginde doldurulur.
- */
-export const canvasPageRef = createRef<HTMLDivElement>()
-export const canvasScaleRef: { current: number } = { current: 2.835 }
 
 export default function Canvas() {
   const blocks       = useEditorStore((s) => s.blocks)
