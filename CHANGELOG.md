@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-04-16
+
+### Added
+- **V2 Grid Canvas**: Bloklar artık A4 sayfası üzerinde serbest X/Y koordinatlarıyla (mm) yerleştiriliyor; eski bölüm tabanlı (V1) editörün yerini aldı
+- **Satır-gruplu akış render**: Önizleme XSLT'sinde `z-index=0` bloklar Y-aralığı örtüşme tabanlı satır gruplama algoritmasıyla `flex-row` olarak render ediliyor; `autoHeight` bloklar altındakileri aşağı itiyor
+- **Overlay katmanı**: `z-index>0` olan bloklar `position:absolute` ile üst üste bindirilebilir; yüksek z-index öndedir
+- **ResizeHandles**: Seçili bloğu 8 yönde pixel-perfect yeniden boyutlandırma
+- **Klavye navigasyonu**: Seçili blok yön tuşlarıyla 1 mm, `Shift` ile 5 mm hareket ettirilebilir
+- **Undo/Redo**: `Ctrl+Z` / `Ctrl+Y` ile 20 adım geri/ileri
+- **Blok kopyalama**: `Ctrl+D` / `duplicateBlock` ile seçili blok +5 mm offset ile kopyalanır
+- **Z-index kontrolü**: Property panel'den blok öne/arkaya gönderilir; negatif değer engellendi
+- **PartyInfo bölünmesi**: Palette'te "Satıcı Bilgileri" ve "Alıcı Bilgileri" olarak iki ayrı hazır blok; `configOverride` pipeline ile önceden yapılandırılmış gelir
+- **Türkçe blok etiketleri**: Canvas üzerindeki tüm blok adları Türkçeleştirildi
+- **MinIO depolama**: Faz 6 — MinIO kurulumu ve secret yönetimi; dosya depolama S3-uyumlu MinIO'ya taşındı
+- **XSLT editör iyileştirmeleri**: Auto-format, folding range provider ve UI geliştirmeleri
+- **XML dosya boyutu doğrulaması**: Yüklenen XML dosyaları için boyut sınırı ve istek limiti artırıldı
+- `gridSnap.ts`: `snapToGrid`, `clampToPage`, `pxToMm` yardımcı fonksiyonları
+- `treeMigration.ts`: V1 (bölüm tabanlı) → V2 (grid tabanlı) otomatik migrasyon yardımcısı
+- `canvasRefs.ts`: `canvasPageRef`, `canvasScaleRef`, `CANVAS_DROPPABLE_ID` paylaşılan modül ref'leri
+
+### Changed
+- Tüm blok tipleri için varsayılan `autoHeight: true`; yalnızca Divider, Spacer, GibKarekod, GibLogo sabit yükseklik
+- Divider varsayılan yüksekliği 3 mm → 10 mm
+- V2 sayfa stili: `height: auto; min-height: 297mm; overflow: hidden` — içerik uzadığında sayfa büyür, print'te doğal sayfalama
+- Palette VERİ kategorisinden "KDV Özeti" ve "Toplamlar" kaldırıldı
+- `addBlock` aksiyonu isteğe bağlı `configOverride` parametresi kabul ediyor
+
+### Fixed
+- Önizlemede auto-height blokların altındaki blokların üst üste binmesi giderildi
+- Yön tuşlarının ilk hareketten sonra yanıt vermemesi (stale closure) `useRef` pattern ile düzeltildi
+- Negatif `z-index` değerinin bloğu canvas'tan gizlemesi engellendi
+- TypeScript build hataları: `config` cast, `ResizeHandles` çift `cursor`, kullanılmayan import
+- V1 `SectionComponent.tsx` kaldırıldı (V2'de kullanılmıyor)
+- `canvasRefs.ts` ayrı dosyaya alınarak ESLint `react-refresh/only-export-components` uyarısı giderildi
+
+---
+
 ## [0.3.1] - 2026-03-29
 
 ### Fixed
