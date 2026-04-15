@@ -33,7 +33,7 @@ const BLOCK_LABEL_TR: Record<string, string> = {
 
 // Her blok tipi icin kisa ozet metni
 function blockSummary(block: GridBlock): string {
-  const c = block.config as Record<string, unknown>
+  const c = block.config as unknown as Record<string, unknown>
   switch (block.type) {
     case 'Text':
     case 'Heading':

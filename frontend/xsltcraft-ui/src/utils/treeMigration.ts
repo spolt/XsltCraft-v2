@@ -10,7 +10,6 @@
 
 import type { BlockTreeV1, BlockTreeV2 } from '../types/template'
 import type { GridBlock, BlockType } from '../types/blocks'
-import { v4 as uuidv4 } from 'uuid'
 import { PAGE_WIDTH_MM } from '../store/editorStore'
 
 const LEFT_MARGIN  = 14 // mm
@@ -77,7 +76,7 @@ export function migrateV1toV2(v1: BlockTreeV1): BlockTreeV2 {
       for (const blockId of section.blockIds) {
         const block = v1.blocks[blockId]
         if (!block) continue
-        const h = estimateHeight(block as { type: BlockType; config: Record<string, unknown> })
+        const h = estimateHeight(block as unknown as { type: BlockType; config: Record<string, unknown> })
         const newId = blockId // ID'yi koru (config referanslari icin)
         newBlocks[newId] = {
           id: newId,
@@ -135,7 +134,7 @@ export function migrateV1toV2(v1: BlockTreeV1): BlockTreeV2 {
         for (const blockId of colBlocks[ci]) {
           const block = v1.blocks[blockId]
           if (!block) continue
-          const h = estimateHeight(block as { type: BlockType; config: Record<string, unknown> })
+          const h = estimateHeight(block as unknown as { type: BlockType; config: Record<string, unknown> })
           newBlocks[blockId] = {
             id: blockId,
             type: block.type as BlockType,

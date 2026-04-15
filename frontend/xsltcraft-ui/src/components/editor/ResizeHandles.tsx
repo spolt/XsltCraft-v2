@@ -103,7 +103,6 @@ function ResizeHandle({
         border: '1.5px solid #fff',
         borderRadius: 2,
         zIndex: 10,
-        cursor: pos.cursor,
         ...pos,
       }}
     />
