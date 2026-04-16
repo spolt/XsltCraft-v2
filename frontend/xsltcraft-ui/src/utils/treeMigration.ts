@@ -22,8 +22,6 @@ const HEIGHT_ESTIMATE: Partial<Record<BlockType, number>> = {
   Heading:          12,
   Paragraph:        25,
   Table:            60,
-  ForEach:          40,
-  Conditional:      30,
   Image:            30,
   DocumentInfo:     40,
   Totals:           50,
@@ -32,7 +30,6 @@ const HEIGHT_ESTIMATE: Partial<Record<BlockType, number>> = {
   ETTN:             40,
   Divider:           3,
   Spacer:           10,
-  Variable:         10,
   ConditionalText:  15,
   TaxSummary:       50,
   GibKarekod:       40,
@@ -88,7 +85,7 @@ export function migrateV1toV2(v1: BlockTreeV1): BlockTreeV2 {
             width: CONTENT_WIDTH,
             height: h,
             zIndex: 0,
-            autoHeight: ['Table', 'InvoiceLineTable', 'ForEach'].includes(block.type),
+            autoHeight: ['Table', 'InvoiceLineTable'].includes(block.type),
           },
         }
         currentY += h + 2
@@ -145,7 +142,7 @@ export function migrateV1toV2(v1: BlockTreeV1): BlockTreeV2 {
               width: colWidths[ci],
               height: h,
               zIndex: 0,
-              autoHeight: ['Table', 'InvoiceLineTable', 'ForEach'].includes(block.type),
+              autoHeight: ['Table', 'InvoiceLineTable'].includes(block.type),
             },
           }
           colY += h + 2

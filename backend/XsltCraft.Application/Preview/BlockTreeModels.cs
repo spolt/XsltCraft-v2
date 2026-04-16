@@ -214,15 +214,6 @@ public sealed class TableConfig
     public string? HeaderBackgroundColor { get; set; }
 }
 
-public sealed class ForEachConfig
-{
-    [JsonPropertyName("iterateOver")]
-    public string IterateOver { get; set; } = string.Empty;
-
-    [JsonPropertyName("children")]
-    public List<string> Children { get; set; } = [];
-}
-
 public sealed class ConditionalCondition
 {
     [JsonPropertyName("xpath")]
@@ -233,18 +224,6 @@ public sealed class ConditionalCondition
 
     [JsonPropertyName("value")]
     public string? Value { get; set; }
-}
-
-public sealed class ConditionalConfig
-{
-    [JsonPropertyName("condition")]
-    public ConditionalCondition Condition { get; set; } = new();
-
-    [JsonPropertyName("thenBlockIds")]
-    public List<string> ThenBlockIds { get; set; } = [];
-
-    [JsonPropertyName("elseBlockIds")]
-    public List<string> ElseBlockIds { get; set; } = [];
 }
 
 public sealed class ImageConfig
@@ -425,15 +404,6 @@ public sealed class SpacerConfig
     public string Height { get; set; } = "24px";
 }
 
-public sealed class VariableConfig
-{
-    [JsonPropertyName("name")]
-    public string Name { get; set; } = string.Empty;
-
-    [JsonPropertyName("xpath")]
-    public string Xpath { get; set; } = string.Empty;
-}
-
 public sealed class ConditionalTextConfig
 {
     [JsonPropertyName("condition")]
@@ -468,6 +438,9 @@ public sealed class GibLogoConfig
 
     [JsonPropertyName("opacity")]
     public int? Opacity { get; set; } // 0-100, null = 100
+
+    [JsonPropertyName("fontSize")]
+    public string? FontSize { get; set; }
 }
 
 public sealed class InvoiceTotalsField
@@ -486,6 +459,9 @@ public sealed class InvoiceTotalsField
 
     [JsonPropertyName("highlight")]
     public bool Highlight { get; set; }
+
+    [JsonPropertyName("bold")]
+    public bool Bold { get; set; }
 
     [JsonPropertyName("order")]
     public int Order { get; set; }
@@ -623,6 +599,9 @@ public sealed class InvoiceLineTableConfig
 
     [JsonPropertyName("showRowNumber")]
     public bool ShowRowNumber { get; set; } = true;
+
+    [JsonPropertyName("showCurrency")]
+    public bool ShowCurrency { get; set; } = true;
 
     [JsonPropertyName("bordered")]
     public bool Bordered { get; set; } = true;

@@ -86,64 +86,57 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
     private string BuildBodyV2(BlockTreeV2Dto tree, BlockTreeDto treeAdapter)
     {
-        // Collect child block IDs (ForEach children, Conditional branches) — exclude from top-level render
-        var childIds = new HashSet<string>();
-        foreach (var block in tree.Blocks.Values)
-        {
-            if (block.Type == "ForEach")
-            {
-                var cfg = Deserialize<ForEachConfig>(block.Config);
-                foreach (var id in cfg.Children) childIds.Add(id);
-            }
-            else if (block.Type == "Conditional")
-            {
-                var cfg = Deserialize<ConditionalConfig>(block.Config);
-                foreach (var id in cfg.ThenBlockIds) childIds.Add(id);
-                foreach (var id in cfg.ElseBlockIds) childIds.Add(id);
-            }
-        }
-
         var allBlocks = tree.Blocks.Values
-            .Where(b => !childIds.Contains(b.Id) && b.GridLayout is not null)
+            .Where(b => b.GridLayout is not null)
             .ToList();
 
-        // z-index = 0 → normal flow (row-grouped, auto-height safe)
-        // z-index > 0 → position:absolute overlay (exact X/Y, higher z-index on top)
-        var flowBlocks = allBlocks
-            .Where(b => (b.GridLayout!.ZIndex ?? 0) == 0)
-            .OrderBy(b => b.GridLayout!.Y)
-            .ThenBy(b => b.GridLayout!.X)
-            .ToList();
-
-        var overlayBlocks = allBlocks
-            .Where(b => (b.GridLayout!.ZIndex ?? 0) > 0)
-            .OrderBy(b => b.GridLayout!.ZIndex ?? 0)
+        // Aynı z-index değerindeki bloklar → satır-gruplu akış (birbirini itmez)
+        // Farklı z-index değerleri     → üst üste binme (position:absolute katman)
+        var blocksByZIndex = allBlocks
+            .GroupBy(b => b.GridLayout!.ZIndex ?? 0)
+            .OrderBy(g => g.Key)
             .ToList();
 
         var sb = new StringBuilder();
 
-        // ── Flow blocks (z=0) ────────────────────────────────────────────────
-        var rows = GroupIntoRows(flowBlocks);
-        double prevRowBottom = 0;
-        foreach (var row in rows)
+        foreach (var group in blocksByZIndex)
         {
-            var rowMinY = row.Min(b => b.GridLayout!.Y);
-            var marginTop = Math.Max(0, rowMinY - prevRowBottom);
-            RenderV2Row(sb, row, marginTop, treeAdapter);
-            var rowMaxBottom = row.Max(b => b.GridLayout!.Y + b.GridLayout!.Height);
-            prevRowBottom = rowMaxBottom;
-        }
+            var zValue = group.Key;
+            var groupBlocks = group
+                .OrderBy(b => b.GridLayout!.Y)
+                .ThenBy(b => b.GridLayout!.X)
+                .ToList();
 
-        // ── Overlay blocks (z>0) — absolute positioned on top of the page ───
-        foreach (var block in overlayBlocks)
-        {
-            var gl = block.GridLayout!;
-            var heightStyle = gl.AutoHeight
-                ? string.Empty
-                : FormattableString.Invariant($"height:{gl.Height:F1}mm;overflow:hidden;");
-            var posStyle = FormattableString.Invariant(
-                $"position:absolute;left:{gl.X:F1}mm;top:{gl.Y:F1}mm;width:{gl.Width:F1}mm;{heightStyle}z-index:{gl.ZIndex ?? 1};");
-            sb.AppendLine($"    <div style=\"{posStyle}\">{DispatchBlock(block, treeAdapter)}</div>");
+            var rows = GroupIntoRows(groupBlocks);
+
+            if (zValue == 0)
+            {
+                // z=0: doğrudan sayfa akışına eklenir, sarmalayıcı gerekmez
+                double prevRowBottom = 0;
+                foreach (var row in rows)
+                {
+                    var rowMinY = row.Min(b => b.GridLayout!.Y);
+                    var marginTop = Math.Max(0, rowMinY - prevRowBottom);
+                    RenderV2Row(sb, row, marginTop, treeAdapter);
+                    prevRowBottom = row.Max(b => b.GridLayout!.Y + b.GridLayout!.Height);
+                }
+            }
+            else
+            {
+                // z>0: tüm grup aynı z-index'li absolute katmana alınır;
+                // katman içinde bloklar yine satır-gruplu akışla render edilir.
+                sb.AppendLine(FormattableString.Invariant(
+                    $"    <div style=\"position:absolute;top:0;left:0;width:100%;z-index:{zValue};\">"));
+                double prevRowBottom = 0;
+                foreach (var row in rows)
+                {
+                    var rowMinY = row.Min(b => b.GridLayout!.Y);
+                    var marginTop = Math.Max(0, rowMinY - prevRowBottom);
+                    RenderV2Row(sb, row, marginTop, treeAdapter);
+                    prevRowBottom = row.Max(b => b.GridLayout!.Y + b.GridLayout!.Height);
+                }
+                sb.AppendLine("    </div>");
+            }
         }
 
         return sb.ToString();
@@ -308,7 +301,8 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                       table.tot td { border: 1px solid #aaa; padding: 2px 8px; }
                       table.tot td.lbl { text-align: right; padding-right: 12px; white-space: nowrap; }
                       table.tot td.val { text-align: right; white-space: nowrap; min-width: 120px; }
-                      table.tot tr.hl td { font-weight: bold; background: #ffffcc; }
+                      table.tot tr.hl td { background: #ffffcc; }
+                      table.tot tr.bd td { font-weight: bold; }
                       /* typography */
                       h1, h2 { padding-bottom: 3px; padding-top: 3px; margin-bottom: 5px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; }
                       h1 { font-size: 1.4em; text-transform: none; }
@@ -529,8 +523,6 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             "Heading" => GenerateHeading(block),
             "Paragraph" => GenerateParagraph(block),
             "Table" => GenerateTable(block),
-            "ForEach" => GenerateForEach(block, tree),
-            "Conditional" => GenerateConditional(block, tree),
             "Image" => GenerateImage(block),
             "DocumentInfo" => GenerateDocumentInfo(block),
             "Totals" => GenerateTotals(block),
@@ -539,7 +531,6 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             "ETTN" => GenerateETTN(block),
             "Divider" => GenerateDivider(block),
             "Spacer" => GenerateSpacer(block),
-            "Variable" => GenerateVariable(block),
             "ConditionalText" => GenerateConditionalText(block),
             "TaxSummary" => GenerateTaxSummary(block),
             "GibKarekod" => GenerateGibKarekod(block),
@@ -650,84 +641,7 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         return sb.ToString();
     }
 
-    // ── BLOCK-05: ForEach ─────────────────────────────────────────────────
-
-    private string GenerateForEach(BlockDto block, BlockTreeDto tree)
-    {
-        var cfg = Deserialize<ForEachConfig>(block.Config);
-        var sb = new StringBuilder();
-        sb.AppendLine($"    <xsl:for-each select=\"{XmlAttr(cfg.IterateOver)}\">");
-
-        foreach (var childId in cfg.Children)
-        {
-            if (!tree.Blocks.TryGetValue(childId, out var child)) continue;
-            sb.AppendLine("      " + DispatchBlock(child, tree));
-        }
-
-        sb.Append("    </xsl:for-each>");
-        return sb.ToString();
-    }
-
-    // ── BLOCK-06: Conditional ─────────────────────────────────────────────
-
-    private string GenerateConditional(BlockDto block, BlockTreeDto tree)
-    {
-        var cfg = Deserialize<ConditionalConfig>(block.Config);
-        var test = BuildXPathTest(cfg.Condition);
-        var sb = new StringBuilder();
-
-        if (cfg.ElseBlockIds.Count == 0)
-        {
-            sb.AppendLine($"    <xsl:if test=\"{XmlAttr(test)}\">");
-            foreach (var id in cfg.ThenBlockIds)
-            {
-                if (!tree.Blocks.TryGetValue(id, out var child)) continue;
-                sb.AppendLine("      " + DispatchBlock(child, tree));
-            }
-            sb.Append("    </xsl:if>");
-        }
-        else
-        {
-            sb.AppendLine("    <xsl:choose>");
-            sb.AppendLine($"      <xsl:when test=\"{XmlAttr(test)}\">");
-            foreach (var id in cfg.ThenBlockIds)
-            {
-                if (!tree.Blocks.TryGetValue(id, out var child)) continue;
-                sb.AppendLine("        " + GenerateBlock(child, tree));
-            }
-            sb.AppendLine("      </xsl:when>");
-            sb.AppendLine("      <xsl:otherwise>");
-            foreach (var id in cfg.ElseBlockIds)
-            {
-                if (!tree.Blocks.TryGetValue(id, out var child)) continue;
-                sb.AppendLine("        " + GenerateBlock(child, tree));
-            }
-            sb.AppendLine("      </xsl:otherwise>");
-            sb.Append("    </xsl:choose>");
-        }
-
-        return sb.ToString();
-    }
-
-    private static string BuildXPathTest(ConditionalCondition cond)
-    {
-        var xpath = cond.Xpath;
-        var val = cond.Value ?? string.Empty;
-
-        return cond.Operator switch
-        {
-            "equals" => $"{xpath} = '{val}'",
-            "notEquals" => $"{xpath} != '{val}'",
-            "contains" => $"contains({xpath}, '{val}')",
-            "greaterThan" => $"number({xpath}) > {val}",
-            "lessThan" => $"number({xpath}) < {val}",
-            "exists" => xpath,
-            "notExists" => $"not({xpath})",
-            _ => xpath
-        };
-    }
-
-    // ── BLOCK-07: Image ───────────────────────────────────────────────────
+    // ── BLOCK-05: Image ───────────────────────────────────────────────────
 
     private string GenerateImage(BlockDto block)
     {
@@ -821,6 +735,35 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var staticBefore = cfg.StaticPosition != "after";
         var sb = new StringBuilder();
         sb.AppendLine($"    <div{outerStyle}>");
+
+        // ── Vergi istisna / muafiyet / tevkifat sebepleri — XML'de varsa başa eklenir ──
+        sb.AppendLine("      <xsl:for-each select=\"//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal\">");
+        sb.AppendLine(
+            "        <xsl:if test=\"(cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015' or " +
+            "//n1:Invoice/cbc:InvoiceTypeCode='OZELMATRAH') and cac:TaxCategory/cbc:TaxExemptionReason\">");
+        sb.AppendLine(
+            $"          <p style=\"{pStyle}\"><strong>Vergi İstisna Muafiyet Sebebi: </strong>" +
+            "<xsl:value-of select=\"cac:TaxCategory/cbc:TaxExemptionReasonCode\"/>" +
+            "<xsl:text>-</xsl:text>" +
+            "<xsl:value-of select=\"cac:TaxCategory/cbc:TaxExemptionReason\"/></p>");
+        sb.AppendLine("        </xsl:if>");
+        sb.AppendLine(
+            "        <xsl:if test=\"starts-with(cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode,'007') " +
+            "and cac:TaxCategory/cbc:TaxExemptionReason\">");
+        sb.AppendLine(
+            $"          <p style=\"{pStyle}\"><strong>ÖTV İstisna Muafiyet Sebebi: </strong>" +
+            "<xsl:value-of select=\"cac:TaxCategory/cbc:TaxExemptionReasonCode\"/>" +
+            "<xsl:text>-</xsl:text>" +
+            "<xsl:value-of select=\"cac:TaxCategory/cbc:TaxExemptionReason\"/></p>");
+        sb.AppendLine("        </xsl:if>");
+        sb.AppendLine("      </xsl:for-each>");
+        sb.AppendLine("      <xsl:for-each select=\"//n1:Invoice/cac:WithholdingTaxTotal/cac:TaxSubtotal/cac:TaxCategory/cac:TaxScheme\">");
+        sb.AppendLine(
+            $"        <p style=\"{pStyle}\"><strong>Tevkifat Sebebi: </strong>" +
+            "<xsl:value-of select=\"cbc:TaxTypeCode\"/>" +
+            "<xsl:text>-</xsl:text>" +
+            "<xsl:value-of select=\"cbc:Name\"/></p>");
+        sb.AppendLine("      </xsl:for-each>");
 
         // Sabit notlar — pozisyona göre
         var staticSnippet = new StringBuilder();
@@ -979,19 +922,26 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         return sb.ToString();
     }
 
-    // ── BLOCK-15: Variable ────────────────────────────────────────────────
-    // Görünür HTML çıktısı üretmez; XSLT değişkeni tanımlar.
-
-    private static string GenerateVariable(BlockDto block)
-    {
-        var cfg = Deserialize<VariableConfig>(block.Config);
-        if (string.IsNullOrWhiteSpace(cfg.Name))
-            return "    <!-- Variable: 'name' alanı zorunlu -->";
-        return $"    <xsl:variable name=\"{XmlAttr(cfg.Name)}\" select=\"{XmlAttr(cfg.Xpath)}\"/>";
-    }
-
-    // ── BLOCK-16: ConditionalText ─────────────────────────────────────────
+    // ── BLOCK-15: ConditionalText ─────────────────────────────────────────
     // Koşula göre farklı metin veya XPath değeri gösterir.
+
+    private static string BuildXPathTest(ConditionalCondition cond)
+    {
+        var xpath = cond.Xpath;
+        var val = cond.Value ?? string.Empty;
+
+        return cond.Operator switch
+        {
+            "equals" => $"{xpath} = '{val}'",
+            "notEquals" => $"{xpath} != '{val}'",
+            "contains" => $"contains({xpath}, '{val}')",
+            "greaterThan" => $"number({xpath}) > {val}",
+            "lessThan" => $"number({xpath}) < {val}",
+            "exists" => xpath,
+            "notExists" => $"not({xpath})",
+            _ => xpath
+        };
+    }
 
     private static string GenerateConditionalText(BlockDto block)
     {
@@ -1271,10 +1221,16 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         if (cfg.ShowRowNumber)
             sb.AppendLine($"          <td style=\"border:{borderAttr};padding:2px 4px;text-align:center\"><xsl:value-of select=\"position()\"/></td>");
 
+        // Para birimi soneki: TRY/TRL → TL, diğerleri olduğu gibi
+        const string currXpath = "//cbc:DocumentCurrencyCode";
+        var currencySuffix = cfg.ShowCurrency
+            ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currXpath}='TRY' or {currXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currXpath}\"/></xsl:otherwise></xsl:choose>"
+            : string.Empty;
+
         foreach (var col in columns)
         {
             var xpathAttr = XmlAttr(col.RelativeXpath ?? string.Empty);
-            var cellContent = GetColumnCellContent(col.Format ?? "text", xpathAttr);
+            var cellContent = GetColumnCellContent(col.Format ?? "text", xpathAttr, currencySuffix);
             var align = col.Format is "currency" or "number" or "percent" or "percentDirect" or "quantityWithUnit"
                 ? "text-align:right;" : string.Empty;
             sb.AppendLine($"          <td style=\"border:{borderAttr};padding:2px 4px;{align}\">{cellContent}</td>");
@@ -1287,13 +1243,14 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         return sb.ToString();
     }
 
-    private static string GetColumnCellContent(string format, string xpathAttr)
+    private static string GetColumnCellContent(string format, string xpathAttr, string currencySuffix = "")
     {
         return format switch
         {
             "currency" =>
                 $"<xsl:if test=\"number({xpathAttr}) = number({xpathAttr})\">" +
                 $"<xsl:value-of select=\"format-number(number({xpathAttr}),'#.##0,00','tr')\"/>" +
+                currencySuffix +
                 "</xsl:if>",
             "number" =>
                 $"<xsl:if test=\"number({xpathAttr}) = number({xpathAttr})\">" +
@@ -1441,10 +1398,12 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var cfg = Deserialize<InvoiceHeaderConfig>(block.Config);
         var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "10.4px" : XmlEscape(cfg.FontSize);
         var bdrStyle = string.IsNullOrWhiteSpace(cfg.BorderStyle) ? "solid" : cfg.BorderStyle;
-        var outerStyle = cfg.Bordered ? $"border:1px {bdrStyle} #555555;padding:4px;" : string.Empty;
-        var cellBorder = cfg.Bordered ? $"border:1px {bdrStyle} #aaaaaa;" : string.Empty;
+        // Dış div'e border KONMAZ — border-collapse kapsamı dışında kalır ve çift çizgi oluşturur.
+        // Border yalnızca tablo + hücreler üzerinde tutulur; collapse ile tek çizgiye indirgenir.
+        var tableBorder = cfg.Bordered ? $"border:1px {bdrStyle} #555555;" : string.Empty;
+        var cellBorder  = cfg.Bordered ? $"border:1px {bdrStyle} #555555;" : string.Empty;
         var scopeId = "ih" + block.Id.Replace("-", string.Empty)[..8];
-        var scopeStyle = $"<style>.{scopeId} td {{ {cellBorder}padding:2px 4px; }}</style>";
+        var scopeStyle = $"<style>.{scopeId} td {{ {cellBorder}padding:2px 6px; }}</style>";
 
         // Custom user-added fields
         var customSb = new StringBuilder();
@@ -1458,9 +1417,9 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         }
 
         return $"""
-    <div style="{outerStyle}font-size:{fontSize}">
+    <div style="font-size:{fontSize}">
       {scopeStyle}
-      <table class="{scopeId}" style="width:100%;border-collapse:collapse;">
+      <table class="{scopeId}" style="width:100%;border-collapse:collapse;{tableBorder}">
           <tbody>
             <tr>
               <td style="width: 50%;">
@@ -1742,22 +1701,165 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
             ? "//cbc:DocumentCurrencyCode"
             : cfg.CurrencyXpath);
 
+        var tableFontStyle = !string.IsNullOrWhiteSpace(cfg.FontSize)
+            ? $" style=\"font-size:{XmlEscape(cfg.FontSize)}\""
+            : string.Empty;
+
+        var lblWidthStyle = !string.IsNullOrWhiteSpace(cfg.LabelWidth)
+            ? $" style=\"width:{XmlEscape(cfg.LabelWidth)}\""
+            : string.Empty;
+
         var sb = new StringBuilder();
-        sb.AppendLine("    <table class=\"tot\">");
+        sb.AppendLine($"    <table class=\"tot\"{tableFontStyle}>");
         foreach (var f in fields)
         {
-            var rowClass = f.Highlight ? " class=\"hl\"" : string.Empty;
+            var classes = new List<string>();
+            if (f.Highlight) classes.Add("hl");
+            if (f.Bold) classes.Add("bd");
+            var rowClass = classes.Count > 0 ? $" class=\"{string.Join(" ", classes)}\"" : string.Empty;
+
+            // ── Dinamik satır: KDV matrahı orana göre, ÖTV matrahı tek toplam ─
+            if (f.Key == "taxBaseGroups")
+            {
+                var dynCurrency = cfg.ShowCurrency
+                    ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencyXpath}\"/></xsl:otherwise></xsl:choose>"
+                    : string.Empty;
+
+                const string kdvFilter = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']";
+                const string otvFilter = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']";
+
+                sb.AppendLine("      <xsl:if test=\"not(//n1:Invoice/cbc:InvoiceTypeCode='TEVKIFATIADE')\">");
+
+                // KDV matrahı: her oran ayrı satır
+                sb.AppendLine($"        <xsl:for-each select=\"{kdvFilter}\">");
+                sb.AppendLine($"          <tr{rowClass}>");
+                sb.AppendLine(
+                    $"            <td class=\"lbl\"{lblWidthStyle}>" +
+                    "<xsl:text>KDV Matrahı</xsl:text>" +
+                    "<xsl:if test=\"//n1:Invoice/cbc:InvoiceTypeCode!='OZELMATRAH'\">" +
+                    "<xsl:text> (%</xsl:text>" +
+                    "<xsl:value-of select=\"cbc:Percent\"/>" +
+                    "<xsl:text>)</xsl:text>" +
+                    "</xsl:if>" +
+                    "</td>");
+                sb.AppendLine(
+                    $"            <td class=\"val\">" +
+                    "<xsl:value-of select=\"format-number(number(cbc:TaxableAmount),'#.##0,00','tr')\"/>" +
+                    dynCurrency +
+                    "</td>");
+                sb.AppendLine("          </tr>");
+                sb.AppendLine("        </xsl:for-each>");
+
+                // ÖTV matrahı: tüm 0015-dışı toplamı tek satır
+                sb.AppendLine($"        <xsl:if test=\"{otvFilter}\">");
+                sb.AppendLine($"          <tr{rowClass}>");
+                sb.AppendLine(
+                    $"            <td class=\"lbl\"{lblWidthStyle}>" +
+                    "<xsl:text>ÖTV Matrahı</xsl:text>" +
+                    "</td>");
+                sb.AppendLine(
+                    $"            <td class=\"val\">" +
+                    $"<xsl:value-of select=\"format-number(sum({otvFilter}/cbc:TaxableAmount),'#.##0,00','tr')\"/>" +
+                    dynCurrency +
+                    "</td>");
+                sb.AppendLine("          </tr>");
+                sb.AppendLine("        </xsl:if>");
+
+                sb.AppendLine("      </xsl:if>");
+                continue;
+            }
+
+            // ── Dinamik satır: KDV oranlarına göre ayrı, ÖTV tek toplam ────
+            if (f.Key == "taxSubtotalGroups")
+            {
+                var dynCurrency = cfg.ShowCurrency
+                    ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencyXpath}\"/></xsl:otherwise></xsl:choose>"
+                    : string.Empty;
+
+                const string kdvFilter  = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']";
+                const string otvFilter  = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']";
+
+                sb.AppendLine("      <xsl:if test=\"not(//n1:Invoice/cbc:InvoiceTypeCode='TEVKIFATIADE')\">");
+
+                // KDV: her oran ayrı satır
+                sb.AppendLine($"        <xsl:for-each select=\"{kdvFilter}\">");
+                sb.AppendLine($"          <tr{rowClass}>");
+                sb.AppendLine(
+                    $"            <td class=\"lbl\"{lblWidthStyle}>" +
+                    "<xsl:text>Hesaplanan KDV</xsl:text>" +
+                    "<xsl:if test=\"//n1:Invoice/cbc:InvoiceTypeCode!='OZELMATRAH'\">" +
+                    "<xsl:text> (%</xsl:text>" +
+                    "<xsl:value-of select=\"cbc:Percent\"/>" +
+                    "<xsl:text>)</xsl:text>" +
+                    "</xsl:if>" +
+                    "</td>");
+                sb.AppendLine(
+                    $"            <td class=\"val\">" +
+                    "<xsl:value-of select=\"format-number(number(cbc:TaxAmount),'#.##0,00','tr')\"/>" +
+                    dynCurrency +
+                    "</td>");
+                sb.AppendLine("          </tr>");
+                sb.AppendLine("        </xsl:for-each>");
+
+                // ÖTV: tüm 0015-dışı kodların toplamı → tek satır
+                sb.AppendLine($"        <xsl:if test=\"{otvFilter}\">");
+                sb.AppendLine($"          <tr{rowClass}>");
+                sb.AppendLine(
+                    $"            <td class=\"lbl\"{lblWidthStyle}>" +
+                    "<xsl:text>Hesaplanan ÖTV</xsl:text>" +
+                    "</td>");
+                sb.AppendLine(
+                    $"            <td class=\"val\">" +
+                    $"<xsl:value-of select=\"format-number(sum({otvFilter}/cbc:TaxAmount),'#.##0,00','tr')\"/>" +
+                    dynCurrency +
+                    "</td>");
+                sb.AppendLine("          </tr>");
+                sb.AppendLine("        </xsl:if>");
+
+                sb.AppendLine("      </xsl:if>");
+                continue;
+            }
+
             var labelEsc = XmlEscape(f.Label ?? string.Empty);
             var xpathAttr = XmlAttr(f.Xpath ?? string.Empty);
             var currencySuffix = cfg.ShowCurrency
-                ? $" <xsl:value-of select=\"{currencyXpath}\"/>"
+                ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencyXpath}\"/></xsl:otherwise></xsl:choose>"
                 : string.Empty;
             sb.AppendLine($"      <tr{rowClass}>");
-            sb.AppendLine($"        <td class=\"lbl\">{labelEsc}</td>");
+            sb.AppendLine($"        <td class=\"lbl\"{lblWidthStyle}>{labelEsc}</td>");
             sb.AppendLine($"        <td class=\"val\"><xsl:value-of select=\"format-number(number({xpathAttr}),'#.##0,00','tr')\"/>{currencySuffix}</td>");
             sb.AppendLine("      </tr>");
         }
         sb.AppendLine("    </table>");
+
+        // ── İadeye Konu Olan Faturalar — yalnızca İADE faturalarında göster ──
+        var iadeRef = "//n1:Invoice/cac:BillingReference/cac:InvoiceDocumentReference/cbc:DocumentTypeCode[text()='İADE' or text()='IADE']";
+        const string bdrColor = "#555555";
+        var iadeFontStyle = !string.IsNullOrWhiteSpace(cfg.FontSize)
+            ? $"font-size:{XmlEscape(cfg.FontSize)};"
+            : string.Empty;
+
+        sb.AppendLine($"    <xsl:if test=\"{iadeRef}\">");
+        sb.AppendLine($"    <table style=\"width:100%;border-collapse:collapse;margin-top:4px;{iadeFontStyle}\">");
+        // Başlık satırı
+        sb.AppendLine("      <tr>");
+        sb.AppendLine($"        <td colspan=\"2\" style=\"padding:3px 6px;border:1px solid {bdrColor};font-weight:bold;\">İadeye Konu Olan Faturalar</td>");
+        sb.AppendLine("      </tr>");
+        // Kolon başlıkları
+        sb.AppendLine("      <tr>");
+        sb.AppendLine($"        <td style=\"padding:2px 6px;border:1px solid {bdrColor};font-weight:bold;\">Fatura No</td>");
+        sb.AppendLine($"        <td style=\"padding:2px 6px;border:1px solid {bdrColor};font-weight:bold;\">Tarih</td>");
+        sb.AppendLine("      </tr>");
+        // Veri satırları
+        sb.AppendLine($"      <xsl:for-each select=\"{iadeRef}\">");
+        sb.AppendLine("        <tr>");
+        sb.AppendLine($"          <td style=\"padding:2px 6px;border:1px solid {bdrColor};\"><xsl:value-of select=\"../cbc:ID\"/></td>");
+        sb.AppendLine($"          <td style=\"padding:2px 6px;border:1px solid {bdrColor};\"><xsl:for-each select=\"../cbc:IssueDate\"><xsl:apply-templates select=\".\"/></xsl:for-each></td>");
+        sb.AppendLine("        </tr>");
+        sb.AppendLine("      </xsl:for-each>");
+        sb.AppendLine("    </table>");
+        sb.AppendLine("    </xsl:if>");
+
         return sb.ToString();
     }
 
@@ -1768,24 +1870,19 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         var cfg = Deserialize<GibLogoConfig>(block.Config);
         var width = string.IsNullOrWhiteSpace(cfg.Width) ? "80px" : XmlEscape(cfg.Width);
         var height = string.IsNullOrWhiteSpace(cfg.Height) ? "80px" : XmlEscape(cfg.Height);
-        var marginStyle = cfg.Alignment switch
+        var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "11px" : XmlEscape(cfg.FontSize);
+        var justifyContent = cfg.Alignment switch
         {
-            "left" => "margin:0 auto 0 0",
-            "right" => "margin:0 0 0 auto",
-            _ => "margin:0 auto",
-        };
-        var textAlign = cfg.Alignment switch
-        {
-            "left" => "left",
-            "right" => "right",
+            "left" => "flex-start",
+            "right" => "flex-end",
             _ => "center",
         };
         var logoOpacity = cfg.Opacity is int lop && lop < 100 ? FormattableString.Invariant($"opacity:{lop / 100.0:F2};") : string.Empty;
         return $"""
-            <div style="display:inline-block;{marginStyle};text-align:{textAlign};{logoOpacity}">
-              <img src="{GibLogoBase64}" alt="GIB Logo" style="display:block;width:{width};height:{height};object-fit:contain;"/>
-              <h1 style="text-align:center;margin:2px 0 0 0;">
-                <span style="font-weight:bold;">
+            <div style="display:flex;justify-content:{justifyContent};{logoOpacity}">
+              <div style="text-align:center;">
+                <img src="{GibLogoBase64}" alt="GIB Logo" style="display:block;width:{width};height:{height};object-fit:contain;"/>
+                <div style="font-size:{fontSize};font-weight:bold;margin:2px 0 0 0;">
                   <xsl:choose>
                     <xsl:when test="//n1:Invoice/cbc:ProfileID='EARSIVFATURA' or //n1:Invoice/cbc:ProfileID='EBELGE'">
                       <xsl:text>e-Arşiv Fatura</xsl:text>
@@ -1797,8 +1894,8 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                       <xsl:text>e-FATURA</xsl:text>
                     </xsl:otherwise>
                   </xsl:choose>
-                </span>
-              </h1>
+                </div>
+              </div>
             </div>
             """;
     }
