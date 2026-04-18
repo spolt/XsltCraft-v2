@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Template> Templates => Set<Template>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<UserXsltTemplate> UserXsltTemplates => Set<UserXsltTemplate>();
+    public DbSet<UserSnippet> UserSnippets => Set<UserSnippet>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -78,6 +79,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(t => t.Owner)
                   .WithMany()
                   .HasForeignKey(t => t.OwnerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserSnippet>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.Prefix).HasMaxLength(255).IsRequired();
+            entity.Property(s => s.Body).IsRequired();
+            entity.Property(s => s.Description).HasMaxLength(500);
+            entity.Property(s => s.Scope).HasMaxLength(50).IsRequired();
+            entity.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            entity.Property(s => s.UpdatedAt).HasDefaultValueSql("NOW()");
+            entity.HasOne(s => s.Owner)
+                  .WithMany()
+                  .HasForeignKey(s => s.OwnerId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
     }

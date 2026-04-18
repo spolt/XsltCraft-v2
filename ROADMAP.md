@@ -478,22 +478,20 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 
 ### Görev grubu 4 — XSLT Profiler (v1)
 
-- [ ] Backend `PreviewController.PreviewRaw` response'una `{ parseMs, compileMs, transformMs, serializeMs }` kırılımı ekle
-- [ ] Frontend toolbar'da detaylı timing gösterimi (tıklayınca açılan popover)
+- [x] Backend `PreviewController.PreviewRaw` response'una `{ parseMs, compileMs, transformMs, serializeMs }` kırılımı ekle
+- [x] Frontend toolbar'da detaylı timing gösterimi (tıklayınca açılan popover)
 
 ### Görev grubu 5 — Snippet kütüphanesi
 
-- [ ] `UserSnippet` entity — `{ Id, OwnerId, Prefix, Body, Description, Scope, IsPublic }`
-- [ ] Migration: `AddUserSnippet`
-- [ ] CRUD endpoint'leri: `/api/user-snippets` (standart pattern)
-- [ ] Frontend: `SnippetManagerDialog.tsx`, `snippetService.ts`
-- [ ] Monaco `registerCompletionItemProvider` — statik + kullanıcı snippet'leri birleşir
+- [x] `UserSnippet` entity — `{ Id, OwnerId, Prefix, Body, Description, Scope, IsPublic }`
+- [x] Migration: `AddUserSnippet`
+- [x] CRUD endpoint'leri: `/api/user-snippets` (standart pattern)
+- [x] Frontend: `SnippetManagerDialog.tsx`, `snippetService.ts`
+- [x] Monaco `registerCompletionItemProvider` — statik + kullanıcı snippet'leri birleşir
 
 ### Görev grubu 6 — UX iyileştirmeleri
 
 - [ ] `ShortcutsDialog.tsx` (F1) — tüm kısayollar
-- [ ] "HTML olarak indir" butonu (preview iframe çıktısı `.html` olarak)
-- [ ] `POST /api/xslt/scaffold-from-xml` — örnek XML'den iskelet XSLT üret
 - [ ] Preview panel'e scale/zoom kontrolleri
 
 ### Görev grubu 7 — Saxon-backed XSLT prettify

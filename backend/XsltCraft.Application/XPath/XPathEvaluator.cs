@@ -1,87 +1,82 @@
 using System.Diagnostics;
 using System.Xml;
-using System.Xml.Linq;
-using Saxon.Api;
+using System.Xml.XPath;
 
 namespace XsltCraft.Application.XPath;
 
 public class XPathEvaluator : IXPathEvaluator
 {
-    private readonly Processor _processor;
-
-    public XPathEvaluator()
-    {
-        _processor = new Processor();
-        try { _processor.SetProperty("http://saxon.sf.net/feature/lineNumbering", "true"); }
-        catch { /* best-effort */ }
-    }
-
     public XPathEvaluateResponse Evaluate(string xpathExpression, string xmlContent)
     {
         var sw = Stopwatch.StartNew();
         try
         {
-            // Parse XML with Saxon (line numbering best-effort)
-            var builder = _processor.NewDocumentBuilder();
-            builder.BaseUri = new Uri("file:///");
-            XdmNode doc;
-            using (var sr = new StringReader(xmlContent))
+            // XPathDocument is optimised for XPath queries
+            var xpathDoc = new XPathDocument(new StringReader(xmlContent));
+            var nav      = xpathDoc.CreateNavigator();
+
+            // Use navigator's NameTable — guaranteed same atom references
+            var nsMgr = new XmlNamespaceManager(nav.NameTable);
+
+            // Collect namespaces via XPathNavigator namespace axis (same NameTable, always works)
+            var nsNav = nav.Clone();
+            nsNav.MoveToRoot();
+            nsNav.MoveToFirstChild(); // move to root element
+            if (nsNav.MoveToFirstNamespace(XPathNamespaceScope.All))
             {
-                doc = builder.Build(sr);
+                do
+                {
+                    var prefix = nsNav.Name;
+                    var uri    = nsNav.Value;
+                    if (!string.IsNullOrEmpty(prefix) && !string.IsNullOrEmpty(uri))
+                        nsMgr.AddNamespace(prefix, uri);
+                } while (nsNav.MoveToNextNamespace(XPathNamespaceScope.All));
             }
 
-            // Declare namespaces from root element
-            var compiler = _processor.NewXPathCompiler();
-            foreach (var (prefix, uri) in ExtractNamespaces(xmlContent))
+            object rawResult;
+            try
             {
-                try { compiler.DeclareNamespace(prefix, uri); }
-                catch { }
+                // Use the overload that takes IXmlNamespaceResolver directly
+                rawResult = nav.Evaluate(xpathExpression, nsMgr);
+            }
+            catch (XPathException xex)
+            {
+                sw.Stop();
+                return new XPathEvaluateResponse("error", [], sw.ElapsedMilliseconds, xex.Message);
             }
 
-            var executable = compiler.Compile(xpathExpression);
-            var selector  = executable.Load();
-            selector.ContextItem = doc;
-            var result = selector.Evaluate();
             sw.Stop();
-
             var items = new List<XPathResultItem>();
-            foreach (var item in result)
+
+            if (rawResult is XPathNodeIterator iter)
             {
-                if (item is XdmNode node)
+                while (iter.MoveNext())
                 {
-                    var kind = node.NodeKind switch
+                    var cur  = iter.Current!;
+                    var kind = cur.NodeType switch
                     {
-                        XmlNodeType.Element               => "element",
-                        XmlNodeType.Attribute             => "attribute",
-                        XmlNodeType.Text                  => "text",
-                        XmlNodeType.Comment               => "comment",
-                        XmlNodeType.ProcessingInstruction => "pi",
-                        _                                 => "node"
+                        XPathNodeType.Element               => "element",
+                        XPathNodeType.Attribute             => "attribute",
+                        XPathNodeType.Text                  => "text",
+                        XPathNodeType.Comment               => "comment",
+                        XPathNodeType.ProcessingInstruction => "pi",
+                        _                                   => "node"
                     };
-
-                    var qname  = node.NodeName;
-                    var name   = qname is null ? "" :
-                        string.IsNullOrEmpty(qname.Prefix)
-                            ? qname.LocalName
-                            : $"{qname.Prefix}:{qname.LocalName}";
-
-                    var (line, col) = TryGetLineInfo(node);
-
-                    items.Add(new XPathResultItem(
-                        kind, name, Truncate(node.StringValue), line, col));
+                    var name = string.IsNullOrEmpty(cur.Prefix)
+                        ? cur.LocalName
+                        : $"{cur.Prefix}:{cur.LocalName}";
+                    items.Add(new XPathResultItem(kind, name, Truncate(cur.Value), null, null));
                 }
-                else if (item is XdmAtomicValue atomic)
-                {
-                    items.Add(new XPathResultItem(
-                        "atomic", "", Truncate(atomic.ToString() ?? ""), null, null));
-                }
+
+                var resultKind = items.Count == 0 ? "empty" : "node-set";
+                return new XPathEvaluateResponse(resultKind, items, sw.ElapsedMilliseconds, null);
             }
-
-            var kind2 = items.Count == 0        ? "empty"
-                      : items[0].Kind == "atomic" ? "atomic"
-                      :                             "node-set";
-
-            return new XPathEvaluateResponse(kind2, items, sw.ElapsedMilliseconds, null);
+            else
+            {
+                // scalar: number, boolean, string
+                items.Add(new XPathResultItem("atomic", "", Truncate(rawResult?.ToString() ?? ""), null, null));
+                return new XPathEvaluateResponse("atomic", items, sw.ElapsedMilliseconds, null);
+            }
         }
         catch (Exception ex)
         {
@@ -90,47 +85,10 @@ public class XPathEvaluator : IXPathEvaluator
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private static (int? Line, int? Column) TryGetLineInfo(XdmNode node)
-    {
-        try
-        {
-            var impl = node.Implementation;
-            if (impl is null) return (null, null);
-            var t = impl.GetType();
-            var lm = t.GetMethod("getLineNumber");
-            var cm = t.GetMethod("getColumnNumber");
-            if (lm is null) return (null, null);
-            var line = (int)(lm.Invoke(impl, null) ?? 0);
-            var col  = cm is null ? 0 : (int)(cm.Invoke(impl, null) ?? 0);
-            return line > 0 ? (line, col > 0 ? col : null) : (null, null);
-        }
-        catch { return (null, null); }
-    }
-
     private static string Truncate(string value)
     {
         if (string.IsNullOrEmpty(value)) return "";
         value = System.Text.RegularExpressions.Regex.Replace(value, @"\s+", " ").Trim();
         return value.Length > 200 ? value[..200] + "…" : value;
-    }
-
-    private static Dictionary<string, string> ExtractNamespaces(string xmlContent)
-    {
-        var ns = new Dictionary<string, string>();
-        try
-        {
-            var root = XDocument.Parse(xmlContent, LoadOptions.None).Root;
-            if (root is null) return ns;
-            foreach (var a in root.Attributes().Where(a => a.IsNamespaceDeclaration))
-            {
-                var prefix = a.Name.LocalName == "xmlns" ? "" : a.Name.LocalName;
-                if (!string.IsNullOrEmpty(prefix))
-                    ns.TryAdd(prefix, a.Value);
-            }
-        }
-        catch { }
-        return ns;
     }
 }

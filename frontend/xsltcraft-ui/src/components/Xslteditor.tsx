@@ -3,6 +3,7 @@ import type { editor as MonacoEditor, languages as MonacoLanguages } from "monac
 import { useRef, useEffect } from "react"
 import xmlFormatter from 'xml-formatter'
 import { buildXmlIndex, getXmlPathSuggestions, type XmlIndex } from './xslt-editor/xpathXmlIndex'
+import type { UserSnippet } from '../services/snippetService'
 
 export type XsltError = {
   message: string
@@ -22,6 +23,7 @@ type Props = {
   value: string
   onChange: (value: string) => void
   xmlContent?: string | null
+  userSnippets?: UserSnippet[]
   onEditorReady?: (fns: EditorFns) => void
   onRequestImageInsert?: (lineNumber: number) => void
   onEvaluateXPath?: (expression: string) => void
@@ -176,6 +178,7 @@ const htmlElements: { label: string; detail: string; snippet: string }[] = [
 let completionRegistered = false
 let foldingProviderRegistered = false
 let currentXmlIndex: XmlIndex | null = null
+let currentUserSnippets: UserSnippet[] = []
 
 function registerXsltCompletions(monaco: Monaco) {
   if (completionRegistered) return
@@ -387,21 +390,44 @@ function registerXsltCompletions(monaco: Monaco) {
         }
       }
 
+      // User snippets — scope-aware
+      for (const s of currentUserSnippets) {
+        const scopeMatches =
+          (s.scope === 'xslt' && isTypingTag) ||
+          (s.scope === 'html' && isTypingTag) ||
+          (s.scope === 'xpath' && inAttrValue) ||
+          (!isTypingTag && !inAttrValue)
+        if (!scopeMatches) continue
+        const range = inAttrValue ? wordRange : (s.scope === 'xslt' || s.scope === 'html' ? replaceRange : wordRange)
+        suggestions.push({
+          label: s.prefix,
+          kind: CompletionItemKind.User,
+          detail: s.description ?? `Kullanıcı snippet (${s.scope})`,
+          insertText: s.body,
+          insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+          range,
+          sortText: `0_user_${s.prefix}`,
+        })
+      }
+
       return { suggestions }
     },
   })
 
 }
 
-export default function XsltEditor({ value, onChange, xmlContent, onEditorReady, onRequestImageInsert, onEvaluateXPath, errors, options }: Props) {
+export default function XsltEditor({ value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, onEvaluateXPath, errors, options }: Props) {
 
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
 
-  // XML içeriği değişince indeksi yeniden kur
   useEffect(() => {
     currentXmlIndex = xmlContent ? buildXmlIndex(xmlContent) : null
   }, [xmlContent])
+
+  useEffect(() => {
+    currentUserSnippets = userSnippets ?? []
+  }, [userSnippets])
 
   function handleBeforeMount(monaco: Monaco) {
     monacoRef.current = monaco

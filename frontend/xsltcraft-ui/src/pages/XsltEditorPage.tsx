@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   ListChecks,
   Terminal,
+  BookMarked,
 } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
@@ -24,7 +25,9 @@ import XsltEditorPreview from '../components/xslt-editor/XsltEditorPreview'
 import SaveTemplateDialog from '../components/xslt-editor/SaveTemplateDialog'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
 import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
-import { previewFromRawXslt } from '../services/previewService'
+import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
+import { listSnippets, type UserSnippet } from '../services/snippetService'
+import { previewFromRawXslt, type PreviewTimings } from '../services/previewService'
 import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import {
   getUserXsltTemplate,
@@ -100,6 +103,7 @@ export default function XsltEditorPage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [lastMs, setLastMs] = useState<number | null>(null)
+  const [lastTimings, setLastTimings] = useState<PreviewTimings | null>(null)
 
   // Save dialog
   const [showSaveDialog, setShowSaveDialog] = useState(false)
@@ -114,6 +118,10 @@ export default function XsltEditorPage() {
   // XPath console
   const [showXPathConsole, setShowXPathConsole] = useState(false)
   const [xpathInitialExpr, setXpathInitialExpr] = useState('')
+
+  // Snippets
+  const [userSnippets, setUserSnippets] = useState<UserSnippet[]>([])
+  const [showSnippetManager, setShowSnippetManager] = useState(false)
 
   // Right panel tab: preview | xml
   const [rightTab, setRightTab] = useState<'preview' | 'xml'>('preview')
@@ -130,6 +138,11 @@ export default function XsltEditorPage() {
   const imageFileInputRef = useRef<HTMLInputElement>(null)
   const pendingInsertLineRef = useRef<number | null>(null)
   const xmlEditorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+
+  // ─── Load user snippets ─────────────────────────────────────────────────────
+  useEffect(() => {
+    listSnippets().then(setUserSnippets).catch(() => {})
+  }, [])
 
   // ─── Load saved template ────────────────────────────────────────────────────
   useEffect(() => {
@@ -189,6 +202,7 @@ export default function XsltEditorPage() {
       const result = await previewFromRawXslt(currentXslt, currentXml)
       setPreviewHtml(result.html)
       setLastMs(result.generationTimeMs)
+      setLastTimings(result.timings ?? null)
     } catch (e: unknown) {
       if (e && typeof e === 'object' && 'response' in e) {
         const data = (e as { response?: { data?: { error?: string; line?: number; column?: number } } }).response?.data
@@ -475,6 +489,7 @@ export default function XsltEditorPage() {
           xmlValid={xmlValid}
           previewLoading={previewLoading}
           lastMs={lastMs}
+          lastTimings={lastTimings}
           hasXslt={!!xsltContent}
           hasXml={!!xmlContent}
           isDirty={isDirty}
@@ -565,6 +580,21 @@ export default function XsltEditorPage() {
                     <Terminal size={13} />
                     <span className="hidden 2xl:inline">XPath</span>
                   </button>
+
+                  {/* Snippet Kütüphanesi */}
+                  <button
+                    onClick={() => setShowSnippetManager(true)}
+                    className="h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors"
+                    title="Snippet Kütüphanesi"
+                  >
+                    <BookMarked size={13} />
+                    <span className="hidden 2xl:inline">Snippet</span>
+                    {userSnippets.length > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-gray-600 text-gray-300 text-[10px] font-medium">
+                        {userSnippets.length}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
               <div className="flex-1 overflow-hidden relative">
@@ -572,6 +602,7 @@ export default function XsltEditorPage() {
                   value={xsltContent}
                   onChange={(v) => { setXsltContent(v); setIsDirty(true) }}
                   xmlContent={xmlContent}
+                  userSnippets={userSnippets}
                   onEvaluateXPath={handleEvaluateXPath}
                   onEditorReady={({ goTo, revealLine, insertTextAtLine, toggleComment, formatDocument }) => {
                     goToRef.current = goTo
@@ -685,6 +716,13 @@ export default function XsltEditorPage() {
           />
         )}
       </div>
+
+      {showSnippetManager && (
+        <SnippetManagerDialog
+          onClose={() => setShowSnippetManager(false)}
+          onSnippetsChanged={setUserSnippets}
+        />
+      )}
 
       {/* Gizli image file input — Resim Ekle context menu için */}
       <input
