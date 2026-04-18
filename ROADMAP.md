@@ -470,10 +470,11 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 
 ### Görev grubu 3 — XPath Console
 
-- [ ] `XPathEvaluator` servisi — Saxon `XPathCompiler` + `XPathExecutable` (cache'li `DocumentBuilder`)
-- [ ] `XPathController.Evaluate` endpoint'i — `{ kind, items, executionMs }` döner
-- [ ] Frontend: `XPathConsolePanel.tsx` — input + sonuç tablosu, satır tıklanınca XML editörde scroll
-- [ ] Monaco context menu: "Seçili XPath'i test et"
+- [x] `XPathEvaluator` servisi — Saxon `XPathCompiler` + `XPathExecutable`, namespace'ler kök elementten otomatik okunur, satır bilgisi best-effort reflection ile alınır
+- [x] `XPathController.Evaluate` endpoint'i (`POST /api/xpath/evaluate`) — `{ kind, items, executionMs, error }` döner; `kind`: node-set | atomic | empty | error
+- [x] Frontend: `XPathConsolePanel.tsx` — XPath input + Çalıştır butonu + sonuç tablosu (tür badge, ad, değer, satır:kolon); satıra tıklanınca XML Kaynak sekmesi açılır ve XML Monaco'da `revealLineInCenter`
+- [x] Sağ panel sekme sistemi: Önizleme | XML Kaynak (read-only Monaco, xmlContent gösterir); XPath sonucu tıklanınca otomatik sekme geçişi
+- [x] Monaco context menu: "Seçili XPath'i Test Et" — seçili metni XPath konsoluna gönderir, konsol otomatik açılır
 
 ### Görev grubu 4 — XSLT Profiler (v1)
 

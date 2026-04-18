@@ -14,12 +14,16 @@ import {
   WandSparkles,
   ShieldCheck,
   ListChecks,
+  Terminal,
 } from 'lucide-react'
+import Editor from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
 import XsltEditorToolbar from '../components/xslt-editor/XsltEditorToolbar'
 import XsltEditorPreview from '../components/xslt-editor/XsltEditorPreview'
 import SaveTemplateDialog from '../components/xslt-editor/SaveTemplateDialog'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
+import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
 import { previewFromRawXslt } from '../services/previewService'
 import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import {
@@ -107,6 +111,13 @@ export default function XsltEditorPage() {
   const [ublTrError, setUblTrError] = useState<string | null>(null)
   const [showProblems, setShowProblems] = useState(false)
 
+  // XPath console
+  const [showXPathConsole, setShowXPathConsole] = useState(false)
+  const [xpathInitialExpr, setXpathInitialExpr] = useState('')
+
+  // Right panel tab: preview | xml
+  const [rightTab, setRightTab] = useState<'preview' | 'xml'>('preview')
+
   // Loading from saved template
   const [loadingTemplate, setLoadingTemplate] = useState(!!routeTemplateId)
 
@@ -118,6 +129,7 @@ export default function XsltEditorPage() {
   const formatDocumentRef = useRef<(() => void) | null>(null)
   const imageFileInputRef = useRef<HTMLInputElement>(null)
   const pendingInsertLineRef = useRef<number | null>(null)
+  const xmlEditorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
 
   // ─── Load saved template ────────────────────────────────────────────────────
   useEffect(() => {
@@ -327,6 +339,24 @@ export default function XsltEditorPage() {
   const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null
   const totalErrorCount = xsltErrors.length + xmlErrors.length + (ublTrErrorCount ?? 0)
 
+  // XPath console — seçili ifadeyi konsola gönder, konsolu aç
+  function handleEvaluateXPath(expression: string) {
+    setXpathInitialExpr(expression)
+    setShowXPathConsole(true)
+  }
+
+  // XML editor'da ilgili satıra git (sekmeyi XML'e çevir + reveal)
+  function handleLocateXmlLine(line: number, column?: number | null) {
+    setRightTab('xml')
+    setTimeout(() => {
+      if (xmlEditorRef.current) {
+        xmlEditorRef.current.revealLineInCenter(line)
+        xmlEditorRef.current.setPosition({ lineNumber: line, column: column ?? 1 })
+        xmlEditorRef.current.focus()
+      }
+    }, 100)
+  }
+
   // ─── Print ──────────────────────────────────────────────────────────────────
   function handlePrint() {
     const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="Canlı Önizleme"]')
@@ -522,12 +552,27 @@ export default function XsltEditorPage() {
                       </span>
                     )}
                   </button>
+
+                  {/* XPath Konsolu */}
+                  <button
+                    onClick={() => setShowXPathConsole(s => !s)}
+                    disabled={!xmlContent}
+                    className={`h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-xs transition-colors disabled:opacity-30 ${
+                      showXPathConsole ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
+                    }`}
+                    title="XPath Konsolu"
+                  >
+                    <Terminal size={13} />
+                    <span className="hidden 2xl:inline">XPath</span>
+                  </button>
                 </div>
               </div>
               <div className="flex-1 overflow-hidden relative">
                 <XsltEditor
                   value={xsltContent}
                   onChange={(v) => { setXsltContent(v); setIsDirty(true) }}
+                  xmlContent={xmlContent}
+                  onEvaluateXPath={handleEvaluateXPath}
                   onEditorReady={({ goTo, revealLine, insertTextAtLine, toggleComment, formatDocument }) => {
                     goToRef.current = goTo
                     revealLineRef.current = revealLine
@@ -545,10 +590,55 @@ export default function XsltEditorPage() {
           <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors cursor-col-resize flex-shrink-0" />
 
           <Panel defaultSize={50} minSize={20}>
-            <XsltEditorPreview
-              html={previewHtml}
-              onElementClick={handlePreviewClick}
-            />
+            <div className="h-full flex flex-col">
+              {/* Sağ panel sekme başlıkları */}
+              <div className="h-9 flex items-center border-b border-gray-700 bg-gray-800 px-2 gap-0.5 flex-shrink-0">
+                <button
+                  onClick={() => setRightTab('preview')}
+                  className={`px-3 py-1 rounded text-xs transition-colors ${
+                    rightTab === 'preview' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  Önizleme
+                </button>
+                <button
+                  onClick={() => setRightTab('xml')}
+                  disabled={!xmlContent}
+                  className={`px-3 py-1 rounded text-xs transition-colors disabled:opacity-30 ${
+                    rightTab === 'xml' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  XML Kaynak
+                </button>
+              </div>
+
+              {/* Sağ panel içerik */}
+              <div className="flex-1 overflow-hidden">
+                {rightTab === 'preview' ? (
+                  <XsltEditorPreview
+                    html={previewHtml}
+                    onElementClick={handlePreviewClick}
+                  />
+                ) : (
+                  <Editor
+                    height="100%"
+                    language="xml"
+                    theme="vs-dark"
+                    value={xmlContent ?? ''}
+                    onMount={(editor) => { xmlEditorRef.current = editor }}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      wordWrap: 'on',
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                      folding: true,
+                    }}
+                  />
+                )}
+              </div>
+            </div>
           </Panel>
         </PanelGroup>
 
@@ -583,6 +673,15 @@ export default function XsltEditorPage() {
             ublTrError={ublTrError}
             onLocateXslt={(line, column) => revealLineRef.current?.(line, column ?? undefined)}
             onClose={() => setShowProblems(false)}
+          />
+        )}
+
+        {showXPathConsole && (
+          <XPathConsolePanel
+            xmlContent={xmlContent}
+            initialExpression={xpathInitialExpr}
+            onLocateLine={handleLocateXmlLine}
+            onClose={() => setShowXPathConsole(false)}
           />
         )}
       </div>

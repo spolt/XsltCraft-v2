@@ -2,6 +2,7 @@ import Editor, { type Monaco } from "@monaco-editor/react"
 import type { editor as MonacoEditor, languages as MonacoLanguages } from "monaco-editor"
 import { useRef, useEffect } from "react"
 import xmlFormatter from 'xml-formatter'
+import { buildXmlIndex, getXmlPathSuggestions, type XmlIndex } from './xslt-editor/xpathXmlIndex'
 
 export type XsltError = {
   message: string
@@ -20,8 +21,10 @@ type EditorFns = {
 type Props = {
   value: string
   onChange: (value: string) => void
+  xmlContent?: string | null
   onEditorReady?: (fns: EditorFns) => void
   onRequestImageInsert?: (lineNumber: number) => void
+  onEvaluateXPath?: (expression: string) => void
   errors?: XsltError[]
   options?: MonacoEditor.IStandaloneEditorConstructionOptions
 }
@@ -172,6 +175,7 @@ const htmlElements: { label: string; detail: string; snippet: string }[] = [
 
 let completionRegistered = false
 let foldingProviderRegistered = false
+let currentXmlIndex: XmlIndex | null = null
 
 function registerXsltCompletions(monaco: Monaco) {
   if (completionRegistered) return
@@ -239,7 +243,7 @@ function registerXsltCompletions(monaco: Monaco) {
   const CompletionItemInsertTextRule = monaco.languages.CompletionItemInsertTextRule
 
   monaco.languages.registerCompletionItemProvider("xml", {
-    triggerCharacters: ["<", ":"],
+    triggerCharacters: ["<", ":", "/", "@"],
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideCompletionItems(model: any, position: any) {
@@ -279,9 +283,39 @@ function registerXsltCompletions(monaco: Monaco) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const suggestions: any[] = []
 
-      // Inside attribute value (select="...", test="...", match="...") → XPath functions
-      const inAttrValue = /(?:select|test|match|use)\s*=\s*"[^"]*$/.test(textBefore)
+      // XPath attribute bağlamı: select="", test="", match="", use="", group-by="", from="", count=""
+      const attrValueMatch = textBefore.match(/(?:select|test|match|use|group-by|from|count)\s*=\s*"([^"]*)$/)
+      const inAttrValue = !!attrValueMatch
       if (inAttrValue) {
+        const xpathSoFar = attrValueMatch![1]
+
+        // XML ağacından path önerileri
+        if (currentXmlIndex) {
+          const { suggestions: xmlSugs, partialSegment, isAttr } = getXmlPathSuggestions(xpathSoFar, currentXmlIndex)
+          if (xmlSugs.length > 0) {
+            const segStartCol = position.column - partialSegment.length
+            const xmlRange = {
+              startLineNumber: position.lineNumber,
+              endLineNumber: position.lineNumber,
+              startColumn: Math.max(1, segStartCol),
+              endColumn: position.column,
+            }
+            const kind = isAttr ? CompletionItemKind.Field : CompletionItemKind.Class
+            const detail = isAttr ? 'XML attribute' : 'XML element'
+            for (const sug of xmlSugs) {
+              suggestions.push({
+                label: sug,
+                kind,
+                detail,
+                insertText: sug,
+                range: xmlRange,
+                sortText: `0_${sug}`,
+              })
+            }
+          }
+        }
+
+        // XPath fonksiyonları (daha düşük öncelik)
         for (const fn of xpathFunctions) {
           suggestions.push({
             label: fn.label,
@@ -290,6 +324,7 @@ function registerXsltCompletions(monaco: Monaco) {
             insertText: fn.snippet,
             insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
             range: wordRange,
+            sortText: `1_${fn.label}`,
           })
         }
         return { suggestions }
@@ -358,10 +393,15 @@ function registerXsltCompletions(monaco: Monaco) {
 
 }
 
-export default function XsltEditor({ value, onChange, onEditorReady, onRequestImageInsert, errors, options }: Props) {
+export default function XsltEditor({ value, onChange, xmlContent, onEditorReady, onRequestImageInsert, onEvaluateXPath, errors, options }: Props) {
 
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+
+  // XML içeriği değişince indeksi yeniden kur
+  useEffect(() => {
+    currentXmlIndex = xmlContent ? buildXmlIndex(xmlContent) : null
+  }, [xmlContent])
 
   function handleBeforeMount(monaco: Monaco) {
     monacoRef.current = monaco
@@ -461,6 +501,20 @@ export default function XsltEditor({ value, onChange, onEditorReady, onRequestIm
       contextMenuOrder: 2,
       keybindings: [monacoRef.current!.KeyMod.CtrlCmd | monacoRef.current!.KeyMod.Shift | monacoRef.current!.KeyCode.KeyC],
       run: toggleComment,
+    })
+
+    editor.addAction({
+      id: 'xslt-evaluate-xpath',
+      label: "Seçili XPath'i Test Et",
+      contextMenuGroupId: 'modification',
+      contextMenuOrder: 4,
+      run(ed) {
+        const sel = ed.getSelection()
+        const model = ed.getModel()
+        if (!sel || !model) return
+        const text = model.getValueInRange(sel).trim()
+        if (text && onEvaluateXPath) onEvaluateXPath(text)
+      },
     })
 
     editor.addAction({
