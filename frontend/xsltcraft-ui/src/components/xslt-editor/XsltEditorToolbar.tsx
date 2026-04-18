@@ -8,7 +8,6 @@ import {
   TriangleAlert,
   FileCode2,
   FileText,
-  WandSparkles,
 } from 'lucide-react'
 
 interface Props {
@@ -24,7 +23,6 @@ interface Props {
   onUploadXslt: (e: React.ChangeEvent<HTMLInputElement>) => void
   onUploadXml: (e: React.ChangeEvent<HTMLInputElement>) => void
   onDownload: () => void
-  onFormat: () => void
   onSave: () => void
   onPrint: () => void
 }
@@ -42,7 +40,6 @@ export default function XsltEditorToolbar({
   onUploadXslt,
   onUploadXml,
   onDownload,
-  onFormat,
   onSave,
   onPrint,
 }: Props) {
@@ -101,12 +98,6 @@ export default function XsltEditorToolbar({
       <button onClick={onDownload} disabled={!hasXslt} className={`${btnBase} text-gray-400 disabled:opacity-30`} title="XSLT indir">
         <Download size={15} />
         <span className="hidden sm:inline">İndir</span>
-      </button>
-
-      {/* Format */}
-      <button onClick={onFormat} disabled={!hasXslt} className={`${btnBase} text-gray-400 disabled:opacity-30`} title="Belgeyi Biçimlendir (Shift+Alt+F)">
-        <WandSparkles size={15} />
-        <span className="hidden sm:inline">Biçimlendir</span>
       </button>
 
       {/* Save */}

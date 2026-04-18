@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
 using XsltCraft.Application.Services;
+using XsltCraft.Application.Validation;
 
 using XsltCraft.Infrastructure.Auth;
 using XsltCraft.Infrastructure.Persistence;
@@ -75,6 +76,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RenderService>();
         services.AddScoped<ITemplateService, TemplateService>();
         services.AddScoped<IXsltGeneratorService, XsltGeneratorService>();
+        services.AddSingleton<IUblTrBusinessRuleService, UblTrBusinessRuleService>();
 
         // -------------------------------------------------
         // Repositories

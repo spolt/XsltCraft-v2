@@ -11,6 +11,7 @@ export type XsltError = {
 
 type EditorFns = {
   goTo: (term: string) => void
+  revealLine: (lineNumber: number, column?: number) => void
   insertTextAtLine: (lineNumber: number, text: string) => void
   toggleComment: () => void
   formatDocument: () => void
@@ -455,7 +456,7 @@ export default function XsltEditor({ value, onChange, onEditorReady, onRequestIm
 
     editor.addAction({
       id: 'xslt-toggle-comment',
-      label: 'Yorum Satırı Ekle / Kaldır',
+      label: 'Açıklama Satırı Yap / Kaldır',
       contextMenuGroupId: 'modification',
       contextMenuOrder: 2,
       keybindings: [monacoRef.current!.KeyMod.CtrlCmd | monacoRef.current!.KeyMod.Shift | monacoRef.current!.KeyCode.KeyC],
@@ -502,6 +503,15 @@ export default function XsltEditor({ value, onChange, onEditorReady, onRequestIm
             editor.setPosition({ lineNumber: startLineNumber, column: startColumn })
             editor.focus()
           }
+        },
+        revealLine: (lineNumber: number, column?: number) => {
+          const model = editor.getModel()
+          if (!model) return
+          const maxLine = model.getLineCount()
+          const target = Math.max(1, Math.min(lineNumber, maxLine))
+          editor.revealLineInCenter(target)
+          editor.setPosition({ lineNumber: target, column: column && column > 0 ? column : 1 })
+          editor.focus()
         },
         insertTextAtLine: (lineNumber: number, text: string) => {
           const monaco = monacoRef.current

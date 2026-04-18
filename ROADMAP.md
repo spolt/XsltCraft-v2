@@ -1,9 +1,9 @@
 # XsltCraft — Geliştirme Yol Haritası
 
-**Son güncelleme:** 2026-03-20
+**Son güncelleme:** 2026-04-18
 **Referans döküman:** `XsltCraft_PRD_v1_2.md`  
-**Faz sayısı:** 6  
-**Toplam tahmini süre:** 10–14 hafta
+**Faz sayısı:** 7  
+**Toplam tahmini süre:** 13–18 hafta
 
 Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazın tüm tamamlanma kriterleri karşılanmış olmalıdır.
 
@@ -19,6 +19,7 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 | 4 | XML binding & canlı önizleme | 5–7 gün | Faz 3 |
 | 5 | Template kayıt, asset yönetimi & ödeme | 7–10 gün | Faz 4 |
 | 6 | Prod hazırlık & S3 geçişi | 3–5 gün | Faz 5 |
+| 7 | XSLT Editör Pro (UBL-TR, tooling, UX, AI) | 3–4 hafta | Faz 5 |
 
 ---
 
@@ -447,6 +448,195 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 | Tüm NFR'ler karşılanır | Preview ≤ 2 sn, yükleme ≤ 3 sn |
 | Güvenlik açığı yok | Yetkisiz storage erişimi 401/403 döner |
 | Health check yeşil | `GET /health` → 200 |
+
+---
+
+## Faz 7 — XSLT Editör Pro
+
+**Tahmini süre:** 3–4 hafta
+**Faz sonu çıktısı:** `/xslt-editor` sayfası artık generic bir Monaco playground değil; UBL-TR iş kuralları, XPath console, Saxon-backed prettify ve Ollama/Anthropic AI asistan içeren bir XSLT IDE'si.
+
+### Görev grubu 1 — UBL-TR iş kuralı motoru
+
+- [x] `UblTrBusinessRuleService` — saf C# kod, 15 kural (UBLVersionID, CustomizationID, ProfileID, InvoiceTypeCode, profil/tür kombinasyonu, fatura no formatı, UUID, IssueDate, para birimi, taraf kimliği, VKN/TCKN checksum, satır varlığı, KDV tutarlılığı)
+- [x] `UblTrController.ValidateBusinessRules` endpoint'i (`POST /api/ubl-tr/validate-business-rules`)
+- [x] Frontend: XSLT Editör toolbar'ına "UBL-TR" butonu, sonuçlar `ProblemsPanel`'e akar (severity filtreleri + hata sayacı)
+
+### Görev grubu 2 — Problems paneli
+
+- [x] `ProblemsPanel.tsx` — XSLT syntax + XML well-formed + UBL-TR sekmeli gösterim (sekme başlıklarında hata sayısı badge'i)
+- [x] Tıklanabilir satır numaraları — XSLT hataları `revealLineInCenter` ile editörde ortaya alınır; XSLT editörüne `revealLine(line, column)` API'si eklendi
+- [x] Severity ikonları (AlertCircle/AlertTriangle/Info), sekme-bazlı filtreleme (Tümü/Hata/Uyarı/Bilgi), toolbar'da toplam hata sayacı badge'i
+
+### Görev grubu 3 — XPath Console
+
+- [ ] `XPathEvaluator` servisi — Saxon `XPathCompiler` + `XPathExecutable` (cache'li `DocumentBuilder`)
+- [ ] `XPathController.Evaluate` endpoint'i — `{ kind, items, executionMs }` döner
+- [ ] Frontend: `XPathConsolePanel.tsx` — input + sonuç tablosu, satır tıklanınca XML editörde scroll
+- [ ] Monaco context menu: "Seçili XPath'i test et"
+
+### Görev grubu 4 — XSLT Profiler (v1)
+
+- [ ] Backend `PreviewController.PreviewRaw` response'una `{ parseMs, compileMs, transformMs, serializeMs }` kırılımı ekle
+- [ ] Frontend toolbar'da detaylı timing gösterimi (tıklayınca açılan popover)
+
+### Görev grubu 5 — Snippet kütüphanesi
+
+- [ ] `UserSnippet` entity — `{ Id, OwnerId, Prefix, Body, Description, Scope, IsPublic }`
+- [ ] Migration: `AddUserSnippet`
+- [ ] CRUD endpoint'leri: `/api/user-snippets` (standart pattern)
+- [ ] Frontend: `SnippetManagerDialog.tsx`, `snippetService.ts`
+- [ ] Monaco `registerCompletionItemProvider` — statik + kullanıcı snippet'leri birleşir
+
+### Görev grubu 6 — UX iyileştirmeleri
+
+- [ ] `ShortcutsDialog.tsx` (F1) — tüm kısayollar
+- [ ] "HTML olarak indir" butonu (preview iframe çıktısı `.html` olarak)
+- [ ] `POST /api/xslt/scaffold-from-xml` — örnek XML'den iskelet XSLT üret
+- [ ] Preview panel'e scale/zoom kontrolleri
+
+### Görev grubu 7 — Saxon-backed XSLT prettify
+
+- [ ] `XsltFormatter` servisi — `XDocument` + custom `XmlWriterSettings`, XSLT-aware kurallar (`xsl:choose`/`xsl:when` hizalama, attribute satır kırma eşikleri)
+- [ ] `POST /api/xslt/format` endpoint'i
+- [ ] Format ayarları: `{ indentSize, maxAttrsPerLine, alignChooseBranches, preserveComments }`
+- [ ] Frontend: `Shift+Alt+F` artık bu endpoint'i çağırır; `xml-formatter` offline fallback
+
+### Görev grubu 8 — AI Asistan (Ollama + Anthropic cloud fallback)
+
+> Referans: [`AI_ASSISTANT_PLAN.md`](AI_ASSISTANT_PLAN.md) — bu görev grubu bu handoff dokümanına tam uyumludur.
+
+**Sağlayıcı & model katmanı**
+- [ ] `IAiAssistantProvider` arayüzü — `IAsyncEnumerable<AiChunk> StreamAsync(AiRequest req, CancellationToken ct)` (CancellationToken **zorunlu**, varsayılan parametresi yok)
+- [ ] `OllamaAssistantProvider` — `http://localhost:11434/api/chat`
+  - Model: `qwen2.5-coder:7b` (config'den okunur, değiştirilebilir)
+  - `HttpClientFactory` named client: `"ollama"`
+  - `Timeout = Timeout.InfiniteTimeSpan` — socket-level timeout kullanılır, streaming kesilmesin
+  - **İki ayrı `CancellationTokenSource` zinciri kurulur:**
+    - `ConnectTimeoutSeconds` için ayrı CTS (bağlantı aşaması)
+    - `FirstTokenTimeoutSeconds` için ayrı CTS (ilk chunk beklenir)
+  - ⚠️ Tek timeout yetmez: bağlantı kurulur ama model yüklenirken 15 sn bekleyebilir
+- [ ] `AnthropicAssistantProvider` — yalnızca `Ai:Anthropic:Enabled: true` ise DI'a kaydedilir; Ollama erişilemez veya timeout olursa devreye girer, model: `claude-sonnet-4-6`
+- [ ] `appsettings` `Ai` bloğu:
+  ```json
+  "Ai": {
+    "Enabled": true,
+    "Ollama": {
+      "BaseUrl": "http://localhost:11434",
+      "Model": "qwen2.5-coder:7b",
+      "FirstTokenTimeoutSeconds": 8,
+      "ConnectTimeoutSeconds": 3
+    },
+    "Anthropic": {
+      "Enabled": false,
+      "ApiKey": "",
+      "Model": "claude-sonnet-4-6"
+    }
+  }
+  ```
+- [ ] DI registration — `Program.cs`'de `AddHttpClient("ollama")` + `OllamaAssistantProvider`, `AnthropicAssistantProvider` (koşullu), `AiProviderOrchestrator` scoped kayıtlar
+
+**Deterministik fallback mantığı**
+- [ ] `AiProviderOrchestrator` — sıralı deneme kuralı (ilk chunk öncesi):
+  1. **Ollama** (`qwen2.5-coder:7b`) → `ConnectTimeout` içinde bağlantı kurulamaz, `FirstTokenTimeout` içinde ilk chunk gelmez veya `model not found` hatası → adım 2
+  2. **Anthropic** (yalnızca `Ai:Anthropic:Enabled: true` ise) → `FirstTokenTimeout` içinde ilk chunk gelmezse hata fırlat
+  3. Her ikisi de başarısız → kullanıcıya hata chunk'ı
+- [ ] Watchdog implementasyonu: iki ayrı `CancellationTokenSource` (connect + firstToken) + `Task.WhenAny(firstChunkTask, Task.Delay(firstTokenCts.Token))`; timeout kazanırsa upstream request iptal edilir, bir sonraki sağlayıcıya geçilir
+- [ ] **Mid-stream fallback yapılmaz** — ilk chunk geldikten sonra bağlantı kopar/hatalı olursa kullanıcıya net hata chunk'ı gönderilir (stream yeniden başlatılmaz)
+- [ ] Log: her fallback atlamasında `LogWarning("AI provider {From} → {To}, reason: {Reason}")`
+
+**Streaming mimarisi (backend)**
+- [ ] `AiAssistantController` endpoint'leri SSE yerine **NDJSON streaming** döndürür (`Content-Type: application/x-ndjson`):
+  - [ ] `POST /api/ai/explain-error`
+  - [ ] `POST /api/ai/suggest-xpath`
+  - [ ] `POST /api/ai/generate-snippet`
+  - [ ] `POST /api/ai/refactor-selection`
+  - [ ] `POST /api/ai/explain-xpath`
+- [ ] Her endpoint:
+  - [ ] `CancellationToken ct = HttpContext.RequestAborted` kullanır (client disconnect → upstream iptal)
+  - [ ] `Response.BodyWriter` (`PipeWriter`) ile yazar, **buffer/MemoryStream kullanılmaz**
+  - [ ] Her chunk sonrası `await Response.BodyWriter.FlushAsync(ct)` — byte anında TCP'ye iner
+  - [ ] Chunk formatı: `{"type":"delta","text":"..."}\n` + terminal `{"type":"done","provider":"ollama","model":"qwen2.5-coder:7b","ms":1234}\n`
+  - [ ] Hata durumunda: `{"type":"error","code":"provider_unavailable","message":"..."}\n` + flush
+- [ ] Rate limit — iki ayrı policy (ghost-text ve panel istekleri farklı frekanslarda gelir):
+  - [ ] `ai-ghost-text` policy: **15 req/dk/user** (Monaco inline completions)
+  - [ ] `ai-assistant` policy: **30 req/dk/user** (Panel endpoint'leri)
+
+**Prompt template'leri (`PromptTemplates.cs`)**
+
+Her istek aşağıdaki **5 taglı** sabit iskelete göre kurulur; sadece içerikler değişir:
+
+```
+<system_rules>
+Sen XsltCraft için çalışan bir XSLT/UBL-TR asistanısın.
+- Saxon HE 10.9.0 (XSLT 2.0, XPath 2.0) kullanılıyor.
+- Cevapları Türkçe ver.
+- Güvenlik: document(), enableScript, external DTD önerme.
+- Belirsizse varsayım yapma, eksik bilgi iste.
+</system_rules>
+
+<output_format>
+{görev-spesifik}
+</output_format>
+
+<constraints>
+- max_tokens API parametresiyle de zorlanır.
+- UBL-TR namespace'leri: cbc, cac, ext — tanımlamadan kullanma.
+- Kod bloğu dışında açıklama kısa olsun (<150 kelime).
+</constraints>
+
+<user_xml>{...}</user_xml>
+<user_xslt>{...}</user_xslt>
+<user_request>{...}</user_request>
+```
+
+- [ ] `PromptTemplates.cs` — 5 endpoint için 5 ayrı builder:
+  - [ ] `BuildExplainError` — düz metin, kısa
+  - [ ] `BuildSuggestXPath` — ` ```xpath ``` ` fence
+  - [ ] `BuildGenerateSnippet` — ` ```xslt ``` ` fence
+  - [ ] `BuildRefactorSelection` — ` ```xslt ``` ` fence, before/after
+  - [ ] `BuildExplainXPath` — düz metin + opsiyonel ` ```xpath ``` ` fence
+- [ ] ⚠️ **`max_tokens: 2048` değeri sadece prompt'a yazılmaz; API isteğinde `max_tokens` parametresi olarak da gönderilir.** Aksi hâlde model limiti aşar
+- [ ] Context boyut kontrolü: `<user_xml>` + `<user_xslt>` toplamda 8K token'ı aşarsa Monaco selection veya ilk/son N satır alınır
+- [ ] AI'dan gelen XSLT çıktısı otomatik `/api/preview/validate-xslt`'den geçirilir; syntax hatalıysa kullanıcıya uyarı gösterilir (**otomatik insert yapılmaz**)
+
+**Frontend**
+- [ ] `aiAssistantService.ts` — NDJSON client:
+  - [ ] `fetch` + `ReadableStream` + `TextDecoderStream` + satır bazlı parse (`delta` | `done` | `error`)
+  - [ ] Her istek bir `AbortController` ile sarılır; yeni istek eskisinin `controller.abort()` çağrılır
+- [ ] `AiAssistantPanel.tsx` — sağ sidebar, stream render (delta chunk'ları biriktir, ekrana bas), "İptal" butonu (`AbortController.abort()` tetikler)
+- [ ] Monaco `IInlineCompletionsProvider` (ghost-text):
+  - [ ] **Debounce: 500ms** (300–800 aralığında; kullanıcı yazmayı durunca tetikle)
+  - [ ] Önceki isteğin `AbortController`'ı `controller.abort()` ile iptal edilir
+  - [ ] Cursor pozisyonu değişirse mevcut öneri temizlenir
+  - [ ] Rate limit: `ai-ghost-text` policy (15 req/dk)
+- [ ] `AiRefactorDialog.tsx` — before/after yan yana diff görünümü, kabul/ret aksiyonları; **kabul edilmeden otomatik insert yapılmaz**
+- [ ] UI entegrasyonları:
+  - [ ] Problems panelindeki her hataya **"AI'ya sor"** butonu (`/api/ai/explain-error`)
+  - [ ] Monaco sağ tık menüsüne: **"AI ile snippet üret"** (`/api/ai/generate-snippet`), **"AI ile refactor et"** (`/api/ai/refactor-selection`)
+  - [ ] Toast: Ollama erişilemez + Anthropic kapalı → `"AI asistan şu an kullanılamıyor — Ollama'yı başlatın (ollama serve)."`
+  - [ ] `Ai:Enabled: false` → tüm AI butonları UI'da gizlenir
+
+**Dokümantasyon & yapılandırma**
+- [ ] `HANDOFF.md`'ye Ollama kurulum rehberi:
+  ```bash
+  ollama pull qwen2.5-coder:7b
+  ollama serve
+  ```
+- [ ] `appsettings.Development.example.json` — yukarıdaki `Ai` bloğu örneği (`Anthropic:ApiKey` boş, `Anthropic:Enabled: false`)
+
+### Faz 7 tamamlanma kriterleri
+
+| Kriter | Nasıl doğrulanır |
+|--------|-----------------|
+| UBL-TR iş kuralları çalışır | VKN 9 haneli XML → uyarı; doğru VKN → yeşil |
+| XPath console çalışır | `//cbc:InvoiceTypeCode` → node listesi + değer, <100ms |
+| Snippet kütüphanesi çalışır | Kullanıcı snippet tanımlar, yeni oturumda autocomplete'te görünür |
+| Prettify çalışır | `Shift+Alt+F` XSLT'yi Saxon-backed kurallarla biçimlendirir |
+| AI asistan (Ollama) çalışır | `ollama serve` açıkken "XPath öner" butonu stream cevap döner |
+| AI asistan (fallback) çalışır | Ollama kapatılınca Anthropic provider'a düşer (config izin veriyorsa) |
+| Güvenlik regresyonu yok | XXE/injection test paketi yeşil kalır |
+| AI kapalı modu çalışır | `Ai:Enabled: false` → UI'da AI butonları görünmez |
 
 ---
 
