@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-04-19
+
+### Added
+- **UBL-TR İş Kuralları Doğrulama**: 40+ UBL-TR 2.1 iş kuralı motoru (`UblTrBusinessRuleService`); zorunlu alan, tutar tutarlılığı ve vergi doğrulaması; ihlaller satır numarasıyla listeleniyor
+- **Sekmeli Problemler Paneli**: XML ayrıştırma hataları, XSLT doğrulama hataları ve UBL-TR iş kuralı ihlalleri tek panelde; sekme başlıklarında badge sayacı
+- **XPath Konsolu**: Monaco editörlü interaktif XPath 1.0 sorgu paneli; namespace-aware; sonuçlar node tipi, adı ve değeriyle gösteriliyor
+- **XML Kaynak Sekmesi**: Editörde XSLT ↔ XML kaynak görünümü arasında hızlı geçiş
+- **XSLT Profiler**: Transform süresi ölçümü, yavaş bölge tespiti ve performans önerileri
+- **Snippet Kütüphanesi**: Kullanıcıya özel XSLT snippet oluşturma/düzenleme/silme; `Ctrl+Space` ile editörde autocomplete; tam CRUD API (`/api/user-snippets`)
+- **Önizleme Zoom Kontrolü**: %50–%200 arası 7 kademe zoom (ZoomIn / ZoomOut / %100 reset); önizleme paneli başlığında kompakt kontrol çubuğu
+- **Seçili Satırları Biçimlendirme**: Sağ tık menüsünden seçili satırları XML-fragment farkındalıklı biçimlendirme; geçersiz fragmentleri geçici root ile sarar
+- **Klavye Kısayolları Diyaloğu**: Tüm editör kısayollarını listeleyen `ShortcutsDialog`; toolbar'dan erişilebilir
+- **About Sayfası**: Uygulama versiyonu, teknoloji stack'i ve bağlantılar
+- `UblTrController`: `POST /api/ubltr/validate` endpoint'i
+- `XPathController`: `POST /api/xpath/evaluate` endpoint'i
+- `UserSnippetsController`: Snippet CRUD endpoint'leri
+- `XPathEvaluator`: Namespace-aware XPath 1.0 değerlendirici
+- `AddUserSnippet` migration: `UserSnippets` tablosu
+- `docker-compose.prod.yml`, `Dockerfile`'lar, `nginx.conf`, `update.sh` — production altyapısı
+- `vite-env.d.ts`: Vite ortam değişkeni tip tanımları
+
+### Fixed
+- Pre-commit hook false-positive: `vite-env.d.ts` artık `.env` kalıbıyla eşleşmiyor
+- Pre-push hook false-positive: `${POSTGRES_PASSWORD}` env var referansı artık secret olarak işaretlenmiyor
+- `dotnet format` whitespace hataları: `XPathModels.cs`, `XPathEvaluator.cs`, `XsltGeneratorService.cs`
+
+---
+
 ## [0.4.0] - 2026-04-16
 
 ### Added
