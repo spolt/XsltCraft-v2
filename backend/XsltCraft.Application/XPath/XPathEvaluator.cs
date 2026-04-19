@@ -13,7 +13,7 @@ public class XPathEvaluator : IXPathEvaluator
         {
             // XPathDocument is optimised for XPath queries
             var xpathDoc = new XPathDocument(new StringReader(xmlContent));
-            var nav      = xpathDoc.CreateNavigator();
+            var nav = xpathDoc.CreateNavigator();
 
             // Use navigator's NameTable — guaranteed same atom references
             var nsMgr = new XmlNamespaceManager(nav.NameTable);
@@ -27,7 +27,7 @@ public class XPathEvaluator : IXPathEvaluator
                 do
                 {
                     var prefix = nsNav.Name;
-                    var uri    = nsNav.Value;
+                    var uri = nsNav.Value;
                     if (!string.IsNullOrEmpty(prefix) && !string.IsNullOrEmpty(uri))
                         nsMgr.AddNamespace(prefix, uri);
                 } while (nsNav.MoveToNextNamespace(XPathNamespaceScope.All));
@@ -52,15 +52,15 @@ public class XPathEvaluator : IXPathEvaluator
             {
                 while (iter.MoveNext())
                 {
-                    var cur  = iter.Current!;
+                    var cur = iter.Current!;
                     var kind = cur.NodeType switch
                     {
-                        XPathNodeType.Element               => "element",
-                        XPathNodeType.Attribute             => "attribute",
-                        XPathNodeType.Text                  => "text",
-                        XPathNodeType.Comment               => "comment",
+                        XPathNodeType.Element => "element",
+                        XPathNodeType.Attribute => "attribute",
+                        XPathNodeType.Text => "text",
+                        XPathNodeType.Comment => "comment",
                         XPathNodeType.ProcessingInstruction => "pi",
-                        _                                   => "node"
+                        _ => "node"
                     };
                     var name = string.IsNullOrEmpty(cur.Prefix)
                         ? cur.LocalName

@@ -1401,7 +1401,7 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         // Dış div'e border KONMAZ — border-collapse kapsamı dışında kalır ve çift çizgi oluşturur.
         // Border yalnızca tablo + hücreler üzerinde tutulur; collapse ile tek çizgiye indirgenir.
         var tableBorder = cfg.Bordered ? $"border:1px {bdrStyle} #555555;" : string.Empty;
-        var cellBorder  = cfg.Bordered ? $"border:1px {bdrStyle} #555555;" : string.Empty;
+        var cellBorder = cfg.Bordered ? $"border:1px {bdrStyle} #555555;" : string.Empty;
         var scopeId = "ih" + block.Id.Replace("-", string.Empty)[..8];
         var scopeStyle = $"<style>.{scopeId} td {{ {cellBorder}padding:2px 6px; }}</style>";
 
@@ -1776,8 +1776,8 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                     ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencyXpath}\"/></xsl:otherwise></xsl:choose>"
                     : string.Empty;
 
-                const string kdvFilter  = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']";
-                const string otvFilter  = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']";
+                const string kdvFilter = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']";
+                const string otvFilter = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']";
 
                 sb.AppendLine("      <xsl:if test=\"not(//n1:Invoice/cbc:InvoiceTypeCode='TEVKIFATIADE')\">");
 
