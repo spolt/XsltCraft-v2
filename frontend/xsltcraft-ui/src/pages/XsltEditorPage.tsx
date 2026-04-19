@@ -26,6 +26,7 @@ import SaveTemplateDialog from '../components/xslt-editor/SaveTemplateDialog'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
 import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
 import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
+import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
 import { listSnippets, type UserSnippet } from '../services/snippetService'
 import { previewFromRawXslt, type PreviewTimings } from '../services/previewService'
 import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
@@ -123,6 +124,9 @@ export default function XsltEditorPage() {
   const [userSnippets, setUserSnippets] = useState<UserSnippet[]>([])
   const [showSnippetManager, setShowSnippetManager] = useState(false)
 
+  // Shortcuts dialog
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
   // Right panel tab: preview | xml
   const [rightTab, setRightTab] = useState<'preview' | 'xml'>('preview')
 
@@ -143,6 +147,25 @@ export default function XsltEditorPage() {
   useEffect(() => {
     listSnippets().then(setUserSnippets).catch(() => {})
   }, [])
+
+  // ─── Global keyboard shortcuts ──────────────────────────────────────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // F1 — kısayollar
+      if (e.key === 'F1') {
+        e.preventDefault()
+        setShowShortcuts(s => !s)
+        return
+      }
+      // Ctrl+S / ⌘S — kaydet (sadece editör ekranı açıkken)
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && xsltContent) {
+        e.preventDefault()
+        setShowSaveDialog(true)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [xsltContent])
 
   // ─── Load saved template ────────────────────────────────────────────────────
   useEffect(() => {
@@ -499,6 +522,7 @@ export default function XsltEditorPage() {
           onDownload={handleDownload}
           onSave={() => setShowSaveDialog(true)}
           onPrint={handlePrint}
+          onShowShortcuts={() => setShowShortcuts(true)}
         />
 
         {previewError && (
@@ -741,6 +765,10 @@ export default function XsltEditorPage() {
           onSave={handleSave}
           onClose={() => setShowSaveDialog(false)}
         />
+      )}
+
+      {showShortcuts && (
+        <ShortcutsDialog onClose={() => setShowShortcuts(false)} />
       )}
     </div>
   )

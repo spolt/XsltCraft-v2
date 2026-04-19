@@ -546,8 +546,6 @@ export default function XsltEditor({ value, onChange, xmlContent, userSnippets, 
     editor.addAction({
       id: 'xslt-format-document',
       label: 'Belgeyi Biçimlendir',
-      contextMenuGroupId: 'modification',
-      contextMenuOrder: 3,
       keybindings: [
         monacoRef.current!.KeyMod.Shift |
         monacoRef.current!.KeyMod.Alt |
@@ -566,6 +564,63 @@ export default function XsltEditor({ value, onChange, xmlContent, userSnippets, 
           })
           ed.executeEdits('format', [{ range: model.getFullModelRange(), text: formatted }])
         } catch { /* geçersiz XML — sessizce geç */ }
+      },
+    })
+
+    editor.addAction({
+      id: 'xslt-format-selection',
+      label: 'Seçili Satırları Biçimlendir',
+      contextMenuGroupId: 'modification',
+      contextMenuOrder: 3,
+      run(ed) {
+        const sel = ed.getSelection()
+        const model = ed.getModel()
+        const mc = monacoRef.current
+        if (!sel || !model || !mc || sel.isEmpty()) return
+
+        const startLine = sel.startLineNumber
+        const endLine = sel.endLineNumber
+
+        const lines: string[] = []
+        for (let i = startLine; i <= endLine; i++) lines.push(model.getLineContent(i))
+
+        const firstNonEmpty = lines.find(l => l.trim().length > 0) ?? ''
+        const baseIndent = firstNonEmpty.match(/^(\s*)/)?.[1] ?? ''
+
+        const stripped = lines
+          .map(l => (l.startsWith(baseIndent) ? l.slice(baseIndent.length) : l))
+          .join('\n')
+
+        const fmtOpts = {
+          indentation: '  ',
+          collapseContent: true,
+          lineSeparator: '\n',
+          whiteSpaceAtEndOfSelfclosingTag: true,
+          forceSelfClosingEmptyTag: true,
+        }
+
+        try {
+          let formatted: string
+          try {
+            formatted = xmlFormatter(stripped, fmtOpts)
+          } catch {
+            // fragment — wrap in a throw-away root, format, then unwrap
+            const wrappedFmt = xmlFormatter(`<__r__>\n${stripped}\n</__r__>`, fmtOpts)
+            formatted = wrappedFmt
+              .split('\n')
+              .slice(1, -1)
+              .map(l => (l.startsWith('  ') ? l.slice(2) : l))
+              .join('\n')
+          }
+
+          const reindented = formatted
+            .split('\n')
+            .map(l => (l.length > 0 ? baseIndent + l : l))
+            .join('\n')
+
+          const range = new mc.Range(startLine, 1, endLine, model.getLineContent(endLine).length + 1)
+          ed.executeEdits('format-selection', [{ range, text: reindented }])
+        } catch { /* geçersiz XML fragment — sessizce geç */ }
       },
     })
 

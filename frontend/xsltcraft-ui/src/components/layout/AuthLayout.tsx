@@ -97,11 +97,11 @@ function ThemeC({ children }: { children: ReactNode }) {
 
 function Footer() {
   return (
-    <div className="relative z-10 mt-5 text-center select-none">
-      <p className="text-xs text-gray-600">
-        Created by <span className="text-gray-500 font-medium">Semih Polat</span>
+    <div className="relative z-10 mt-5 text-center">
+      <p className="text-sm text-gray-500">
+        Created by <span className="text-gray-400 font-medium">Semih Polat</span>
       </p>
-      <p className="text-xs text-gray-700 mt-0.5">XsltCraft 2026</p>
+      <p className="text-sm text-gray-600 mt-0.5">XsltCraft 2026</p>
     </div>
   )
 }

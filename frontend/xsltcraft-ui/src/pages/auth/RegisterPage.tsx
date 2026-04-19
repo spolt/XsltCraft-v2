@@ -41,7 +41,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthLayout theme="B">
+    <AuthLayout theme="A">
       <h1 className="text-2xl font-bold text-white mb-2">Hesap Oluştur</h1>
       <p className="text-gray-400 text-sm mb-6">
         Zaten hesabın var mı?{' '}

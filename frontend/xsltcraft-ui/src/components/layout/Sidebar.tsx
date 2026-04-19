@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Code2,
   FileCode2,
+  Info,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -142,12 +143,20 @@ export default function Sidebar({ collapsed }: SidebarProps) {
         )}
       </nav>
 
-      {/* Versiyon bilgisi (sadece genişletilmiş halde) */}
-      {!collapsed && (
-        <div className="p-2 border-t border-gray-100">
-          <p className="text-xs text-gray-400 text-center px-2">v0.3.0</p>
-        </div>
-      )}
+      {/* Alt alan: Hakkında + versiyon */}
+      <div className="p-2 border-t border-gray-100 flex flex-col gap-0.5">
+        <Link
+          to="/about"
+          className={`${itemBase} ${isActive('/about') ? itemActive : itemInactive}`}
+          title="Hakkında"
+        >
+          <Info size={18} className="flex-shrink-0" />
+          {!collapsed && <span>Hakkında</span>}
+        </Link>
+        {!collapsed && (
+          <p className="text-xs text-gray-400 text-center px-2 pt-1">v{__APP_VERSION__}</p>
+        )}
+      </div>
     </aside>
   )
 }

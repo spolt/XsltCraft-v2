@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
+import Editor from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
+import XsltEditorPreview from '../components/xslt-editor/XsltEditorPreview'
+import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
+import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
+import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
+import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
 import {
   LayoutDashboard,
   BookOpen,
@@ -19,12 +26,22 @@ import {
   AlignRight,
   Download,
   WandSparkles,
+  ListChecks,
+  Terminal,
+  BookMarked,
+  ShieldCheck,
+  Keyboard,
 } from 'lucide-react'
 import { getTemplate } from '../services/templateService'
 import { fetchThemeXslt, previewFromRawXslt, type BankInfoItem, type Alignment } from '../services/previewService'
+import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
+import { listSnippets, type UserSnippet } from '../services/snippetService'
 import { useAuthStore } from '../store/authStore'
+import api from '../services/apiService'
 
 const DEBOUNCE_MS = 1000
+const XSLT_VALIDATION_DEBOUNCE_MS = 1500
+const XML_VALIDATION_DEBOUNCE_MS = 500
 
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -120,7 +137,6 @@ function applyInjection(xslt: string, injection: string): string {
 
   if (si >= 0 && ei >= 0) {
     if (!injection) {
-      // Remove existing block
       return xslt.slice(0, si).trimEnd() + '\n' + xslt.slice(ei + OVERRIDE_END.length).trimStart()
     }
     return xslt.slice(0, si) + injection + xslt.slice(ei + OVERRIDE_END.length)
@@ -128,17 +144,31 @@ function applyInjection(xslt: string, injection: string): string {
 
   if (!injection) return xslt
 
-  // Insert before last </body>
   const bodyClose = xslt.lastIndexOf('</body>')
   if (bodyClose >= 0)
     return xslt.slice(0, bodyClose) + injection + '\n' + xslt.slice(bodyClose)
 
-  // Fallback: before </xsl:template>
   const tmpl = xslt.lastIndexOf('</xsl:template>')
   if (tmpl >= 0)
     return xslt.slice(0, tmpl) + injection + '\n' + xslt.slice(tmpl)
 
   return xslt + '\n' + injection
+}
+
+/** DOMParser parsererror çıktısından satır/kolon çıkarır. */
+function extractXmlParseErrors(xml: string): { message: string; line: number | null; column: number | null }[] {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(xml, 'text/xml')
+  const err = doc.querySelector('parsererror')
+  if (!err) return []
+  const raw = (err.textContent ?? 'XML ayrıştırma hatası').replace(/\s+/g, ' ').trim()
+  const lineMatch = /line\s*(?:number)?\s*[:\s]\s*(\d+)/i.exec(raw)
+  const colMatch = /column\s*(\d+)/i.exec(raw)
+  return [{
+    message: raw,
+    line: lineMatch ? Number(lineMatch[1]) : null,
+    column: colMatch ? Number(colMatch[1]) : null,
+  }]
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -256,13 +286,43 @@ export default function DevModePage() {
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [lastMs, setLastMs] = useState<number | null>(null)
 
-  const iframeRef = useRef<HTMLIFrameElement>(null)
-  // Tracks whether initial XSLT has been loaded (so injection effect doesn't fire too early)
+  // Validation
+  const [xsltValid, setXsltValid] = useState<boolean | null>(null)
+  const [xsltErrors, setXsltErrors] = useState<{ message: string; line: number; column: number }[]>([])
+  const [xmlValid, setXmlValid] = useState<boolean | null>(null)
+  const [xmlErrors, setXmlErrors] = useState<{ message: string; line: number | null; column: number | null }[]>([])
+
+  // Problems panel
+  const [showProblems, setShowProblems] = useState(false)
+  const [ublTrResults, setUblTrResults] = useState<BusinessRuleResult[] | null>(null)
+  const [ublTrLoading, setUblTrLoading] = useState(false)
+  const [ublTrError, setUblTrError] = useState<string | null>(null)
+
+  // XPath console
+  const [showXPathConsole, setShowXPathConsole] = useState(false)
+  const [xpathInitialExpr, setXpathInitialExpr] = useState('')
+
+  // Snippets
+  const [userSnippets, setUserSnippets] = useState<UserSnippet[]>([])
+  const [showSnippetManager, setShowSnippetManager] = useState(false)
+
+  // Right panel tab
+  const [rightTab, setRightTab] = useState<'preview' | 'xml'>('preview')
+
+  // Shortcuts dialog
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
+  // Refs
   const xsltReadyRef = useRef(false)
   const toggleCommentRef = useRef<(() => void) | null>(null)
   const formatDocumentRef = useRef<(() => void) | null>(null)
+  const revealLineRef = useRef<((lineNumber: number, column?: number) => void) | null>(null)
+  const insertTextAtLineRef = useRef<((lineNumber: number, text: string) => void) | null>(null)
+  const imageFileInputRef = useRef<HTMLInputElement>(null)
+  const pendingInsertLineRef = useRef<number | null>(null)
+  const xmlEditorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
 
-  // Load template name + XSLT on mount
+  // ─── Load template name + XSLT ───────────────────────────────────────────────
   useEffect(() => {
     if (!templateId) return
     getTemplate(templateId).then((t) => setTemplateName(t.name)).catch(() => {})
@@ -278,14 +338,31 @@ export default function DevModePage() {
       })
   }, [templateId])
 
-  // When edit-panel values change → update XSLT editor with injection block
+  // ─── Load user snippets ──────────────────────────────────────────────────────
+  useEffect(() => {
+    listSnippets().then(setUserSnippets).catch(() => {})
+  }, [])
+
+  // ─── Global keyboard shortcuts ────────────────────────────────────────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'F1') {
+        e.preventDefault()
+        setShowShortcuts(s => !s)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // ─── Injection block → XSLT ─────────────────────────────────────────────────
   useEffect(() => {
     if (!xsltReadyRef.current) return
     const injection = buildInjection(logo, signature, bankInfo)
     setXslt((prev) => applyInjection(prev, injection))
   }, [logo, signature, bankInfo])
 
-  // Debounced preview — triggered by XSLT or XML change
+  // ─── Debounced preview ───────────────────────────────────────────────────────
   const runPreview = useCallback(async (currentXslt: string, currentXml: string) => {
     setPreviewLoading(true)
     setPreviewError(null)
@@ -310,6 +387,39 @@ export default function DevModePage() {
     return () => clearTimeout(t)
   }, [xslt, xmlContent, runPreview])
 
+  // ─── Debounced XSLT validation ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!xslt) { setXsltValid(null); setXsltErrors([]); return }
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await api.post<{ valid: boolean; error?: string; line?: number; column?: number }>(
+          '/api/preview/validate-xslt',
+          { xslt },
+        )
+        if (data.valid) {
+          setXsltValid(true)
+          setXsltErrors([])
+        } else {
+          setXsltValid(false)
+          setXsltErrors([{ message: data.error ?? 'XSLT hatası', line: data.line ?? 1, column: data.column ?? 1 }])
+        }
+      } catch { /* silently fail */ }
+    }, XSLT_VALIDATION_DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [xslt])
+
+  // ─── Debounced XML validation ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!xmlContent) { setXmlValid(null); setXmlErrors([]); return }
+    const t = setTimeout(() => {
+      const errs = extractXmlParseErrors(xmlContent)
+      setXmlErrors(errs)
+      setXmlValid(errs.length === 0)
+    }, XML_VALIDATION_DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [xmlContent])
+
+  // ─── Handlers ────────────────────────────────────────────────────────────────
   function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -351,6 +461,68 @@ export default function DevModePage() {
   function updateBankRow(idx: number, field: keyof BankInfoItem, value: string) {
     setBankInfo((p) => p.map((r, i) => (i === idx ? { ...r, [field]: value } : r)))
   }
+
+  async function handleValidateUblTr() {
+    if (!xmlContent) return
+    setUblTrLoading(true)
+    setUblTrError(null)
+    setShowProblems(true)
+    try {
+      const res = await validateBusinessRules(xmlContent)
+      setUblTrResults(res.results)
+    } catch (e: unknown) {
+      const msg = e && typeof e === 'object' && 'response' in e
+        ? (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Doğrulama yapılamadı.'
+        : 'Doğrulama yapılamadı.'
+      setUblTrError(msg)
+      setUblTrResults(null)
+    } finally {
+      setUblTrLoading(false)
+    }
+  }
+
+  function handleEvaluateXPath(expression: string) {
+    setXpathInitialExpr(expression)
+    setShowXPathConsole(true)
+  }
+
+  function handleLocateXmlLine(line: number, column?: number | null) {
+    setRightTab('xml')
+    setTimeout(() => {
+      if (xmlEditorRef.current) {
+        xmlEditorRef.current.revealLineInCenter(line)
+        xmlEditorRef.current.setPosition({ lineNumber: line, column: column ?? 1 })
+        xmlEditorRef.current.focus()
+      }
+    }, 100)
+  }
+
+  function handleRequestImageInsert(lineNumber: number) {
+    pendingInsertLineRef.current = lineNumber
+    imageFileInputRef.current?.click()
+  }
+
+  function handleImageFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || pendingInsertLineRef.current === null) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string
+      const imgHtml = `<div><img src="${dataUrl}" style="max-width:100%;height:auto;" /></div>`
+      insertTextAtLineRef.current?.(pendingInsertLineRef.current!, imgHtml)
+      pendingInsertLineRef.current = null
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  function handlePrint() {
+    const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="Canlı Önizleme"]')
+    iframe?.contentWindow?.print()
+  }
+
+  const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null
+  const totalErrorCount = xsltErrors.length + xmlErrors.length + (ublTrErrorCount ?? 0)
 
   // ─── Phase 1: no XML ─────────────────────────────────────────────────────────
   if (!xmlContent) {
@@ -397,20 +569,41 @@ export default function DevModePage() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="h-10 border-b border-gray-700 bg-gray-900 flex items-center gap-2 px-4 flex-shrink-0">
+        <div className="h-10 border-b border-gray-700 bg-gray-900 flex items-center gap-1.5 px-3 flex-shrink-0">
           <button onClick={() => navigate(`/theme-use/${templateId}`)}
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors mr-1" title="Geri dön">
             <ArrowLeft size={13} />
           </button>
-          <span className="text-sm font-medium text-gray-200 flex-1 truncate">{templateName} — Geliştirici Modu</span>
+          <span className="text-sm font-medium text-gray-200 flex-1 truncate min-w-0">{templateName} — Geliştirici Modu</span>
+
+          {/* Loading / timing */}
           {previewLoading && (
-            <span className="text-xs text-blue-400 flex items-center gap-1">
+            <span className="text-xs text-blue-400 flex items-center gap-1 flex-shrink-0">
               <span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
               Derleniyor
             </span>
           )}
-          {!previewLoading && lastMs !== null && <span className="text-xs text-gray-500">{lastMs} ms</span>}
-          <label className="cursor-pointer text-xs text-gray-400 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800">
+          {!previewLoading && lastMs !== null && (
+            <span className="text-xs text-gray-500 flex-shrink-0">{lastMs} ms</span>
+          )}
+
+          {/* Validation status */}
+          {xsltValid !== null && (
+            <span className={`flex items-center gap-1 text-xs flex-shrink-0 ${xsltValid ? 'text-green-400' : 'text-red-400'}`} title={xsltValid ? 'XSLT geçerli' : 'XSLT hatası'}>
+              {xsltValid ? <CheckCircle2 size={13} /> : <TriangleAlert size={13} />}
+              XSLT
+            </span>
+          )}
+          {xmlValid !== null && (
+            <span className={`flex items-center gap-1 text-xs flex-shrink-0 ${xmlValid ? 'text-green-400' : 'text-red-400'}`} title={xmlValid ? 'XML geçerli' : 'XML hatası'}>
+              {xmlValid ? <CheckCircle2 size={13} /> : <TriangleAlert size={13} />}
+              XML
+            </span>
+          )}
+
+          <div className="w-px h-4 bg-gray-700 mx-0.5 flex-shrink-0" />
+
+          <label className="cursor-pointer text-xs text-gray-400 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 flex-shrink-0">
             XML Değiştir
             <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={handleXmlFile} />
           </label>
@@ -424,23 +617,34 @@ export default function DevModePage() {
               URL.revokeObjectURL(a.href)
             }}
             disabled={!xslt}
-            className="flex items-center gap-1.5 text-xs text-gray-400 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 disabled:opacity-30"
+            className="flex items-center gap-1 text-xs text-gray-400 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 disabled:opacity-30 flex-shrink-0"
             title="XSLT dosyasını indir"
           >
-            <Download size={13} />İndir
+            <Download size={12} />İndir
           </button>
-          <button onClick={() => iframeRef.current?.contentWindow?.print()} disabled={!html}
-            className="text-gray-400 border border-gray-600 rounded p-1 hover:bg-gray-800 disabled:opacity-30" title="Yazdır">
-            <Printer size={14} />
+          <button onClick={handlePrint} disabled={!html}
+            className="text-gray-400 border border-gray-600 rounded p-1 hover:bg-gray-800 disabled:opacity-30 flex-shrink-0" title="Yazdır">
+            <Printer size={13} />
           </button>
           {!editMode
-            ? <button onClick={() => setEditMode(true)} className="flex items-center gap-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-3 py-1">
-                <Settings2 size={13} />Düzenle
+            ? <button onClick={() => setEditMode(true)} className="flex items-center gap-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-2 py-1 flex-shrink-0">
+                <Settings2 size={12} />Düzenle
               </button>
-            : <button onClick={() => setEditMode(false)} className="flex items-center gap-1.5 text-xs text-gray-300 border border-gray-600 rounded px-3 py-1 hover:bg-gray-800">
-                <X size={13} />Kapat
+            : <button onClick={() => setEditMode(false)} className="flex items-center gap-1 text-xs text-gray-300 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 flex-shrink-0">
+                <X size={12} />Kapat
               </button>
           }
+
+          <div className="w-px h-4 bg-gray-700 mx-0.5 flex-shrink-0" />
+
+          {/* Shortcuts */}
+          <button
+            onClick={() => setShowShortcuts(true)}
+            className="h-6 px-2 flex items-center rounded border border-gray-600 text-gray-300 hover:bg-gray-800 text-xs transition-colors flex-shrink-0"
+            title="Klavye Kısayolları (F1)"
+          >
+            <Keyboard size={12} />
+          </button>
         </div>
 
         {previewError && (
@@ -451,26 +655,79 @@ export default function DevModePage() {
         )}
 
         <div className="flex-1 flex overflow-hidden">
-          {/* Resizable: XSLT editor | preview */}
+          {/* Resizable: XSLT editor | right panel */}
           <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
             <Panel defaultSize={50} minSize={20}>
               <div className="h-full flex flex-col">
-                <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between">
-                  <span className="text-xs text-gray-400 font-mono uppercase tracking-wide">XSLT Editörü</span>
-                  <div className="flex items-center gap-1">
+                <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between gap-2">
+                  <span className="text-xs text-gray-400 font-mono uppercase tracking-wide whitespace-nowrap">XSLT Editörü</span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={() => toggleCommentRef.current?.()}
-                      className="h-6 px-2 flex items-center justify-center rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-xs font-mono transition-colors"
+                      className="h-6 px-2 flex items-center justify-center rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs font-mono transition-colors"
                       title="Yorum Satırı Ekle / Kaldır (Ctrl+Shift+C)"
                     >
                       {'<!--'}
                     </button>
                     <button
                       onClick={() => formatDocumentRef.current?.()}
-                      className="h-6 px-2 flex items-center gap-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-xs transition-colors"
+                      className="h-6 px-2 flex items-center gap-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors"
                       title="Belgeyi Biçimlendir (Shift+Alt+F)"
                     >
                       <WandSparkles size={12} />
+                    </button>
+
+                    <button
+                      onClick={handleValidateUblTr}
+                      disabled={!xmlContent || ublTrLoading}
+                      className="h-6 px-2 flex items-center gap-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors disabled:opacity-30"
+                      title="UBL-TR iş kurallarını kontrol et"
+                    >
+                      <ShieldCheck size={12} />
+                      {ublTrErrorCount != null && ublTrErrorCount > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[9px] font-semibold">
+                          {ublTrErrorCount}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => setShowXPathConsole(s => !s)}
+                      disabled={!xmlContent}
+                      className={`h-6 px-2 flex items-center rounded border border-gray-600 text-xs transition-colors disabled:opacity-30 ${
+                        showXPathConsole ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
+                      }`}
+                      title="XPath Konsolu"
+                    >
+                      <Terminal size={12} />
+                    </button>
+
+                    <button
+                      onClick={() => setShowSnippetManager(true)}
+                      className="h-6 px-2 flex items-center gap-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors"
+                      title="Snippet Kütüphanesi"
+                    >
+                      <BookMarked size={12} />
+                      {userSnippets.length > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-gray-600 text-gray-300 text-[9px] font-medium">
+                          {userSnippets.length}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => setShowProblems(s => !s)}
+                      className={`h-6 px-2 flex items-center gap-1 rounded border border-gray-600 text-xs transition-colors ${
+                        showProblems ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
+                      }`}
+                      title="Problemler panelini aç/kapat"
+                    >
+                      <ListChecks size={12} />
+                      {totalErrorCount > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[9px] font-semibold">
+                          {totalErrorCount}
+                        </span>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -483,7 +740,14 @@ export default function DevModePage() {
                     <XsltEditor
                       value={xslt}
                       onChange={(v) => setXslt(v)}
-                      onEditorReady={({ toggleComment, formatDocument }) => {
+                      xmlContent={xmlContent}
+                      userSnippets={userSnippets}
+                      onEvaluateXPath={handleEvaluateXPath}
+                      onRequestImageInsert={handleRequestImageInsert}
+                      errors={xsltErrors}
+                      onEditorReady={({ revealLine, insertTextAtLine, toggleComment, formatDocument }) => {
+                        revealLineRef.current = revealLine
+                        insertTextAtLineRef.current = insertTextAtLine
                         toggleCommentRef.current = toggleComment
                         formatDocumentRef.current = formatDocument
                       }}
@@ -506,18 +770,48 @@ export default function DevModePage() {
 
             <Panel defaultSize={50} minSize={20}>
               <div className="h-full flex flex-col">
-                <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0">
-                  <span className="text-xs text-gray-400 font-mono uppercase tracking-wide">Önizleme</span>
+                {/* Sekme başlıkları */}
+                <div className="h-8 flex items-center border-b border-gray-700 bg-gray-800 px-2 gap-0.5 flex-shrink-0">
+                  <button
+                    onClick={() => setRightTab('preview')}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${
+                      rightTab === 'preview' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
+                    }`}
+                  >
+                    Önizleme
+                  </button>
+                  <button
+                    onClick={() => setRightTab('xml')}
+                    className={`px-3 py-1 rounded text-xs transition-colors ${
+                      rightTab === 'xml' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
+                    }`}
+                  >
+                    XML Kaynak
+                  </button>
                 </div>
-                <div className="flex-1 overflow-auto bg-gray-300 flex justify-center">
-                  <iframe
-                    ref={iframeRef}
-                    srcDoc={html || '<html><body style="background:#d1d5db;margin:0"></body></html>'}
-                    sandbox="allow-same-origin allow-scripts allow-modals"
-                    className="border-none bg-white shadow-lg"
-                    style={{ width: 860, minHeight: '100%', height: 'max(100%, 1200px)' }}
-                    title="Canlı Önizleme"
-                  />
+
+                {/* Sekme içerikleri */}
+                <div className="flex-1 overflow-hidden">
+                  {rightTab === 'preview' ? (
+                    <XsltEditorPreview html={html} />
+                  ) : (
+                    <Editor
+                      height="100%"
+                      language="xml"
+                      theme="vs-dark"
+                      value={xmlContent ?? ''}
+                      onMount={(editor) => { xmlEditorRef.current = editor }}
+                      options={{
+                        readOnly: true,
+                        minimap: { enabled: false },
+                        fontSize: 12,
+                        wordWrap: 'on',
+                        lineNumbers: 'on',
+                        scrollBeyondLastLine: false,
+                        folding: true,
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             </Panel>
@@ -565,14 +859,76 @@ export default function DevModePage() {
 
                 <div className="border-t border-gray-100 pt-2">
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    Düzenlemeler XSLT editörüne <code className="bg-gray-100 px-1 rounded">DEV-MODE-OVERRIDES</code> bloğu olarak yansır. Bloğu doğrudan editörde de değiştirebilirsiniz.
+                    Düzenlemeler XSLT editörüne <code className="bg-gray-100 px-1 rounded">DEV-MODE-OVERRIDES</code> bloğu olarak yansır.
                   </p>
                 </div>
               </div>
             </div>
           )}
         </div>
+
+        {showProblems && (
+          <ProblemsPanel
+            xsltProblems={xsltErrors.map(e => ({
+              source: 'xslt' as const,
+              severity: 'error' as const,
+              ruleName: 'XSLT Sözdizimi',
+              message: e.message,
+              line: e.line,
+              column: e.column,
+            }))}
+            xmlProblems={xmlErrors.map(e => ({
+              source: 'xml' as const,
+              severity: 'error' as const,
+              ruleName: 'XML Ayrıştırma',
+              message: e.message,
+              line: e.line,
+              column: e.column,
+            }))}
+            ublTrProblems={ublTrResults?.map(r => ({
+              source: 'ubl-tr' as const,
+              ruleId: r.ruleId,
+              ruleName: r.ruleName,
+              severity: r.severity,
+              message: r.message,
+              line: r.line,
+              column: r.column,
+            })) ?? null}
+            ublTrLoading={ublTrLoading}
+            ublTrError={ublTrError}
+            onLocateXslt={(line, column) => revealLineRef.current?.(line, column ?? undefined)}
+            onClose={() => setShowProblems(false)}
+          />
+        )}
+
+        {showXPathConsole && (
+          <XPathConsolePanel
+            xmlContent={xmlContent}
+            initialExpression={xpathInitialExpr}
+            onLocateLine={handleLocateXmlLine}
+            onClose={() => setShowXPathConsole(false)}
+          />
+        )}
       </div>
+
+      {showSnippetManager && (
+        <SnippetManagerDialog
+          onClose={() => setShowSnippetManager(false)}
+          onSnippetsChanged={setUserSnippets}
+        />
+      )}
+
+      {showShortcuts && (
+        <ShortcutsDialog onClose={() => setShowShortcuts(false)} />
+      )}
+
+      <input
+        ref={imageFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageFileSelect}
+      />
     </div>
   )
 }

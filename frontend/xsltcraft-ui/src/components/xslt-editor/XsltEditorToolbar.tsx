@@ -10,6 +10,7 @@ import {
   FileCode2,
   FileText,
   Timer,
+  Keyboard,
 } from 'lucide-react'
 import type { PreviewTimings } from '../../services/previewService'
 
@@ -29,6 +30,7 @@ interface Props {
   onDownload: () => void
   onSave: () => void
   onPrint: () => void
+  onShowShortcuts: () => void
 }
 
 function TimingPopover({ timings, onClose }: { timings: PreviewTimings; onClose: () => void }) {
@@ -90,6 +92,7 @@ export default function XsltEditorToolbar({
   onDownload,
   onSave,
   onPrint,
+  onShowShortcuts,
 }: Props) {
   const btnBase = 'flex items-center gap-1.5 text-sm border border-gray-600 rounded px-3 py-1.5 hover:bg-gray-800 transition-colors'
   const [showTimingPopover, setShowTimingPopover] = useState(false)
@@ -174,6 +177,11 @@ export default function XsltEditorToolbar({
       {/* Print */}
       <button onClick={onPrint} disabled={!hasXml || !hasXslt} className={`${btnBase} text-gray-400 disabled:opacity-30`} title="Yazdır">
         <Printer size={16} />
+      </button>
+
+      {/* Shortcuts */}
+      <button onClick={onShowShortcuts} className={`${btnBase} text-gray-400`} title="Klavye Kısayolları (F1)">
+        <Keyboard size={15} />
       </button>
     </div>
   )

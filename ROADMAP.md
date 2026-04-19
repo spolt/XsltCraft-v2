@@ -491,15 +491,8 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 
 ### Görev grubu 6 — UX iyileştirmeleri
 
-- [ ] `ShortcutsDialog.tsx` (F1) — tüm kısayollar
-- [ ] Preview panel'e scale/zoom kontrolleri
-
-### Görev grubu 7 — Saxon-backed XSLT prettify
-
-- [ ] `XsltFormatter` servisi — `XDocument` + custom `XmlWriterSettings`, XSLT-aware kurallar (`xsl:choose`/`xsl:when` hizalama, attribute satır kırma eşikleri)
-- [ ] `POST /api/xslt/format` endpoint'i
-- [ ] Format ayarları: `{ indentSize, maxAttrsPerLine, alignChooseBranches, preserveComments }`
-- [ ] Frontend: `Shift+Alt+F` artık bu endpoint'i çağırır; `xml-formatter` offline fallback
+- [x] `ShortcutsDialog.tsx` (F1) — tüm kısayollar
+- [x] Preview panel'e scale/zoom kontrolleri
 
 ### Görev grubu 8 — AI Asistan (Ollama + Anthropic cloud fallback)
 
