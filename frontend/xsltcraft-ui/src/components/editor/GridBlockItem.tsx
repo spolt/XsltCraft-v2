@@ -10,8 +10,6 @@ const BLOCK_LABEL_TR: Record<string, string> = {
   Heading:          'Başlık',
   Paragraph:        'Paragraf',
   Table:            'Tablo',
-  ForEach:          'For-Each',
-  Conditional:      'Koşul Bloğu',
   Image:            'Görsel',
   DocumentInfo:     'Belge Bilgisi',
   Totals:           'Toplamlar',
@@ -20,7 +18,6 @@ const BLOCK_LABEL_TR: Record<string, string> = {
   ETTN:             'Dinamik Karekod',
   Divider:          'Ayırıcı',
   Spacer:           'Boşluk',
-  Variable:         'Değişken',
   ConditionalText:  'Koşullu Metin',
   TaxSummary:       'KDV Özeti',
   GibKarekod:       'GİB Karekod',
@@ -66,12 +63,9 @@ function blockSummary(block: GridBlock): string {
     }
     case 'Notes': return (c.prefix as string) ?? 'Not'
     case 'BankInfo': return (c.bankName as string) || 'IBAN'
-    case 'ForEach': return `foreach: ${(c.iterateOver as string)?.slice(0, 30) ?? ''}`
-    case 'Conditional': return 'Koşul Bloğu'
     case 'ETTN': return 'E-TTN / QR'
     case 'GibKarekod': return 'GİB Karekod'
     case 'GibLogo': return 'GİB Logo'
-    case 'Variable': return `$${(c.name as string) ?? ''}`
     case 'Divider': return '─────'
     case 'Spacer': return `Boşluk: ${(c.height as string) ?? ''}`
     default: return ''

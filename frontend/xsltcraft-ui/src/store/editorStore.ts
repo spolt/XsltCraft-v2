@@ -20,14 +20,6 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
       return { lines: [], fontSize: '11px' }
     case 'Table':
       return { iterateOver: '', columns: [], showHeader: true }
-    case 'ForEach':
-      return { iterateOver: '', children: [] }
-    case 'Conditional':
-      return {
-        condition: { xpath: '', operator: 'equals', value: '' },
-        thenBlockIds: [],
-        elseBlockIds: [],
-      }
     case 'Image':
       return { assetType: 'logo', alignment: 'center', width: '100px', height: '80px', editableOnFreeTheme: false }
     case 'DocumentInfo':
@@ -44,8 +36,6 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
       return { style: 'solid', color: '#CCCCCC', thickness: '1px' }
     case 'Spacer':
       return { height: '24px' }
-    case 'Variable':
-      return { name: '', xpath: '' }
     case 'ConditionalText':
       return {
         condition: { xpath: '', operator: 'equals', value: '' },
@@ -84,6 +74,7 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         showTitle: false,
         showHeader: true,
         showRowNumber: true,
+        showCurrency: true,
         bordered: true,
         borderStyle: 'solid',
         headerBackgroundColor: '#E0E0E0',
@@ -108,7 +99,7 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
         fontSize: '11px',
       }
     case 'GibLogo':
-      return { width: '80px', height: '80px', alignment: 'center' }
+      return { width: '80px', height: '80px', alignment: 'center', fontSize: '11px' }
   }
 }
 

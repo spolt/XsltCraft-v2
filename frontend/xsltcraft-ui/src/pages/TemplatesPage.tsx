@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
-import { cloneTemplate, getFreeThemes, type FreeTheme } from '../services/templateService'
+import { getFreeThemes, type FreeTheme } from '../services/templateService'
 import { previewFromStoredXslt } from '../services/previewService'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
@@ -20,7 +20,6 @@ export default function TemplatesPage() {
   const [selectedTheme, setSelectedTheme] = useState<FreeTheme | null>(null)
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
-  const [cloning, setCloning] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const navigate = useNavigate()
 
@@ -43,16 +42,9 @@ export default function TemplatesPage() {
     return () => { cancelled = true }
   }, [selectedTheme])
 
-  async function handleUse() {
-    if (!selectedTheme || cloning) return
-    setCloning(true)
-    try {
-      const clone = await cloneTemplate(selectedTheme.id)
-      navigate(`/theme-use/${clone.id}`)
-    } catch {
-      alert('Şablon kopyalanamadı.')
-      setCloning(false)
-    }
+  function handleUse() {
+    if (!selectedTheme) return
+    navigate(`/theme-use/${selectedTheme.id}`)
   }
 
   const filtered = typeFilter
@@ -124,10 +116,10 @@ export default function TemplatesPage() {
             )}
             <button
               onClick={handleUse}
-              disabled={cloning || previewLoading}
+              disabled={previewLoading}
               className="flex-shrink-0 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-1.5 transition-colors"
             >
-              {cloning ? 'Kopyalanıyor…' : 'Bu temayı kullan'}
+              Bu temayı kullan
             </button>
             <button
               onClick={() => setSelectedTheme(null)}
@@ -168,19 +160,11 @@ function ThemeCard({
   compact: boolean
   onSelect: () => void
 }) {
-  const [cloning, setCloning] = useState(false)
   const navigate = useNavigate()
 
-  async function handleUse(e: React.MouseEvent) {
+  function handleUse(e: React.MouseEvent) {
     e.stopPropagation()
-    setCloning(true)
-    try {
-      const clone = await cloneTemplate(theme.id)
-      navigate(`/theme-use/${clone.id}`)
-    } catch {
-      alert('Şablon kopyalanamadı.')
-      setCloning(false)
-    }
+    navigate(`/theme-use/${theme.id}`)
   }
 
   return (
@@ -203,10 +187,9 @@ function ThemeCard({
           </div>
           <button
             onClick={handleUse}
-            disabled={cloning}
-            className="flex-shrink-0 text-xs font-medium text-blue-600 border border-blue-500 hover:bg-blue-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-3 py-1.5 transition-colors"
+            className="flex-shrink-0 text-xs font-medium text-blue-600 border border-blue-500 hover:bg-blue-600 hover:text-white rounded-lg px-3 py-1.5 transition-colors"
           >
-            {cloning ? '…' : 'Seç'}
+            Seç
           </button>
         </div>
       ) : (

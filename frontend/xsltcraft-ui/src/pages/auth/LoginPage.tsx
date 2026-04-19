@@ -73,7 +73,7 @@ export default function LoginPage() {
   })
 
   return (
-    <AuthLayout theme="B">
+    <AuthLayout theme="C">
       <h1 className="text-2xl font-bold text-white mb-2">Giriş Yap</h1>
       <p className="text-gray-400 text-sm mb-6">
         Hesabın yok mu?{' '}

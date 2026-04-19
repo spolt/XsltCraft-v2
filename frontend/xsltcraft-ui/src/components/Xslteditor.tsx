@@ -2,6 +2,8 @@ import Editor, { type Monaco } from "@monaco-editor/react"
 import type { editor as MonacoEditor, languages as MonacoLanguages } from "monaco-editor"
 import { useRef, useEffect } from "react"
 import xmlFormatter from 'xml-formatter'
+import { buildXmlIndex, getXmlPathSuggestions, type XmlIndex } from './xslt-editor/xpathXmlIndex'
+import type { UserSnippet } from '../services/snippetService'
 
 export type XsltError = {
   message: string
@@ -11,6 +13,7 @@ export type XsltError = {
 
 type EditorFns = {
   goTo: (term: string) => void
+  revealLine: (lineNumber: number, column?: number) => void
   insertTextAtLine: (lineNumber: number, text: string) => void
   toggleComment: () => void
   formatDocument: () => void
@@ -19,8 +22,11 @@ type EditorFns = {
 type Props = {
   value: string
   onChange: (value: string) => void
+  xmlContent?: string | null
+  userSnippets?: UserSnippet[]
   onEditorReady?: (fns: EditorFns) => void
   onRequestImageInsert?: (lineNumber: number) => void
+  onEvaluateXPath?: (expression: string) => void
   errors?: XsltError[]
   options?: MonacoEditor.IStandaloneEditorConstructionOptions
 }
@@ -171,6 +177,8 @@ const htmlElements: { label: string; detail: string; snippet: string }[] = [
 
 let completionRegistered = false
 let foldingProviderRegistered = false
+let currentXmlIndex: XmlIndex | null = null
+let currentUserSnippets: UserSnippet[] = []
 
 function registerXsltCompletions(monaco: Monaco) {
   if (completionRegistered) return
@@ -238,7 +246,7 @@ function registerXsltCompletions(monaco: Monaco) {
   const CompletionItemInsertTextRule = monaco.languages.CompletionItemInsertTextRule
 
   monaco.languages.registerCompletionItemProvider("xml", {
-    triggerCharacters: ["<", ":"],
+    triggerCharacters: ["<", ":", "/", "@"],
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideCompletionItems(model: any, position: any) {
@@ -278,9 +286,39 @@ function registerXsltCompletions(monaco: Monaco) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const suggestions: any[] = []
 
-      // Inside attribute value (select="...", test="...", match="...") → XPath functions
-      const inAttrValue = /(?:select|test|match|use)\s*=\s*"[^"]*$/.test(textBefore)
+      // XPath attribute bağlamı: select="", test="", match="", use="", group-by="", from="", count=""
+      const attrValueMatch = textBefore.match(/(?:select|test|match|use|group-by|from|count)\s*=\s*"([^"]*)$/)
+      const inAttrValue = !!attrValueMatch
       if (inAttrValue) {
+        const xpathSoFar = attrValueMatch![1]
+
+        // XML ağacından path önerileri
+        if (currentXmlIndex) {
+          const { suggestions: xmlSugs, partialSegment, isAttr } = getXmlPathSuggestions(xpathSoFar, currentXmlIndex)
+          if (xmlSugs.length > 0) {
+            const segStartCol = position.column - partialSegment.length
+            const xmlRange = {
+              startLineNumber: position.lineNumber,
+              endLineNumber: position.lineNumber,
+              startColumn: Math.max(1, segStartCol),
+              endColumn: position.column,
+            }
+            const kind = isAttr ? CompletionItemKind.Field : CompletionItemKind.Class
+            const detail = isAttr ? 'XML attribute' : 'XML element'
+            for (const sug of xmlSugs) {
+              suggestions.push({
+                label: sug,
+                kind,
+                detail,
+                insertText: sug,
+                range: xmlRange,
+                sortText: `0_${sug}`,
+              })
+            }
+          }
+        }
+
+        // XPath fonksiyonları (daha düşük öncelik)
         for (const fn of xpathFunctions) {
           suggestions.push({
             label: fn.label,
@@ -289,6 +327,7 @@ function registerXsltCompletions(monaco: Monaco) {
             insertText: fn.snippet,
             insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
             range: wordRange,
+            sortText: `1_${fn.label}`,
           })
         }
         return { suggestions }
@@ -351,16 +390,44 @@ function registerXsltCompletions(monaco: Monaco) {
         }
       }
 
+      // User snippets — scope-aware
+      for (const s of currentUserSnippets) {
+        const scopeMatches =
+          (s.scope === 'xslt' && isTypingTag) ||
+          (s.scope === 'html' && isTypingTag) ||
+          (s.scope === 'xpath' && inAttrValue) ||
+          (!isTypingTag && !inAttrValue)
+        if (!scopeMatches) continue
+        const range = inAttrValue ? wordRange : (s.scope === 'xslt' || s.scope === 'html' ? replaceRange : wordRange)
+        suggestions.push({
+          label: s.prefix,
+          kind: CompletionItemKind.User,
+          detail: s.description ?? `Kullanıcı snippet (${s.scope})`,
+          insertText: s.body,
+          insertTextRules: CompletionItemInsertTextRule.InsertAsSnippet,
+          range,
+          sortText: `0_user_${s.prefix}`,
+        })
+      }
+
       return { suggestions }
     },
   })
 
 }
 
-export default function XsltEditor({ value, onChange, onEditorReady, onRequestImageInsert, errors, options }: Props) {
+export default function XsltEditor({ value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, onEvaluateXPath, errors, options }: Props) {
 
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+
+  useEffect(() => {
+    currentXmlIndex = xmlContent ? buildXmlIndex(xmlContent) : null
+  }, [xmlContent])
+
+  useEffect(() => {
+    currentUserSnippets = userSnippets ?? []
+  }, [userSnippets])
 
   function handleBeforeMount(monaco: Monaco) {
     monacoRef.current = monaco
@@ -455,7 +522,7 @@ export default function XsltEditor({ value, onChange, onEditorReady, onRequestIm
 
     editor.addAction({
       id: 'xslt-toggle-comment',
-      label: 'Yorum Satırı Ekle / Kaldır',
+      label: 'Açıklama Satırı Yap / Kaldır',
       contextMenuGroupId: 'modification',
       contextMenuOrder: 2,
       keybindings: [monacoRef.current!.KeyMod.CtrlCmd | monacoRef.current!.KeyMod.Shift | monacoRef.current!.KeyCode.KeyC],
@@ -463,10 +530,22 @@ export default function XsltEditor({ value, onChange, onEditorReady, onRequestIm
     })
 
     editor.addAction({
+      id: 'xslt-evaluate-xpath',
+      label: "Seçili XPath'i Test Et",
+      contextMenuGroupId: 'modification',
+      contextMenuOrder: 4,
+      run(ed) {
+        const sel = ed.getSelection()
+        const model = ed.getModel()
+        if (!sel || !model) return
+        const text = model.getValueInRange(sel).trim()
+        if (text && onEvaluateXPath) onEvaluateXPath(text)
+      },
+    })
+
+    editor.addAction({
       id: 'xslt-format-document',
       label: 'Belgeyi Biçimlendir',
-      contextMenuGroupId: 'modification',
-      contextMenuOrder: 3,
       keybindings: [
         monacoRef.current!.KeyMod.Shift |
         monacoRef.current!.KeyMod.Alt |
@@ -488,6 +567,63 @@ export default function XsltEditor({ value, onChange, onEditorReady, onRequestIm
       },
     })
 
+    editor.addAction({
+      id: 'xslt-format-selection',
+      label: 'Seçili Satırları Biçimlendir',
+      contextMenuGroupId: 'modification',
+      contextMenuOrder: 3,
+      run(ed) {
+        const sel = ed.getSelection()
+        const model = ed.getModel()
+        const mc = monacoRef.current
+        if (!sel || !model || !mc || sel.isEmpty()) return
+
+        const startLine = sel.startLineNumber
+        const endLine = sel.endLineNumber
+
+        const lines: string[] = []
+        for (let i = startLine; i <= endLine; i++) lines.push(model.getLineContent(i))
+
+        const firstNonEmpty = lines.find(l => l.trim().length > 0) ?? ''
+        const baseIndent = firstNonEmpty.match(/^(\s*)/)?.[1] ?? ''
+
+        const stripped = lines
+          .map(l => (l.startsWith(baseIndent) ? l.slice(baseIndent.length) : l))
+          .join('\n')
+
+        const fmtOpts = {
+          indentation: '  ',
+          collapseContent: true,
+          lineSeparator: '\n',
+          whiteSpaceAtEndOfSelfclosingTag: true,
+          forceSelfClosingEmptyTag: true,
+        }
+
+        try {
+          let formatted: string
+          try {
+            formatted = xmlFormatter(stripped, fmtOpts)
+          } catch {
+            // fragment — wrap in a throw-away root, format, then unwrap
+            const wrappedFmt = xmlFormatter(`<__r__>\n${stripped}\n</__r__>`, fmtOpts)
+            formatted = wrappedFmt
+              .split('\n')
+              .slice(1, -1)
+              .map(l => (l.startsWith('  ') ? l.slice(2) : l))
+              .join('\n')
+          }
+
+          const reindented = formatted
+            .split('\n')
+            .map(l => (l.length > 0 ? baseIndent + l : l))
+            .join('\n')
+
+          const range = new mc.Range(startLine, 1, endLine, model.getLineContent(endLine).length + 1)
+          ed.executeEdits('format-selection', [{ range, text: reindented }])
+        } catch { /* geçersiz XML fragment — sessizce geç */ }
+      },
+    })
+
     if (onEditorReady) {
       onEditorReady({
         goTo: (term: string) => {
@@ -502,6 +638,15 @@ export default function XsltEditor({ value, onChange, onEditorReady, onRequestIm
             editor.setPosition({ lineNumber: startLineNumber, column: startColumn })
             editor.focus()
           }
+        },
+        revealLine: (lineNumber: number, column?: number) => {
+          const model = editor.getModel()
+          if (!model) return
+          const maxLine = model.getLineCount()
+          const target = Math.max(1, Math.min(lineNumber, maxLine))
+          editor.revealLineInCenter(target)
+          editor.setPosition({ lineNumber: target, column: column && column > 0 ? column : 1 })
+          editor.focus()
         },
         insertTextAtLine: (lineNumber: number, text: string) => {
           const monaco = monacoRef.current

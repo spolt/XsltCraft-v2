@@ -5,8 +5,6 @@ export type BlockType =
   | 'Heading'
   | 'Paragraph'
   | 'Table'
-  | 'ForEach'
-  | 'Conditional'
   | 'Image'
   | 'DocumentInfo'
   | 'Totals'
@@ -15,7 +13,6 @@ export type BlockType =
   | 'ETTN'
   | 'Divider'
   | 'Spacer'
-  | 'Variable'
   | 'ConditionalText'
   | 'TaxSummary'
   | 'GibKarekod'
@@ -83,35 +80,7 @@ export interface TableBlockConfig {
   headerBackgroundColor?: string
 }
 
-// BLOCK-05: ForEach (Loop Container)
-export interface ForEachBlockConfig {
-  iterateOver: string
-  children: string[] // child block ID'leri
-}
-
-// BLOCK-06: Conditional
-export type ConditionalOperator =
-  | 'equals'
-  | 'notEquals'
-  | 'contains'
-  | 'greaterThan'
-  | 'lessThan'
-  | 'exists'
-  | 'notExists'
-
-export interface ConditionalCondition {
-  xpath: string
-  operator: ConditionalOperator
-  value?: string
-}
-
-export interface ConditionalBlockConfig {
-  condition: ConditionalCondition
-  thenBlockIds: string[]
-  elseBlockIds: string[]
-}
-
-// BLOCK-07: Image
+// BLOCK-05: Image
 export type AssetType = 'logo' | 'signature' | 'other'
 export type Alignment = 'left' | 'center' | 'right'
 
@@ -202,13 +171,23 @@ export interface SpacerBlockConfig {
   height: string
 }
 
-// BLOCK-15: Variable (XSL değişken tanımı — görünür çıktı üretmez)
-export interface VariableBlockConfig {
-  name: string
+// Koşul operatörü (ConditionalText bloğu tarafından kullanılır)
+export type ConditionalOperator =
+  | 'equals'
+  | 'notEquals'
+  | 'contains'
+  | 'greaterThan'
+  | 'lessThan'
+  | 'exists'
+  | 'notExists'
+
+export interface ConditionalCondition {
   xpath: string
+  operator: ConditionalOperator
+  value?: string
 }
 
-// BLOCK-16: ConditionalText (koşula göre farklı metin/xpath)
+// BLOCK-15: ConditionalText (koşula göre farklı metin/xpath)
 export interface ConditionalTextBlockConfig {
   condition: ConditionalCondition
   thenIsStatic: boolean
@@ -320,6 +299,7 @@ export interface InvoiceLineTableBlockConfig {
   showTitle: boolean
   showHeader: boolean
   showRowNumber: boolean
+  showCurrency: boolean
   bordered: boolean
   borderStyle?: 'solid' | 'dashed' | 'dotted'
   alternateRowColor?: string
@@ -385,6 +365,7 @@ export interface GibLogoBlockConfig {
   height?: string
   alignment: 'left' | 'center' | 'right'
   opacity?: number // 0-100
+  fontSize?: string
 }
 
 // BLOCK-22: InvoiceTotals (Fatura dip toplamları — hazır UBL XPath'li)
@@ -394,6 +375,7 @@ export interface InvoiceTotalsField {
   xpath: string       // mutlak XPath
   visible: boolean
   highlight: boolean
+  bold: boolean
   order: number
   isCustom?: boolean
 }
@@ -407,14 +389,16 @@ export interface InvoiceTotalsBlockConfig {
 }
 
 export const DEFAULT_INVOICE_TOTALS_FIELDS: InvoiceTotalsField[] = [
-  { key: 'lineExtension', label: 'Mal Hizmet Tutarı',      xpath: '//cac:LegalMonetaryTotal/cbc:LineExtensionAmount',   visible: true,  highlight: false, order: 0 },
-  { key: 'allowance',     label: 'İskonto Tutarı',          xpath: '//cac:LegalMonetaryTotal/cbc:AllowanceTotalAmount',  visible: true,  highlight: false, order: 1 },
-  { key: 'taxExclusive',  label: 'KDV Matrahı',             xpath: '//cac:LegalMonetaryTotal/cbc:TaxExclusiveAmount',    visible: false, highlight: false, order: 2 },
-  { key: 'taxAmount',     label: 'Hesaplanan KDV',          xpath: '//cac:TaxTotal/cbc:TaxAmount',                       visible: true,  highlight: false, order: 3 },
-  { key: 'taxInclusive',  label: 'Vergiler Dahil Toplam',   xpath: '//cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount',    visible: true,  highlight: true,  order: 4 },
-  { key: 'payable',       label: 'Ödenecek Tutar',          xpath: '//cac:LegalMonetaryTotal/cbc:PayableAmount',         visible: true,  highlight: true,  order: 5 },
-  { key: 'prepaid',       label: 'Ödenen Tutar',            xpath: '//cac:LegalMonetaryTotal/cbc:PrepaidAmount',         visible: false, highlight: false, order: 6 },
-  { key: 'rounding',      label: 'Yuvarlama',               xpath: '//cac:LegalMonetaryTotal/cbc:PayableRoundingAmount', visible: false, highlight: false, order: 7 },
+  { key: 'lineExtension',      label: 'Mal Hizmet Tutarı',            xpath: '//cac:LegalMonetaryTotal/cbc:LineExtensionAmount',   visible: true,  highlight: false, bold: false, order: 0 },
+  { key: 'allowance',          label: 'Toplam İskonto',                xpath: '//cac:LegalMonetaryTotal/cbc:AllowanceTotalAmount',  visible: true,  highlight: false, bold: false, order: 1 },
+  { key: 'taxExclusive',       label: 'KDV Matrahı (toplam)',           xpath: '//cac:LegalMonetaryTotal/cbc:TaxExclusiveAmount',    visible: false, highlight: false, bold: false, order: 2 },
+  { key: 'taxBaseGroups',      label: 'KDV/ÖTV Matrahı (orana göre)', xpath: '',                                                   visible: false, highlight: false, bold: false, order: 3 },
+  { key: 'taxAmount',          label: 'Hesaplanan KDV (toplam)',        xpath: '//cac:TaxTotal/cbc:TaxAmount',                       visible: false, highlight: false, bold: false, order: 4 },
+  { key: 'taxSubtotalGroups',  label: 'Hesaplanan KDV (orana göre)',   xpath: '',                                                   visible: true,  highlight: false, bold: false, order: 5 },
+  { key: 'taxInclusive',       label: 'Vergiler Dahil Toplam Tutar',   xpath: '//cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount',    visible: true,  highlight: true,  bold: true,  order: 6 },
+  { key: 'payable',            label: 'Ödenecek Tutar',                xpath: '//cac:LegalMonetaryTotal/cbc:PayableAmount',         visible: true,  highlight: true,  bold: true,  order: 7 },
+  { key: 'prepaid',            label: 'Ödenen Tutar',                  xpath: '//cac:LegalMonetaryTotal/cbc:PrepaidAmount',         visible: false, highlight: false, bold: false, order: 8 },
+  { key: 'rounding',           label: 'Yuvarlama',                     xpath: '//cac:LegalMonetaryTotal/cbc:PayableRoundingAmount', visible: false, highlight: false, bold: false, order: 9 },
 ]
 
 // Discriminated union: her block tipini config'iyle eşleştir
@@ -423,8 +407,6 @@ export type BlockConfig =
   | { type: 'Heading'; config: HeadingBlockConfig }
   | { type: 'Paragraph'; config: ParagraphBlockConfig }
   | { type: 'Table'; config: TableBlockConfig }
-  | { type: 'ForEach'; config: ForEachBlockConfig }
-  | { type: 'Conditional'; config: ConditionalBlockConfig }
   | { type: 'Image'; config: ImageBlockConfig }
   | { type: 'DocumentInfo'; config: DocumentInfoBlockConfig }
   | { type: 'Totals'; config: TotalsBlockConfig }
@@ -433,7 +415,6 @@ export type BlockConfig =
   | { type: 'ETTN'; config: ETTNBlockConfig }
   | { type: 'Divider'; config: DividerBlockConfig }
   | { type: 'Spacer'; config: SpacerBlockConfig }
-  | { type: 'Variable'; config: VariableBlockConfig }
   | { type: 'ConditionalText'; config: ConditionalTextBlockConfig }
   | { type: 'TaxSummary'; config: TaxSummaryBlockConfig }
   | { type: 'GibKarekod'; config: GibKarekodBlockConfig }
@@ -481,8 +462,6 @@ export const DEFAULT_BLOCK_SIZE: Record<BlockType, { width: number; height: numb
   Heading:          { width: 182, height: 12,  autoHeight: true },
   Paragraph:        { width: 182, height: 25,  autoHeight: true },
   Table:            { width: 182, height: 60,  autoHeight: true },
-  ForEach:          { width: 182, height: 40,  autoHeight: true },
-  Conditional:      { width: 182, height: 30,  autoHeight: true },
   Image:            { width: 40,  height: 30,  autoHeight: true },
   DocumentInfo:     { width: 90,  height: 40,  autoHeight: true },
   Totals:           { width: 90,  height: 50,  autoHeight: true },
@@ -491,12 +470,11 @@ export const DEFAULT_BLOCK_SIZE: Record<BlockType, { width: number; height: numb
   ETTN:             { width: 40,  height: 40,  autoHeight: true },
   Divider:          { width: 182, height: 10,  autoHeight: false },
   Spacer:           { width: 182, height: 10,  autoHeight: false },
-  Variable:         { width: 80,  height: 10,  autoHeight: true },
   ConditionalText:  { width: 182, height: 15,  autoHeight: true },
   TaxSummary:       { width: 90,  height: 50,  autoHeight: true },
   GibKarekod:       { width: 40,  height: 40,  autoHeight: false },
   PartyInfo:        { width: 90,  height: 55,  autoHeight: true },
-  InvoiceLineTable: { width: 182, height: 80,  autoHeight: true },
+  InvoiceLineTable: { width: 182, height: 20,  autoHeight: true },
   InvoiceHeader:    { width: 90,  height: 50,  autoHeight: true },
   InvoiceTotals:    { width: 90,  height: 50,  autoHeight: true },
   GibLogo:          { width: 30,  height: 30,  autoHeight: false },

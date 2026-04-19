@@ -12,12 +12,24 @@ import {
   Upload,
   TriangleAlert,
   WandSparkles,
+  ShieldCheck,
+  ListChecks,
+  Terminal,
+  BookMarked,
 } from 'lucide-react'
+import Editor from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
 import XsltEditorToolbar from '../components/xslt-editor/XsltEditorToolbar'
 import XsltEditorPreview from '../components/xslt-editor/XsltEditorPreview'
 import SaveTemplateDialog from '../components/xslt-editor/SaveTemplateDialog'
-import { previewFromRawXslt } from '../services/previewService'
+import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
+import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
+import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
+import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
+import { listSnippets, type UserSnippet } from '../services/snippetService'
+import { previewFromRawXslt, type PreviewTimings } from '../services/previewService'
+import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import {
   getUserXsltTemplate,
   createUserXsltTemplate,
@@ -29,6 +41,22 @@ import api from '../services/apiService'
 const PREVIEW_DEBOUNCE_MS = 1000
 const XSLT_VALIDATION_DEBOUNCE_MS = 1500
 const XML_VALIDATION_DEBOUNCE_MS = 500
+
+/** DOMParser parsererror çıktısından satır/kolon çıkarır. */
+function extractXmlParseErrors(xml: string): { message: string; line: number | null; column: number | null }[] {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(xml, 'text/xml')
+  const err = doc.querySelector('parsererror')
+  if (!err) return []
+  const raw = (err.textContent ?? 'XML ayrıştırma hatası').replace(/\s+/g, ' ').trim()
+  const lineMatch = /line\s*(?:number)?\s*[:\s]\s*(\d+)/i.exec(raw)
+  const colMatch = /column\s*(\d+)/i.exec(raw)
+  return [{
+    message: raw,
+    line: lineMatch ? Number(lineMatch[1]) : null,
+    column: colMatch ? Number(colMatch[1]) : null,
+  }]
+}
 
 // ─── Compact Sidebar ─────────────────────────────────────────────────────────
 function EditorSidebar() {
@@ -69,27 +97,75 @@ export default function XsltEditorPage() {
   const [xsltValid, setXsltValid] = useState<boolean | null>(null)
   const [xsltErrors, setXsltErrors] = useState<{ message: string; line: number; column: number }[]>([])
   const [xmlValid, setXmlValid] = useState<boolean | null>(null)
+  const [xmlErrors, setXmlErrors] = useState<{ message: string; line: number | null; column: number | null }[]>([])
 
   // Preview
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [lastMs, setLastMs] = useState<number | null>(null)
+  const [lastTimings, setLastTimings] = useState<PreviewTimings | null>(null)
 
   // Save dialog
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // UBL-TR business rule validation
+  const [ublTrResults, setUblTrResults] = useState<BusinessRuleResult[] | null>(null)
+  const [ublTrLoading, setUblTrLoading] = useState(false)
+  const [ublTrError, setUblTrError] = useState<string | null>(null)
+  const [showProblems, setShowProblems] = useState(false)
+
+  // XPath console
+  const [showXPathConsole, setShowXPathConsole] = useState(false)
+  const [xpathInitialExpr, setXpathInitialExpr] = useState('')
+
+  // Snippets
+  const [userSnippets, setUserSnippets] = useState<UserSnippet[]>([])
+  const [showSnippetManager, setShowSnippetManager] = useState(false)
+
+  // Shortcuts dialog
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
+  // Right panel tab: preview | xml
+  const [rightTab, setRightTab] = useState<'preview' | 'xml'>('preview')
 
   // Loading from saved template
   const [loadingTemplate, setLoadingTemplate] = useState(!!routeTemplateId)
 
   // Refs
   const goToRef = useRef<((term: string) => void) | null>(null)
+  const revealLineRef = useRef<((lineNumber: number, column?: number) => void) | null>(null)
   const insertTextAtLineRef = useRef<((lineNumber: number, text: string) => void) | null>(null)
   const toggleCommentRef = useRef<(() => void) | null>(null)
   const formatDocumentRef = useRef<(() => void) | null>(null)
   const imageFileInputRef = useRef<HTMLInputElement>(null)
   const pendingInsertLineRef = useRef<number | null>(null)
+  const xmlEditorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+
+  // ─── Load user snippets ─────────────────────────────────────────────────────
+  useEffect(() => {
+    listSnippets().then(setUserSnippets).catch(() => {})
+  }, [])
+
+  // ─── Global keyboard shortcuts ──────────────────────────────────────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // F1 — kısayollar
+      if (e.key === 'F1') {
+        e.preventDefault()
+        setShowShortcuts(s => !s)
+        return
+      }
+      // Ctrl+S / ⌘S — kaydet (sadece editör ekranı açıkken)
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && xsltContent) {
+        e.preventDefault()
+        setShowSaveDialog(true)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [xsltContent])
 
   // ─── Load saved template ────────────────────────────────────────────────────
   useEffect(() => {
@@ -132,14 +208,9 @@ export default function XsltEditorPage() {
     const reader = new FileReader()
     reader.onload = (ev) => {
       const content = ev.target?.result as string
-      // Validate XML on upload
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(content, 'text/xml')
-      if (doc.querySelector('parsererror')) {
-        setXmlValid(false)
-      } else {
-        setXmlValid(true)
-      }
+      const errs = extractXmlParseErrors(content)
+      setXmlErrors(errs)
+      setXmlValid(errs.length === 0)
       setXmlContent(content)
     }
     reader.readAsText(file, 'utf-8')
@@ -154,6 +225,7 @@ export default function XsltEditorPage() {
       const result = await previewFromRawXslt(currentXslt, currentXml)
       setPreviewHtml(result.html)
       setLastMs(result.generationTimeMs)
+      setLastTimings(result.timings ?? null)
     } catch (e: unknown) {
       if (e && typeof e === 'object' && 'response' in e) {
         const data = (e as { response?: { data?: { error?: string; line?: number; column?: number } } }).response?.data
@@ -202,11 +274,11 @@ export default function XsltEditorPage() {
 
   // ─── Debounced XML validation ───────────────────────────────────────────────
   useEffect(() => {
-    if (!xmlContent) { setXmlValid(null); return }
+    if (!xmlContent) { setXmlValid(null); setXmlErrors([]); return }
     const t = setTimeout(() => {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(xmlContent, 'text/xml')
-      setXmlValid(!doc.querySelector('parsererror'))
+      const errs = extractXmlParseErrors(xmlContent)
+      setXmlErrors(errs)
+      setXmlValid(errs.length === 0)
     }, XML_VALIDATION_DEBOUNCE_MS)
     return () => clearTimeout(t)
   }, [xmlContent])
@@ -280,6 +352,47 @@ export default function XsltEditorPage() {
     const searchTerm = text.length > 50 ? text.substring(0, 50) : text
     goToRef.current(searchTerm)
   }, [])
+
+  // ─── UBL-TR iş kuralı doğrulaması ───────────────────────────────────────────
+  async function handleValidateUblTr() {
+    if (!xmlContent) return
+    setUblTrLoading(true)
+    setUblTrError(null)
+    setShowProblems(true)
+    try {
+      const res = await validateBusinessRules(xmlContent)
+      setUblTrResults(res.results)
+    } catch (e: unknown) {
+      const msg = e && typeof e === 'object' && 'response' in e
+        ? (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Doğrulama yapılamadı.'
+        : 'Doğrulama yapılamadı.'
+      setUblTrError(msg)
+      setUblTrResults(null)
+    } finally {
+      setUblTrLoading(false)
+    }
+  }
+
+  const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null
+  const totalErrorCount = xsltErrors.length + xmlErrors.length + (ublTrErrorCount ?? 0)
+
+  // XPath console — seçili ifadeyi konsola gönder, konsolu aç
+  function handleEvaluateXPath(expression: string) {
+    setXpathInitialExpr(expression)
+    setShowXPathConsole(true)
+  }
+
+  // XML editor'da ilgili satıra git (sekmeyi XML'e çevir + reveal)
+  function handleLocateXmlLine(line: number, column?: number | null) {
+    setRightTab('xml')
+    setTimeout(() => {
+      if (xmlEditorRef.current) {
+        xmlEditorRef.current.revealLineInCenter(line)
+        xmlEditorRef.current.setPosition({ lineNumber: line, column: column ?? 1 })
+        xmlEditorRef.current.focus()
+      }
+    }, 100)
+  }
 
   // ─── Print ──────────────────────────────────────────────────────────────────
   function handlePrint() {
@@ -399,6 +512,7 @@ export default function XsltEditorPage() {
           xmlValid={xmlValid}
           previewLoading={previewLoading}
           lastMs={lastMs}
+          lastTimings={lastTimings}
           hasXslt={!!xsltContent}
           hasXml={!!xmlContent}
           isDirty={isDirty}
@@ -406,9 +520,9 @@ export default function XsltEditorPage() {
           onUploadXslt={handleXsltFile}
           onUploadXml={handleXmlFile}
           onDownload={handleDownload}
-          onFormat={() => formatDocumentRef.current?.()}
           onSave={() => setShowSaveDialog(true)}
           onPrint={handlePrint}
+          onShowShortcuts={() => setShowShortcuts(true)}
         />
 
         {previewError && (
@@ -421,22 +535,89 @@ export default function XsltEditorPage() {
         <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
           <Panel defaultSize={50} minSize={20}>
             <div className="h-full flex flex-col">
-              <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between">
-                <span className="text-xs text-gray-400 font-mono uppercase tracking-wide">XSLT Editörü</span>
-                <div className="flex items-center gap-1">
+              <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between gap-2">
+                <span className="text-xs text-gray-400 font-mono uppercase tracking-wide whitespace-nowrap">XSLT Editörü</span>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {/* Yorum Satırı */}
                   <button
                     onClick={() => toggleCommentRef.current?.()}
-                    className="h-6 px-2 flex items-center justify-center rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-xs font-mono transition-colors"
-                    title="Yorum Satırı Ekle / Kaldır (Ctrl+Shift+C)"
+                    className="h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors"
+                    title="Açıklama Satırı Yap / Kaldır (Ctrl + Shift + C)"
                   >
-                    {'<!--'}
+                    <span className="font-mono text-[11px]">{'<!--'}</span>
+                    <span className="hidden 2xl:inline">Açıklama</span>
                   </button>
+
+                  {/* Biçimlendir */}
                   <button
                     onClick={() => formatDocumentRef.current?.()}
-                    className="h-6 px-2 flex items-center gap-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-xs transition-colors"
+                    disabled={!xsltContent}
+                    className="h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors disabled:opacity-30"
                     title="Belgeyi Biçimlendir (Shift+Alt+F)"
                   >
-                    <WandSparkles size={12} />
+                    <WandSparkles size={13} />
+                    <span className="hidden 2xl:inline">Biçimlendir</span>
+                  </button>
+
+                  {/* UBL-TR */}
+                  <button
+                    onClick={handleValidateUblTr}
+                    disabled={!xmlContent || ublTrLoading}
+                    className="h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors disabled:opacity-30"
+                    title="UBL-TR iş kurallarını kontrol et"
+                  >
+                    <ShieldCheck size={13} />
+                    <span className="hidden 2xl:inline">UBL-TR</span>
+                    {ublTrErrorCount != null && ublTrErrorCount > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold">
+                        {ublTrErrorCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Problemler */}
+                  <button
+                    onClick={() => setShowProblems(s => !s)}
+                    className={`h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-xs transition-colors ${
+                      showProblems ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
+                    }`}
+                    title="Problemler panelini aç/kapat"
+                  >
+                    <ListChecks size={13} />
+                    <span className="hidden 2xl:inline">Problemler</span>
+                    {totalErrorCount > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold">
+                        {totalErrorCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* XPath Konsolu */}
+                  <button
+                    onClick={() => setShowXPathConsole(s => !s)}
+                    disabled={!xmlContent}
+                    className={`h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-xs transition-colors disabled:opacity-30 ${
+                      showXPathConsole ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
+                    }`}
+                    title="XPath Konsolu"
+                  >
+                    <Terminal size={13} />
+                    <span className="hidden 2xl:inline">XPath</span>
+                  </button>
+
+                  {/* Snippet Kütüphanesi */}
+                  <button
+                    onClick={() => setShowSnippetManager(true)}
+                    className="h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors"
+                    title="Snippet Kütüphanesi"
+                  >
+                    <BookMarked size={13} />
+                    <span className="hidden 2xl:inline">Snippet</span>
+                    {userSnippets.length > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-gray-600 text-gray-300 text-[10px] font-medium">
+                        {userSnippets.length}
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
@@ -444,8 +625,12 @@ export default function XsltEditorPage() {
                 <XsltEditor
                   value={xsltContent}
                   onChange={(v) => { setXsltContent(v); setIsDirty(true) }}
-                  onEditorReady={({ goTo, insertTextAtLine, toggleComment, formatDocument }) => {
+                  xmlContent={xmlContent}
+                  userSnippets={userSnippets}
+                  onEvaluateXPath={handleEvaluateXPath}
+                  onEditorReady={({ goTo, revealLine, insertTextAtLine, toggleComment, formatDocument }) => {
                     goToRef.current = goTo
+                    revealLineRef.current = revealLine
                     insertTextAtLineRef.current = insertTextAtLine
                     toggleCommentRef.current = toggleComment
                     formatDocumentRef.current = formatDocument
@@ -460,13 +645,108 @@ export default function XsltEditorPage() {
           <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors cursor-col-resize flex-shrink-0" />
 
           <Panel defaultSize={50} minSize={20}>
-            <XsltEditorPreview
-              html={previewHtml}
-              onElementClick={handlePreviewClick}
-            />
+            <div className="h-full flex flex-col">
+              {/* Sağ panel sekme başlıkları */}
+              <div className="h-9 flex items-center border-b border-gray-700 bg-gray-800 px-2 gap-0.5 flex-shrink-0">
+                <button
+                  onClick={() => setRightTab('preview')}
+                  className={`px-3 py-1 rounded text-xs transition-colors ${
+                    rightTab === 'preview' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  Önizleme
+                </button>
+                <button
+                  onClick={() => setRightTab('xml')}
+                  disabled={!xmlContent}
+                  className={`px-3 py-1 rounded text-xs transition-colors disabled:opacity-30 ${
+                    rightTab === 'xml' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  XML Kaynak
+                </button>
+              </div>
+
+              {/* Sağ panel içerik */}
+              <div className="flex-1 overflow-hidden">
+                {rightTab === 'preview' ? (
+                  <XsltEditorPreview
+                    html={previewHtml}
+                    onElementClick={handlePreviewClick}
+                  />
+                ) : (
+                  <Editor
+                    height="100%"
+                    language="xml"
+                    theme="vs-dark"
+                    value={xmlContent ?? ''}
+                    onMount={(editor) => { xmlEditorRef.current = editor }}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      wordWrap: 'on',
+                      lineNumbers: 'on',
+                      scrollBeyondLastLine: false,
+                      folding: true,
+                    }}
+                  />
+                )}
+              </div>
+            </div>
           </Panel>
         </PanelGroup>
+
+        {showProblems && (
+          <ProblemsPanel
+            xsltProblems={xsltErrors.map(e => ({
+              source: 'xslt' as const,
+              severity: 'error' as const,
+              ruleName: 'XSLT Sözdizimi',
+              message: e.message,
+              line: e.line,
+              column: e.column,
+            }))}
+            xmlProblems={xmlErrors.map(e => ({
+              source: 'xml' as const,
+              severity: 'error' as const,
+              ruleName: 'XML Ayrıştırma',
+              message: e.message,
+              line: e.line,
+              column: e.column,
+            }))}
+            ublTrProblems={ublTrResults?.map(r => ({
+              source: 'ubl-tr' as const,
+              ruleId: r.ruleId,
+              ruleName: r.ruleName,
+              severity: r.severity,
+              message: r.message,
+              line: r.line,
+              column: r.column,
+            })) ?? null}
+            ublTrLoading={ublTrLoading}
+            ublTrError={ublTrError}
+            onLocateXslt={(line, column) => revealLineRef.current?.(line, column ?? undefined)}
+            onClose={() => setShowProblems(false)}
+          />
+        )}
+
+        {showXPathConsole && (
+          <XPathConsolePanel
+            xmlContent={xmlContent}
+            initialExpression={xpathInitialExpr}
+            onLocateLine={handleLocateXmlLine}
+            onClose={() => setShowXPathConsole(false)}
+          />
+        )}
       </div>
+
+      {showSnippetManager && (
+        <SnippetManagerDialog
+          onClose={() => setShowSnippetManager(false)}
+          onSnippetsChanged={setUserSnippets}
+        />
+      )}
 
       {/* Gizli image file input — Resim Ekle context menu için */}
       <input
@@ -485,6 +765,10 @@ export default function XsltEditorPage() {
           onSave={handleSave}
           onClose={() => setShowSaveDialog(false)}
         />
+      )}
+
+      {showShortcuts && (
+        <ShortcutsDialog onClose={() => setShowShortcuts(false)} />
       )}
     </div>
   )

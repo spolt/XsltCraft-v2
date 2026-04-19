@@ -61,9 +61,6 @@ const CATEGORIES: { name: string; items: PaletteItem[] }[] = [
   {
     name: 'DÜZEN',
     items: [
-      { id: 'ForEach',    type: 'ForEach',    label: 'For-Each',    icon: '↺' },
-      { id: 'Conditional',type: 'Conditional',label: 'Koşul Bloğu', icon: '∨' },
-      { id: 'Variable',   type: 'Variable',   label: 'Değişken',    icon: '$' },
       { id: 'Divider',    type: 'Divider',    label: 'Ayırıcı',     icon: '—' },
       { id: 'Spacer',     type: 'Spacer',     label: 'Boşluk',      icon: '↕' },
     ],
