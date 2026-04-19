@@ -102,68 +102,7 @@ public class XsltGeneratorTests
             }
         }));
 
-    // ── BLOCK-05: ForEach ─────────────────────────────────────────────────
-
-    [Fact]
-    public void ForEach_WithChildren_GeneratesValidXslt()
-    {
-        var tree = new BlockTreeDto
-        {
-            Sections =
-            [
-                new SectionDto { Id = "s1", Name = "Test", Order = 1, BlockIds = ["b1"] }
-            ],
-            Blocks = new Dictionary<string, BlockDto>
-            {
-                ["b1"] = new BlockDto
-                {
-                    Id = "b1",
-                    Type = "ForEach",
-                    Config = JsonSerializer.SerializeToElement(new
-                    {
-                        iterateOver = "//cac:InvoiceLine",
-                        children = new[] { "b2" }
-                    })
-                },
-                ["b2"] = new BlockDto
-                {
-                    Id = "b2",
-                    Type = "Text",
-                    Config = JsonSerializer.SerializeToElement(new { isStatic = true, content = "satır" })
-                }
-            }
-        };
-        AssertValid(tree);
-    }
-
-    // ── BLOCK-06: Conditional ─────────────────────────────────────────────
-
-    [Theory]
-    [InlineData("equals", "TEMELFATURA")]
-    [InlineData("notEquals", "TEMELFATURA")]
-    [InlineData("contains", "FATURA")]
-    [InlineData("greaterThan", "100")]
-    [InlineData("lessThan", "100")]
-    [InlineData("exists", "")]
-    [InlineData("notExists", "")]
-    public void Conditional_AllOperators_GenerateValidXslt(string op, string val)
-        => AssertValid(SingleBlock("Conditional", new
-        {
-            condition = new { xpath = "//cbc:InvoiceTypeCode", @operator = op, value = val },
-            thenBlockIds = Array.Empty<string>(),
-            elseBlockIds = Array.Empty<string>()
-        }));
-
-    [Fact]
-    public void Conditional_WithElse_GeneratesValidXslt()
-        => AssertValid(SingleBlock("Conditional", new
-        {
-            condition = new { xpath = "//cbc:InvoiceTypeCode", @operator = "equals", value = "TEMELFATURA" },
-            thenBlockIds = Array.Empty<string>(),
-            elseBlockIds = new[] { "nonexistent" }
-        }));
-
-    // ── BLOCK-07: Image ───────────────────────────────────────────────────
+    // ── BLOCK-05: Image ───────────────────────────────────────────────────
 
     [Fact]
     public void Image_GeneratesValidXslt()

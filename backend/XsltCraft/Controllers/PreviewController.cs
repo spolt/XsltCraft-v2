@@ -160,7 +160,7 @@ public class PreviewController : ControllerBase
     /// <summary>
     /// Ham XSLT + XML ile anlık önizleme — geliştirici mod için.
     /// Request: { xslt, xmlContent }
-    /// Response: { html, generationTimeMs }
+    /// Response: { html, generationTimeMs, timings: { parseMs, compileMs, transformMs, serializeMs } }
     /// </summary>
     [HttpPost("raw")]
     [RequestSizeLimit(MaxRawBodyBytes)]
@@ -171,10 +171,9 @@ public class PreviewController : ControllerBase
         if (System.Text.Encoding.UTF8.GetByteCount(request.XmlContent) > MaxRawBodyBytes / 2)
             return BadRequest(new { error = "XML içeriği çok büyük (maks. 512 KB)." });
 
-        var sw = Stopwatch.StartNew();
         try
         {
-            var html = ApplyXsltWithParams(request.Xslt, request.XmlContent, request.LogoUrl, request.SignatureUrl);
+            var (html, timings) = ApplyXsltWithTimings(request.Xslt, request.XmlContent, request.LogoUrl, request.SignatureUrl);
 
             if (!string.IsNullOrEmpty(request.LogoUrl) || !string.IsNullOrEmpty(request.SignatureUrl))
                 html = InjectAssetOverrides(html,
@@ -184,8 +183,12 @@ public class PreviewController : ControllerBase
             if (request.BankInfo?.Count > 0)
                 html = InjectBankInfo(html, request.BankInfo);
 
-            sw.Stop();
-            return Ok(new { html, generationTimeMs = sw.ElapsedMilliseconds });
+            return Ok(new
+            {
+                html,
+                generationTimeMs = timings.ParseMs + timings.CompileMs + timings.TransformMs + timings.SerializeMs,
+                timings = new { timings.ParseMs, timings.CompileMs, timings.TransformMs, timings.SerializeMs },
+            });
         }
         catch (XsltException ex)
         {
@@ -306,17 +309,27 @@ public class PreviewController : ControllerBase
         => ApplyXsltWithParams(xslt, xmlContent, null, null);
 
     private static string ApplyXsltWithParams(string xslt, string xmlContent, string? logoUrl, string? signatureUrl)
+        => ApplyXsltWithTimings(xslt, xmlContent, logoUrl, signatureUrl).Html;
+
+    private sealed record PreviewTimings(long ParseMs, long CompileMs, long TransformMs, long SerializeMs);
+
+    private static (string Html, PreviewTimings Timings) ApplyXsltWithTimings(
+        string xslt, string xmlContent, string? logoUrl, string? signatureUrl)
     {
+        var sw = Stopwatch.StartNew();
         var transform = new XslCompiledTransform();
         var xsltReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
         using var xsltReader = XmlReader.Create(new StringReader(xslt), xsltReaderSettings);
         var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
         transform.Load(xsltReader, xsltSettings, new XmlUrlResolver());
+        var compileMs = sw.ElapsedMilliseconds;
 
+        sw.Restart();
         var xmlReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
         var xmlDoc = new XmlDocument { XmlResolver = null };
         using var xmlReader = XmlReader.Create(new StringReader(xmlContent), xmlReaderSettings);
         xmlDoc.Load(xmlReader);
+        var parseMs = sw.ElapsedMilliseconds;
 
         var args = new XsltArgumentList();
         if (!string.IsNullOrEmpty(logoUrl))
@@ -324,9 +337,16 @@ public class PreviewController : ControllerBase
         if (!string.IsNullOrEmpty(signatureUrl))
             args.AddParam("signature-url", "", signatureUrl);
 
-        using var sw = new StringWriter();
-        transform.Transform(xmlDoc, args, sw);
-        return sw.ToString();
+        sw.Restart();
+        using var writer = new StringWriter();
+        transform.Transform(xmlDoc, args, writer);
+        var transformMs = sw.ElapsedMilliseconds;
+
+        sw.Restart();
+        var html = writer.ToString();
+        var serializeMs = sw.ElapsedMilliseconds;
+
+        return (html, new PreviewTimings(parseMs, compileMs, transformMs, serializeMs));
     }
 
     /// <summary>

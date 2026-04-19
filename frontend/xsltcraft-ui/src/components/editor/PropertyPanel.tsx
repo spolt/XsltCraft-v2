@@ -535,58 +535,6 @@ function TablePanel({ config, update }: { config: Config<'Table'>; update: Updat
   )
 }
 
-function ForEachPanel({ config, update }: { config: Config<'ForEach'>; update: UpdateFn }) {
-  return (
-    <Field label="Her eleman için (XPath)">
-      <XPathInput
-        value={config.iterateOver}
-        onChange={(v) => update({ iterateOver: v })}
-        placeholder="//cac:InvoiceLine"
-      />
-    </Field>
-  )
-}
-
-function ConditionalPanel({ config, update }: { config: Config<'Conditional'>; update: UpdateFn }) {
-  const OPERATORS = [
-    { value: 'equals', label: 'Eşit (=)' },
-    { value: 'notEquals', label: 'Eşit Değil (≠)' },
-    { value: 'contains', label: 'İçeriyor' },
-    { value: 'greaterThan', label: 'Büyüktür (>)' },
-    { value: 'lessThan', label: 'Küçüktür (<)' },
-    { value: 'exists', label: 'Mevcut' },
-    { value: 'notExists', label: 'Mevcut Değil' },
-  ] as const
-
-  return (
-    <>
-      <Field label="XPath">
-        <XPathInput
-          value={config.condition.xpath}
-          onChange={(v) => update({ condition: { ...config.condition, xpath: v } })}
-          placeholder="//cbc:InvoiceTypeCode"
-        />
-      </Field>
-      <Field label="Operatör">
-        <Select
-          value={config.condition.operator}
-          onChange={(v) => update({ condition: { ...config.condition, operator: v } })}
-          options={[...OPERATORS]}
-        />
-      </Field>
-      {!['exists', 'notExists'].includes(config.condition.operator) && (
-        <Field label="Değer">
-          <TextInput
-            value={config.condition.value ?? ''}
-            onChange={(v) => update({ condition: { ...config.condition, value: v } })}
-            placeholder="TEMELFATURA"
-          />
-        </Field>
-      )}
-    </>
-  )
-}
-
 function ImagePanel({ config, update }: { config: Config<'Image'>; update: UpdateFn }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
@@ -992,22 +940,6 @@ function SpacerPanel({ config, update }: { config: Config<'Spacer'>; update: Upd
   )
 }
 
-function VariablePanel({ config, update }: { config: Config<'Variable'>; update: UpdateFn }) {
-  return (
-    <>
-      <p className="text-xs text-gray-400 bg-gray-50 rounded p-2">
-        Görünür çıktı üretmez. Diğer bloklarda <code className="font-mono">$isim</code> ile kullanılır.
-      </p>
-      <Field label="Değişken adı">
-        <TextInput value={config.name} onChange={(v) => update({ name: v })} placeholder="currency" />
-      </Field>
-      <Field label="XPath / Değer">
-        <XPathInput value={config.xpath} onChange={(v) => update({ xpath: v })} placeholder="//cbc:DocumentCurrencyCode" />
-      </Field>
-    </>
-  )
-}
-
 function ConditionalTextPanel({ config, update }: { config: Config<'ConditionalText'>; update: UpdateFn }) {
   const OPERATORS = [
     { value: 'equals', label: 'Eşit (=)' },
@@ -1208,6 +1140,7 @@ function InvoiceTotalsPanel({ config, update }: { config: Config<'InvoiceTotals'
           xpath: '//',
           visible: true,
           highlight: false,
+          bold: false,
           order: config.fields.length,
           isCustom: true,
         },
@@ -1304,7 +1237,7 @@ function InvoiceTotalsPanel({ config, update }: { config: Config<'InvoiceTotals'
                 <button
                   type="button"
                   onClick={() => updateField(i, { highlight: !field.highlight })}
-                  title={field.highlight ? 'Vurguyu kaldır' : 'Vurgula'}
+                  title={field.highlight ? 'Vurguyu kaldır' : 'Vurgula (arka plan rengi)'}
                   style={{
                     width: 14, height: 14, borderRadius: 2, flexShrink: 0,
                     border: field.highlight ? '1.5px solid #D4A017' : '1.5px solid #A0A09A',
@@ -1314,6 +1247,22 @@ function InvoiceTotalsPanel({ config, update }: { config: Config<'InvoiceTotals'
                   }}
                 >
                   ★
+                </button>
+
+                {/* Kalın yazı toggle */}
+                <button
+                  type="button"
+                  onClick={() => updateField(i, { bold: !field.bold })}
+                  title={field.bold ? 'Kalın yazıyı kaldır' : 'Kalın yaz'}
+                  style={{
+                    width: 14, height: 14, borderRadius: 2, flexShrink: 0,
+                    border: field.bold ? '1.5px solid #185FA5' : '1.5px solid #A0A09A',
+                    background: field.bold ? 'rgba(24,95,165,0.12)' : 'var(--color-surface-card)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, color: field.bold ? '#185FA5' : '#A0A09A', fontWeight: 900, cursor: 'pointer',
+                  }}
+                >
+                  B
                 </button>
 
                 {/* Etiket */}
@@ -1344,8 +1293,20 @@ function InvoiceTotalsPanel({ config, update }: { config: Config<'InvoiceTotals'
                 )}
               </div>
 
-              {/* XPath */}
-              {field.isCustom ? (
+              {/* XPath / Dinamik bilgi */}
+              {(field.key === 'taxSubtotalGroups' || field.key === 'taxBaseGroups') ? (
+                <div style={{
+                  padding: '3px 8px', background: 'var(--color-surface-card)',
+                  fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  <span style={{ fontSize: 11 }}>↻</span>
+                  <span>
+                    {field.key === 'taxBaseGroups'
+                      ? 'TaxSubtotal/TaxableAmount — KDV oranına göre, ÖTV toplam'
+                      : 'TaxSubtotal/TaxAmount — KDV oranına göre, ÖTV toplam'}
+                  </span>
+                </div>
+              ) : field.isCustom ? (
                 <div style={{ padding: '4px 8px', background: 'var(--color-surface-card)' }}>
                   <XPathInput
                     value={field.xpath}
@@ -1420,6 +1381,9 @@ function GibLogoPanel({ config, update }: { config: Config<'GibLogo'>; update: U
             { value: 'right', label: 'Sağ' },
           ]}
         />
+      </Field>
+      <Field label="Yazı Boyutu">
+        <TextInput value={config.fontSize ?? '11px'} onChange={(v) => update({ fontSize: v })} placeholder="11px" />
       </Field>
       <Field label="Saydamlık (0–100)">
         <input
@@ -1912,6 +1876,7 @@ function InvoiceLineTablePanel({ config, update }: { config: Config<'InvoiceLine
       <Checkbox label="Başlığı göster" checked={config.showTitle} onChange={(v) => update({ showTitle: v })} />
       <Checkbox label="Başlık satırı göster" checked={config.showHeader} onChange={(v) => update({ showHeader: v })} />
       <Checkbox label="Sıra No göster" checked={config.showRowNumber} onChange={(v) => update({ showRowNumber: v })} />
+      <Checkbox label="Para birimi göster" checked={config.showCurrency ?? true} onChange={(v) => update({ showCurrency: v })} />
       <Checkbox label="Kenarlıklı" checked={config.bordered} onChange={(v) => update({ bordered: v })} />
       {config.bordered && (
         <Field label="Kenarlık Stili">
@@ -1965,8 +1930,6 @@ function PropertiesContent() {
         {block.type === 'Heading' && <HeadingPanel config={cfg} update={update} />}
         {block.type === 'Paragraph' && <ParagraphPanel config={cfg} update={update} />}
         {block.type === 'Table' && <TablePanel config={cfg} update={update} />}
-        {block.type === 'ForEach' && <ForEachPanel config={cfg} update={update} />}
-        {block.type === 'Conditional' && <ConditionalPanel config={cfg} update={update} />}
         {block.type === 'Image' && <ImagePanel config={cfg} update={update} />}
         {block.type === 'DocumentInfo' && <DocumentInfoPanel config={cfg} update={update} />}
         {block.type === 'Totals' && <TotalsPanel config={cfg} update={update} />}
@@ -1975,7 +1938,6 @@ function PropertiesContent() {
         {block.type === 'ETTN' && <ETTNPanel config={cfg} update={update} />}
         {block.type === 'Divider' && <DividerPanel config={cfg} update={update} />}
         {block.type === 'Spacer' && <SpacerPanel config={cfg} update={update} />}
-        {block.type === 'Variable' && <VariablePanel config={cfg} update={update} />}
         {block.type === 'ConditionalText' && <ConditionalTextPanel config={cfg} update={update} />}
         {block.type === 'TaxSummary' && <TaxSummaryPanel config={cfg} update={update} />}
         {block.type === 'GibKarekod' && <GibKarekodPanel config={cfg} update={update} />}

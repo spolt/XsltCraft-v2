@@ -1,9 +1,17 @@
 import api from './apiService'
 import type { GridBlock } from '../types/blocks'
 
+export interface PreviewTimings {
+  parseMs: number
+  compileMs: number
+  transformMs: number
+  serializeMs: number
+}
+
 export interface PreviewResponse {
   html: string
   generationTimeMs: number
+  timings?: PreviewTimings
 }
 
 export async function previewFromBlockTree(
