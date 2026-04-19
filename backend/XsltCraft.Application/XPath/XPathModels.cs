@@ -11,10 +11,10 @@ public record XPathResultItem(
 );
 
 public record XPathEvaluateResponse(
-    string                       Kind,          // node-set | atomic | empty | error
+    string Kind,
     IReadOnlyList<XPathResultItem> Items,
-    long                         ExecutionMs,
-    string?                      Error
+    long ExecutionMs,
+    string? Error
 );
 
 public interface IXPathEvaluator
