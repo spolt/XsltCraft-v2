@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.1] - 2026-04-21
+
+### Fixed
+- **V2 grid-canvas preview taşma**: `editorStore.addBlock` ve `updateBlockGridLayout` artık `clampToPage` ile A4 sınırlarına kilitleniyor (drag / resize / PropertyPanel input tek noktadan).
+- **V2 blok üst üste binme**: `XsltGeneratorService.BuildBodyV2` şerit (band) + sütun akış algoritmasıyla yeniden yazıldı. Bloklar Y'ye göre taranır, X-kesişimine göre sütunlara eklenir; birden çok sütunla kesişen geniş blok (ör. Fatura Satırları) yeni bir şerit başlatır. `autoHeight` blok büyüdüğünde altındaki bloklar ve sonraki şeritler doğal olarak aşağı kayar — üst üste binmez, WYSIWYG korunur.
+- **.page CSS**: `position:relative` + `overflow:hidden` eklendi; A4 dışı taşmalar kırpılır.
+
+### Removed
+- `GroupIntoRows` / `RenderV2Row` ölü kodu (~80 satır) temizlendi.
+
+---
+
 ## [0.5.0] - 2026-04-19
 
 ### Added
