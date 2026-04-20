@@ -86,141 +86,119 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
     private string BuildBodyV2(BlockTreeV2Dto tree, BlockTreeDto treeAdapter)
     {
+        // Grid-canvas V2 — şerit (band) + sütun akış algoritması:
+        //  • Bloklar Y'ye göre sıralanır ve bir "tarama" (sweep) yapılır.
+        //  • Aktif sütunlar korunur; her yeni blok aktif sütunlardan biriyle
+        //    X-kesişimi varsa o sütunun dibine eklenir.
+        //  • Blok aktif sütunların BİRDEN ÇOĞUYLA X-kesişiyorsa (örn. tam
+        //    genişlikte bir "Fatura Satırları") mevcut şerit kapanır ve bu
+        //    blok yeni bir şerit başlatır.
+        //  • Çıktı: art arda gelen flex-row şeritler. Her şerit, yan yana
+        //    sütunlardan oluşur; her sütun içinde bloklar dikey akış yapar.
+        //    AutoHeight'lı blok içeriği büyüyünce aynı sütunun alt blokları
+        //    ve sonraki şeritler doğal olarak aşağı kayar — üst üste binmez.
         var allBlocks = tree.Blocks.Values
             .Where(b => b.GridLayout is not null)
+            .OrderBy(b => b.GridLayout!.Y)
+            .ThenBy(b => b.GridLayout!.X)
             .ToList();
 
-        // Aynı z-index değerindeki bloklar → satır-gruplu akış (birbirini itmez)
-        // Farklı z-index değerleri     → üst üste binme (position:absolute katman)
-        var blocksByZIndex = allBlocks
-            .GroupBy(b => b.GridLayout!.ZIndex ?? 0)
-            .OrderBy(g => g.Key)
-            .ToList();
+        if (allBlocks.Count == 0) return string.Empty;
 
-        var sb = new StringBuilder();
+        var bands = new List<List<List<BlockDto>>>();
+        var activeCols = new List<List<BlockDto>>();
 
-        foreach (var group in blocksByZIndex)
+        static (double minX, double maxX) ColRange(List<BlockDto> col)
         {
-            var zValue = group.Key;
-            var groupBlocks = group
-                .OrderBy(b => b.GridLayout!.Y)
-                .ThenBy(b => b.GridLayout!.X)
-                .ToList();
+            var minX = col.Min(b => b.GridLayout!.X);
+            var maxX = col.Max(b => b.GridLayout!.X + b.GridLayout!.Width);
+            return (minX, maxX);
+        }
 
-            var rows = GroupIntoRows(groupBlocks);
-
-            if (zValue == 0)
+        foreach (var block in allBlocks)
+        {
+            var gl = block.GridLayout!;
+            var overlapping = new List<int>();
+            for (int i = 0; i < activeCols.Count; i++)
             {
-                // z=0: doğrudan sayfa akışına eklenir, sarmalayıcı gerekmez
-                double prevRowBottom = 0;
-                foreach (var row in rows)
-                {
-                    var rowMinY = row.Min(b => b.GridLayout!.Y);
-                    var marginTop = Math.Max(0, rowMinY - prevRowBottom);
-                    RenderV2Row(sb, row, marginTop, treeAdapter);
-                    prevRowBottom = row.Max(b => b.GridLayout!.Y + b.GridLayout!.Height);
-                }
+                var (cMin, cMax) = ColRange(activeCols[i]);
+                var overlap = Math.Min(gl.X + gl.Width, cMax) - Math.Max(gl.X, cMin);
+                var minW = Math.Min(gl.Width, cMax - cMin);
+                if (minW > 0 && overlap > minW * 0.3) overlapping.Add(i);
+            }
+
+            if (overlapping.Count == 0)
+            {
+                activeCols.Add(new List<BlockDto> { block });
+            }
+            else if (overlapping.Count == 1)
+            {
+                activeCols[overlapping[0]].Add(block);
             }
             else
             {
-                // z>0: tüm grup aynı z-index'li absolute katmana alınır;
-                // katman içinde bloklar yine satır-gruplu akışla render edilir.
-                sb.AppendLine(FormattableString.Invariant(
-                    $"    <div style=\"position:absolute;top:0;left:0;width:100%;z-index:{zValue};\">"));
-                double prevRowBottom = 0;
-                foreach (var row in rows)
-                {
-                    var rowMinY = row.Min(b => b.GridLayout!.Y);
-                    var marginTop = Math.Max(0, rowMinY - prevRowBottom);
-                    RenderV2Row(sb, row, marginTop, treeAdapter);
-                    prevRowBottom = row.Max(b => b.GridLayout!.Y + b.GridLayout!.Height);
-                }
-                sb.AppendLine("    </div>");
+                bands.Add(activeCols);
+                activeCols = new List<List<BlockDto>> { new List<BlockDto> { block } };
             }
+        }
+        if (activeCols.Count > 0) bands.Add(activeCols);
+
+        var sb = new StringBuilder();
+        double prevBandBottom = 0;
+
+        foreach (var band in bands)
+        {
+            var allBandBlocks = band.SelectMany(c => c).ToList();
+            var bandTop = allBandBlocks.Min(b => b.GridLayout!.Y);
+            var bandBottom = allBandBlocks.Max(b => b.GridLayout!.Y + b.GridLayout!.Height);
+            var bandMarginTop = Math.Max(0, bandTop - prevBandBottom);
+
+            sb.AppendLine(FormattableString.Invariant(
+                $"    <div style=\"display:flex;align-items:flex-start;margin-top:{bandMarginTop:F1}mm;\">"));
+
+            var sortedCols = band.OrderBy(c => ColRange(c).minX).ToList();
+            double prevColRight = 0;
+
+            foreach (var col in sortedCols)
+            {
+                var (colMinX, colMaxX) = ColRange(col);
+                var colWidth = colMaxX - colMinX;
+                var colMarginLeft = Math.Max(0, colMinX - prevColRight);
+
+                sb.AppendLine(FormattableString.Invariant(
+                    $"      <div style=\"margin-left:{colMarginLeft:F1}mm;width:{colWidth:F1}mm;flex-shrink:0;\">"));
+
+                var sortedBlocks = col.OrderBy(b => b.GridLayout!.Y).ToList();
+                double prevBlockBottom = sortedBlocks[0].GridLayout!.Y;
+
+                for (int i = 0; i < sortedBlocks.Count; i++)
+                {
+                    var b = sortedBlocks[i];
+                    var bgl = b.GridLayout!;
+                    var blockMarginTop = i == 0 ? 0 : Math.Max(0, bgl.Y - prevBlockBottom);
+                    var blockMarginLeft = Math.Max(0, bgl.X - colMinX);
+                    var heightStyle = bgl.AutoHeight
+                        ? string.Empty
+                        : FormattableString.Invariant($"height:{bgl.Height:F1}mm;overflow:hidden;");
+                    var zIndex = bgl.ZIndex ?? 0;
+                    var zStyle = zIndex != 0
+                        ? FormattableString.Invariant($"position:relative;z-index:{zIndex};")
+                        : string.Empty;
+                    var style = FormattableString.Invariant(
+                        $"margin-top:{blockMarginTop:F1}mm;margin-left:{blockMarginLeft:F1}mm;width:{bgl.Width:F1}mm;{heightStyle}{zStyle}");
+                    sb.AppendLine($"        <div style=\"{style}\">{DispatchBlock(b, treeAdapter)}</div>");
+                    prevBlockBottom = bgl.Y + bgl.Height;
+                }
+
+                sb.AppendLine("      </div>");
+                prevColRight = colMaxX;
+            }
+
+            sb.AppendLine("    </div>");
+            prevBandBottom = bandBottom;
         }
 
         return sb.ToString();
-    }
-
-    /// <summary>
-    /// Groups blocks into rows: two blocks belong to the same row when their Y-ranges
-    /// overlap by more than 5mm. Blocks stacked vertically (even with small gaps or
-    /// minimal touching) go into separate rows. Each row is sorted by X.
-    /// </summary>
-    private static List<List<BlockDto>> GroupIntoRows(List<BlockDto> blocks, double minOverlapMm = 5.0)
-    {
-        var rows = new List<List<BlockDto>>();
-
-        foreach (var block in blocks)
-        {
-            var gl = block.GridLayout!;
-            var blockTop = gl.Y;
-            var blockBottom = gl.Y + gl.Height;
-
-            // Find an existing row whose Y-range overlaps this block's range by at least minOverlapMm
-            List<BlockDto>? matched = null;
-            foreach (var row in rows)
-            {
-                var rowTop = row.Min(b => b.GridLayout!.Y);
-                var rowBottom = row.Max(b => b.GridLayout!.Y + b.GridLayout!.Height);
-                var overlap = Math.Min(blockBottom, rowBottom) - Math.Max(blockTop, rowTop);
-                if (overlap >= minOverlapMm)
-                {
-                    matched = row;
-                    break;
-                }
-            }
-
-            if (matched is not null)
-                matched.Add(block);
-            else
-                rows.Add([block]);
-        }
-
-        // Sort each row's blocks by X
-        foreach (var row in rows)
-            row.Sort((a, b) => a.GridLayout!.X.CompareTo(b.GridLayout!.X));
-
-        // Sort rows by their minimum Y
-        rows.Sort((a, b) => a.Min(x => x.GridLayout!.Y).CompareTo(b.Min(x => x.GridLayout!.Y)));
-
-        return rows;
-    }
-
-    private void RenderV2Row(StringBuilder sb, List<BlockDto> row, double marginTopMm, BlockTreeDto treeAdapter)
-    {
-        var marginStyle = FormattableString.Invariant($"margin-top:{marginTopMm:F1}mm;");
-
-        if (row.Count == 1)
-        {
-            var block = row[0];
-            var gl = block.GridLayout!;
-            var heightStyle = gl.AutoHeight
-                ? string.Empty
-                : FormattableString.Invariant($"height:{gl.Height:F1}mm;overflow:hidden;");
-            var style = FormattableString.Invariant(
-                $"position:relative;{marginStyle}margin-left:{gl.X:F1}mm;width:{gl.Width:F1}mm;{heightStyle}");
-            sb.AppendLine($"    <div style=\"{style}\">{DispatchBlock(block, treeAdapter)}</div>");
-        }
-        else
-        {
-            // Flex row — blocks sorted by X
-            sb.AppendLine(FormattableString.Invariant($"    <div style=\"display:flex;align-items:flex-start;{marginStyle}\">"));
-            double prevXEnd = 0;
-            foreach (var block in row)
-            {
-                var gl = block.GridLayout!;
-                var gap = Math.Max(0, gl.X - prevXEnd);
-                var heightStyle = gl.AutoHeight
-                    ? string.Empty
-                    : FormattableString.Invariant($"height:{gl.Height:F1}mm;overflow:hidden;");
-                var style = FormattableString.Invariant(
-                    $"flex-shrink:0;margin-left:{gap:F1}mm;width:{gl.Width:F1}mm;{heightStyle}");
-                sb.AppendLine($"      <div style=\"{style}\">{DispatchBlock(block, treeAdapter)}</div>");
-                prevXEnd = gl.X + gl.Width;
-            }
-            sb.AppendLine("    </div>");
-        }
     }
 
     // ── Stylesheet wrapper ────────────────────────────────────────────────
@@ -273,6 +251,8 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                         margin: 16px auto;
                         padding: 12mm 14mm 18mm 14mm;
                         box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+                        position: relative;
+                        overflow: hidden;
                       }
                       /* layout tables — multi-column rows, no visible borders */
                       table.lr { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; }

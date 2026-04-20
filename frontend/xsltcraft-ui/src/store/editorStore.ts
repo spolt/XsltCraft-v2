@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { DEFAULT_BLOCK_SIZE, DEFAULT_PARTY_FIELDS, DEFAULT_INVOICE_LINE_COLUMNS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../types/blocks'
 import type { BlockType, BlockConfig, GridBlock } from '../types/blocks'
 import type { GridBlockLayout, BlockTreeV2 } from '../types/template'
+import { clampToPage } from '../utils/gridSnap'
 
 const MAX_HISTORY = 20
 
@@ -172,6 +173,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const prev = snapshot(state)
     const id = uuidv4()
     const defaults = DEFAULT_BLOCK_SIZE[type]
+    const clamped = clampToPage(position.x, position.y, defaults.width, defaults.height)
     const block: GridBlock = {
       id,
       type,
@@ -179,10 +181,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ? { ...defaultConfig(type), ...configOverride }
         : defaultConfig(type),
       gridLayout: {
-        x: position.x,
-        y: position.y,
-        width: defaults.width,
-        height: defaults.height,
+        x: clamped.x,
+        y: clamped.y,
+        width: clamped.width,
+        height: clamped.height,
         zIndex: 0,
         autoHeight: defaults.autoHeight,
       },
@@ -257,12 +259,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const existing = state.blocks[blockId]
     if (!existing) return
 
+    const merged = { ...existing.gridLayout, ...patch }
+    const clamped = clampToPage(merged.x, merged.y, merged.width, merged.height)
+    const newLayout: GridBlockLayout = { ...merged, ...clamped }
+
     set((s) => ({
       blocks: {
         ...s.blocks,
         [blockId]: {
           ...existing,
-          gridLayout: { ...existing.gridLayout, ...patch },
+          gridLayout: newLayout,
         },
       },
       isDirty: true,
