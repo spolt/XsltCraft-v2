@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-04-22
+
+### Added
+- **Blok kenar boşlukları**: `GridBlockLayout`'a `marginTop`, `marginBottom`, `marginLeft`, `marginRight` (mm) alanları eklendi; PropertyPanel'de "Kenar Boşlukları" bölümünden düzenlenebilir. Değerler önizleme çıktısında `padding + box-sizing:border-box` olarak uygulanır — canvas konumunu ve sweep algoritmasını etkilemez.
+- **Z-index overlay katmanı**: `zIndex > 0` olan bloklar sweep akışından ayrılır; `.page` üzerine `position:absolute` ile render edilir. Birden fazla overlay bloğu CSS `z-index` sırasıyla üst üste binebilir; canvas konumlarıyla birebir örtüşür.
+
+### Fixed
+- **Divider/Spacer band-spanning**: `Divider` ve `Spacer` tipleri genişliklerinden bağımsız olarak her zaman sweep band'ini kapatır. Geniş ama full-width eşiğini aşmayan Divider'ların (ör. 155 mm) sonraki dar blokları kendi kolonuna emmesi önlendi; yan yana dizilim doğru çalışıyor.
+- **İlk blok kolon hizalaması**: Kolon içindeki ilk bloğun `margin-top` değeri band tepesinden (Y=0) değil, bloğun kendi Y koordinatından hesaplanıyor (`bgl.Y - bandTop`). Farklı Y'lerdeki bloklar artık canvas'taki konumlarıyla hizalanıyor.
+- **Full-width blok sonrası yan yana dizilim**: Full-width bir bloktan (ör. Fatura Satırları) sonra gelen dar bloklar kendi band'lerinde yan yana yerleşebiliyor; önceki band sweep'i tarafından emilme sorunu giderildi.
+
+---
+
 ## [0.5.1] - 2026-04-21
 
 ### Fixed
