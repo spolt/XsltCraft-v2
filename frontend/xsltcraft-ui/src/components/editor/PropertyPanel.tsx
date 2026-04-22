@@ -331,6 +331,16 @@ function GridPositionControls({ block }: { block: GridBlock }) {
         />
         <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Otomatik yükseklik</span>
       </label>
+
+      <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-text-muted)', marginTop: 10, marginBottom: 6 }}>
+        KENAR BOŞLUKLARI (mm)
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        {numInput('Üst', gl.marginTop ?? 0, (v) => updateBlockGridLayout(block.id, { marginTop: Math.max(0, v) }))}
+        {numInput('Alt', gl.marginBottom ?? 0, (v) => updateBlockGridLayout(block.id, { marginBottom: Math.max(0, v) }))}
+        {numInput('Sol', gl.marginLeft ?? 0, (v) => updateBlockGridLayout(block.id, { marginLeft: Math.max(0, v) }))}
+        {numInput('Sağ', gl.marginRight ?? 0, (v) => updateBlockGridLayout(block.id, { marginRight: Math.max(0, v) }))}
+      </div>
     </div>
   )
 }

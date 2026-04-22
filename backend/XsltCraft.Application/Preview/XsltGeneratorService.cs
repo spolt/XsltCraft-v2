@@ -14,6 +14,13 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         PropertyNameCaseInsensitive = true
     };
 
+    // Grid-canvas V2 sweep algoritmasi: bir blok sayfa genisliginin
+    // FULL_WIDTH_RATIO'sundan fazlaysa "band-spanning" sayilir ve
+    // eklendigi band'i kapatir — ki sonraki dar bloklar yeni bir
+    // band'de yan yana yerlesebilsin.
+    private const double PAGE_WIDTH_MM = 210.0;
+    private const double FULL_WIDTH_RATIO = 0.85;
+
     // assetId → "data:{mime};base64,{data}" — Generate() çağrısı boyunca geçerli
     private Dictionary<string, string> _assetBase64 = [];
 
@@ -97,13 +104,26 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
         //    sütunlardan oluşur; her sütun içinde bloklar dikey akış yapar.
         //    AutoHeight'lı blok içeriği büyüyünce aynı sütunun alt blokları
         //    ve sonraki şeritler doğal olarak aşağı kayar — üst üste binmez.
-        var allBlocks = tree.Blocks.Values
+        // z-index > 0 olan bloklar sweep'ten çıkarılır; sayfa üzerine
+        // mutlak konumlu "overlay" katman olarak render edilir. Böylece
+        // daha yüksek z-index değerli bloklar akıştaki bloklarla
+        // (ve birbirleriyle) serbestçe üst üste binebilir.
+        var gridBlocks = tree.Blocks.Values
             .Where(b => b.GridLayout is not null)
+            .ToList();
+
+        var overlayBlocks = gridBlocks
+            .Where(b => (b.GridLayout!.ZIndex ?? 0) > 0)
+            .OrderBy(b => b.GridLayout!.ZIndex ?? 0)
+            .ToList();
+
+        var allBlocks = gridBlocks
+            .Where(b => (b.GridLayout!.ZIndex ?? 0) <= 0)
             .OrderBy(b => b.GridLayout!.Y)
             .ThenBy(b => b.GridLayout!.X)
             .ToList();
 
-        if (allBlocks.Count == 0) return string.Empty;
+        if (allBlocks.Count == 0 && overlayBlocks.Count == 0) return string.Empty;
 
         var bands = new List<List<List<BlockDto>>>();
         var activeCols = new List<List<BlockDto>>();
@@ -140,6 +160,22 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                 bands.Add(activeCols);
                 activeCols = new List<List<BlockDto>> { new List<BlockDto> { block } };
             }
+
+            // Band-spanning blok: eklendigi band'i kapatir; sonraki dar
+            // bloklar temiz bir band'de yan yana yerlesebilsin.
+            // - Genislik esigini asan bloklar (tam genislik / Fatura Satirlari vb.)
+            // - Divider / Spacer: semantik olarak bolum ayirici; genislik ne olursa
+            //   olsun band'i kapatirlar. Aksi halde genis ama tam olmayan bir Divider
+            //   (ornek: 155mm) sonraki dar bloklari kendi kolonuna emer.
+            var isBandSpanning =
+                gl.Width >= PAGE_WIDTH_MM * FULL_WIDTH_RATIO
+                || block.Type == "Divider"
+                || block.Type == "Spacer";
+            if (isBandSpanning)
+            {
+                bands.Add(activeCols);
+                activeCols = new List<List<BlockDto>>();
+            }
         }
         if (activeCols.Count > 0) bands.Add(activeCols);
 
@@ -175,17 +211,19 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
                 {
                     var b = sortedBlocks[i];
                     var bgl = b.GridLayout!;
-                    var blockMarginTop = i == 0 ? 0 : Math.Max(0, bgl.Y - prevBlockBottom);
+                    // Ilk blok: band'in tepesinden kendi Y'sine olan bosluk
+                    // (kolon, band icinde daha asagidan basliyor olabilir).
+                    // Sonraki bloklar: bir onceki blogun altindan kendi Y'sine.
+                    var blockMarginTop = i == 0
+                        ? Math.Max(0, bgl.Y - bandTop)
+                        : Math.Max(0, bgl.Y - prevBlockBottom);
                     var blockMarginLeft = Math.Max(0, bgl.X - colMinX);
                     var heightStyle = bgl.AutoHeight
                         ? string.Empty
                         : FormattableString.Invariant($"height:{bgl.Height:F1}mm;overflow:hidden;");
-                    var zIndex = bgl.ZIndex ?? 0;
-                    var zStyle = zIndex != 0
-                        ? FormattableString.Invariant($"position:relative;z-index:{zIndex};")
-                        : string.Empty;
+                    var padStyle = BuildUserMarginPadding(bgl);
                     var style = FormattableString.Invariant(
-                        $"margin-top:{blockMarginTop:F1}mm;margin-left:{blockMarginLeft:F1}mm;width:{bgl.Width:F1}mm;{heightStyle}{zStyle}");
+                        $"margin-top:{blockMarginTop:F1}mm;margin-left:{blockMarginLeft:F1}mm;width:{bgl.Width:F1}mm;{heightStyle}{padStyle}");
                     sb.AppendLine($"        <div style=\"{style}\">{DispatchBlock(b, treeAdapter)}</div>");
                     prevBlockBottom = bgl.Y + bgl.Height;
                 }
@@ -196,6 +234,22 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
             sb.AppendLine("    </div>");
             prevBandBottom = bandBottom;
+        }
+
+        // Overlay katmanı: z-index > 0 bloklar mutlak konumlu olarak
+        // .page üzerine yerleştirilir. Canvas koordinatlarıyla (X/Y mm)
+        // birebir örtüşür; aralarındaki sıra CSS z-index ile belirlenir.
+        foreach (var b in overlayBlocks)
+        {
+            var bgl = b.GridLayout!;
+            var zIndex = bgl.ZIndex ?? 0;
+            var heightStyle = bgl.AutoHeight
+                ? string.Empty
+                : FormattableString.Invariant($"height:{bgl.Height:F1}mm;overflow:hidden;");
+            var padStyle = BuildUserMarginPadding(bgl);
+            var style = FormattableString.Invariant(
+                $"position:absolute;left:{bgl.X:F1}mm;top:{bgl.Y:F1}mm;width:{bgl.Width:F1}mm;{heightStyle}z-index:{zIndex};{padStyle}");
+            sb.AppendLine($"    <div style=\"{style}\">{DispatchBlock(b, treeAdapter)}</div>");
         }
 
         return sb.ToString();
@@ -492,6 +546,20 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
     };
 
     private string GenerateBlock(BlockDto block, BlockTreeDto tree) => DispatchBlock(block, tree);
+
+    // Kullanici tarafindan verilen kenar bosluklarini padding olarak uygular
+    // (box-sizing:border-box ile blogun disaridaki konum/boyutunu degistirmez,
+    // yalnizca ic icerigi hava verir). Sweep algoritmasini etkilemez.
+    private static string BuildUserMarginPadding(GridBlockLayoutDto gl)
+    {
+        var t = Math.Max(0, gl.MarginTop ?? 0);
+        var r = Math.Max(0, gl.MarginRight ?? 0);
+        var b = Math.Max(0, gl.MarginBottom ?? 0);
+        var l = Math.Max(0, gl.MarginLeft ?? 0);
+        if (t == 0 && r == 0 && b == 0 && l == 0) return string.Empty;
+        return FormattableString.Invariant(
+            $"padding:{t:F1}mm {r:F1}mm {b:F1}mm {l:F1}mm;box-sizing:border-box;");
+    }
 
     // ── Block dispatcher ─────────────────────────────────────────────────
 
