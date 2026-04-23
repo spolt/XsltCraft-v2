@@ -928,25 +928,7 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
         // Hidden div — GİB JSON payload
         sb.AppendLine("      <div id=\"qrvalue\" style=\"visibility: hidden; height: 20px;width: 20px; ; display:none\">");
-        sb.AppendLine("        {\"vkntckn\":\"<xsl:value-of select=\"n1:Invoice/cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN']\"/>\",");
-        sb.AppendLine("        \"avkntckn\":\"<xsl:value-of select=\"n1:Invoice/cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN']\"/>\",");
-        sb.AppendLine("        <xsl:if test=\"//n1:Invoice/cbc:ProfileID = 'YOLCUBERABERFATURA'\">\"pasaportno\":\"<xsl:value-of select=\"n1:Invoice/cac:BuyerCustomerParty/cac:Party/cac:Person/cac:IdentityDocumentReference/cbc:ID\"/>\",</xsl:if>");
-        sb.AppendLine("        <xsl:if test=\"//n1:Invoice/cbc:ProfileID = 'YOLCUBERABERFATURA'\">\"aracikurumvkn\":\"<xsl:value-of select=\"n1:Invoice/cac:TaxRepresentativeParty/cac:PartyIdentification/cbc:ID[@schemeID='ARACIKURUMVKN']\"/>\",</xsl:if>");
-        sb.AppendLine("        \"senaryo\":\"<xsl:value-of select=\"n1:Invoice/cbc:ProfileID\"/>\",");
-        sb.AppendLine("        \"tip\":\"<xsl:value-of select=\"n1:Invoice/cbc:InvoiceTypeCode\"/>\",");
-        sb.AppendLine("        \"tarih\":\"<xsl:value-of select=\"n1:Invoice/cbc:IssueDate\"/>\",");
-        sb.AppendLine("        \"no\":\"<xsl:value-of select=\"n1:Invoice/cbc:ID\"/>\",");
-        sb.AppendLine("        \"ettn\":\"<xsl:value-of select=\"n1:Invoice/cbc:UUID\"/>\",");
-        sb.AppendLine("        \"parabirimi\":\"<xsl:value-of select=\"n1:Invoice/cbc:DocumentCurrencyCode\"/>\",");
-        sb.AppendLine("        \"malhizmettoplam\":\"<xsl:value-of select=\"n1:Invoice/cac:LegalMonetaryTotal/cbc:LineExtensionAmount\"/>\",");
-        sb.AppendLine("        <xsl:for-each select=\"n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']\">");
-        sb.AppendLine("        \"kdvmatrah(<xsl:value-of select=\"cbc:Percent\"/>)\":\"<xsl:value-of select=\"cbc:TaxableAmount\"/>\",");
-        sb.AppendLine("        </xsl:for-each>");
-        sb.AppendLine("        <xsl:for-each select=\"n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']\">");
-        sb.AppendLine("        \"hesaplanankdv(<xsl:value-of select=\"cbc:Percent\"/>)\":\"<xsl:value-of select=\"cbc:TaxAmount\"/>\",");
-        sb.AppendLine("        </xsl:for-each>");
-        sb.AppendLine("        \"vergidahil\":\"<xsl:value-of select=\"n1:Invoice/cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount\"/>\",");
-        sb.AppendLine("        \"odenecek\":\"<xsl:value-of select=\"n1:Invoice/cac:LegalMonetaryTotal/cbc:PayableAmount\"/>\"}");
+        sb.AppendLine("        {\"vkntckn\":\"<xsl:value-of select=\"n1:Invoice/cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN']\"/>\",\"avkntckn\":\"<xsl:value-of select=\"n1:Invoice/cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN']\"/>\",<xsl:if test=\"//n1:Invoice/cbc:ProfileID = 'YOLCUBERABERFATURA'\">\"pasaportno\":\"<xsl:value-of select=\"n1:Invoice/cac:BuyerCustomerParty/cac:Party/cac:Person/cac:IdentityDocumentReference/cbc:ID\"/>\",</xsl:if><xsl:if test=\"//n1:Invoice/cbc:ProfileID = 'YOLCUBERABERFATURA'\">\"aracikurumvkn\":\"<xsl:value-of select=\"n1:Invoice/cac:TaxRepresentativeParty/cac:PartyIdentification/cbc:ID[@schemeID='ARACIKURUMVKN']\"/>\",</xsl:if>\"senaryo\":\"<xsl:value-of select=\"n1:Invoice/cbc:ProfileID\"/>\",\"tip\":\"<xsl:value-of select=\"n1:Invoice/cbc:InvoiceTypeCode\"/>\",\"tarih\":\"<xsl:value-of select=\"n1:Invoice/cbc:IssueDate\"/>\",\"no\":\"<xsl:value-of select=\"n1:Invoice/cbc:ID\"/>\",\"ettn\":\"<xsl:value-of select=\"n1:Invoice/cbc:UUID\"/>\",\"parabirimi\":\"<xsl:value-of select=\"n1:Invoice/cbc:DocumentCurrencyCode\"/>\",\"malhizmettoplam\":\"<xsl:value-of select=\"n1:Invoice/cac:LegalMonetaryTotal/cbc:LineExtensionAmount\"/>\",<xsl:for-each select=\"n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']\">\"kdvmatrah(<xsl:value-of select=\"cbc:Percent\"/>)\":\"<xsl:value-of select=\"cbc:TaxableAmount\"/>\",</xsl:for-each><xsl:for-each select=\"n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']\">\"hesaplanankdv(<xsl:value-of select=\"cbc:Percent\"/>)\":\"<xsl:value-of select=\"cbc:TaxAmount\"/>\",</xsl:for-each>\"vergidahil\":\"<xsl:value-of select=\"n1:Invoice/cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount\"/>\",\"odenecek\":\"<xsl:value-of select=\"n1:Invoice/cac:LegalMonetaryTotal/cbc:PayableAmount\"/>\"}");
         sb.AppendLine("      </div>");
 
         // QR container — flex alignment

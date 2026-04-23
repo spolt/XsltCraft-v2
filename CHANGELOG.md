@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.1] - 2026-04-23
+
+### Fixed
+- **GİB karekod JSON tek satır**: Yeni şablon oluşturmada karekod bloğu eklendiğinde üretilen XSLT'deki JSON payload artık tek satırda yazılıyor. Önceki çok satırlı yapıda virgüller arasında boşluk/satır sonu oluşuyordu; bu durum karekodun hatalı okunmasına yol açabiliyordu.
+
+---
+
 ## [0.6.0] - 2026-04-22
 
 ### Added
