@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Xml;
 
 using Microsoft.AspNetCore.Authorization;
@@ -140,6 +141,134 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
 
         return NoContent();
     }
+
+    // ─── Admin Snippet Endpoints ────────────────────────────────────────────────
+
+    private static readonly HashSet<string> AllowedSnippetScopes = ["xslt", "xpath", "html"];
+
+    // GET /api/admin/snippets
+    [HttpGet("snippets")]
+    public async Task<IActionResult> GetSnippets()
+    {
+        var snippets = await db.UserSnippets
+            .Where(s => s.IsPublic)
+            .OrderBy(s => s.Scope)
+            .ThenBy(s => s.Prefix)
+            .Select(s => new UserSnippetResponse
+            {
+                Id = s.Id,
+                Prefix = s.Prefix,
+                Body = s.Body,
+                Description = s.Description,
+                Scope = s.Scope,
+                IsPublic = s.IsPublic,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt,
+            })
+            .ToListAsync();
+
+        return Ok(snippets);
+    }
+
+    // POST /api/admin/snippets
+    [HttpPost("snippets")]
+    public async Task<IActionResult> CreateSnippet([FromBody] CreateUserSnippetRequest request)
+    {
+        var adminId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        if (string.IsNullOrWhiteSpace(request.Prefix))
+            return BadRequest(new { message = "Prefix boş olamaz." });
+
+        if (string.IsNullOrWhiteSpace(request.Body))
+            return BadRequest(new { message = "Snippet içeriği boş olamaz." });
+
+        var scope = request.Scope?.ToLowerInvariant() ?? "xslt";
+        if (!AllowedSnippetScopes.Contains(scope))
+            return BadRequest(new { message = "Geçersiz scope. Kabul edilenler: xslt, xpath, html." });
+
+        var snippet = new UserSnippet
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = adminId,
+            Prefix = request.Prefix.Trim(),
+            Body = request.Body,
+            Description = request.Description?.Trim(),
+            Scope = scope,
+            IsPublic = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
+
+        db.UserSnippets.Add(snippet);
+        await db.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetSnippets), null, ToSnippetResponse(snippet));
+    }
+
+    // PUT /api/admin/snippets/:id
+    [HttpPut("snippets/{id:guid}")]
+    public async Task<IActionResult> UpdateSnippet(Guid id, [FromBody] UpdateUserSnippetRequest request)
+    {
+        var snippet = await db.UserSnippets.FindAsync(id);
+        if (snippet is null) return NotFound(new { message = "Snippet bulunamadı." });
+        if (!snippet.IsPublic) return Forbid();
+
+        if (request.Prefix is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Prefix))
+                return BadRequest(new { message = "Prefix boş olamaz." });
+            snippet.Prefix = request.Prefix.Trim();
+        }
+
+        if (request.Body is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Body))
+                return BadRequest(new { message = "Snippet içeriği boş olamaz." });
+            snippet.Body = request.Body;
+        }
+
+        if (request.Description is not null)
+            snippet.Description = request.Description.Trim();
+
+        if (request.Scope is not null)
+        {
+            var scope = request.Scope.ToLowerInvariant();
+            if (!AllowedSnippetScopes.Contains(scope))
+                return BadRequest(new { message = "Geçersiz scope. Kabul edilenler: xslt, xpath, html." });
+            snippet.Scope = scope;
+        }
+
+        snippet.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return Ok(ToSnippetResponse(snippet));
+    }
+
+    // DELETE /api/admin/snippets/:id
+    [HttpDelete("snippets/{id:guid}")]
+    public async Task<IActionResult> DeleteSnippet(Guid id)
+    {
+        var snippet = await db.UserSnippets.FindAsync(id);
+        if (snippet is null) return NotFound(new { message = "Snippet bulunamadı." });
+        if (!snippet.IsPublic) return Forbid();
+
+        db.UserSnippets.Remove(snippet);
+        await db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    private static UserSnippetResponse ToSnippetResponse(UserSnippet s) => new()
+    {
+        Id = s.Id,
+        Prefix = s.Prefix,
+        Body = s.Body,
+        Description = s.Description,
+        Scope = s.Scope,
+        IsPublic = s.IsPublic,
+        CreatedAt = s.CreatedAt,
+        UpdatedAt = s.UpdatedAt,
+    };
 
     // -------------------------------------------------------
 

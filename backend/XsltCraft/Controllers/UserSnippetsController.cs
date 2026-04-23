@@ -24,8 +24,9 @@ public class UserSnippetsController(AppDbContext db) : ControllerBase
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         var snippets = await db.UserSnippets
-            .Where(s => s.OwnerId == userId)
-            .OrderBy(s => s.Scope)
+            .Where(s => s.OwnerId == userId || s.IsPublic)
+            .OrderBy(s => s.IsPublic)   // kişisel önce
+            .ThenBy(s => s.Scope)
             .ThenBy(s => s.Prefix)
             .Select(s => new UserSnippetResponse
             {

@@ -16,6 +16,7 @@ import {
   ListChecks,
   Terminal,
   BookMarked,
+  Library,
 } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
@@ -75,7 +76,10 @@ function EditorSidebar() {
       <Link to="/xslt-editor" className={`${base} ${isActive('/xslt-editor') ? active : inactive}`} title="XSLT Editör"><Code2 size={18} /></Link>
       <Link to="/my-xslt-templates" className={`${base} ${isActive('/my-xslt-templates') ? active : inactive}`} title="Şablonlarım"><FileCode2 size={18} /></Link>
       {user?.role === 'Admin' && (
-        <Link to="/admin/themes" className={`${base} ${isActive('/admin/themes') ? active : inactive}`} title="Admin Paneli"><Shield size={18} /></Link>
+        <>
+          <Link to="/admin/themes" className={`${base} ${isActive('/admin/themes') ? active : inactive}`} title="Admin — Temalar"><Shield size={18} /></Link>
+          <Link to="/admin/snippets" className={`${base} ${isActive('/admin/snippets') ? active : inactive}`} title="Admin — Snippet Kütüphanesi"><Library size={18} /></Link>
+        </>
       )}
     </div>
   )

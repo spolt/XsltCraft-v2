@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Plus, Pencil, Trash2, Save, AlertCircle } from 'lucide-react'
+import { X, Plus, Pencil, Trash2, Save, AlertCircle, Library, Star } from 'lucide-react'
 import {
   listSnippets,
   createSnippet,
@@ -243,52 +243,86 @@ export default function SnippetManagerDialog({ onClose, onSnippetsChanged }: Pro
               Henüz snippet yok. "Yeni Snippet" ile başlayın.
             </div>
           )}
-          {!loading && snippets.length > 0 && (
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-gray-800 border-b border-gray-700">
-                <tr>
-                  <th className="px-4 py-2 text-left text-gray-400 font-medium">Prefix</th>
-                  <th className="px-4 py-2 text-left text-gray-400 font-medium w-16">Kapsam</th>
-                  <th className="px-4 py-2 text-left text-gray-400 font-medium">Açıklama</th>
-                  <th className="px-4 py-2 text-right text-gray-400 font-medium w-20"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {snippets.map(s => (
-                  <tr key={s.id} className="hover:bg-gray-800/50 group">
-                    <td className="px-4 py-2.5 font-mono text-blue-300">{s.prefix}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${SCOPE_COLORS[s.scope] ?? 'bg-gray-700 text-gray-300'}`}>
-                        {SCOPE_LABELS[s.scope] ?? s.scope}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-400 truncate max-w-[200px]">
-                      {s.description || <span className="text-gray-600 italic">—</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => openEdit(s)}
-                          className="p-1 text-gray-400 hover:text-white rounded hover:bg-gray-700 transition-colors"
-                          title="Düzenle"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(s.id)}
-                          disabled={deletingId === s.id}
-                          className="p-1 text-gray-400 hover:text-red-400 rounded hover:bg-gray-700 transition-colors disabled:opacity-40"
-                          title="Sil"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </td>
+          {!loading && snippets.length > 0 && (() => {
+            const personal = snippets.filter(s => !s.isPublic)
+            const library = snippets.filter(s => s.isPublic)
+            return (
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-gray-800 border-b border-gray-700">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-gray-400 font-medium">Prefix</th>
+                    <th className="px-4 py-2 text-left text-gray-400 font-medium w-16">Kapsam</th>
+                    <th className="px-4 py-2 text-left text-gray-400 font-medium">Açıklama</th>
+                    <th className="px-4 py-2 text-right text-gray-400 font-medium w-20"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {personal.map(s => (
+                    <tr key={s.id} className="hover:bg-gray-800/50 group">
+                      <td className="px-4 py-2.5 font-mono text-blue-300">{s.prefix}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${SCOPE_COLORS[s.scope] ?? 'bg-gray-700 text-gray-300'}`}>
+                          {SCOPE_LABELS[s.scope] ?? s.scope}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-400 truncate max-w-[200px]">
+                        {s.description || <span className="text-gray-600 italic">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => openEdit(s)}
+                            className="p-1 text-gray-400 hover:text-white rounded hover:bg-gray-700 transition-colors"
+                            title="Düzenle"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(s.id)}
+                            disabled={deletingId === s.id}
+                            className="p-1 text-gray-400 hover:text-red-400 rounded hover:bg-gray-700 transition-colors disabled:opacity-40"
+                            title="Sil"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {library.length > 0 && (
+                    <>
+                      <tr>
+                        <td colSpan={4} className="px-4 py-1.5 bg-gray-800/80 border-t border-gray-700">
+                          <div className="flex items-center gap-1.5 text-[10px] font-medium text-indigo-400 tracking-wide">
+                            <Library size={11} />
+                            XsltCraft Kütüphanesi
+                          </div>
+                        </td>
+                      </tr>
+                      {library.map(s => (
+                        <tr key={s.id} className="hover:bg-gray-800/50">
+                          <td className="px-4 py-2.5 font-mono text-indigo-300">{s.prefix}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${SCOPE_COLORS[s.scope] ?? 'bg-gray-700 text-gray-300'}`}>
+                              {SCOPE_LABELS[s.scope] ?? s.scope}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-400 truncate max-w-[200px]">
+                            {s.description || <span className="text-gray-600 italic">—</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            <span title="Sistem yöneticisi tarafından tanımlanmıştır.">
+                              <Star size={14} className="text-purple-400 fill-purple-400 cursor-default" />
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  )}
+                </tbody>
+              </table>
+            )
+          })()}
         </div>
 
         {/* Footer */}

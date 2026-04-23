@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-04-24
+
+### Added
+- **Admin Snippet Kütüphanesi**: Admin kullanıcılar `/admin/snippets` sayfasından tüm kullanıcılara görünecek global snippet'lar oluşturabilir, düzenleyebilir ve silebilir. `UserSnippet.IsPublic` alanı etkinleştirildi — veritabanı migration gerekmedi.
+- **Kütüphane bölümü (SnippetManagerDialog)**: Kullanıcı snippet yöneticisinde kişisel snippet'ların altında "XsltCraft Kütüphanesi" başlığıyla ayrılmış bölüm; kütüphane snippet'ları mor yıldız ikonu ile işaretli, düzenleme/silme butonları gizli.
+- **Admin paneli Snippet Kütüphanesi menüsü**: Ana kenar çubuğundaki Admin Paneli accordion'una "Snippet Kütüphanesi" alt öğesi eklendi (`/admin/snippets`); XSLT Editör kenar çubuğuna da kütüphane ikonu bağlantısı eklendi.
+- `GET /api/user-snippets` artık kullanıcının kendi snippet'larına ek olarak tüm `IsPublic=true` snippet'ları da döner (kişisel önce, kütüphane sonra).
+- `GET|POST|PUT|DELETE /api/admin/snippets` endpoint'leri — yalnızca Admin rolüne açık; PUT/DELETE yalnızca `IsPublic=true` kayıtlara izin verir.
+
+---
+
 ## [0.6.1] - 2026-04-23
 
 ### Fixed
