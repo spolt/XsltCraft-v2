@@ -7,6 +7,7 @@ import DraftsPage from './pages/DraftsPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminThemesPage from './pages/admin/AdminThemesPage'
 import AdminSnippetsPage from './pages/admin/AdminSnippetsPage'
+import AdminUsersPage from './pages/admin/AdminUsersPage'
 import EditorPage from './pages/EditorPage'
 import ThemeUsePage from './pages/ThemeUsePage'
 import DevModePage from './pages/DevModePage'
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/admin" element={<Navigate to="/admin/themes" replace />} />
             <Route path="/admin/themes" element={<AdminThemesPage />} />
             <Route path="/admin/snippets" element={<AdminSnippetsPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
           </Route>
         </Route>
 

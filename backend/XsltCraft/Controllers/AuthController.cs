@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 using Google.Apis.Auth;
 
@@ -22,17 +23,26 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
     private const string RefreshTokenCookie = "refreshToken";
     private static readonly TimeSpan RefreshTokenExpiry = TimeSpan.FromDays(30);
 
+    private static readonly Regex UsernameRegex = new(@"^[a-zA-Z0-9_]{3,30}$", RegexOptions.Compiled);
+
     // POST /api/auth/register
     [HttpPost("register")]
     [EnableRateLimiting("auth-register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
+        if (!UsernameRegex.IsMatch(request.Username))
+            return BadRequest(new { message = "Kullanıcı adı 3-30 karakter olmalı, yalnızca harf, rakam ve alt çizgi içerebilir." });
+
+        if (await db.Users.AnyAsync(u => u.Username.ToLower() == request.Username.ToLower()))
+            return Conflict(new { message = "Bu kullanıcı adı zaten kullanılıyor." });
+
         if (await db.Users.AnyAsync(u => u.Email == request.Email))
             return Conflict(new { message = "Bu e-posta adresi zaten kullanılıyor." });
 
         var user = new User
         {
             Id = Guid.NewGuid(),
+            Username = request.Username,
             Email = request.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             DisplayName = request.DisplayName,
@@ -43,7 +53,7 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
         db.Users.Add(user);
         await db.SaveChangesAsync();
 
-        return StatusCode(201, new { user.Id, user.Email, user.DisplayName });
+        return StatusCode(201, new { user.Id, user.Username, user.Email, user.DisplayName });
     }
 
     // POST /api/auth/login
@@ -51,11 +61,18 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
     [EnableRateLimiting("auth-sensitive")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        var usernameLower = request.Username.ToLowerInvariant();
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Username.ToLower() == usernameLower);
 
         if (user is null || user.PasswordHash is null ||
             !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            return Unauthorized(new { message = "E-posta veya şifre hatalı." });
+            return Unauthorized(new { message = "Kullanıcı adı veya şifre hatalı." });
+
+        if (!user.IsActive)
+            return StatusCode(403, new { message = "Hesabınız askıya alınmış. Destek için yöneticinize başvurun." });
+
+        user.LastLoginAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
 
         var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Role.ToString());
         await SetNewRefreshToken(user.Id);
@@ -84,6 +101,9 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
 
             return Unauthorized(new { message = "Geçersiz veya süresi dolmuş refresh token." });
         }
+
+        if (!existing.User.IsActive)
+            return Unauthorized(new { message = "Hesabınız askıya alınmış." });
 
         // Rotate: revoke old, issue new
         existing.RevokedAt = DateTime.UtcNow;
@@ -156,9 +176,11 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
 
         if (user is null)
         {
+            var username = await GenerateUniqueUsernameAsync(payload.Email);
             user = new User
             {
                 Id = Guid.NewGuid(),
+                Username = username,
                 Email = payload.Email,
                 DisplayName = payload.Name,
                 GoogleId = payload.Subject,
@@ -174,6 +196,10 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
             user.UpdatedAt = DateTime.UtcNow;
         }
 
+        if (!user.IsActive)
+            return StatusCode(403, new { message = "Hesabınız askıya alınmış. Destek için yöneticinize başvurun." });
+
+        user.LastLoginAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
         var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Role.ToString());
@@ -273,6 +299,26 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
             SameSite = isHttps ? SameSiteMode.Strict : SameSiteMode.Lax,
             Expires = token.ExpiresAt
         });
+    }
+
+    private async Task<string> GenerateUniqueUsernameAsync(string email)
+    {
+        var prefix = email.Split('@')[0].ToLowerInvariant();
+        var cleaned = Regex.Replace(prefix, "[^a-z0-9_]", "");
+        if (cleaned.Length < 3) cleaned = cleaned.PadRight(3, '0');
+        if (cleaned.Length > 20) cleaned = cleaned[..20];
+
+        if (!await db.Users.AnyAsync(u => u.Username.ToLower() == cleaned))
+            return cleaned;
+
+        for (int i = 1; i <= 999; i++)
+        {
+            var candidate = $"{cleaned}_{i}";
+            if (!await db.Users.AnyAsync(u => u.Username.ToLower() == candidate))
+                return candidate;
+        }
+
+        return $"{cleaned}_{Guid.NewGuid().ToString("N")[..6]}";
     }
 
     private async Task RevokeAllUserTokens(Guid userId)

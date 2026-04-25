@@ -15,6 +15,7 @@ import {
   FileCode2,
   Info,
   Library,
+  Users,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -164,6 +165,13 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                 >
                   <Library size={16} className="flex-shrink-0" />
                   <span>Snippet Kütüphanesi</span>
+                </Link>
+                <Link
+                  to="/admin/users"
+                  className={`${itemBase} ${isActive('/admin/users') ? itemActive : itemInactive}`}
+                >
+                  <Users size={16} className="flex-shrink-0" />
+                  <span>Kullanıcıları Yönet</span>
                 </Link>
               </div>
             )}

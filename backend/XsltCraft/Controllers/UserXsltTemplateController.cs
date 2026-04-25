@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Application.DTO;
+using XsltCraft.Application.Interfaces;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 
@@ -13,7 +14,7 @@ namespace XsltCraft.Api.Controllers;
 [ApiController]
 [Route("api/user-xslt-templates")]
 [Authorize]
-public class UserXsltTemplateController(AppDbContext db) : ControllerBase
+public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder activity) : ControllerBase
 {
     // GET /api/user-xslt-templates — kullanıcının kayıtlı XSLT şablonlarını listele
     [HttpGet]
@@ -82,6 +83,7 @@ public class UserXsltTemplateController(AppDbContext db) : ControllerBase
 
         db.UserXsltTemplates.Add(template);
         await db.SaveChangesAsync();
+        await activity.RecordAsync(userId, UserActivityType.Save, template.Id, "Xslt");
 
         return CreatedAtAction(nameof(GetById), new { id = template.Id }, new UserXsltTemplateDetailResponse
         {
@@ -118,6 +120,7 @@ public class UserXsltTemplateController(AppDbContext db) : ControllerBase
 
         template.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        await activity.RecordAsync(userId, UserActivityType.Save, template.Id, "Xslt");
 
         return Ok(new UserXsltTemplateDetailResponse
         {

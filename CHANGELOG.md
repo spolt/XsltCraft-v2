@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.0] - 2026-04-25
+
+### Added
+- **Admin Kullanıcı Yönetimi**: `/admin/users` sayfası; kullanıcı listesi (kullanıcı adı, e-posta, rol, durum, kayıt tarihi, son login, kullanım sayıları), rol atama (Admin / Editor / User), aktif/pasif toggle, manuel kullanıcı oluşturma, şifre sıfırlama ve silme.
+- **Editor rolü**: `UserRole` enum'una `Editor` değeri eklendi (yetki kapsamı sonraki sürümde netleşecek).
+- **Kullanım takibi**: `UserActivity` tablosu — kullanıcı başına kaydetme ve indirme olayları izleniyor; admin paneli özet kartında toplam aktivite sayısı görünür.
+- **Kullanıcı son login takibi**: `User.LastLoginAt` alanı; her başarılı girişte güncellenir.
+- **Admin özet kartları**: Aktif kullanıcı sayısı, pasif kullanıcı sayısı ve toplam aktivite sayısı (tüm sistem toplamı, sayfa bazlı değil).
+- **Kullanıcı adı ile giriş**: Giriş ekranı artık e-posta yerine kullanıcı adı (username) kullanır. Kayıt ekranına kullanıcı adı alanı eklendi; Google ile giriş yapan yeni kullanıcılar için e-posta önekinden otomatik benzersiz kullanıcı adı üretilir.
+
+### Changed
+- `POST /api/auth/login` artık `email` yerine `username` alanı alır.
+- `POST /api/auth/register` artık zorunlu `username` alanı içerir (3-30 karakter, harf/rakam/alt çizgi).
+- Admin paneli "Kullanıcıları Yönet" menü öğesi kenar çubuğuna eklendi.
+
+### Security
+- Pasif kullanıcılar login ve refresh endpoint'lerinde 403/401 döner; mevcut access token süresi dolana kadar çalışmaya devam eder.
+- Şifre sıfırlama ve kullanıcı deaktivasyonunda tüm refresh token'lar revoke edilir.
+- Admin kendi hesabını silemez, deaktive edemez veya rolünü değiştiremez.
+
+---
+
 ## [0.7.0] - 2026-04-24
 
 ### Added

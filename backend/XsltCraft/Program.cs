@@ -86,6 +86,7 @@ using (var scope = app.Services.CreateScope())
 
     db.Database.Migrate();
 
+    var adminUsername = config["Admin:Username"] ?? "admin";
     var adminEmail = config["Admin:Email"];
     var adminPassword = config["Admin:Password"];
 
@@ -97,6 +98,7 @@ using (var scope = app.Services.CreateScope())
             db.Users.Add(new XsltCraft.Domain.Entities.User
             {
                 Id = Guid.NewGuid(),
+                Username = adminUsername,
                 Email = adminEmail,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
                 DisplayName = "Admin",

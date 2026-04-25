@@ -11,6 +11,7 @@ using XsltCraft.Application.XPath;
 using XsltCraft.Infrastructure.Auth;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Repositories;
+using XsltCraft.Infrastructure.Services;
 using XsltCraft.Infrastructure.Storage;
 using XsltCraft.Infrastructure.Templates;
 using XsltCraft.Infrastructure.Xslt;
@@ -85,6 +86,13 @@ public static class ServiceCollectionExtensions
         // -------------------------------------------------
 
         services.AddScoped<ITemplateRepository, FileTemplateRepository>();
+
+        // -------------------------------------------------
+        // User Management
+        // -------------------------------------------------
+
+        services.AddScoped<IUserActivityRecorder, UserActivityRecorder>();
+        services.AddScoped<IUserManagementService, UserManagementService>();
 
         return services;
     }
