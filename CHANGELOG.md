@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.0] - 2026-04-25
+
+### Added
+- **Taslaklarım Önizleme Paneli**: Taslaklarım listesinde her satırda önizleme ikonu (Eye) eklendi; tıklandığında sağda iframe split-panel açılır, varsayılan e-Fatura XML ile blok ağacı render edilir. "Editörde Düzenle" butonuyla doğrudan editöre geçiş sağlanır.
+- **Şablonlarım Önizleme Paneli**: XSLT şablonları listesinde aynı split-panel önizleme akışı; XSLT içeriği `POST /api/preview/raw` üzerinden render edilir. "XSLT Editörde Aç" butonuyla editöre geçiş.
+- **`TemplatePreviewPanel` bileşeni**: Taslaklarım ve Şablonlarım sayfaları arasında paylaşılan yeniden kullanılabilir önizleme paneli; şablon adı, yükleniyor göstergesi, aksiyon butonu ve kapat kontrolü içerir.
+- **`POST /api/preview/user-template/{id}` endpoint'i**: Kullanıcının blok ağacı tabanlı (V1 ve V2) şablonlarını backend'de önizlemek için yeni endpoint; V1/V2 format tespiti ve XSLT üretimi backend'de gerçekleşir.
+- **`previewFromUserTemplate` servis fonksiyonu**: Frontend'de yeni endpoint'i çağıran `previewService.ts` fonksiyonu.
+- **Admin Kullanıcı Detay Paneli**: Kullanıcı listesinde ⋯ menüsüne "Detaylar" seçeneği eklendi; sağdan kayan panel ile kullanıcı profili, istatistikler (kaydetme/indirme sayısı), son giriş/aktivite tarihi ve aksiyon butonları gösterilir.
+- **Kullanıcı adına göre arama**: Admin kullanıcı listesi arama kutusuna `username` alanı eklendi; e-posta, isim ve kullanıcı adına göre filtreleme destekleniyor.
+
+### Changed
+- Admin panel kullanıcı listesinde kullanıcı adı (`@username`) birincil isim olarak gösteriliyor; e-posta ikincil satıra taşındı.
+- Admin kullanıcı action menu dropdown'u viewport sınırını aşan durumlarda yukarı açılacak şekilde `getBoundingClientRect` + `position:fixed` ile konumlandırılıyor.
+- Sidebar'da admin "Temalar" menü etiketi → "Hazır Şablonlar" olarak güncellendi.
+
+### Fixed
+- **V1/V2 blok ağacı tespiti (`XsltGeneratorService`)**: `GenerateFromJson` her zaman V1 mantığını çalıştırıyordu; V2 şablonlarında (`version: 2`) boş XSLT üretilip önizleme boş görünüyordu. `version` alanına göre `GenerateV2()` / `Generate()` dallanması eklendi.
+- **Editör sayfası açılmıyordu (`EditorPage`)**: Taslaklarım'dan şablon açıldığında sayfa boş kalıyordu; üç ayrı hata vardı:
+  - `handleNamePromptConfirm` (`useCallback`) `if (isLoading) return` erken dönüşünden sonra tanımlanıyordu → React hook sırası ihlali → bileşen çöküyordu. `useCallback` erken dönüş öncesine taşındı.
+  - `isLoading` başlangıç değeri `false` olduğu için Canvas, Zustand store'undaki eski blokları yükleme ekranı gösterilmeden önce render ediyordu. `useState(!!routeTemplateId)` ile mevcut şablon açılışında yükleme ekranı anında gösterilmesi sağlandı.
+  - Yükleme başlamadan önce `resetTree()` çağrılmadığından önceki editör oturumunun bayat blokları yeni şablonun üzerine biniyordu.
+
+---
+
 ## [0.8.0] - 2026-04-25
 
 ### Added

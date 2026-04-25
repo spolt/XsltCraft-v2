@@ -30,18 +30,28 @@ public sealed class XsltGeneratorService : IXsltGeneratorService
 
     public (string? Xslt, string? Error) GenerateFromJson(string blockTreeJson)
     {
-        BlockTreeDto tree;
         try
         {
-            tree = JsonSerializer.Deserialize<BlockTreeDto>(blockTreeJson, JsonOpts)
-                   ?? throw new JsonException("Boş sonuç.");
+            using var doc = JsonDocument.Parse(blockTreeJson);
+            var version = doc.RootElement.TryGetProperty("version", out var vEl) ? vEl.GetInt32() : 1;
+
+            if (version == 2)
+            {
+                var treeV2 = JsonSerializer.Deserialize<BlockTreeV2Dto>(blockTreeJson, JsonOpts)
+                             ?? throw new JsonException("Boş sonuç.");
+                return GenerateV2(treeV2);
+            }
+            else
+            {
+                var tree = JsonSerializer.Deserialize<BlockTreeDto>(blockTreeJson, JsonOpts)
+                           ?? throw new JsonException("Boş sonuç.");
+                return Generate(tree);
+            }
         }
         catch (Exception ex)
         {
             return (null, $"Block tree JSON parse hatası: {ex.Message}");
         }
-
-        return Generate(tree);
     }
 
     public (string? Xslt, string? Error) Generate(BlockTreeDto tree, Dictionary<string, string>? assetBase64 = null)

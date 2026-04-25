@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Check, Copy, FilePlus, Pencil, Trash2, X } from 'lucide-react'
+import { Check, Copy, Eye, FilePlus, Pencil, Trash2, X } from 'lucide-react'
 import {
   cloneTemplate,
   deleteTemplate,
@@ -8,6 +8,9 @@ import {
   updateTemplate,
   type TemplateDetail,
 } from '../services/templateService'
+import { previewFromUserTemplate } from '../services/previewService'
+import TemplatePreviewPanel from '../components/TemplatePreviewPanel'
+import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 const DOC_TYPE_LABEL: Record<string, string> = {
   Invoice: 'e-Fatura / e-Arşiv',
@@ -20,7 +23,22 @@ export default function DraftsPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [previewTemplate, setPreviewTemplate] = useState<TemplateDetail | null>(null)
+  const [previewHtml, setPreviewHtml] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!previewTemplate) return
+    let cancelled = false
+    setPreviewHtml('')
+    setPreviewLoading(true)
+    previewFromUserTemplate(previewTemplate.id, defaultInvoiceXml)
+      .then((res) => { if (!cancelled) setPreviewHtml(res.html) })
+      .catch(() => { if (!cancelled) setPreviewHtml('<html><body style="display:flex;align-items:center;justify-content:center;height:100%;color:#ef4444;font-family:sans-serif;font-size:13px">Önizleme alınamadı.</body></html>') })
+      .finally(() => { if (!cancelled) setPreviewLoading(false) })
+    return () => { cancelled = true }
+  }, [previewTemplate])
 
   useEffect(() => {
     load()
@@ -120,7 +138,12 @@ export default function DraftsPage() {
   const someSelected = selectedIds.size > 0
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="flex h-full overflow-hidden">
+      <div
+        className={`overflow-y-auto ${previewTemplate ? 'border-r border-gray-200' : 'flex-1'}`}
+        style={previewTemplate ? { width: 400, flexShrink: 0 } : {}}
+      >
+      <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-gray-800">Şablonlarım</h1>
@@ -192,10 +215,23 @@ export default function DraftsPage() {
                 onClone={handleClone}
                 onDelete={handleDelete}
                 onRename={handleRename}
+                onPreview={setPreviewTemplate}
               />
             ))}
           </div>
         </>
+      )}
+      </div>
+      </div>
+      {previewTemplate && (
+        <TemplatePreviewPanel
+          name={previewTemplate.name}
+          html={previewHtml}
+          loading={previewLoading}
+          actionLabel="Editörde Düzenle"
+          onAction={() => navigate(`/editor/${previewTemplate.id}`)}
+          onClose={() => setPreviewTemplate(null)}
+        />
       )}
     </div>
   )
@@ -234,6 +270,7 @@ function TemplateRow({
   onClone,
   onDelete,
   onRename,
+  onPreview,
 }: {
   template: TemplateDetail
   selected: boolean
@@ -241,6 +278,7 @@ function TemplateRow({
   onClone: (id: string) => void
   onDelete: (id: string) => void
   onRename: (id: string, name: string) => void
+  onPreview: (template: TemplateDetail) => void
 }) {
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
@@ -318,6 +356,13 @@ function TemplateRow({
       </span>
 
       <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          onClick={() => onPreview(template)}
+          title="Önizle"
+          className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+        >
+          <Eye size={14} />
+        </button>
         <button
           onClick={() => setEditing(true)}
           title="Yeniden adlandır"

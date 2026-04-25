@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, Plus, Search, Trash2, Users } from 'lucide-react'
+import { AlertCircle, Calendar, Clock, Download, ExternalLink, Plus, Save, Search, Shield, Trash2, Users, X } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import {
   createUser,
@@ -38,7 +38,7 @@ function userInitials(user: UserListItem): string {
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
     return parts[0].slice(0, 2).toUpperCase()
   }
-  return user.email.slice(0, 2).toUpperCase()
+  return user.username.slice(0, 2).toUpperCase()
 }
 
 const AVATAR_COLORS = [
@@ -78,32 +78,63 @@ function ActiveToggle({ user, disabled, onChange }: {
 }
 
 // ─── Action menu ─────────────────────────────────────────────────────────────
-function ActionMenu({ onRoleChange, onResetPassword, onDelete }: {
+function ActionMenu({ onDetail, onRoleChange, onResetPassword, onDelete }: {
+  onDetail: () => void
   onRoleChange: () => void
   onResetPassword: () => void
   onDelete: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({})
+  const btnRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     function handle(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (btnRef.current && !btnRef.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', handle)
     return () => document.removeEventListener('mousedown', handle)
   }, [])
 
+  const handleToggle = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      const dropdownH = 180
+      const spaceBelow = window.innerHeight - rect.bottom
+      const style: React.CSSProperties = {
+        position: 'fixed',
+        right: window.innerWidth - rect.right,
+        width: '11rem',
+        zIndex: 9999,
+      }
+      if (spaceBelow < dropdownH) {
+        style.bottom = window.innerHeight - rect.top + 4
+      } else {
+        style.top = rect.bottom + 4
+      }
+      setMenuStyle(style)
+    }
+    setOpen(o => !o)
+  }
+
   return (
-    <div ref={ref} className="relative">
+    <div className="relative inline-block">
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onClick={handleToggle}
         className="text-gray-400 hover:text-gray-700 text-lg px-1 leading-none"
       >
         ⋯
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 text-sm">
+        <div style={menuStyle} className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 text-sm">
+          <button
+            onClick={() => { setOpen(false); onDetail() }}
+            className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700 flex items-center gap-2"
+          >
+            <ExternalLink size={13} className="text-gray-400" /> Detaylar
+          </button>
+          <div className="border-t border-gray-100 my-1" />
           <button
             onClick={() => { setOpen(false); onRoleChange() }}
             className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700"
@@ -126,6 +157,134 @@ function ActionMenu({ onRoleChange, onResetPassword, onDelete }: {
         </div>
       )}
     </div>
+  )
+}
+
+// ─── Detay paneli ─────────────────────────────────────────────────────────────
+function DetailCard({ user, onClose, onRoleChange, onResetPassword, onDelete, isSelf }: {
+  user: UserListItem
+  onClose: () => void
+  onRoleChange: () => void
+  onResetPassword: () => void
+  onDelete: () => void
+  isSelf: boolean
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/30 z-30" onClick={onClose} />
+      <div className="fixed right-0 top-0 h-full w-80 bg-white border-l border-gray-200 shadow-xl z-40 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <span className="text-sm font-semibold text-gray-800">Kullanıcı Detayı</span>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {/* Profil */}
+          <div className="px-5 py-5 flex flex-col items-center text-center border-b border-gray-100">
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold mb-3 ${avatarColor(user.email)}`}>
+              {userInitials(user)}
+            </div>
+            <div className="font-semibold text-gray-900 text-base">
+              @{user.username}
+              {isSelf && <span className="ml-1.5 text-xs text-gray-400 font-normal">(sen)</span>}
+            </div>
+            {user.displayName && (
+              <div className="text-sm text-gray-500 mt-0.5">{user.displayName}</div>
+            )}
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-700'}`}>
+                <Shield size={10} className="mr-1" />{user.role}
+              </span>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${user.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                {user.isActive ? 'Aktif' : 'Pasif'}
+              </span>
+            </div>
+          </div>
+
+          {/* Bilgiler */}
+          <div className="px-5 py-4 flex flex-col gap-3 border-b border-gray-100 text-sm">
+            <div className="flex items-start gap-3 text-gray-600">
+              <span className="text-gray-400 mt-0.5">@</span>
+              <div>
+                <div className="text-xs text-gray-400 mb-0.5">E-posta</div>
+                <div className="break-all">{user.email}</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 text-gray-600">
+              <Calendar size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <div className="text-xs text-gray-400 mb-0.5">Kayıt Tarihi</div>
+                <div>{formatDate(user.createdAt)}</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 text-gray-600">
+              <Clock size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <div className="text-xs text-gray-400 mb-0.5">Son Giriş</div>
+                <div>
+                  {user.lastLoginAt
+                    ? formatDate(user.lastLoginAt)
+                    : <span className="text-gray-400 italic">Henüz giriş yapmadı</span>}
+                </div>
+              </div>
+            </div>
+            {user.lastActivityAt && (
+              <div className="flex items-start gap-3 text-gray-600">
+                <Clock size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="text-xs text-gray-400 mb-0.5">Son Aktivite</div>
+                  <div>{formatDate(user.lastActivityAt)}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* İstatistikler */}
+          <div className="px-5 py-4 border-b border-gray-100">
+            <div className="text-xs text-gray-400 uppercase tracking-wide mb-3">Kullanım</div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <Save size={14} className="mx-auto text-blue-500 mb-1" />
+                <div className="text-xl font-semibold text-gray-900">{user.saveCount}</div>
+                <div className="text-xs text-gray-400 mt-0.5">Kaydetme</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <Download size={14} className="mx-auto text-green-500 mb-1" />
+                <div className="text-xl font-semibold text-gray-900">{user.downloadCount}</div>
+                <div className="text-xs text-gray-400 mt-0.5">İndirme</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer aksiyonlar */}
+        {!isSelf && (
+          <div className="px-5 py-4 border-t border-gray-100 flex flex-col gap-2">
+            <button
+              onClick={onRoleChange}
+              className="w-full px-3 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition text-left"
+            >
+              Rol Değiştir
+            </button>
+            <button
+              onClick={onResetPassword}
+              className="w-full px-3 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition text-left"
+            >
+              Şifre Sıfırla
+            </button>
+            <button
+              onClick={onDelete}
+              className="w-full px-3 py-2 text-sm text-red-600 border border-red-200 hover:bg-red-50 rounded-lg transition text-left"
+            >
+              Kullanıcıyı Sil
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -387,6 +546,7 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [showCreate, setShowCreate] = useState(false)
+  const [detailTarget, setDetailTarget] = useState<UserListItem | null>(null)
   const [roleTarget, setRoleTarget] = useState<UserListItem | null>(null)
   const [pwdTarget, setPwdTarget] = useState<UserListItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserListItem | null>(null)
@@ -473,7 +633,7 @@ export default function AdminUsersPage() {
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Email veya isim ara…"
+            placeholder="Kullanıcı adı, email veya isim ara…"
             className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -533,7 +693,7 @@ export default function AdminUsersPage() {
                         </div>
                         <div>
                           <div className="font-medium text-gray-900">
-                            {u.displayName || <span className="text-gray-400 italic">—</span>}
+                            @{u.username}
                             {isSelf && <span className="ml-1.5 text-xs text-gray-400">(sen)</span>}
                           </div>
                           <div className="text-xs text-gray-500">{u.email}</div>
@@ -568,6 +728,7 @@ export default function AdminUsersPage() {
                         ? <Trash2 size={14} className="text-gray-200 ml-auto" />
                         : (
                           <ActionMenu
+                            onDetail={() => setDetailTarget(u)}
                             onRoleChange={() => setRoleTarget(u)}
                             onResetPassword={() => setPwdTarget(u)}
                             onDelete={() => setDeleteTarget(u)}
@@ -615,6 +776,18 @@ export default function AdminUsersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Detay paneli */}
+      {detailTarget && (
+        <DetailCard
+          user={detailTarget}
+          isSelf={detailTarget.id === currentUser?.id}
+          onClose={() => setDetailTarget(null)}
+          onRoleChange={() => { setDetailTarget(null); setRoleTarget(detailTarget) }}
+          onResetPassword={() => { setDetailTarget(null); setPwdTarget(detailTarget) }}
+          onDelete={() => { setDetailTarget(null); setDeleteTarget(detailTarget) }}
+        />
       )}
 
       {/* Modaller */}

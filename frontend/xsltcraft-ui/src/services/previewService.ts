@@ -84,6 +84,18 @@ export async function previewFromRawXslt(
   return data
 }
 
+/** Kullanıcının blok ağacı tabanlı şablonundan önizleme (V1/V2 her ikisi de desteklenir) */
+export async function previewFromUserTemplate(
+  templateId: string,
+  xmlContent: string,
+): Promise<PreviewResponse> {
+  const { data } = await api.post<PreviewResponse>(
+    `/api/preview/user-template/${templateId}`,
+    { xmlContent },
+  )
+  return data
+}
+
 /** Storage'daki XSLT dosyasıyla (free theme klonu vb.) önizleme */
 export async function previewFromStoredXslt(
   templateId: string,

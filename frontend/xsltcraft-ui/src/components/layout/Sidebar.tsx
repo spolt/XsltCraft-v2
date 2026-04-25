@@ -157,7 +157,7 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                   className={`${itemBase} ${isActive('/admin/themes') ? itemActive : itemInactive}`}
                 >
                   <Palette size={16} className="flex-shrink-0" />
-                  <span>Temalar</span>
+                  <span>Hazır Şablonlar</span>
                 </Link>
                 <Link
                   to="/admin/snippets"

@@ -17,6 +17,7 @@ public class UserManagementService(AppDbContext db) : IUserManagementService
         {
             var lower = query.ToLowerInvariant();
             q = q.Where(u => u.Email.ToLower().Contains(lower) ||
+                             u.Username.ToLower().Contains(lower) ||
                              (u.DisplayName != null && u.DisplayName.ToLower().Contains(lower)));
         }
 
