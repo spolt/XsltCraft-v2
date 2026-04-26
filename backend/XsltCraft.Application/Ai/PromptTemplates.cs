@@ -24,12 +24,12 @@ public static class PromptTemplates
         "- Satırlar: cac:InvoiceLine içinde cbc:ID, cbc:InvoicedQuantity, cac:Item, cac:Price, cac:TaxTotal\n" +
         "- Header: cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name\n" +
         "- Notlar: cbc:Note (Invoice altında veya InvoiceLine altında)\n\n" +
-		 "Rules:\n" +
+        "Rules:\n" +
         "- NEVER rewrite from scratch unless explicitly asked.\n" +
         "- ONLY change what is necessary.\n" +
         "- Preserve structure and templates.\n" +
-        "- Explain what you changed and why.\n" + 
-		 "When a knowledge base is provided:\n" +
+        "- Explain what you changed and why.\n" +
+        "When a knowledge base is provided:\n" +
         "- Prefer existing patterns\n" +
         "- Follow project conventions strictly\n" +
         "Görevin:\n" +

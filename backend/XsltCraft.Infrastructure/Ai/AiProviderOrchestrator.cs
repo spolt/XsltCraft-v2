@@ -44,8 +44,8 @@ public class AiProviderOrchestrator
 
         // "gemini" öncelikli: Gemini varsa önce dene, Ollama yedek.
         List<IAiAssistantProvider> providers = preferred == "gemini" && _others.Count > 0
-            ? [.._others, _ollama]
-            : [(IAiAssistantProvider)_ollama, .._others];
+            ? [.. _others, _ollama]
+            : [(IAiAssistantProvider)_ollama, .. _others];
 
         Exception? lastError = null;
         for (int i = 0; i < providers.Count; i++)
