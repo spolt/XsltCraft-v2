@@ -37,6 +37,21 @@ builder.Services.AddRateLimiter(opts =>
         o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         o.QueueLimit = 0;
     });
+
+    // AI panel istekleri: 30 req/dk/user
+    opts.AddPolicy("ai-assistant", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                          ?? "anon",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
 });
 
 // JWT Authentication

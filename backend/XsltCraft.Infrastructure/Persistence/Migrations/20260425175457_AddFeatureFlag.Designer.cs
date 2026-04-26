@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using XsltCraft.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using XsltCraft.Infrastructure.Persistence;
 namespace XsltCraft.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260425175457_AddFeatureFlag")]
+    partial class AddFeatureFlag
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -73,10 +76,6 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("NOW()");
-
-                    b.Property<string>("Value")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
 
                     b.HasKey("Key");
 
@@ -270,29 +269,6 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.ToTable("UserActivities");
                 });
 
-            modelBuilder.Entity("XsltCraft.Domain.Entities.UserAiUsage", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("date");
-
-                    b.Property<int>("TokensUsed")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.HasKey("UserId", "Date");
-
-                    b.HasIndex("Date");
-
-                    b.ToTable("UserAiUsages");
-                });
-
             modelBuilder.Entity("XsltCraft.Domain.Entities.UserSnippet", b =>
                 {
                     b.Property<Guid>("Id")
@@ -414,17 +390,6 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                 {
                     b.HasOne("XsltCraft.Domain.Entities.User", "User")
                         .WithMany("Activities")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("XsltCraft.Domain.Entities.UserAiUsage", b =>
-                {
-                    b.HasOne("XsltCraft.Domain.Entities.User", "User")
-                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

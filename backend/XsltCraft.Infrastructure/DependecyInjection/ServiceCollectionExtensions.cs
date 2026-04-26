@@ -8,6 +8,9 @@ using XsltCraft.Application.Services;
 using XsltCraft.Application.Validation;
 using XsltCraft.Application.XPath;
 
+using XsltCraft.Application.Ai;
+
+using XsltCraft.Infrastructure.Ai;
 using XsltCraft.Infrastructure.Auth;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Repositories;
@@ -93,6 +96,40 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IUserActivityRecorder, UserActivityRecorder>();
         services.AddScoped<IUserManagementService, UserManagementService>();
+
+        // -------------------------------------------------
+        // AI Assistant
+        // -------------------------------------------------
+
+        services.AddMemoryCache();
+        services.Configure<AiOptions>(configuration.GetSection(AiOptions.SectionName));
+
+        var aiOptions = new AiOptions();
+        configuration.GetSection(AiOptions.SectionName).Bind(aiOptions);
+
+        services.AddHttpClient("ollama", client =>
+        {
+            client.BaseAddress = new Uri(aiOptions.Ollama.BaseUrl);
+            client.Timeout = Timeout.InfiniteTimeSpan;
+        });
+
+        services.AddScoped<OllamaAssistantProvider>();
+        services.AddScoped<IAiAssistantProvider>(sp => sp.GetRequiredService<OllamaAssistantProvider>());
+
+        if (aiOptions.Gemini.Enabled)
+        {
+            services.AddHttpClient("gemini", client =>
+            {
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            });
+            services.AddScoped<GeminiAssistantProvider>();
+            services.AddScoped<IAiAssistantProvider>(sp => sp.GetRequiredService<GeminiAssistantProvider>());
+        }
+
+        services.AddScoped<AiProviderOrchestrator>();
+        services.AddScoped<IAiFeatureFlagService, AiFeatureFlagService>();
+        services.AddScoped<IAiProviderHealthService, AiProviderHealthService>();
+        services.AddScoped<IAiTokenBudgetService, AiTokenBudgetService>();
 
         return services;
     }

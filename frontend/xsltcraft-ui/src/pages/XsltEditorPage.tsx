@@ -17,7 +17,12 @@ import {
   Terminal,
   BookMarked,
   Library,
+  Sparkles,
 } from 'lucide-react'
+import { useAiStore } from '../store/aiStore'
+import AiAssistantPanel from '../components/ai/AiAssistantPanel'
+import AiRefactorDialog from '../components/ai/AiRefactorDialog'
+import type { ProblemItem } from '../components/xslt-editor/ProblemsPanel'
 import Editor from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
@@ -131,8 +136,53 @@ export default function XsltEditorPage() {
   // Shortcuts dialog
   const [showShortcuts, setShowShortcuts] = useState(false)
 
-  // Right panel tab: preview | xml
-  const [rightTab, setRightTab] = useState<'preview' | 'xml'>('preview')
+  // Right panel tab: preview | xml | ai
+  const [rightTab, setRightTab] = useState<'preview' | 'xml' | 'ai'>('preview')
+
+  // XML editor cursor / selection — AI bağlam kırpma için
+  const [xmlCursorLine, setXmlCursorLine] = useState<number | undefined>()
+  const [xmlSelection, setXmlSelection] = useState<string | undefined>()
+
+  // AI panel
+  const aiEnabled = useAiStore(s => s.enabled === true)
+  const refreshAi = useAiStore(s => s.refresh)
+  const [aiInitialError, setAiInitialError] = useState<string | null>(null)
+  const [aiKey, setAiKey] = useState(0)
+  const [refactorState, setRefactorState] = useState<{
+    selection: string
+    range: { startLine: number; endLine: number }
+  } | null>(null)
+
+  useEffect(() => { refreshAi() }, [refreshAi])
+
+  function handleAiRefactor(selection: string, range: { startLine: number; endLine: number }) {
+    setRefactorState({ selection, range })
+  }
+
+  function applyRefactor(newText: string) {
+    if (!refactorState) return
+    const lines = xsltContent.split('\n')
+    const before = lines.slice(0, refactorState.range.startLine - 1).join('\n')
+    const after = lines.slice(refactorState.range.endLine).join('\n')
+    const next = [before, newText, after].filter(Boolean).join('\n')
+    setXsltContent(next)
+    setIsDirty(true)
+    setRefactorState(null)
+  }
+
+  function openAiForProblem(problem: ProblemItem) {
+    const errMsg = `${problem.ruleName ?? 'Hata'}: ${problem.message}` +
+      (problem.line != null ? ` (satır ${problem.line}${problem.column ? `:${problem.column}` : ''})` : '')
+    setAiInitialError(errMsg)
+    setAiKey(k => k + 1)
+    setRightTab('ai')
+  }
+
+  function openAiBlank() {
+    setAiInitialError(null)
+    setAiKey(k => k + 1)
+    setRightTab('ai')
+  }
 
   // Loading from saved template
   const [loadingTemplate, setLoadingTemplate] = useState(!!routeTemplateId)
@@ -641,6 +691,8 @@ export default function XsltEditorPage() {
                   }}
                   onRequestImageInsert={handleRequestImageInsert}
                   errors={xsltErrors}
+                  aiEnabled={aiEnabled}
+                  onAiRefactor={handleAiRefactor}
                 />
               </div>
             </div>
@@ -669,6 +721,17 @@ export default function XsltEditorPage() {
                 >
                   XML Kaynak
                 </button>
+                {aiEnabled && (
+                  <button
+                    onClick={() => { if (rightTab !== 'ai') openAiBlank(); else setRightTab('preview') }}
+                    className={`px-3 py-1 rounded text-xs transition-colors flex items-center gap-1 ${
+                      rightTab === 'ai' ? 'bg-violet-700 text-white' : 'text-violet-300 hover:bg-gray-700'
+                    }`}
+                    title="AI Asistan"
+                  >
+                    <Sparkles size={12} /> AI
+                  </button>
+                )}
               </div>
 
               {/* Sağ panel içerik */}
@@ -678,13 +741,32 @@ export default function XsltEditorPage() {
                     html={previewHtml}
                     onElementClick={handlePreviewClick}
                   />
+                ) : rightTab === 'ai' ? (
+                  <AiAssistantPanel
+                    key={aiKey}
+                    xslt={xsltContent}
+                    xml={xmlContent}
+                    xmlCursorLine={xmlCursorLine}
+                    xmlSelection={xmlSelection}
+                    initialErrorMessage={aiInitialError}
+                    onClose={() => setRightTab('preview')}
+                  />
                 ) : (
                   <Editor
                     height="100%"
                     language="xml"
                     theme="vs-dark"
                     value={xmlContent ?? ''}
-                    onMount={(editor) => { xmlEditorRef.current = editor }}
+                    onMount={(editor) => {
+                      xmlEditorRef.current = editor
+                      editor.onDidChangeCursorPosition(e => {
+                        setXmlCursorLine(e.position.lineNumber)
+                      })
+                      editor.onDidChangeCursorSelection(e => {
+                        const sel = editor.getModel()?.getValueInRange(e.selection) ?? ''
+                        setXmlSelection(sel.trim() || undefined)
+                      })
+                    }}
                     options={{
                       readOnly: true,
                       minimap: { enabled: false },
@@ -699,6 +781,7 @@ export default function XsltEditorPage() {
               </div>
             </div>
           </Panel>
+
         </PanelGroup>
 
         {showProblems && (
@@ -731,6 +814,7 @@ export default function XsltEditorPage() {
             ublTrLoading={ublTrLoading}
             ublTrError={ublTrError}
             onLocateXslt={(line, column) => revealLineRef.current?.(line, column ?? undefined)}
+            onAskAi={openAiForProblem}
             onClose={() => setShowProblems(false)}
           />
         )}
@@ -773,6 +857,15 @@ export default function XsltEditorPage() {
 
       {showShortcuts && (
         <ShortcutsDialog onClose={() => setShowShortcuts(false)} />
+      )}
+
+      {refactorState && (
+        <AiRefactorDialog
+          originalSelection={refactorState.selection}
+          fullXslt={xsltContent}
+          onAccept={applyRefactor}
+          onClose={() => setRefactorState(null)}
+        />
       )}
     </div>
   )

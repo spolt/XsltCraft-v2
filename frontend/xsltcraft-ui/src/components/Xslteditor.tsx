@@ -1,5 +1,5 @@
 import Editor, { type Monaco } from "@monaco-editor/react"
-import type { editor as MonacoEditor, languages as MonacoLanguages } from "monaco-editor"
+import type { editor as MonacoEditor, languages as MonacoLanguages, IDisposable } from "monaco-editor"
 import { useRef, useEffect } from "react"
 import xmlFormatter from 'xml-formatter'
 import { buildXmlIndex, getXmlPathSuggestions, type XmlIndex } from './xslt-editor/xpathXmlIndex'
@@ -29,6 +29,9 @@ type Props = {
   onEvaluateXPath?: (expression: string) => void
   errors?: XsltError[]
   options?: MonacoEditor.IStandaloneEditorConstructionOptions
+  // ── AI ──────────────────────────────────────
+  aiEnabled?: boolean
+  onAiRefactor?: (selection: string, range: { startLine: number; endLine: number }) => void
 }
 
 /* ── XSLT 1.0 element definitions ── */
@@ -416,10 +419,17 @@ function registerXsltCompletions(monaco: Monaco) {
 
 }
 
-export default function XsltEditor({ value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, onEvaluateXPath, errors, options }: Props) {
+export default function XsltEditor({
+  value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, onEvaluateXPath, errors, options,
+  aiEnabled = false, onAiRefactor,
+}: Props) {
 
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  const onAiRefactorRef = useRef(onAiRefactor)
+  const aiActionDisposablesRef = useRef<IDisposable[]>([])
+
+  useEffect(() => { onAiRefactorRef.current = onAiRefactor }, [onAiRefactor])
 
   useEffect(() => {
     currentXmlIndex = xmlContent ? buildXmlIndex(xmlContent) : null
@@ -428,6 +438,36 @@ export default function XsltEditor({ value, onChange, xmlContent, userSnippets, 
   useEffect(() => {
     currentUserSnippets = userSnippets ?? []
   }, [userSnippets])
+
+  // AI sağ tık aksiyonlarını aiEnabled durumuna göre register/dispose et.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    aiActionDisposablesRef.current.forEach(d => d.dispose())
+    aiActionDisposablesRef.current = []
+    if (!aiEnabled) return
+
+    const a1 = editor.addAction({
+      id: 'xslt-ai-refactor-selection',
+      label: 'AI ile refactor et (seçim)',
+      contextMenuGroupId: 'ai',
+      contextMenuOrder: 1,
+      run(ed) {
+        const sel = ed.getSelection()
+        const model = ed.getModel()
+        if (!sel || !model || sel.isEmpty()) return
+        const text = model.getValueInRange(sel)
+        if (text.trim() && onAiRefactorRef.current) {
+          onAiRefactorRef.current(text, { startLine: sel.startLineNumber, endLine: sel.endLineNumber })
+        }
+      },
+    })
+    aiActionDisposablesRef.current = [a1]
+    return () => {
+      aiActionDisposablesRef.current.forEach(d => d.dispose())
+      aiActionDisposablesRef.current = []
+    }
+  }, [aiEnabled])
 
   function handleBeforeMount(monaco: Monaco) {
     monacoRef.current = monaco

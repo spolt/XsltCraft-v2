@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.10.0] - 2026-04-26
+
+### Added
+- **AI Asistan**: XSLT editörüne entegre AI asistan paneli (`AiAssistantPanel`); sohbet geçmişi, NDJSON streaming yanıt, iptal (AbortController) ve toast bildirimleri. Sağ sidebar'dan açılır; UBL-TR e-Fatura/e-Arşiv bağlamında Türkçe yanıt verir.
+- **AI Refactor Diyaloğu**: Editörde seçili XSLT bölümü için before/after diff önizlemeli `AiRefactorDialog`; kullanıcı onayı sonrası seçili aralık güvenle değiştirilir.
+- **AI Provider Orchestrator**: Birincil sağlayıcı Ollama (`qwen2.5-coder:7b`), opsiyonel cloud fallback Gemini (`GeminiAssistantProvider`). `ConnectTimeout` ve `FirstTokenTimeout` için iki ayrı `CancellationTokenSource` zinciri ile streaming kesilmesi engellenir.
+- **AI Endpoint'leri** (`/api/ai`):
+  - `GET /api/ai/status` — AI etkin mi (UI butonlarını gizler/gösterir, `[AllowAnonymous]`).
+  - `POST /api/ai/assistant` — Sohbet endpoint'i, NDJSON streaming, rate-limit `ai-assistant`.
+  - `POST /api/ai/refactor-selection` — Seçili XSLT aralığını refactor eder.
+- **Admin Feature Flag Yönetimi** (`/api/admin/feature-flags`): `GET|PUT /ai` (AI özelliğini açıp kapama), `GET /ai/health` (sağlayıcı sağlık durumu), `GET|PUT /ai/provider` (aktif sağlayıcı seçimi), `GET /ai/usage?date=YYYY-MM-DD` (günlük token/istek kullanımı).
+- **Admin AI sayfası**: `/admin/ai` — feature flag toggle, sağlayıcı sağlık paneli, sağlayıcı seçimi, günlük kullanıcı bazlı token/istek kullanım raporu.
+- **`FeatureFlag` entity ve migration** (`AddFeatureFlag`): Veritabanı tabanlı feature flag altyapısı; AI özelliği için runtime toggle.
+- **`UserAiUsage` entity ve migration** (`AddAiUsageAndFlagValue`): Kullanıcı başına günlük AI istek sayısı ve token bütçesi takibi (`IAiTokenBudgetService`).
+- **Toast bildirim sistemi**: Global `toastStore` (Zustand) ve `ToastContainer` bileşeni; AI hata/iptal akışları başta olmak üzere uygulama genelinde kullanılabilir.
+- **AI rate limiting**: `Program.cs` içinde `ai-assistant` policy — kullanıcı başına eş zamanlı AI streaming isteklerini sınırlar.
+- **Editör AI entegrasyonu**: `XsltEditorPage` ve `Xslteditor` bileşenlerinde AI panel toggle, seçim tabanlı refactor tetikleyici ve `ProblemsPanel` AI önerisi entegrasyonu.
+
+### Changed
+- `appsettings.json` ve `appsettings.Development.example.json` dosyalarına `Ai` bölümü (Ollama + Gemini config) eklendi.
+- Sidebar'a "AI Asistan" ve admin altına "AI Yönetimi" menü öğeleri eklendi.
+
+---
+
 ## [0.9.0] - 2026-04-25
 
 ### Added

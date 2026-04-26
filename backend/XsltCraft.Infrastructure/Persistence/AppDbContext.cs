@@ -12,6 +12,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserXsltTemplate> UserXsltTemplates => Set<UserXsltTemplate>();
     public DbSet<UserSnippet> UserSnippets => Set<UserSnippet>();
     public DbSet<UserActivity> UserActivities => Set<UserActivity>();
+    public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
+    public DbSet<UserAiUsage> UserAiUsages => Set<UserAiUsage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -97,6 +99,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(t => t.Owner)
                   .WithMany()
                   .HasForeignKey(t => t.OwnerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FeatureFlag>(entity =>
+        {
+            entity.HasKey(f => f.Key);
+            entity.Property(f => f.Key).HasMaxLength(100);
+            entity.Property(f => f.Value).HasMaxLength(200);
+            entity.Property(f => f.UpdatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        modelBuilder.Entity<UserAiUsage>(entity =>
+        {
+            entity.HasKey(u => new { u.UserId, u.Date });
+            entity.Property(u => u.Date).HasColumnType("date");
+            entity.Property(u => u.UpdatedAt).HasDefaultValueSql("NOW()");
+            entity.HasIndex(u => u.Date);
+            entity.HasOne(u => u.User)
+                  .WithMany()
+                  .HasForeignKey(u => u.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
 

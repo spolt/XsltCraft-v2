@@ -16,6 +16,7 @@ import {
   Info,
   Library,
   Users,
+  Sparkles,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -172,6 +173,13 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                 >
                   <Users size={16} className="flex-shrink-0" />
                   <span>Kullanıcıları Yönet</span>
+                </Link>
+                <Link
+                  to="/admin/ai"
+                  className={`${itemBase} ${isActive('/admin/ai') ? itemActive : itemInactive}`}
+                >
+                  <Sparkles size={16} className="flex-shrink-0" />
+                  <span>AI Asistan</span>
                 </Link>
               </div>
             )}

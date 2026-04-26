@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { AlertCircle, AlertTriangle, Info, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Info, ChevronDown, ChevronUp, X, Sparkles } from 'lucide-react'
+import { useAiStore } from '../../store/aiStore'
 
 export type ProblemSeverity = 'error' | 'warning' | 'info'
 export type ProblemSource = 'xslt' | 'xml' | 'ubl-tr'
@@ -24,6 +25,7 @@ interface Props {
   ublTrError?: string | null
   onLocateXslt?: (line: number, column?: number | null) => void
   onLocateXml?: (line: number, column?: number | null) => void
+  onAskAi?: (problem: ProblemItem) => void
   onClose: () => void
 }
 
@@ -41,8 +43,9 @@ const TAB_LABELS: Record<ProblemSource, string> = {
 
 export default function ProblemsPanel({
   xsltProblems, xmlProblems, ublTrProblems, ublTrLoading, ublTrError,
-  onLocateXslt, onLocateXml, onClose,
+  onLocateXslt, onLocateXml, onAskAi, onClose,
 }: Props) {
+  const aiEnabled = useAiStore(s => s.enabled === true)
   const [collapsed, setCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<ProblemSource>('xslt')
   const [filter, setFilter] = useState<Filter>('all')
@@ -204,6 +207,16 @@ export default function ProblemsPanel({
                       </div>
                       <div className="text-gray-300 mt-0.5 break-words">{p.message}</div>
                     </div>
+                    {aiEnabled && onAskAi && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onAskAi(p) }}
+                        className="flex-shrink-0 self-start ml-2 px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 bg-violet-700/30 text-violet-300 hover:bg-violet-700/60 hover:text-white border border-violet-700/50 transition-colors"
+                        title="Bu hatayı AI'ya açıklattır"
+                      >
+                        <Sparkles size={10} />
+                        AI'ya sor
+                      </button>
+                    )}
                   </li>
                 )
               })}
