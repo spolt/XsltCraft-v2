@@ -1,6 +1,6 @@
 ---
 id: customer-party-person
-triggers: [alıcı, customer, accountingcustomerparty, müşteri, kişi, person, unvan, partyname, firstname, familyname, vkn, tckn]
+triggers: [alıcı kişi, alıcı isim, alıcı unvan, müşteri kişi, customer kişi, buyer kişi, alıcı adı, alıcı gerçek, alıcı tüzel]
 ---
 
 ## Pattern: Alıcı Bilgisi (AccountingCustomerParty)

@@ -1,6 +1,6 @@
 ---
 id: supplier-party-person
-triggers: [satıcı, supplier, accountingsupplierparty, kişi, person, unvan, partyname, firstname, familyname, vkn, tckn]
+triggers: [satıcı kişi, satıcı isim, satıcı unvan, gerçek kişi, tüzel kişi, firstname, familyname, middlename, partyname, adsoyad]
 ---
 
 ## Pattern: Satıcı Bilgisi (AccountingSupplierParty)

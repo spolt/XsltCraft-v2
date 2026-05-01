@@ -1,6 +1,6 @@
 ---
 id: supplier-party-address
-triggers: [satıcı, supplier, adres, address, telefon, faks, web, websiteuri, e-posta, elektronik, vergi dairesi, kimlik, mersisno, ticaretsicil, postaladdress]
+triggers: [satıcı adres, satıcı iletişim, satıcı telefon, satıcı faks, satıcı web, satıcı e-posta, satıcı vergi dairesi, satıcı kimlik, postaladdress, websiteuri, mersisno, şehir, ilçe, sokak, cadde, posta kodu]
 ---
 
 ## Pattern: Satıcı Adres ve İletişim Bilgileri (AccountingSupplierParty)

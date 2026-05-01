@@ -1,6 +1,6 @@
 ---
 id: legal-monetary-total
-triggers: [toplam, total, legalmonetarytotal, kdv, vergi, ödeme, tutar, tevkifat, taxtotal, matrah, ödenecek]
+triggers: [dip toplam, ödenecek tutar, kdv tutarı, vergi toplam, legalmonetarytotal, taxtotal, matrah, vergiler dahil, tevkifat tutarı, allowancetotal, withholdingtaxtotal]
 ---
 
 ## Pattern: Fatura Dip Toplamları (LegalMonetaryTotal / TaxTotal)

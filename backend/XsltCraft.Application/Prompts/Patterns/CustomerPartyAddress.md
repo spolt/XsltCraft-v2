@@ -1,6 +1,6 @@
 ---
 id: customer-party-address
-triggers: [alıcı, customer, müşteri, adres, address, telefon, faks, web, websiteuri, e-posta, elektronik, vergi dairesi, kimlik, postaladdress]
+triggers: [alıcı adres, alıcı iletişim, alıcı telefon, alıcı faks, alıcı web, alıcı e-posta, müşteri adres, customer adres, alıcı şehir, alıcı posta]
 ---
 
 ## Pattern: Alıcı Adres ve İletişim Bilgileri (AccountingCustomerParty)

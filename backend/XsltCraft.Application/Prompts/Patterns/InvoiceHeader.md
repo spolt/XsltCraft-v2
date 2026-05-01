@@ -1,6 +1,6 @@
 ---
 id: invoice-header
-triggers: [başlık, header, fatura no, fatura numarası, tarih, senaryo, profileid, tip, invoicetypecode, dönem, irsaliye, sipariş, ödeme, customizationid]
+triggers: [başlık, fatura numarası, fatura tarihi, fatura tipi, senaryo, profileid, invoicetypecode, dönem, irsaliye, sipariş no, customizationid, accountingcost, pusula, ödeme tarihi, ödeme şekli]
 ---
 
 ## Pattern: Fatura Başlık Bilgileri (Invoice Header)

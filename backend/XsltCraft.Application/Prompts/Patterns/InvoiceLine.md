@@ -1,6 +1,6 @@
 ---
 id: invoice-line
-triggers: [satır, line, invoiceline, kolon, column, miktar, birim, fiyat, kdv, iskonto, tevkifat, gtip, ürün, mal, hizmet, tutar]
+triggers: [satır, kolon, sütun, invoiceline, birim fiyat, miktar, ürün kodu, mal hizmet, iskonto, gtip, invoicedquantity, lineextension, yeni kolon, satır ekle]
 ---
 
 ## Pattern: Fatura Satırları Tablosu (InvoiceLine)

@@ -19,4 +19,8 @@
     <EmbeddedResource Include="Prompts\**\*.md" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="XsltCraft.Application.Tests" />
+  </ItemGroup>
+
 </Project>
