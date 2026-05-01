@@ -28,10 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Patterns/LegalMonetaryTotal.md` — Dip toplamları pattern'i (15 satır + SGK değişken tablosu).
 
 ### Changed
-- `XsltCraft.Application.csproj`: `<EmbeddedResource Include="Prompts\**\*.md" />` eklendi — tüm prompt dosyaları assembly'ye embed edilir.
-- `Ai/PromptTemplates.cs` (`SystemRules`): Karışık dildeki İngilizce genel kurallar kaldırıldı; UBL-TR pattern içeriği Madde 3'e kadar geçici olarak const string'de tutulmaktadır.
+- `XsltCraft.Application.csproj`: `<EmbeddedResource Include="Prompts\**\*.md" />` eklendi; `<InternalsVisibleTo Include="XsltCraft.Application.Tests" />` ile test projesine internal erişim açıldı.
+- `Ai/PromptTemplates.cs`: ~535 satır `SystemRules`/`CommonConstraints` const string kaldırıldı; `Build()` ve `BuildAssistant()` thin wrapper'lara indirgendi. `BuildMessages(req, mode)` internal unified builder eklendi.
+- `Ai/PatternSelector.cs`: Türkçe karakter folding (ı→i, ş→s, ç→c, ğ→g, ü→u, ö→o) + substring trigger matching + XSLT content signal (+1 skor) ile en fazla 4 pattern seçimi; fallback: `invoice-header + invoice-line`.
+- Tüm 8 pattern `.md` trigger listeleri compound trigger'lara dönüştürüldü (overlap giderme: `satıcı kişi` / `satıcı adres`, `alıcı kişi` / `alıcı adres` vb.).
+- `XsltCraft.slnx`: `XsltCraft.Application.Tests` projesi solution'a eklendi.
 
-> **Sprint 1 (P0) ilerleme:** Madde 1/4 tamamlandı. Madde 2 (`PatternSelector` — request-bazlı pattern seçimi), Madde 3 (`BuildMessages` thin wrapper), Madde 4 (xUnit golden testler) beklemekte.
+### Tests
+- **`XsltCraft.Application.Tests`** projesi oluşturuldu (xunit 2.9.3, Verify.Xunit 31.12.5, net10.0).
+- `PromptRegistryTests` (5 test): Identity/Constraints non-empty + 8 pattern yükleme + count = 8 doğrulaması.
+- `PatternSelectorTests` (12 test): 10 `TheoryData` case, XSLT signal testi, max-4 pattern sınırı.
+- `BuildMessagesGoldenTests` (3 Verify snapshot): `Refactor_RefactorSelection`, `Assistant_FirstTurn`, `Assistant_ThirdTurn_WithHistory` — mesaj listesi tamamen snapshot'lanmış.
+- **Toplam: 26/26 test geçti.**
+
+> **Sprint 1 (P0) tamamlandı.** Tüm 4 madde (`PromptRegistry`, `PatternSelector`, `BuildMessages`, golden testler) `develop` branch'ine merge edildi.
 
 ---
 
