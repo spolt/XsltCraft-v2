@@ -9,7 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.10.0] - 2026-04-26
+## [1.1.0] - 2026-05-01
+
+### Added
+- **`PromptRegistry`** (`Ai/PromptRegistry.cs`): Assembly embedded resource'lardan lazy-loading ile UBL-TR prompt içeriklerini yükleyen statik registry. YAML front-matter (`id`, `triggers`) regex ile parse edilir; pattern'ler `IReadOnlyDictionary<string, PromptPattern>` olarak double-check lock ile önbelleklenir.
+- **`PromptPattern` record** (`Ai/PromptRegistry.cs`): `Id`, `Triggers`, `Content` üçlüsünü temsil eden değer tipi — Madde 2 `PatternSelector` tarafından tüketilecek.
+- **`AiMode` enum** (`Ai/AiMode.cs`): `Refactor | Assistant` — Madde 3 `BuildMessages` için zemin.
+- **Embedded markdown prompt dosyaları** (`Prompts/`):
+  - `Core/Identity.md` — Mühendis rolü, UBL-TR namespace tabanı, görev tanımı, güvenlik kuralları.
+  - `Core/Constraints.md` — Çıktı formatı ve kısıtlamalar (eski `CommonConstraints` içeriği).
+  - `Patterns/InvoiceNote.md` — `cbc:Note` görünürlük pattern'i.
+  - `Patterns/SupplierPartyPerson.md` — `AccountingSupplierParty` kişi bilgisi pattern'i.
+  - `Patterns/CustomerPartyPerson.md` — `AccountingCustomerParty` kişi bilgisi pattern'i.
+  - `Patterns/SupplierPartyAddress.md` — `AccountingSupplierParty` adres/iletişim pattern'i.
+  - `Patterns/CustomerPartyAddress.md` — `AccountingCustomerParty` adres/iletişim pattern'i.
+  - `Patterns/InvoiceHeader.md` — Fatura başlık alanları pattern'i (15 alan, [A]/[B] sınıflandırması).
+  - `Patterns/InvoiceLine.md` — InvoiceLine tablo kolonları pattern'i (18 kolon + değişken tablosu).
+  - `Patterns/LegalMonetaryTotal.md` — Dip toplamları pattern'i (15 satır + SGK değişken tablosu).
+
+### Changed
+- `XsltCraft.Application.csproj`: `<EmbeddedResource Include="Prompts\**\*.md" />` eklendi — tüm prompt dosyaları assembly'ye embed edilir.
+- `Ai/PromptTemplates.cs` (`SystemRules`): Karışık dildeki İngilizce genel kurallar kaldırıldı; UBL-TR pattern içeriği Madde 3'e kadar geçici olarak const string'de tutulmaktadır.
+
+> **Sprint 1 (P0) ilerleme:** Madde 1/4 tamamlandı. Madde 2 (`PatternSelector` — request-bazlı pattern seçimi), Madde 3 (`BuildMessages` thin wrapper), Madde 4 (xUnit golden testler) beklemekte.
+
+---
+
+## [1.0.0] - 2026-04-26
 
 ### Added
 - **AI Asistan**: XSLT editörüne entegre AI asistan paneli (`AiAssistantPanel`); sohbet geçmişi, NDJSON streaming yanıt, iptal (AbortController) ve toast bildirimleri. Sağ sidebar'dan açılır; UBL-TR e-Fatura/e-Arşiv bağlamında Türkçe yanıt verir.
