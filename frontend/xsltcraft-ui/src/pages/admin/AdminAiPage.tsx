@@ -147,8 +147,14 @@ export default function AdminAiPage() {
           {error && <div className="text-xs text-red-600">{error}</div>}
 
           <div className="text-xs text-gray-500 border-t border-gray-100 pt-3">
-            Birincil sağlayıcı: <span className="font-mono">Ollama (qwen2.5-coder:7b)</span>.
-            Sunucuda kurulu olmalı: <code className="px-1 py-0.5 bg-gray-100 rounded">ollama serve</code>.
+            Birincil sağlayıcı:{' '}
+            <span className="font-mono">
+              ollama
+              {providers?.find(p => p.name === 'ollama')?.model
+                ? ` (${providers.find(p => p.name === 'ollama')!.model})`
+                : ''}
+            </span>. Sunucuda kurulu olmalı:{' '}
+            <code className="px-1 py-0.5 bg-gray-100 rounded">ollama serve</code>.
           </div>
         </div>
       )}

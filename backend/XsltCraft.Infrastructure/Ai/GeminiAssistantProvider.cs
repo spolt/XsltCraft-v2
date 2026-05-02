@@ -72,7 +72,7 @@ public class GeminiAssistantProvider : IAiAssistantProvider
                     Parts = [new GeminiPart { Text = systemMsg.Content }],
                 },
                 Contents = contents,
-                GenerationConfig = new GeminiGenerationConfig { MaxOutputTokens = req.MaxTokens },
+                GenerationConfig = new GeminiGenerationConfig { MaxOutputTokens = cfg.MaxTokens },
             };
         }
         else
@@ -87,7 +87,7 @@ public class GeminiAssistantProvider : IAiAssistantProvider
                         Parts = [new GeminiPart { Text = prompt }],
                     },
                 ],
-                GenerationConfig = new GeminiGenerationConfig { MaxOutputTokens = req.MaxTokens },
+                GenerationConfig = new GeminiGenerationConfig { MaxOutputTokens = cfg.MaxTokens },
             };
         }
 

@@ -60,7 +60,7 @@ public class OllamaAssistantProvider : IAiAssistantProvider
             Model = ollama.Model,
             Stream = true,
             Messages = messages,
-            Options = new OllamaChatOptions { NumPredict = req.MaxTokens },
+            Options = new OllamaChatOptions { NumPredict = ollama.MaxTokens, NumCtx = ollama.NumCtx },
         };
 
         using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -184,6 +184,8 @@ public class OllamaAssistantProvider : IAiAssistantProvider
     {
         [JsonPropertyName("num_predict")]
         public int NumPredict { get; set; }
+        [JsonPropertyName("num_ctx")]
+        public int NumCtx { get; set; }
     }
 
     private sealed class OllamaChatResponse

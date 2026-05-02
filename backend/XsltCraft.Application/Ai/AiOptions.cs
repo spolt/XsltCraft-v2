@@ -16,10 +16,12 @@ public class AiOptions
 public class OllamaOptions
 {
     public string BaseUrl { get; set; } = "http://localhost:11434";
-    public string Model { get; set; } = "qwen2.5-coder:7b";
+    public string Model { get; set; } = "llama3.1:8b";
     public int FirstTokenTimeoutSeconds { get; set; } = 8;
     public int ConnectTimeoutSeconds { get; set; } = 3;
     public int MaxTokens { get; set; } = 4096;
+    /// <summary>Ollama context window (token). Sistem promptu ~3-4K token; 2048 varsayılan bunu keser.</summary>
+    public int NumCtx { get; set; } = 8192;
 }
 
 public class GeminiOptions
