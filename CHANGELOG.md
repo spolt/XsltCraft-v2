@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **CI Format check**: `PromptTemplates.cs`, `PatternSelector.cs` ve `BuildMessagesGoldenTests.cs` üzerinde trailing whitespace temizlendi; `dotnet format --verify-no-changes` artık hatasız geçiyor (PR #8 backend job kırmızıdan yeşile döndü).
+- **BuildMessages golden snapshots**: v1.2.0'da `Identity.md`'ye eklenen "Selamlama veya XSLT ile ilgisiz mesajlarda kısa ve doğal Türkçe yanıt ver" satırı sistem promptuna yansıdığı için 3 Verify golden snapshot (`Refactor_RefactorSelection`, `Assistant_FirstTurn`, `Assistant_ThirdTurn_WithHistory`) güncel çıktıyla yeniden kabul edildi. Lokal: 27/27 geçti.
 
 ### Changed
 - **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.2.0 → 1.2.1`.
