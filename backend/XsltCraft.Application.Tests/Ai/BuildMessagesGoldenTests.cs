@@ -19,10 +19,10 @@ public class BuildMessagesGoldenTests
     {
         var req = new AiRequest
         {
-            Task      = AiTaskKind.RefactorSelection,
+            Task = AiTaskKind.RefactorSelection,
             UserRequest = "note prefix gizle ETF",
-            UserXslt  = SimpleXslt,
-            UserXml   = "<Invoice><cbc:Note>ETF:100</cbc:Note></Invoice>",
+            UserXslt = SimpleXslt,
+            UserXml = "<Invoice><cbc:Note>ETF:100</cbc:Note></Invoice>",
             Selection = "<xsl:for-each select=\"//n1:Invoice/cbc:Note\">\n  <b>Not: </b><xsl:value-of select=\".\"/>\n</xsl:for-each>",
         };
         var messages = PromptTemplates.BuildMessages(req, AiMode.Refactor);
@@ -34,10 +34,10 @@ public class BuildMessagesGoldenTests
     {
         var req = new AiRequest
         {
-            Task        = AiTaskKind.Assistant,
+            Task = AiTaskKind.Assistant,
             UserRequest = "satıcı adresini sadece şehir ve ilçe göster",
-            UserXslt    = SimpleXslt,
-            History     = [],
+            UserXslt = SimpleXslt,
+            History = [],
         };
         var messages = PromptTemplates.BuildMessages(req, AiMode.Assistant);
         return Verifier.Verify(messages).UseDirectory("__snapshots__");
@@ -48,9 +48,9 @@ public class BuildMessagesGoldenTests
     {
         var req = new AiRequest
         {
-            Task        = AiTaskKind.Assistant,
+            Task = AiTaskKind.Assistant,
             UserRequest = "peki telefon numarasını da gizle",
-            UserXslt    = SimpleXslt,
+            UserXslt = SimpleXslt,
             History =
             [
                 new AssistantMessage("user",      "satıcı adresini sadece şehir ve ilçe göster"),

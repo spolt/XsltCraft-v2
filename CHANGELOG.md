@@ -9,11 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.2.0] - Unreleased
+## [1.2.1] - 2026-05-03
+
+### Fixed
+- **CI Format check**: `PromptTemplates.cs`, `PatternSelector.cs` ve `BuildMessagesGoldenTests.cs` üzerinde trailing whitespace temizlendi; `dotnet format --verify-no-changes` artık hatasız geçiyor (PR #8 backend job kırmızıdan yeşile döndü).
+
+### Changed
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.2.0 → 1.2.1`.
+
+---
+
+## [1.2.0] - 2026-05-03
+
+### Added
+- **Hakkında sayfası** (`AboutPage.tsx`): Placeholder yerine standart bilgi sayfası — versiyon rozeti (`__APP_VERSION__`), uygulama açıklaması, 4 öne çıkan özellik kartı (XSLT Editör, Tema Kütüphanesi, AI Asistan, Taslaklar) ve telif satırı. `lucide-react` ikonları + Tailwind utility class'ları.
+- **README** baştan sona güncellendi: V2 grid canvas, AI asistan, UBL-TR doğrulama, XSLT 2.0 / Saxon HE 10.9, MinIO, admin paneli ve güncel API tablosu.
 
 ### Changed
 - **`OllamaOptions.NumCtx`** (`AiOptions.cs`): Varsayılan `8192`. Sistem promptu (Identity + patterns + Constraints + proje bağlamı) ~3-4K token'a ulaştı; `num_ctx` verilmezse 2048-token varsayılanı promptu keserek pattern kurallarını yutuyordu.
 - **`OllamaChatOptions.NumCtx`** (`OllamaAssistantProvider.cs`): `num_ctx` parametresi Ollama `/api/chat` payload'una eklendi; `OllamaOptions.NumCtx`'ten beslenir.
+- **`Identity.md`**: Selamlama veya XSLT-dışı mesajlarda kısa-doğal Türkçe yanıt kuralı eklendi (savunma 2. katman — `PatternSelector` fallback'ı kaçırırsa bile model zorla XSLT üretmez).
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.1.0 → 1.2.0`.
+
+### Fixed
+- **"Selam" → hayali XSLT planı bug'ı** (`PatternSelector.cs`): Hiçbir pattern eşleşmeyen 0–1 kelimelik mesajlarda `Fallback()` artık çağrılmıyor (`[]` döner). Önceki davranış: kullanıcı `"selam"` yazdığında `["invoice-header", "invoice-line"]` injection yapılıyor + Constraints "Plan + xslt kodu" çıktısı zorluyordu → model hayali XSLT değişiklik planı + kod bloğu üretiyordu. Sınır: `wordCount >= 2 ? Fallback() : []`.
+- **`PatternSelectorTests`**: Boş istek ve `"selam"` case'leri `[]` beklentisiyle güncellendi (26/26 test geçti).
 
 ---
 
