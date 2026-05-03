@@ -42,7 +42,10 @@ public static class PatternSelector
         }
 
         if (scored.Count == 0)
-            return Fallback();
+        {
+            var wordCount = candidateText.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+            return wordCount >= 2 ? Fallback() : [];
+        }
 
         return scored
             .OrderByDescending(s => s.Score)

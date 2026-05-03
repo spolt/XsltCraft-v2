@@ -16,7 +16,8 @@ public class PatternSelectorTests
         { "note prefix gizle",              null, null, ["invoice-note"] },
         { "satıcı adresi sadece il ilçe",   null, null, ["supplier-party-address"] },
         { "yeni kolon ekle",                null, null, ["invoice-line"] },
-        { "",                               null, null, ["invoice-header", "invoice-line"] },   // şüphe modu
+        { "",                               null, null, [] },   // boş istek → fallback yok (0 kelime)
+        { "selam",                          null, null, [] },   // selamlama → fallback yok (1 kelime)
 
         // Ek case'ler
         { "alıcı adresini gizle",           null, null, ["customer-party-address"] },

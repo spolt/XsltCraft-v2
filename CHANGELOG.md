@@ -14,7 +14,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **`OllamaOptions.NumCtx`** (`AiOptions.cs`): Varsayılan `8192`. Sistem promptu (Identity + patterns + Constraints + proje bağlamı) ~3-4K token'a ulaştı; `num_ctx` verilmezse 2048-token varsayılanı promptu keserek pattern kurallarını yutuyordu.
 - **`OllamaChatOptions.NumCtx`** (`OllamaAssistantProvider.cs`): `num_ctx` parametresi Ollama `/api/chat` payload'una eklendi; `OllamaOptions.NumCtx`'ten beslenir.
-- `appsettings.Development.json`, `appsettings.json`, `appsettings.Development.example.json`: `"Model": "llama3.1:8b"` ve `"NumCtx": 8192` eklendi.
 
 ---
 
