@@ -17,7 +17,7 @@ public static class PatternSelector
     public static IReadOnlyList<PromptPattern> Select(AiRequest req)
     {
         var candidateText = Fold((req.UserRequest ?? "") + " " + (req.Selection ?? ""));
-        var xsltContext   = (req.Selection ?? "") + (req.UserXslt ?? "");
+        var xsltContext = (req.Selection ?? "") + (req.UserXslt ?? "");
 
         var scored = new List<(string Id, int Score)>();
 

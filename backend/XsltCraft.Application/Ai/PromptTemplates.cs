@@ -9,8 +9,8 @@ public record ProviderMessage(string Role, string Content);
 public static class PromptTemplates
 {
     private const int AssistantXsltLimitChars = 16_000;
-    private const int ContextSoftLimitChars   = 24_000;
-    private const int MaxHistoryPairs         = 10;
+    private const int ContextSoftLimitChars = 24_000;
+    private const int MaxHistoryPairs = 10;
 
     private static readonly Regex VersionRe = new(
         @"\bversion=[""']([^""']+)[""']",
@@ -68,7 +68,7 @@ public static class PromptTemplates
             // Context message (user): fresh XSLT + XML each turn
             var ctxSb = new StringBuilder();
             var xsltClipped = Clip(req.UserXslt, AssistantXsltLimitChars);
-            var xmlClipped  = Clip(req.UserXml, ContextSoftLimitChars - AssistantXsltLimitChars);
+            var xmlClipped = Clip(req.UserXml, ContextSoftLimitChars - AssistantXsltLimitChars);
 
             if (!string.IsNullOrWhiteSpace(xsltClipped))
                 ctxSb.Append("<user_xslt>\n").Append(xsltClipped).Append("\n</user_xslt>\n");
@@ -104,7 +104,7 @@ public static class PromptTemplates
     {
         var messages = BuildMessages(req, AiMode.Refactor);
         var system = messages.First(m => m.Role == "system");
-        var user   = messages.Last(m => m.Role == "user");
+        var user = messages.Last(m => m.Role == "user");
         return new StringBuilder()
             .Append("<system_rules>\n").Append(system.Content).Append("\n</system_rules>\n\n")
             .Append(user.Content)
