@@ -8,11 +8,15 @@ import {
   FilePlus,
   FolderOpen,
   Shield,
+  Palette,
   ChevronDown,
   ChevronRight,
   Code2,
   FileCode2,
   Info,
+  Library,
+  Users,
+  Sparkles,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -24,6 +28,7 @@ export default function Sidebar({ collapsed }: SidebarProps) {
   const { user } = useAuthStore()
   const location = useLocation()
   const [libraryOpen, setLibraryOpen] = useState(true)
+  const [adminOpen, setAdminOpen] = useState(true)
 
   const isActive = (path: string) => location.pathname + location.search === path || location.pathname === path
 
@@ -132,14 +137,53 @@ export default function Sidebar({ collapsed }: SidebarProps) {
 
         {/* Admin - sadece admin kullanıcı */}
         {user?.role === 'Admin' && (
-          <Link
-            to="/admin/themes"
-            className={`${itemBase} ${isActive('/admin/themes') ? itemActive : itemInactive}`}
-            title="Admin Paneli"
-          >
-            <Shield size={18} className="flex-shrink-0" />
-            {!collapsed && <span>Admin Paneli</span>}
-          </Link>
+          <>
+            <button
+              className={`${itemBase} ${location.pathname.startsWith('/admin') ? itemActive : itemInactive}`}
+              onClick={() => !collapsed && setAdminOpen((o) => !o)}
+              title="Admin Paneli"
+            >
+              <Shield size={18} className="flex-shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1">Admin Paneli</span>
+                  {adminOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </>
+              )}
+            </button>
+            {!collapsed && adminOpen && (
+              <div className="ml-4 flex flex-col gap-0.5">
+                <Link
+                  to="/admin/themes"
+                  className={`${itemBase} ${isActive('/admin/themes') ? itemActive : itemInactive}`}
+                >
+                  <Palette size={16} className="flex-shrink-0" />
+                  <span>Hazır Şablonlar</span>
+                </Link>
+                <Link
+                  to="/admin/snippets"
+                  className={`${itemBase} ${isActive('/admin/snippets') ? itemActive : itemInactive}`}
+                >
+                  <Library size={16} className="flex-shrink-0" />
+                  <span>Snippet Kütüphanesi</span>
+                </Link>
+                <Link
+                  to="/admin/users"
+                  className={`${itemBase} ${isActive('/admin/users') ? itemActive : itemInactive}`}
+                >
+                  <Users size={16} className="flex-shrink-0" />
+                  <span>Kullanıcıları Yönet</span>
+                </Link>
+                <Link
+                  to="/admin/ai"
+                  className={`${itemBase} ${isActive('/admin/ai') ? itemActive : itemInactive}`}
+                >
+                  <Sparkles size={16} className="flex-shrink-0" />
+                  <span>AI Asistan</span>
+                </Link>
+              </div>
+            )}
+          </>
         )}
       </nav>
 

@@ -307,6 +307,72 @@ transform.Load(reader, xsltSettings, new XmlUrlResolver());
 
 ---
 
+## AI Asistan (opsiyonel)
+
+XSLT editöründe AI ile snippet üretme, refactor diff'i, hata açıklama ve Monaco ghost-text özellikleri **opsiyoneldir**. Sunucu başlangıçta `Ai:Enabled: false` ile gelir; admin runtime toggle ile DB'ye yazılarak açılır.
+
+### Birincil sağlayıcı: Ollama (yerel)
+
+```bash
+# 1) Ollama'yı kur — https://ollama.com/download
+# 2) Model indir (≈ 4.7 GB):
+ollama pull qwen2.5-coder:7b
+
+# 3) Sunucuyu çalıştır (varsayılan port 11434):
+ollama serve
+```
+
+Geliştirme makinesinde Ollama çalışmıyorsa AI istekleri `provider_unavailable` chunk'ı döner, kullanıcı toast olarak uyarı görür. Backend ayağa kalkmaya devam eder.
+
+### Yedek sağlayıcı: Anthropic (cloud, opsiyonel)
+
+`appsettings.Development.json` (veya user-secrets):
+
+```json
+"Ai": {
+  "Enabled": true,
+  "Anthropic": {
+    "Enabled": true,
+    "ApiKey": "<console.anthropic.com'dan>",
+    "Model": "claude-sonnet-4-6",
+    "ConnectTimeoutSeconds": 5,
+    "FirstTokenTimeoutSeconds": 15,
+    "MaxTokens": 2048
+  }
+}
+```
+
+`Anthropic:Enabled: true` olduğunda DI'a kaydedilir; orchestrator Ollama'ya ulaşamadığında veya ilk token gelmediğinde **otomatik** Anthropic'e düşer. Anthropic kapalıyken Ollama erişilemezse kullanıcıya net hata chunk'ı gönderilir.
+
+### Açma/kapatma (admin)
+
+Backend ayağa kalktıktan sonra:
+
+1. Admin olarak giriş yap → sol menüden **Admin → AI Asistan** sayfası
+2. **Etkin/Devre dışı** anahtarıyla tüm kullanıcılar için aç/kapa
+3. **Sağlayıcı Durumu** panelinden Ollama'nın canlı erişilebilirliğini ve Anthropic konfigürasyonunu kontrol et
+
+DB'ye yazılan flag (`feature_flags` tablosu, key `ai.enabled`) `appsettings.Ai.Enabled` değerini override eder. Cache TTL 15 sn — değişiklik en geç 15 sn içinde tüm kullanıcılarda etkili olur.
+
+### Mimari notları
+
+- Sağlayıcı arayüzü: `IAiAssistantProvider.StreamAsync(req, prompt, ct) : IAsyncEnumerable<AiChunk>` — `CancellationToken` zorunlu, varsayılan parametresi yok.
+- **Mid-stream fallback yapılmaz**: ilk chunk geldikten sonra bağlantı koparsa yeni provider denenmez; kullanıcıya hata chunk'ı gönderilir (stream yeniden başlatılmaz, model halüsinasyonu birleşmez).
+- Iki ayrı `CancellationTokenSource`: `ConnectTimeoutSeconds` (TCP/TLS handshake) + `FirstTokenTimeoutSeconds` (model warmup). Tek timeout yetmez — bağlantı kurulur ama model yüklenirken 15+ sn bekleyebilir.
+- NDJSON streaming: `Response.BodyWriter` (`PipeWriter`) + her chunk sonrası `FlushAsync`. Buffer/MemoryStream **kullanma** — byte anında TCP'ye iner.
+- Rate limit: `ai-ghost-text` (15 req/dk/user) ve `ai-assistant` (30 req/dk/user) — per-user partition.
+- Refactor dialog ve panel snippet apply, kullanıcı kabul etmeden **otomatik insert yapmaz** ve önce `/api/preview/validate-xslt` ile sözdizimi kontrolü yapar.
+
+### Yeni AI özelliği eklerken
+
+1. Yeni `AiTaskKind` ekle ([AiModels.cs](backend/XsltCraft.Application/Ai/AiModels.cs)).
+2. `PromptTemplates.Build` switch'ine yeni `<output_format>` ekle.
+3. Controller'a yeni endpoint + uygun rate limit policy seç.
+4. Frontend'de `aiAssistantService.AiTaskKind`'a ekle, panel/Monaco entegrasyonu yap.
+5. UI'da `aiEnabled` kontrolünü unutma (`useAiStore(s => s.enabled === true)`).
+
+---
+
 ## Soru için
 
 Bir şey anlamadıysan ya da PRD'de belirsiz bir nokta gördüysen önce ilgili PRD bölümünü tekrar oku. Hâlâ netleşmediyse Semih'e sor.

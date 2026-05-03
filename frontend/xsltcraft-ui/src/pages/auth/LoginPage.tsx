@@ -20,7 +20,7 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const login = useAuthStore((s) => s.login)
 
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -30,7 +30,7 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
     try {
-      const { data } = await api.post('/api/auth/login', { email, password })
+      const { data } = await api.post('/api/auth/login', { username, password })
       const me = await api.get('/api/auth/me', {
         headers: { Authorization: `Bearer ${data.accessToken}` },
       })
@@ -90,14 +90,15 @@ export default function LoginPage() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm text-gray-300 mb-1">E-posta</label>
+          <label className="block text-sm text-gray-300 mb-1">Kullanıcı Adı</label>
           <input
-            type="email"
+            type="text"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
-            placeholder="ornek@mail.com"
+            placeholder="kullanici_adi"
           />
         </div>
         <div>

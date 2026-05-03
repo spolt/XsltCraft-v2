@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XsltCraft Grid Canvas - Konsept Gorseli</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #F1F0EC; display: flex; height: 100vh; overflow: hidden; }
+
+  /* Toolbar */
+  .toolbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 48px; z-index: 100;
+    background: #fff; border-bottom: 1px solid #E0DDD8;
+    display: flex; align-items: center; padding: 0 16px; gap: 12px;
+  }
+  .toolbar .logo { font-weight: 700; color: #185FA5; font-size: 14px; }
+  .toolbar .sep { width: 1px; height: 24px; background: #E0DDD8; }
+  .toolbar .tpl-name { font-size: 13px; color: #2C2C2A; font-weight: 500; }
+  .toolbar .actions { margin-left: auto; display: flex; gap: 8px; }
+  .toolbar .btn { padding: 6px 14px; border-radius: 6px; font-size: 12px; border: 1px solid #D3D1C7; background: #fff; cursor: pointer; color: #5F5E5A; }
+  .toolbar .btn-primary { background: #185FA5; color: #fff; border-color: #185FA5; }
+
+  /* Sidebar - Block Palette */
+  .palette {
+    position: fixed; top: 48px; left: 0; bottom: 0; width: 180px;
+    background: #fff; border-right: 1px solid #E0DDD8; padding: 12px 8px;
+    overflow-y: auto; z-index: 50;
+  }
+  .palette h3 { font-size: 10px; letter-spacing: 1px; color: #888780; margin: 12px 4px 6px; font-weight: 600; }
+  .palette h3:first-child { margin-top: 4px; }
+  .palette-item {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+    font-size: 12px; color: #2C2C2A; cursor: grab; transition: background 120ms;
+  }
+  .palette-item:hover { background: #EBF3FC; }
+  .palette-item .icon {
+    width: 24px; height: 24px; border-radius: 4px; background: #EBF3FC;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #185FA5; flex-shrink: 0;
+  }
+
+  /* Canvas area */
+  .canvas-area {
+    margin-top: 48px; margin-left: 180px; margin-right: 280px;
+    flex: 1; display: flex; align-items: flex-start; justify-content: center;
+    padding: 32px; overflow: auto; background: #F1F0EC;
+  }
+
+  /* A4 page */
+  .a4-page {
+    position: relative;
+    width: 595px; /* 210mm at ~2.83px/mm */
+    height: 842px; /* 297mm at ~2.83px/mm */
+    background: #fff;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05);
+    border-radius: 2px;
+    /* Grid overlay */
+    background-image:
+      linear-gradient(rgba(0,120,200,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,120,200,0.06) 1px, transparent 1px),
+      linear-gradient(rgba(0,120,200,0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,120,200,0.12) 1px, transparent 1px);
+    background-size: 14.15px 14.15px, 14.15px 14.15px, 70.75px 70.75px, 70.75px 70.75px;
+    background-position: -0.5px -0.5px;
+    flex-shrink: 0;
+  }
+
+  /* Grid blocks on canvas */
+  .grid-block {
+    position: absolute;
+    border: 1.5px solid #B5D4F4;
+    border-radius: 4px;
+    background: rgba(235,243,252,0.6);
+    display: flex; align-items: flex-start; padding: 4px 6px;
+    font-size: 10px; color: #2C2C2A; overflow: hidden;
+    cursor: move; transition: box-shadow 120ms;
+  }
+  .grid-block:hover { box-shadow: 0 2px 8px rgba(24,95,165,0.15); }
+  .grid-block.selected {
+    border-color: #185FA5; border-width: 2px;
+    background: rgba(214,233,248,0.7);
+    box-shadow: 0 0 0 3px rgba(24,95,165,0.12);
+  }
+  .grid-block .block-icon {
+    width: 18px; height: 18px; border-radius: 3px; background: #185FA5;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: #fff; flex-shrink: 0; margin-right: 5px;
+  }
+  .grid-block .block-label { font-weight: 500; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grid-block .block-detail { font-size: 9px; color: #888780; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .grid-block .auto-height-badge {
+    position: absolute; bottom: 2px; right: 4px;
+    font-size: 8px; color: #185FA5; opacity: 0.7;
+  }
+
+  /* Resize handles */
+  .resize-handle {
+    position: absolute; width: 8px; height: 8px;
+    background: #185FA5; border: 1px solid #fff; border-radius: 2px;
+  }
+  .resize-handle.nw { top: -4px; left: -4px; cursor: nw-resize; }
+  .resize-handle.ne { top: -4px; right: -4px; cursor: ne-resize; }
+  .resize-handle.sw { bottom: -4px; left: -4px; cursor: sw-resize; }
+  .resize-handle.se { bottom: -4px; right: -4px; cursor: se-resize; }
+  .resize-handle.n { top: -4px; left: 50%; transform: translateX(-50%); cursor: n-resize; }
+  .resize-handle.s { bottom: -4px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
+  .resize-handle.w { top: 50%; left: -4px; transform: translateY(-50%); cursor: w-resize; }
+  .resize-handle.e { top: 50%; right: -4px; transform: translateY(-50%); cursor: e-resize; }
+
+  /* Property panel */
+  .prop-panel {
+    position: fixed; top: 48px; right: 0; bottom: 0; width: 280px;
+    background: #fff; border-left: 1px solid #E0DDD8; padding: 16px;
+    overflow-y: auto; z-index: 50;
+  }
+  .prop-panel h3 { font-size: 11px; font-weight: 600; color: #2C2C2A; margin-bottom: 12px; }
+  .prop-section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #F0EFEB; }
+  .prop-section label { display: block; font-size: 10px; color: #888780; margin-bottom: 3px; font-weight: 500; }
+  .prop-section input {
+    width: 100%; padding: 5px 8px; border: 1px solid #D3D1C7; border-radius: 4px;
+    font-size: 11px; font-family: inherit; outline: none; background: #FAFAF8;
+  }
+  .prop-section input:focus { border-color: #185FA5; box-shadow: 0 0 0 2px rgba(24,95,165,0.1); }
+  .prop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .prop-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .prop-row label { min-width: 50px; }
+  .prop-checkbox { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .prop-checkbox input[type="checkbox"] { width: 14px; height: 14px; accent-color: #185FA5; }
+
+  /* Margin guide lines */
+  .margin-guide {
+    position: absolute; border: 1px dashed rgba(24,95,165,0.2);
+    pointer-events: none; z-index: 1;
+  }
+  .margin-guide.inner {
+    top: 34px; left: 40px; right: 40px; bottom: 34px;
+  }
+
+  /* Info badge */
+  .page-info {
+    position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: #888780; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <span class="logo">XsltCraft</span>
+  <span class="sep"></span>
+  <span class="tpl-name">e-Fatura Sablonu v3</span>
+  <span style="font-size:11px; color:#888780; margin-left:4px;">A4 (210 x 297 mm)</span>
+  <div class="actions">
+    <button class="btn">Geri Al</button>
+    <button class="btn">Yinele</button>
+    <button class="btn" style="border-color: #185FA5; color: #185FA5;">Onizle</button>
+    <button class="btn btn-primary">Kaydet</button>
+  </div>
+</div>
+
+<!-- Block Palette -->
+<div class="palette">
+  <h3>HAZIR BLOKLAR</h3>
+  <div class="palette-item"><div class="icon">P</div> PartyInfo</div>
+  <div class="palette-item"><div class="icon">H</div> InvoiceHeader</div>
+  <div class="palette-item"><div class="icon" style="font-size:8px;">T</div> InvoiceLineTable</div>
+  <div class="palette-item"><div class="icon">$</div> InvoiceTotals</div>
+  <div class="palette-item"><div class="icon">N</div> Notes</div>
+  <div class="palette-item"><div class="icon">B</div> BankInfo</div>
+  <h3>METIN</h3>
+  <div class="palette-item"><div class="icon">T</div> Text</div>
+  <div class="palette-item"><div class="icon">H</div> Heading</div>
+  <div class="palette-item"><div class="icon">P</div> Paragraph</div>
+  <h3>VERI</h3>
+  <div class="palette-item"><div class="icon">#</div> Table</div>
+  <div class="palette-item"><div class="icon">%</div> TaxSummary</div>
+  <h3>MEDYA</h3>
+  <div class="palette-item"><div class="icon" style="font-size:9px;">I</div> Image</div>
+  <div class="palette-item"><div class="icon" style="font-size:8px;">QR</div> GibKarekod</div>
+  <h3>DUZEN</h3>
+  <div class="palette-item"><div class="icon">-</div> Divider</div>
+  <div class="palette-item"><div class="icon" style="font-size:8px;">_</div> Spacer</div>
+</div>
+
+<!-- Canvas Area -->
+<div class="canvas-area">
+  <div style="position:relative;">
+    <div class="a4-page">
+      <!-- Margin guide -->
+      <div class="margin-guide inner"></div>
+
+      <!-- === SAMPLE BLOCKS ON CANVAS === -->
+
+      <!-- Logo (Image) - top left -->
+      <div class="grid-block" style="left:40px; top:34px; width:113px; height:85px;">
+        <div class="block-icon" style="background:#4A90D9;">I</div>
+        <div>
+          <div class="block-label">Image</div>
+          <div class="block-detail">Logo (sirket)</div>
+        </div>
+      </div>
+
+      <!-- GIB Logo - top center -->
+      <div class="grid-block" style="left:241px; top:34px; width:113px; height:85px;">
+        <div class="block-icon" style="background:#E8A838; color:#fff;">G</div>
+        <div>
+          <div class="block-label">GibLogo</div>
+          <div class="block-detail">80x80 center</div>
+        </div>
+      </div>
+
+      <!-- Invoice Header - top right -->
+      <div class="grid-block selected" style="left:383px; top:34px; width:172px; height:85px;">
+        <div class="block-icon">H</div>
+        <div>
+          <div class="block-label">InvoiceHeader</div>
+          <div class="block-detail">Fatura No, Tarih...</div>
+        </div>
+        <!-- Resize handles for selected block -->
+        <div class="resize-handle nw"></div>
+        <div class="resize-handle ne"></div>
+        <div class="resize-handle sw"></div>
+        <div class="resize-handle se"></div>
+        <div class="resize-handle n"></div>
+        <div class="resize-handle s"></div>
+        <div class="resize-handle w"></div>
+        <div class="resize-handle e"></div>
+      </div>
+
+      <!-- Supplier PartyInfo - left -->
+      <div class="grid-block" style="left:40px; top:140px; width:255px; height:127px;">
+        <div class="block-icon" style="background:#2E7D32;">P</div>
+        <div>
+          <div class="block-label">PartyInfo</div>
+          <div class="block-detail">SATICI - Unvan, VKN, Adres...</div>
+        </div>
+      </div>
+
+      <!-- Customer PartyInfo - right -->
+      <div class="grid-block" style="left:310px; top:140px; width:245px; height:127px;">
+        <div class="block-icon" style="background:#1565C0;">P</div>
+        <div>
+          <div class="block-label">PartyInfo</div>
+          <div class="block-detail">ALICI - Unvan, VKN, Adres...</div>
+        </div>
+      </div>
+
+      <!-- ETTN QR -->
+      <div class="grid-block" style="left:40px; top:283px; width:113px; height:85px;">
+        <div class="block-icon" style="background:#7B1FA2;">QR</div>
+        <div>
+          <div class="block-label">ETTN</div>
+          <div class="block-detail">QR + ETTN no</div>
+        </div>
+      </div>
+
+      <!-- Heading -->
+      <div class="grid-block" style="left:168px; top:283px; width:255px; height:28px;">
+        <div class="block-icon" style="background:#C62828;">H</div>
+        <div>
+          <div class="block-label">Heading</div>
+          <div class="block-detail">e-FATURA</div>
+        </div>
+      </div>
+
+      <!-- InvoiceLineTable - full width, auto height -->
+      <div class="grid-block" style="left:40px; top:383px; width:515px; height:212px; border-style: dashed; border-color: #66BB6A;">
+        <div class="block-icon" style="background:#2E7D32; font-size:8px;">TBL</div>
+        <div>
+          <div class="block-label">InvoiceLineTable</div>
+          <div class="block-detail">Urun Kodu, Mal Hizmet, Miktar, Birim Fiyat, KDV...</div>
+        </div>
+        <span class="auto-height-badge">~ otomatik yukseklik</span>
+      </div>
+
+      <!-- TaxSummary - bottom left -->
+      <div class="grid-block" style="left:40px; top:611px; width:230px; height:85px;">
+        <div class="block-icon" style="background:#EF6C00;">%</div>
+        <div>
+          <div class="block-label">TaxSummary</div>
+          <div class="block-detail">KDV ozetleri</div>
+        </div>
+      </div>
+
+      <!-- InvoiceTotals - bottom right -->
+      <div class="grid-block" style="left:298px; top:611px; width:257px; height:113px;">
+        <div class="block-icon" style="background:#185FA5;">$</div>
+        <div>
+          <div class="block-label">InvoiceTotals</div>
+          <div class="block-detail">Toplam, KDV, Odenecek</div>
+        </div>
+      </div>
+
+      <!-- Notes - bottom -->
+      <div class="grid-block" style="left:40px; top:740px; width:340px; height:56px;">
+        <div class="block-icon" style="background:#5D4037;">N</div>
+        <div>
+          <div class="block-label">Notes</div>
+          <div class="block-detail">Fatura notlari</div>
+        </div>
+      </div>
+
+      <!-- BankInfo - bottom right -->
+      <div class="grid-block" style="left:395px; top:740px; width:160px; height:56px;">
+        <div class="block-icon" style="background:#37474F;">B</div>
+        <div>
+          <div class="block-label">BankInfo</div>
+          <div class="block-detail">IBAN, Banka</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="page-info">A4 &mdash; 210 x 297 mm &mdash; 5mm izgara</div>
+  </div>
+</div>
+
+<!-- Property Panel -->
+<div class="prop-panel">
+  <h3>InvoiceHeader</h3>
+
+  <div class="prop-section">
+    <div style="font-size:10px; font-weight:600; color:#185FA5; margin-bottom:8px; letter-spacing:0.5px;">POZISYON & BOYUT</div>
+    <div class="prop-grid">
+      <div>
+        <label>X (mm)</label>
+        <input type="number" value="135" step="5">
+      </div>
+      <div>
+        <label>Y (mm)</label>
+        <input type="number" value="12" step="5">
+      </div>
+      <div>
+        <label>Genislik (mm)</label>
+        <input type="number" value="61" step="5">
+      </div>
+      <div>
+        <label>Yukseklik (mm)</label>
+        <input type="number" value="30" step="5">
+      </div>
+    </div>
+    <div style="margin-top:6px;">
+      <label>Z-index</label>
+      <input type="number" value="0" style="width:60px;">
+    </div>
+  </div>
+
+  <div class="prop-section">
+    <div style="font-size:10px; font-weight:600; color:#185FA5; margin-bottom:8px; letter-spacing:0.5px;">BLOK AYARLARI</div>
+    <label>Baslik</label>
+    <input type="text" value="FATURA BILGILERI" style="margin-bottom:8px;">
+    <div class="prop-checkbox">
+      <input type="checkbox" checked> <span style="font-size:11px;">Basligi goster</span>
+    </div>
+    <div class="prop-checkbox">
+      <input type="checkbox" checked> <span style="font-size:11px;">Cerceveli</span>
+    </div>
+  </div>
+
+  <div class="prop-section">
+    <div style="font-size:10px; font-weight:600; color:#185FA5; margin-bottom:8px; letter-spacing:0.5px;">ALANLAR</div>
+    <div style="font-size:10px; color:#5F5E5A; margin-bottom:4px;">
+      <div style="display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #F0EFEB;">
+        <span>Fatura No</span>
+        <span style="color:#888; font-family:monospace; font-size:9px;">//cbc:ID</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #F0EFEB;">
+        <span>Fatura Tarihi</span>
+        <span style="color:#888; font-family:monospace; font-size:9px;">//cbc:IssueDate</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #F0EFEB;">
+        <span>Senaryo</span>
+        <span style="color:#888; font-family:monospace; font-size:9px;">//cbc:ProfileID</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:3px 0;">
+        <span>Fatura Tipi</span>
+        <span style="color:#888; font-family:monospace; font-size:9px;">//cbc:InvoiceTypeCode</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="prop-section">
+    <label>Yazi Boyutu</label>
+    <input type="text" value="10.4px" style="width:80px;">
+  </div>
+</div>
+
+</body>
+</html>

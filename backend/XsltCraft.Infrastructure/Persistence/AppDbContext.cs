@@ -11,12 +11,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<UserXsltTemplate> UserXsltTemplates => Set<UserXsltTemplate>();
     public DbSet<UserSnippet> UserSnippets => Set<UserSnippet>();
+    public DbSet<UserActivity> UserActivities => Set<UserActivity>();
+    public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
+    public DbSet<UserAiUsage> UserAiUsages => Set<UserAiUsage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(u => u.Id);
+            entity.Property(u => u.Username).HasMaxLength(50).IsRequired().HasDefaultValue("");
+            entity.HasIndex(u => u.Username).IsUnique();
             entity.Property(u => u.Email).HasMaxLength(255).IsRequired();
             entity.HasIndex(u => u.Email).IsUnique();
             entity.Property(u => u.PasswordHash).HasMaxLength(255);
@@ -24,8 +29,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(u => u.GoogleId).IsUnique().HasFilter("google_id IS NOT NULL");
             entity.Property(u => u.DisplayName).HasMaxLength(100);
             entity.Property(u => u.Role).HasConversion<string>();
+            entity.Property(u => u.IsActive).HasDefaultValue(true);
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
             entity.Property(u => u.UpdatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        modelBuilder.Entity<UserActivity>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.Type).HasConversion<string>();
+            entity.Property(a => a.EntityKind).HasMaxLength(50);
+            entity.Property(a => a.CreatedAt).HasDefaultValueSql("NOW()");
+            entity.HasIndex(a => a.CreatedAt);
+            entity.HasIndex(a => new { a.UserId, a.Type });
+            entity.HasOne(a => a.User)
+                  .WithMany(u => u.Activities)
+                  .HasForeignKey(a => a.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>
@@ -79,6 +99,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(t => t.Owner)
                   .WithMany()
                   .HasForeignKey(t => t.OwnerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FeatureFlag>(entity =>
+        {
+            entity.HasKey(f => f.Key);
+            entity.Property(f => f.Key).HasMaxLength(100);
+            entity.Property(f => f.Value).HasMaxLength(200);
+            entity.Property(f => f.UpdatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        modelBuilder.Entity<UserAiUsage>(entity =>
+        {
+            entity.HasKey(u => new { u.UserId, u.Date });
+            entity.Property(u => u.Date).HasColumnType("date");
+            entity.Property(u => u.UpdatedAt).HasDefaultValueSql("NOW()");
+            entity.HasIndex(u => u.Date);
+            entity.HasOne(u => u.User)
+                  .WithMany()
+                  .HasForeignKey(u => u.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
 

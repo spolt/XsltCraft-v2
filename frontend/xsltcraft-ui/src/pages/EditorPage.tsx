@@ -56,7 +56,7 @@ export default function EditorPage() {
   const addXmlFile  = useXmlStore((s) => s.addXmlFile)
   const setActiveXml = useXmlStore((s) => s.setActiveXml)
 
-  const [isLoading, setIsLoading]         = useState(false)
+  const [isLoading, setIsLoading]         = useState(!!routeTemplateId)
   const [isSaving, setIsSaving]           = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [saveError, setSaveError]         = useState<string | null>(null)
@@ -65,6 +65,11 @@ export default function EditorPage() {
   const [showPreview, setShowPreview]     = useState(false)
   const [xmlError, setXmlError]           = useState<string | null>(null)
   const [paletteOpen, setPaletteOpen]     = useState(() => window.innerWidth >= 900)
+  const [namePrompt, setNamePrompt]       = useState<null | 'save' | 'download'>(null)
+  const [saveSuccess, setSaveSuccess]       = useState(false)
+  const saveSuccessTimer                    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [downloadSuccess, setDownloadSuccess] = useState(false)
+  const downloadSuccessTimer                = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const xmlInputRef      = useRef<HTMLInputElement>(null)
@@ -167,7 +172,11 @@ export default function EditorPage() {
       return
     }
 
+    resetTree()
     setIsLoading(true)
+    // XML store'u temizle + varsayılan XML'i ekle (mevcut şablon yüklenirken de)
+    useXmlStore.setState({ xmlFiles: [], activeXmlId: null })
+    addXmlFile('varsayilan-fatura.xml', defaultInvoiceXml)
     getTemplate(routeTemplateId)
       .then((tpl) => {
         setTemplateId(tpl.id)
@@ -203,62 +212,82 @@ export default function EditorPage() {
     return JSON.stringify({ version: 2, blocks })
   }, [blocks])
 
-  const save = useCallback(async () => {
+  const save = useCallback(async (forceName?: string) => {
     if (isSaving) return
+    if (!templateId && !forceName) {
+      setNamePrompt('save')
+      return
+    }
+    const nameToUse = forceName ?? templateName
     setSaveError(null)
     setIsSaving(true)
     try {
       const blockTreeJson = serializeTree()
       if (!templateId) {
         const created = await createTemplate({
-          name: templateName,
+          name: nameToUse,
           documentType: 'Invoice',
           blockTree: blockTreeJson,
         })
         setTemplateId(created.id)
-        navigate(`/editor/${created.id}`, { replace: true })
+        // URL'yi güncelle ama komponent remount olmadan (navigate farklı route → remount eder)
+        window.history.replaceState({}, '', `/editor/${created.id}`)
       } else {
-        await updateTemplate(templateId, { name: templateName, blockTree: blockTreeJson })
+        await updateTemplate(templateId, { name: nameToUse, blockTree: blockTreeJson })
       }
       useEditorStore.setState({ isDirty: false })
-    } catch {
-      setSaveError('Kayıt başarısız. Tekrar deneyin.')
+      if (saveSuccessTimer.current) clearTimeout(saveSuccessTimer.current)
+      setSaveSuccess(true)
+      saveSuccessTimer.current = setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setSaveError(msg ?? 'Kayıt başarısız. Tekrar deneyin.')
     } finally {
       setIsSaving(false)
     }
   }, [isSaving, templateId, templateName, serializeTree, navigate]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Otomatik kaydetme ─────────────────────────────────────────────────────────
+  // ── Otomatik kaydetme — sadece mevcut (kayıtlı) şablonlar için ───────────────
   useEffect(() => {
-    if (!isDirty) return
+    if (!isDirty || !templateId) return
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(() => { save() }, AUTOSAVE_DELAY_MS)
     return () => { if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current) }
-  }, [isDirty, blocks, templateName]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isDirty, templateId, blocks, templateName]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── XSLT indirme ─────────────────────────────────────────────────────────────
-  const handleDownload = useCallback(async () => {
+  const handleDownload = useCallback(async (forceName?: string) => {
     const hasBlocks = Object.keys(blocks).length > 0
     if (isDownloading || !hasBlocks) return
+    if (!templateId && !forceName) {
+      setNamePrompt('download')
+      return
+    }
+    const nameToUse = forceName ?? templateName
     setIsDownloading(true)
     setSaveError(null)
     try {
       if (templateId) {
-        await downloadTemplate(templateId, templateName)
+        await downloadTemplate(templateId, nameToUse)
       } else {
         const xslt = await generateXslt(blocks)
         const blob = new Blob([xslt], { type: 'application/xslt+xml' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${templateName.replace(/[^a-zA-Z0-9_-]/g, '_') || 'template'}.xslt`
+        a.download = `${nameToUse.replace(/[^a-zA-Z0-9_-]/g, '_') || 'template'}.xslt`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
       }
-    } catch {
-      setSaveError('XSLT indirilemedi.')
+      if (downloadSuccessTimer.current) clearTimeout(downloadSuccessTimer.current)
+      setDownloadSuccess(true)
+      downloadSuccessTimer.current = setTimeout(() => setDownloadSuccess(false), 3000)
+
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setSaveError(msg ?? 'XSLT indirilemedi.')
       setTimeout(() => setSaveError(null), 4000)
     } finally {
       setIsDownloading(false)
@@ -272,6 +301,14 @@ export default function EditorPage() {
     else setNameInput(templateName)
     setIsEditingName(false)
   }
+
+  const handleNamePromptConfirm = useCallback((name: string) => {
+    const action = namePrompt
+    setTemplateName(name)
+    setNamePrompt(null)
+    if (action === 'save') save(name)
+    else handleDownload(name)
+  }, [namePrompt, setTemplateName, save, handleDownload]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading) {
@@ -393,7 +430,7 @@ export default function EditorPage() {
             Önizle
           </button>
           <button
-            onClick={handleDownload}
+            onClick={() => handleDownload()}
             disabled={isDownloading || !hasBlocks}
             style={{ ...GHOST_BTN, opacity: isDownloading || !hasBlocks ? 0.4 : 1, cursor: isDownloading || !hasBlocks ? 'not-allowed' : 'pointer' }}
             title="XSLT dosyasını indir"
@@ -404,7 +441,7 @@ export default function EditorPage() {
         <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
 
         {/* Save */}
-        <button onClick={save} disabled={isSaving || !isDirty} style={PRIMARY_BTN}>
+        <button onClick={() => save()} disabled={isSaving || !isDirty} style={PRIMARY_BTN}>
           {isSaving ? 'Kaydediliyor…' : 'Kaydet'}
         </button>
       </header>
@@ -443,6 +480,96 @@ export default function EditorPage() {
           )}
         </DragOverlay>
       </DndContext>
+
+      {/* Kayıt başarı bildirimi */}
+      {saveSuccess && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#1A7F4B', color: '#fff', borderRadius: 8,
+          padding: '10px 20px', fontSize: 13, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)', zIndex: 99999,
+          display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
+        }}>
+          <span>✓</span> Taslaklarım'a kaydedildi
+        </div>
+      )}
+
+      {/* İndirme başlatıldı bildirimi */}
+      {downloadSuccess && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#1A5FA5', color: '#fff', borderRadius: 8,
+          padding: '10px 20px', fontSize: 13, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)', zIndex: 99999,
+          display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
+        }}>
+          <span>↓</span> Şablon indirme başlatıldı
+        </div>
+      )}
+
+      {/* İsim verme modalı — yeni şablon */}
+      {namePrompt && (
+        <NamePromptModal
+          initial={templateName === 'Yeni Şablon' ? '' : templateName}
+          action={namePrompt}
+          onConfirm={handleNamePromptConfirm}
+          onClose={() => setNamePrompt(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── İsim verme modalı ─────────────────────────────────────────────────────────
+function NamePromptModal({ initial, action, onConfirm, onClose }: {
+  initial: string
+  action: 'save' | 'download'
+  onConfirm: (name: string) => void
+  onClose: () => void
+}) {
+  const [name, setName] = React.useState(initial)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  React.useEffect(() => { inputRef.current?.focus() }, [])
+
+  const confirm = () => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    onConfirm(trimmed)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center" style={{ zIndex: 99999 }}>
+      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+        <h3 className="text-base font-semibold text-gray-900 mb-1">Şablona isim ver</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          {action === 'save' ? 'Kaydetmeden önce' : 'İndirmeden önce'} şablona bir isim belirleyin.
+        </p>
+        <input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') onClose() }}
+          placeholder="Şablon adı…"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 mb-5"
+        />
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition"
+          >
+            İptal
+          </button>
+          <button
+            onClick={confirm}
+            disabled={!name.trim()}
+            className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-lg transition"
+          >
+            {action === 'save' ? 'Kaydet' : 'İndir'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

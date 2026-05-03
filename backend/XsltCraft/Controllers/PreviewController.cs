@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Security.Claims;
 using System.Xml;
 using System.Xml.Xsl;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using XsltCraft.Application.DTO;
@@ -134,6 +136,72 @@ public class PreviewController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Önizleme sırasında beklenmeyen hata.");
+            return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
+        }
+    }
+
+    /// <summary>
+    /// Kullanıcının kendi blok ağacı tabanlı şablonundan HTML önizleme üretir.
+    /// V1 ve V2 blok ağacı formatlarını otomatik destekler.
+    /// Request: { xmlContent }
+    /// Response: { html, generationTimeMs }
+    /// </summary>
+    [HttpPost("user-template/{id:guid}"), Authorize]
+    public async Task<IActionResult> PreviewUserTemplate(Guid id, [FromBody] UserTemplatePreviewRequest req)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var template = await _db.Templates.FirstOrDefaultAsync(t => t.Id == id && t.OwnerId == userId);
+        if (template is null) return NotFound(new { error = "Şablon bulunamadı." });
+
+        const string noContentHtml =
+            "<html><body style='display:flex;align-items:center;justify-content:center;height:100%;" +
+            "color:#6b7280;font-family:sans-serif;font-size:13px'>" +
+            "Bu şablona henüz içerik eklenmemiş. Editörde blok ekledikten sonra önizleyin." +
+            "</body></html>";
+
+        if (string.IsNullOrWhiteSpace(template.BlockTree))
+            return Ok(new { html = noContentHtml, generationTimeMs = 0 });
+
+        // Blok ağacı boş olsa bile JSON geçerli olabilir ({"version":2,"blocks":{}}) —
+        // bu durumda XSLT boş HTML üretir. Kullanıcıya bilgilendirici mesaj göster.
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(template.BlockTree);
+            var root = doc.RootElement;
+            bool hasBlocks = false;
+            if (root.TryGetProperty("blocks", out var blocksEl) &&
+                blocksEl.ValueKind == System.Text.Json.JsonValueKind.Object)
+                hasBlocks = blocksEl.EnumerateObject().Any();
+            else if (root.TryGetProperty("sections", out var sectionsEl) &&
+                     sectionsEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+                hasBlocks = sectionsEl.GetArrayLength() > 0;
+
+            if (!hasBlocks)
+                return Ok(new { html = noContentHtml, generationTimeMs = 0 });
+        }
+        catch { /* JSON parse hatası → XSLT generator'a bırak */ }
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var (xslt, genError) = _generator.GenerateFromJson(template.BlockTree);
+            if (xslt is null) return BadRequest(new { error = genError });
+
+            var html = ApplyXslt(xslt, req.XmlContent);
+            sw.Stop();
+            return Ok(new { html, generationTimeMs = sw.ElapsedMilliseconds });
+        }
+        catch (XsltException ex)
+        {
+            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+        }
+        catch (XmlException ex)
+        {
+            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Kullanıcı şablon önizlemesi sırasında beklenmeyen hata.");
             return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
         }
     }
@@ -437,6 +505,8 @@ public class ValidateXsltRequest
 {
     public string Xslt { get; set; } = "";
 }
+
+public record UserTemplatePreviewRequest(string XmlContent);
 
 file sealed class ImageAssetIdOnly
 {

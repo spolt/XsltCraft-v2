@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>XsltCraft · Kullanıcıları Yönet (Mockup)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-60 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+      <div class="px-4 py-4 border-b border-gray-100">
+        <div class="font-semibold text-gray-900">XsltCraft</div>
+        <div class="text-xs text-gray-500">v0.7.0</div>
+      </div>
+      <nav class="p-2 flex flex-col gap-0.5 text-sm">
+        <a class="px-3 py-2 rounded text-gray-600 hover:bg-gray-50 cursor-pointer">Şablonlarım</a>
+        <div class="px-3 pt-3 pb-1 text-xs uppercase tracking-wide text-gray-400 font-medium">Admin Paneli</div>
+        <a class="px-3 py-2 rounded text-gray-600 hover:bg-gray-50 ml-2 cursor-pointer">Temalar</a>
+        <a class="px-3 py-2 rounded text-gray-600 hover:bg-gray-50 ml-2 cursor-pointer">Snippet Kütüphanesi</a>
+        <a class="px-3 py-2 rounded bg-blue-50 text-blue-700 font-medium ml-2 cursor-pointer">Kullanıcıları Yönet</a>
+      </nav>
+    </aside>
+
+    <!-- Ana içerik -->
+    <main class="flex-1 p-8 overflow-auto">
+      <!-- Başlık -->
+      <header class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-gray-900">Kullanıcıları Yönet</h1>
+          <p class="text-sm text-gray-500 mt-1">Tüm kullanıcılar, rolleri, kullanım istatistikleri ve hesap durumları.</p>
+        </div>
+        <button onclick="document.getElementById('create-modal').classList.remove('hidden')"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
+          <span class="text-lg leading-none">+</span> Yeni Kullanıcı
+        </button>
+      </header>
+
+      <!-- Özet kartları -->
+      <section class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg border border-gray-200 p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Toplam Kullanıcı</div>
+          <div class="text-2xl font-semibold text-gray-900 mt-1">147</div>
+        </div>
+        <div class="bg-white rounded-lg border border-gray-200 p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Aktif</div>
+          <div class="text-2xl font-semibold text-green-600 mt-1">132</div>
+        </div>
+        <div class="bg-white rounded-lg border border-gray-200 p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Pasif</div>
+          <div class="text-2xl font-semibold text-gray-400 mt-1">15</div>
+        </div>
+        <div class="bg-white rounded-lg border border-gray-200 p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Bu Hafta Aktivite</div>
+          <div class="text-2xl font-semibold text-blue-600 mt-1">2.4k</div>
+        </div>
+      </section>
+
+      <!-- Filtre barı -->
+      <section class="bg-white border border-gray-200 rounded-lg p-4 mb-4 flex flex-wrap items-center gap-3">
+        <input type="text" placeholder="Email veya isim ara..."
+          class="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+        <select class="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
+          <option>Tüm Roller</option>
+          <option>Admin</option>
+          <option>Editor</option>
+          <option>User</option>
+        </select>
+        <select class="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
+          <option>Tüm Durumlar</option>
+          <option>Aktif</option>
+          <option>Pasif</option>
+        </select>
+      </section>
+
+      <!-- Kullanıcı tablosu -->
+      <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr class="text-left text-xs uppercase text-gray-500 tracking-wide">
+              <th class="px-4 py-3 font-medium">Kullanıcı</th>
+              <th class="px-4 py-3 font-medium">Rol</th>
+              <th class="px-4 py-3 font-medium">Durum</th>
+              <th class="px-4 py-3 font-medium text-right">Kaydet</th>
+              <th class="px-4 py-3 font-medium text-right">İndirme</th>
+              <th class="px-4 py-3 font-medium">Son Login</th>
+              <th class="px-4 py-3 font-medium">Kayıt Tarihi</th>
+              <th class="px-4 py-3 font-medium text-right">İşlemler</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+
+            <!-- Satır 1: Admin (kendisi) — işlem butonları devre dışı -->
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">SP</div>
+                  <div>
+                    <div class="font-medium text-gray-900">Semih Polat</div>
+                    <div class="text-xs text-gray-500">spoltone@gmail.com</div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Admin</span>
+                <span class="ml-1 text-xs text-gray-400">(sen)</span>
+              </td>
+              <td class="px-4 py-3">
+                <label class="relative inline-flex items-center cursor-not-allowed opacity-50" title="Kendi hesabını pasif yapamazsın">
+                  <input type="checkbox" class="sr-only" checked disabled />
+                  <div class="w-9 h-5 bg-green-500 rounded-full relative">
+                    <div class="absolute top-0.5 right-0.5 bg-white rounded-full h-4 w-4"></div>
+                  </div>
+                </label>
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-700 font-medium">128</td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-700 font-medium">86</td>
+              <td class="px-4 py-3 text-gray-600 text-xs">25 Nis 2026, 14:32</td>
+              <td class="px-4 py-3 text-gray-600 text-xs">12 Mar 2026</td>
+              <td class="px-4 py-3 text-right">
+                <div class="relative inline-block">
+                  <button class="text-gray-300 cursor-not-allowed text-lg" title="Kendi hesabında işlem yapılamaz">⋯</button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Satır 2: Editor aktif -->
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">AY</div>
+                  <div>
+                    <div class="font-medium text-gray-900">Ayşe Yılmaz</div>
+                    <div class="text-xs text-gray-500">ayse@example.com</div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Editor</span>
+              </td>
+              <td class="px-4 py-3">
+                <label class="relative inline-flex items-center cursor-pointer" onclick="toggleStatus(this)">
+                  <input type="checkbox" class="sr-only" checked />
+                  <div class="toggle-bg w-9 h-5 bg-green-500 rounded-full relative transition-colors">
+                    <div class="toggle-dot absolute top-0.5 right-0.5 bg-white rounded-full h-4 w-4 transition-all"></div>
+                  </div>
+                </label>
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-700">42</td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-700">19</td>
+              <td class="px-4 py-3 text-gray-600 text-xs">24 Nis 2026, 09:18</td>
+              <td class="px-4 py-3 text-gray-600 text-xs">3 Şub 2026</td>
+              <td class="px-4 py-3 text-right">
+                <div class="relative">
+                  <button onclick="toggleMenu(event, 'menu-2')" class="text-gray-400 hover:text-gray-700 text-lg px-1">⋯</button>
+                  <div id="menu-2" class="hidden absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 text-sm">
+                    <button onclick="document.getElementById('role-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">Rol Değiştir</button>
+                    <button onclick="document.getElementById('password-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">Şifre Sıfırla</button>
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <button onclick="document.getElementById('delete-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600">Sil</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Satır 3: User aktif -->
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">MK</div>
+                  <div>
+                    <div class="font-medium text-gray-900">Mehmet Kaya</div>
+                    <div class="text-xs text-gray-500">mehmet@firma.com.tr</div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">User</span>
+              </td>
+              <td class="px-4 py-3">
+                <label class="relative inline-flex items-center cursor-pointer" onclick="toggleStatus(this)">
+                  <input type="checkbox" class="sr-only" checked />
+                  <div class="toggle-bg w-9 h-5 bg-green-500 rounded-full relative transition-colors">
+                    <div class="toggle-dot absolute top-0.5 right-0.5 bg-white rounded-full h-4 w-4 transition-all"></div>
+                  </div>
+                </label>
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-700">8</td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-700">3</td>
+              <td class="px-4 py-3 text-gray-600 text-xs">22 Nis 2026, 16:04</td>
+              <td class="px-4 py-3 text-gray-600 text-xs">19 Nis 2026</td>
+              <td class="px-4 py-3 text-right">
+                <div class="relative">
+                  <button onclick="toggleMenu(event, 'menu-3')" class="text-gray-400 hover:text-gray-700 text-lg px-1">⋯</button>
+                  <div id="menu-3" class="hidden absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 text-sm">
+                    <button onclick="document.getElementById('role-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">Rol Değiştir</button>
+                    <button onclick="document.getElementById('password-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">Şifre Sıfırla</button>
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <button onclick="document.getElementById('delete-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600">Sil</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Satır 4: User pasif -->
+            <tr class="bg-gray-50/50">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs font-semibold flex-shrink-0">FE</div>
+                  <div>
+                    <div class="font-medium text-gray-500 line-through decoration-gray-300">Fatma Erdem</div>
+                    <div class="text-xs text-gray-400">fatma@test.com</div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-400">User</span>
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <label class="relative inline-flex items-center cursor-pointer" onclick="toggleStatus(this)">
+                    <input type="checkbox" class="sr-only" />
+                    <div class="toggle-bg w-9 h-5 bg-gray-300 rounded-full relative transition-colors">
+                      <div class="toggle-dot absolute top-0.5 left-0.5 bg-white rounded-full h-4 w-4 transition-all"></div>
+                    </div>
+                  </label>
+                  <span class="text-xs text-red-500 font-medium">Pasif</span>
+                </div>
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-400">2</td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-400">0</td>
+              <td class="px-4 py-3 text-gray-400 text-xs">8 Mar 2026, 11:42</td>
+              <td class="px-4 py-3 text-gray-400 text-xs">5 Mar 2026</td>
+              <td class="px-4 py-3 text-right">
+                <div class="relative">
+                  <button onclick="toggleMenu(event, 'menu-4')" class="text-gray-400 hover:text-gray-700 text-lg px-1">⋯</button>
+                  <div id="menu-4" class="hidden absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 text-sm">
+                    <button onclick="document.getElementById('role-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">Rol Değiştir</button>
+                    <button onclick="document.getElementById('password-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">Şifre Sıfırla</button>
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <button onclick="document.getElementById('delete-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600">Sil</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Satır 5: Hiç login olmamış -->
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-semibold flex-shrink-0">CT</div>
+                  <div>
+                    <div class="font-medium text-gray-900">Can Tekin</div>
+                    <div class="text-xs text-gray-500">can@yenikullanici.com</div>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">User</span>
+              </td>
+              <td class="px-4 py-3">
+                <label class="relative inline-flex items-center cursor-pointer" onclick="toggleStatus(this)">
+                  <input type="checkbox" class="sr-only" checked />
+                  <div class="toggle-bg w-9 h-5 bg-green-500 rounded-full relative transition-colors">
+                    <div class="toggle-dot absolute top-0.5 right-0.5 bg-white rounded-full h-4 w-4 transition-all"></div>
+                  </div>
+                </label>
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-700">0</td>
+              <td class="px-4 py-3 text-right tabular-nums text-gray-700">0</td>
+              <td class="px-4 py-3 text-gray-400 text-xs italic">Hiç login olmadı</td>
+              <td class="px-4 py-3 text-gray-600 text-xs">24 Nis 2026</td>
+              <td class="px-4 py-3 text-right">
+                <div class="relative">
+                  <button onclick="toggleMenu(event, 'menu-5')" class="text-gray-400 hover:text-gray-700 text-lg px-1">⋯</button>
+                  <div id="menu-5" class="hidden absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 text-sm">
+                    <button onclick="document.getElementById('role-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">Rol Değiştir</button>
+                    <button onclick="document.getElementById('password-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700">Şifre Sıfırla</button>
+                    <div class="border-t border-gray-100 my-1"></div>
+                    <button onclick="document.getElementById('delete-modal').classList.remove('hidden');closeMenus()" class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600">Sil</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+
+        <!-- Sayfalama -->
+        <div class="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+          <div class="text-xs text-gray-500">147 kullanıcıdan 1–5 arası gösteriliyor</div>
+          <div class="flex items-center gap-1">
+            <button class="px-3 py-1 text-sm border border-gray-300 rounded bg-white hover:bg-gray-50 disabled:opacity-40" disabled>‹ Önceki</button>
+            <button class="px-3 py-1 text-sm border border-blue-500 bg-blue-50 text-blue-700 rounded font-medium">1</button>
+            <button class="px-3 py-1 text-sm border border-gray-300 rounded bg-white hover:bg-gray-50">2</button>
+            <button class="px-3 py-1 text-sm border border-gray-300 rounded bg-white hover:bg-gray-50">3</button>
+            <button class="px-3 py-1 text-sm border border-gray-300 rounded bg-white hover:bg-gray-50">Sonraki ›</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ===== MODALLER ===== -->
+
+  <!-- Yeni Kullanıcı Modalı -->
+  <div id="create-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+      <h3 class="text-base font-semibold text-gray-900 mb-4">Yeni Kullanıcı Oluştur</h3>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">E-posta</label>
+          <input type="email" placeholder="kullanici@ornek.com" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Ad Soyad</label>
+          <input type="text" placeholder="Ad Soyad" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Rol</label>
+          <select class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option>User</option>
+            <option>Editor</option>
+            <option>Admin</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Geçici Şifre</label>
+          <input type="password" placeholder="••••••••" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <div class="flex gap-3 justify-end mt-6">
+        <button onclick="document.getElementById('create-modal').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition">İptal</button>
+        <button onclick="document.getElementById('create-modal').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition">Oluştur</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rol Değiştir Modalı -->
+  <div id="role-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+      <h3 class="text-base font-semibold text-gray-900 mb-1">Rol Değiştir</h3>
+      <p class="text-sm text-gray-500 mb-4">Ayşe Yılmaz için yeni rol seçin.</p>
+      <div class="flex flex-col gap-2">
+        <label class="flex items-center gap-3 px-3 py-2.5 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+          <input type="radio" name="role" value="User" checked class="accent-blue-600" />
+          <div>
+            <div class="text-sm font-medium text-gray-900">User</div>
+            <div class="text-xs text-gray-500">Kendi şablonlarını yönetebilir</div>
+          </div>
+        </label>
+        <label class="flex items-center gap-3 px-3 py-2.5 border border-blue-200 bg-blue-50 rounded-lg cursor-pointer">
+          <input type="radio" name="role" value="Editor" class="accent-blue-600" />
+          <div>
+            <div class="text-sm font-medium text-gray-900">Editor</div>
+            <div class="text-xs text-gray-500">Genişletilmiş erişim (yetkileri yakında)</div>
+          </div>
+        </label>
+        <label class="flex items-center gap-3 px-3 py-2.5 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+          <input type="radio" name="role" value="Admin" class="accent-blue-600" />
+          <div>
+            <div class="text-sm font-medium text-gray-900">Admin</div>
+            <div class="text-xs text-gray-500">Tam yetki</div>
+          </div>
+        </label>
+      </div>
+      <div class="flex gap-3 justify-end mt-6">
+        <button onclick="document.getElementById('role-modal').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition">İptal</button>
+        <button onclick="document.getElementById('role-modal').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition">Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Şifre Sıfırla Modalı -->
+  <div id="password-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+      <h3 class="text-base font-semibold text-gray-900 mb-1">Şifre Sıfırla</h3>
+      <p class="text-sm text-gray-500 mb-4">Mehmet Kaya için yeni şifre belirleyin.</p>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Yeni Şifre</label>
+          <input type="password" placeholder="••••••••" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-600 block mb-1">Şifre Tekrar</label>
+          <input type="password" placeholder="••••••••" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+      <p class="text-xs text-amber-600 mt-3 flex items-start gap-1">
+        <span>⚠</span>
+        <span>Mevcut oturumlar geçersiz kılınacak. Kullanıcının yeni şifre ile tekrar giriş yapması gerekecek.</span>
+      </p>
+      <div class="flex gap-3 justify-end mt-5">
+        <button onclick="document.getElementById('password-modal').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition">İptal</button>
+        <button onclick="document.getElementById('password-modal').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition">Şifreyi Güncelle</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sil Onay Modalı -->
+  <div id="delete-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+      <h3 class="text-base font-semibold text-gray-900 mb-2">Kullanıcıyı Sil</h3>
+      <p class="text-sm text-gray-600 mb-2">
+        <span class="font-medium text-gray-900">Can Tekin</span> hesabı ve tüm verileri <span class="text-red-600 font-medium">kalıcı olarak silinecek</span>.
+      </p>
+      <div class="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 mb-5">
+        Şablonlar, snippet'lar ve aktivite geçmişi dahil tüm veriler geri alınamaz şekilde silinir.
+      </div>
+      <div class="flex gap-3 justify-end">
+        <button onclick="document.getElementById('delete-modal').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition">İptal</button>
+        <button onclick="document.getElementById('delete-modal').classList.add('hidden')"
+          class="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition">Evet, Sil</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleMenu(event, id) {
+      event.stopPropagation()
+      closeMenus(id)
+      document.getElementById(id).classList.toggle('hidden')
+    }
+
+    function closeMenus(exceptId) {
+      document.querySelectorAll('[id^="menu-"]').forEach(el => {
+        if (el.id !== exceptId) el.classList.add('hidden')
+      })
+    }
+
+    document.addEventListener('click', () => closeMenus())
+
+    function toggleStatus(label) {
+      const cb = label.querySelector('input[type=checkbox]')
+      const bg = label.querySelector('.toggle-bg')
+      const dot = label.querySelector('.toggle-dot')
+      const isActive = !cb.checked
+
+      cb.checked = isActive
+      if (isActive) {
+        bg.classList.remove('bg-gray-300')
+        bg.classList.add('bg-green-500')
+        dot.classList.remove('left-0.5')
+        dot.classList.add('right-0.5')
+      } else {
+        bg.classList.remove('bg-green-500')
+        bg.classList.add('bg-gray-300')
+        dot.classList.remove('right-0.5')
+        dot.classList.add('left-0.5')
+      }
+    }
+  </script>
+</body>
+</html>

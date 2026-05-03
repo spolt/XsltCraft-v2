@@ -8,13 +8,18 @@ const PASSWORD_RULES = /^(?=.*[A-Z])(?=.*\d).{8,}$/
 export default function RegisterPage() {
   const navigate = useNavigate()
 
+  const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,30}$/
+
   const validate = (): string | null => {
+    if (!USERNAME_REGEX.test(username))
+      return 'Kullanıcı adı 3-30 karakter olmalı, yalnızca harf, rakam ve alt çizgi içerebilir.'
     if (!PASSWORD_RULES.test(password))
       return 'Şifre en az 8 karakter, 1 büyük harf ve 1 rakam içermelidir.'
     return null
@@ -30,7 +35,7 @@ export default function RegisterPage() {
     setError(null)
     setLoading(true)
     try {
-      await api.post('/api/auth/register', { email, password, displayName })
+      await api.post('/api/auth/register', { username, email, password, displayName })
       navigate('/auth/login', { state: { registered: true } })
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -57,6 +62,19 @@ export default function RegisterPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm text-gray-300 mb-1">Kullanıcı Adı</label>
+          <input
+            type="text"
+            required
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+            placeholder="kullanici_adi"
+          />
+          <p className="mt-1 text-xs text-gray-500">3-30 karakter, harf/rakam/alt çizgi</p>
+        </div>
         <div>
           <label className="block text-sm text-gray-300 mb-1">Ad Soyad</label>
           <input

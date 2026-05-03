@@ -6,6 +6,9 @@ import TemplatesPage from './pages/TemplatesPage'
 import DraftsPage from './pages/DraftsPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminThemesPage from './pages/admin/AdminThemesPage'
+import AdminSnippetsPage from './pages/admin/AdminSnippetsPage'
+import AdminUsersPage from './pages/admin/AdminUsersPage'
+import AdminAiPage from './pages/admin/AdminAiPage'
 import EditorPage from './pages/EditorPage'
 import ThemeUsePage from './pages/ThemeUsePage'
 import DevModePage from './pages/DevModePage'
@@ -15,10 +18,12 @@ import AboutPage from './pages/AboutPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
 import AppLayout from './components/layout/AppLayout'
+import ToastContainer from './components/ui/ToastContainer'
 
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/register" element={<RegisterPage />} />
@@ -46,6 +51,9 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/admin" element={<Navigate to="/admin/themes" replace />} />
             <Route path="/admin/themes" element={<AdminThemesPage />} />
+            <Route path="/admin/snippets" element={<AdminSnippetsPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/ai" element={<AdminAiPage />} />
           </Route>
         </Route>
 

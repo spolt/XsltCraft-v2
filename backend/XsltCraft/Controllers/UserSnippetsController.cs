@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Application.DTO;
+using XsltCraft.Application.Interfaces;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 
@@ -13,7 +14,7 @@ namespace XsltCraft.Api.Controllers;
 [ApiController]
 [Route("api/user-snippets")]
 [Authorize]
-public class UserSnippetsController(AppDbContext db) : ControllerBase
+public class UserSnippetsController(AppDbContext db, IUserActivityRecorder activity) : ControllerBase
 {
     private static readonly HashSet<string> AllowedScopes = ["xslt", "xpath", "html"];
 
@@ -24,8 +25,9 @@ public class UserSnippetsController(AppDbContext db) : ControllerBase
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         var snippets = await db.UserSnippets
-            .Where(s => s.OwnerId == userId)
-            .OrderBy(s => s.Scope)
+            .Where(s => s.OwnerId == userId || s.IsPublic)
+            .OrderBy(s => s.IsPublic)   // kişisel önce
+            .ThenBy(s => s.Scope)
             .ThenBy(s => s.Prefix)
             .Select(s => new UserSnippetResponse
             {
@@ -74,6 +76,7 @@ public class UserSnippetsController(AppDbContext db) : ControllerBase
 
         db.UserSnippets.Add(snippet);
         await db.SaveChangesAsync();
+        await activity.RecordAsync(userId, UserActivityType.Save, snippet.Id, "Snippet");
 
         return CreatedAtAction(nameof(GetAll), null, ToResponse(snippet));
     }

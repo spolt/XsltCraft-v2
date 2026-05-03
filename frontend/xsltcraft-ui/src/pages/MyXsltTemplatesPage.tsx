@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Code2, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Code2, Eye, Pencil, Trash2, Check, X } from 'lucide-react'
 import {
   getUserXsltTemplates,
+  getUserXsltTemplate,
   deleteUserXsltTemplate,
   updateUserXsltTemplate,
   type UserXsltTemplateSummary,
 } from '../services/userXsltService'
+import { previewFromRawXslt } from '../services/previewService'
+import TemplatePreviewPanel from '../components/TemplatePreviewPanel'
+import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 export default function MyXsltTemplatesPage() {
   const [templates, setTemplates] = useState<UserXsltTemplateSummary[]>([])
@@ -14,11 +18,28 @@ export default function MyXsltTemplatesPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [previewName, setPreviewName] = useState('')
+  const [previewHtml, setPreviewHtml] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => {
+    if (!previewId) return
+    let cancelled = false
+    setPreviewHtml('')
+    setPreviewLoading(true)
+    getUserXsltTemplate(previewId)
+      .then((t) => previewFromRawXslt(t.xsltContent, t.xmlContent || defaultInvoiceXml))
+      .then((res) => { if (!cancelled) setPreviewHtml(res.html) })
+      .catch(() => { if (!cancelled) setPreviewHtml('<html><body style="display:flex;align-items:center;justify-content:center;height:100%;color:#ef4444;font-family:sans-serif;font-size:13px">Önizleme alınamadı.</body></html>') })
+      .finally(() => { if (!cancelled) setPreviewLoading(false) })
+    return () => { cancelled = true }
+  }, [previewId])
 
   async function load() {
     setLoading(true)
@@ -105,7 +126,12 @@ export default function MyXsltTemplatesPage() {
   const someSelected = selectedIds.size > 0
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="flex h-full overflow-hidden">
+      <div
+        className={`overflow-y-auto ${previewId ? 'border-r border-gray-200' : 'flex-1'}`}
+        style={previewId ? { width: 400, flexShrink: 0 } : {}}
+      >
+      <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-gray-800">Şablonlarım</h1>
@@ -177,10 +203,23 @@ export default function MyXsltTemplatesPage() {
                 onOpen={() => navigate(`/xslt-editor/${t.id}`)}
                 onDelete={handleDelete}
                 onRename={handleRename}
+                onPreview={(id, name) => { setPreviewId(id); setPreviewName(name) }}
               />
             ))}
           </div>
         </>
+      )}
+      </div>
+      </div>
+      {previewId && (
+        <TemplatePreviewPanel
+          name={previewName}
+          html={previewHtml}
+          loading={previewLoading}
+          actionLabel="XSLT Editörde Aç"
+          onAction={() => navigate(`/xslt-editor/${previewId}`)}
+          onClose={() => setPreviewId(null)}
+        />
       )}
     </div>
   )
@@ -213,6 +252,7 @@ function TemplateRow({
   onOpen,
   onDelete,
   onRename,
+  onPreview,
 }: {
   template: UserXsltTemplateSummary
   selected: boolean
@@ -220,6 +260,7 @@ function TemplateRow({
   onOpen: () => void
   onDelete: (id: string) => void
   onRename: (id: string, name: string) => void
+  onPreview: (id: string, name: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(template.name)
@@ -278,6 +319,9 @@ function TemplateRow({
       </span>
 
       <div className="flex items-center gap-1 flex-shrink-0">
+        <button onClick={() => onPreview(template.id, template.name)} title="Önizle" className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+          <Eye size={14} />
+        </button>
         <button onClick={() => setEditing(true)} title="Yeniden adlandır" className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
           <Pencil size={14} />
         </button>

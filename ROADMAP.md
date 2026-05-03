@@ -1,6 +1,6 @@
 # XsltCraft — Geliştirme Yol Haritası
 
-**Son güncelleme:** 2026-04-18
+**Son güncelleme:** 2026-04-26
 **Referans döküman:** `XsltCraft_PRD_v1_2.md`  
 **Faz sayısı:** 7  
 **Toplam tahmini süre:** 13–18 hafta
@@ -496,126 +496,112 @@ Her faz sırayla tamamlanmalıdır. Bir sonraki faza geçiş için önceki fazı
 
 ### Görev grubu 8 — AI Asistan (Ollama + Anthropic cloud fallback)
 
-> Referans: [`AI_ASSISTANT_PLAN.md`](AI_ASSISTANT_PLAN.md) — bu görev grubu bu handoff dokümanına tam uyumludur.
+> Referans: [`AI_ASSISTANT_PLAN.md`](AI_ASSISTANT_PLAN.md). **Faz 1 + Faz 2 tamamlandı.** Aşağıdaki kontrol listesi mevcut durumu yansıtır; kalan iyileştirmeler "Faz 3+" başlığı altında toplanmıştır.
+
+#### ✅ Faz 1 — Çekirdek (tamamlandı)
 
 **Sağlayıcı & model katmanı**
-- [ ] `IAiAssistantProvider` arayüzü — `IAsyncEnumerable<AiChunk> StreamAsync(AiRequest req, CancellationToken ct)` (CancellationToken **zorunlu**, varsayılan parametresi yok)
-- [ ] `OllamaAssistantProvider` — `http://localhost:11434/api/chat`
-  - Model: `qwen2.5-coder:7b` (config'den okunur, değiştirilebilir)
-  - `HttpClientFactory` named client: `"ollama"`
-  - `Timeout = Timeout.InfiniteTimeSpan` — socket-level timeout kullanılır, streaming kesilmesin
-  - **İki ayrı `CancellationTokenSource` zinciri kurulur:**
-    - `ConnectTimeoutSeconds` için ayrı CTS (bağlantı aşaması)
-    - `FirstTokenTimeoutSeconds` için ayrı CTS (ilk chunk beklenir)
-  - ⚠️ Tek timeout yetmez: bağlantı kurulur ama model yüklenirken 15 sn bekleyebilir
-- [ ] `AnthropicAssistantProvider` — yalnızca `Ai:Anthropic:Enabled: true` ise DI'a kaydedilir; Ollama erişilemez veya timeout olursa devreye girer, model: `claude-sonnet-4-6`
-- [ ] `appsettings` `Ai` bloğu:
-  ```json
-  "Ai": {
-    "Enabled": true,
-    "Ollama": {
-      "BaseUrl": "http://localhost:11434",
-      "Model": "qwen2.5-coder:7b",
-      "FirstTokenTimeoutSeconds": 8,
-      "ConnectTimeoutSeconds": 3
-    },
-    "Anthropic": {
-      "Enabled": false,
-      "ApiKey": "",
-      "Model": "claude-sonnet-4-6"
-    }
-  }
-  ```
-- [ ] DI registration — `Program.cs`'de `AddHttpClient("ollama")` + `OllamaAssistantProvider`, `AnthropicAssistantProvider` (koşullu), `AiProviderOrchestrator` scoped kayıtlar
+- [x] `IAiAssistantProvider` arayüzü — `IAsyncEnumerable<AiChunk> StreamAsync(AiRequest req, string prompt, CancellationToken ct)` ([AiModels.cs](backend/XsltCraft.Application/Ai/AiModels.cs))
+- [x] `OllamaAssistantProvider` — `http://localhost:11434/api/chat`, named `HttpClient "ollama"`, `Timeout.InfiniteTimeSpan`, **iki ayrı CTS** (connect + firstToken) ([OllamaAssistantProvider.cs](backend/XsltCraft.Infrastructure/Ai/OllamaAssistantProvider.cs))
+- [x] `appsettings` `Ai` bloğu — Enabled, Ollama (BaseUrl/Model/Timeouts/MaxTokens), Anthropic (Enabled/ApiKey/Model/MaxTokens) ([appsettings.json](backend/XsltCraft/appsettings.json), [appsettings.Development.example.json](backend/XsltCraft/appsettings.Development.example.json))
+- [x] DI registration — `AddHttpClient("ollama")` + `OllamaAssistantProvider` + `AiProviderOrchestrator` scoped ([ServiceCollectionExtensions.cs](backend/XsltCraft.Infrastructure/DependecyInjection/ServiceCollectionExtensions.cs))
 
 **Deterministik fallback mantığı**
-- [ ] `AiProviderOrchestrator` — sıralı deneme kuralı (ilk chunk öncesi):
-  1. **Ollama** (`qwen2.5-coder:7b`) → `ConnectTimeout` içinde bağlantı kurulamaz, `FirstTokenTimeout` içinde ilk chunk gelmez veya `model not found` hatası → adım 2
-  2. **Anthropic** (yalnızca `Ai:Anthropic:Enabled: true` ise) → `FirstTokenTimeout` içinde ilk chunk gelmezse hata fırlat
-  3. Her ikisi de başarısız → kullanıcıya hata chunk'ı
-- [ ] Watchdog implementasyonu: iki ayrı `CancellationTokenSource` (connect + firstToken) + `Task.WhenAny(firstChunkTask, Task.Delay(firstTokenCts.Token))`; timeout kazanırsa upstream request iptal edilir, bir sonraki sağlayıcıya geçilir
-- [ ] **Mid-stream fallback yapılmaz** — ilk chunk geldikten sonra bağlantı kopar/hatalı olursa kullanıcıya net hata chunk'ı gönderilir (stream yeniden başlatılmaz)
-- [ ] Log: her fallback atlamasında `LogWarning("AI provider {From} → {To}, reason: {Reason}")`
+- [x] `AiProviderOrchestrator` — sıralı sağlayıcı listesi, ilk chunk öncesi watchdog, mid-stream fallback yok ([AiProviderOrchestrator.cs](backend/XsltCraft.Infrastructure/Ai/AiProviderOrchestrator.cs))
+- [x] **Mid-stream fallback yapılmıyor** — ilk chunk sonrası kopma → kullanıcıya hata chunk'ı
+- [x] Log: `LogWarning("AI provider {From} → {To}, reason: {Reason}")`
 
 **Streaming mimarisi (backend)**
-- [ ] `AiAssistantController` endpoint'leri SSE yerine **NDJSON streaming** döndürür (`Content-Type: application/x-ndjson`):
-  - [ ] `POST /api/ai/explain-error`
-  - [ ] `POST /api/ai/suggest-xpath`
-  - [ ] `POST /api/ai/generate-snippet`
-  - [ ] `POST /api/ai/refactor-selection`
-  - [ ] `POST /api/ai/explain-xpath`
-- [ ] Her endpoint:
-  - [ ] `CancellationToken ct = HttpContext.RequestAborted` kullanır (client disconnect → upstream iptal)
-  - [ ] `Response.BodyWriter` (`PipeWriter`) ile yazar, **buffer/MemoryStream kullanılmaz**
-  - [ ] Her chunk sonrası `await Response.BodyWriter.FlushAsync(ct)` — byte anında TCP'ye iner
-  - [ ] Chunk formatı: `{"type":"delta","text":"..."}\n` + terminal `{"type":"done","provider":"ollama","model":"qwen2.5-coder:7b","ms":1234}\n`
-  - [ ] Hata durumunda: `{"type":"error","code":"provider_unavailable","message":"..."}\n` + flush
-- [ ] Rate limit — iki ayrı policy (ghost-text ve panel istekleri farklı frekanslarda gelir):
-  - [ ] `ai-ghost-text` policy: **15 req/dk/user** (Monaco inline completions)
-  - [ ] `ai-assistant` policy: **30 req/dk/user** (Panel endpoint'leri)
+- [x] `AiAssistantController` — NDJSON streaming, `Response.BodyWriter` (PipeWriter), `HttpContext.RequestAborted`, her chunk sonrası `FlushAsync` ([AiAssistantController.cs](backend/XsltCraft/Controllers/AiAssistantController.cs))
+- [x] 5 endpoint: `explain-error`, `suggest-xpath`, `generate-snippet`, `refactor-selection`, `explain-xpath`
+- [x] Chunk formatı: `{"type":"delta"|"done"|"error",...}\n`
+- [x] Rate limit — **`ai-assistant` (30/dk/user)** ve **`ai-ghost-text` (15/dk/user)** per-user partition ([Program.cs](backend/XsltCraft/Program.cs))
 
-**Prompt template'leri (`PromptTemplates.cs`)**
-
-Her istek aşağıdaki **5 taglı** sabit iskelete göre kurulur; sadece içerikler değişir:
-
-```
-<system_rules>
-Sen XsltCraft için çalışan bir XSLT/UBL-TR asistanısın.
-- Saxon HE 10.9.0 (XSLT 2.0, XPath 2.0) kullanılıyor.
-- Cevapları Türkçe ver.
-- Güvenlik: document(), enableScript, external DTD önerme.
-- Belirsizse varsayım yapma, eksik bilgi iste.
-</system_rules>
-
-<output_format>
-{görev-spesifik}
-</output_format>
-
-<constraints>
-- max_tokens API parametresiyle de zorlanır.
-- UBL-TR namespace'leri: cbc, cac, ext — tanımlamadan kullanma.
-- Kod bloğu dışında açıklama kısa olsun (<150 kelime).
-</constraints>
-
-<user_xml>{...}</user_xml>
-<user_xslt>{...}</user_xslt>
-<user_request>{...}</user_request>
-```
-
-- [ ] `PromptTemplates.cs` — 5 endpoint için 5 ayrı builder:
-  - [ ] `BuildExplainError` — düz metin, kısa
-  - [ ] `BuildSuggestXPath` — ` ```xpath ``` ` fence
-  - [ ] `BuildGenerateSnippet` — ` ```xslt ``` ` fence
-  - [ ] `BuildRefactorSelection` — ` ```xslt ``` ` fence, before/after
-  - [ ] `BuildExplainXPath` — düz metin + opsiyonel ` ```xpath ``` ` fence
-- [ ] ⚠️ **`max_tokens: 2048` değeri sadece prompt'a yazılmaz; API isteğinde `max_tokens` parametresi olarak da gönderilir.** Aksi hâlde model limiti aşar
-- [ ] Context boyut kontrolü: `<user_xml>` + `<user_xslt>` toplamda 8K token'ı aşarsa Monaco selection veya ilk/son N satır alınır
-- [ ] AI'dan gelen XSLT çıktısı otomatik `/api/preview/validate-xslt`'den geçirilir; syntax hatalıysa kullanıcıya uyarı gösterilir (**otomatik insert yapılmaz**)
+**Prompt template'leri**
+- [x] `PromptTemplates.Build` — 5 taglı iskelet (`<system_rules>`, `<output_format>`, `<constraints>`, `<user_xml>`, `<user_xslt>`, `<user_selection>`, `<user_error>`, `<user_request>`) ([PromptTemplates.cs](backend/XsltCraft.Application/Ai/PromptTemplates.cs))
+- [x] 5 görev için ayrı `<output_format>` tanımı (BuildExplainError / SuggestXPath / GenerateSnippet / RefactorSelection / ExplainXPath)
+- [x] `max_tokens` API parametresi: Ollama → `options.num_predict`, Anthropic → `max_tokens`; config'den `Ai.Ollama.MaxTokens` / `Ai.Anthropic.MaxTokens`
+- [x] Context boyut kontrolü — `<user_xml>` + `<user_xslt>` toplamı `ContextSoftLimitChars` (≈24K karakter / 8K token) aşarsa orantılı kırpma (head + tail, "[kırpıldı]" marker'ı)
 
 **Frontend**
-- [ ] `aiAssistantService.ts` — NDJSON client:
-  - [ ] `fetch` + `ReadableStream` + `TextDecoderStream` + satır bazlı parse (`delta` | `done` | `error`)
-  - [ ] Her istek bir `AbortController` ile sarılır; yeni istek eskisinin `controller.abort()` çağrılır
-- [ ] `AiAssistantPanel.tsx` — sağ sidebar, stream render (delta chunk'ları biriktir, ekrana bas), "İptal" butonu (`AbortController.abort()` tetikler)
-- [ ] Monaco `IInlineCompletionsProvider` (ghost-text):
-  - [ ] **Debounce: 500ms** (300–800 aralığında; kullanıcı yazmayı durunca tetikle)
-  - [ ] Önceki isteğin `AbortController`'ı `controller.abort()` ile iptal edilir
-  - [ ] Cursor pozisyonu değişirse mevcut öneri temizlenir
-  - [ ] Rate limit: `ai-ghost-text` policy (15 req/dk)
-- [ ] `AiRefactorDialog.tsx` — before/after yan yana diff görünümü, kabul/ret aksiyonları; **kabul edilmeden otomatik insert yapılmaz**
-- [ ] UI entegrasyonları:
-  - [ ] Problems panelindeki her hataya **"AI'ya sor"** butonu (`/api/ai/explain-error`)
-  - [ ] Monaco sağ tık menüsüne: **"AI ile snippet üret"** (`/api/ai/generate-snippet`), **"AI ile refactor et"** (`/api/ai/refactor-selection`)
-  - [ ] Toast: Ollama erişilemez + Anthropic kapalı → `"AI asistan şu an kullanılamıyor — Ollama'yı başlatın (ollama serve)."`
-  - [ ] `Ai:Enabled: false` → tüm AI butonları UI'da gizlenir
+- [x] `aiAssistantService.ts` — `fetch` + `pipeThrough(TextDecoderStream)` + satır bazlı parse, `AbortController` (yeni istek eskisini abort) ([aiAssistantService.ts](frontend/xsltcraft-ui/src/services/aiAssistantService.ts))
+- [x] `AiAssistantPanel.tsx` — sağ panele 3. sekme; quick action'lar, akan cevap, "İptal" butonu, snippet önizleme/uygulama ([AiAssistantPanel.tsx](frontend/xsltcraft-ui/src/components/ai/AiAssistantPanel.tsx))
+- [x] **Problems panelinde her hataya "AI'ya sor"** butonu — `aiEnabled` iken görünür ([ProblemsPanel.tsx](frontend/xsltcraft-ui/src/components/xslt-editor/ProblemsPanel.tsx))
+- [x] `Ai:Enabled: false` → tüm AI butonları UI'da gizli (ProblemsPanel + ghost-text + sağ tık + sekme) — `useAiStore` global state üzerinden
+
+**Toggle altyapısı (plan ötesi — admin runtime kontrolü)**
+- [x] `FeatureFlag` entity + `AddFeatureFlag` migration ([FeatureFlag.cs](backend/XsltCraft.Domain/Entities/FeatureFlag.cs))
+- [x] `IAiFeatureFlagService` — DB öncelikli, `appsettings.Ai.Enabled` fallback, `IMemoryCache` ile 15 sn TTL ([AiFeatureFlagService.cs](backend/XsltCraft.Infrastructure/Ai/AiFeatureFlagService.cs))
+- [x] `GET /api/ai/status` (anonymous) — UI gating için
+- [x] `GET/PUT /api/admin/feature-flags/ai` — admin runtime toggle ([AdminFeatureFlagsController.cs](backend/XsltCraft/Controllers/AdminFeatureFlagsController.cs))
+- [x] `aiStore` (Zustand) — uygulama açılışında `refresh`, admin değişikliği sonrası anlık senkron ([aiStore.ts](frontend/xsltcraft-ui/src/store/aiStore.ts))
+- [x] `/admin/ai` sayfası + sidebar linki ([AdminAiPage.tsx](frontend/xsltcraft-ui/src/pages/admin/AdminAiPage.tsx))
 
 **Dokümantasyon & yapılandırma**
-- [ ] `HANDOFF.md`'ye Ollama kurulum rehberi:
-  ```bash
-  ollama pull qwen2.5-coder:7b
-  ollama serve
-  ```
-- [ ] `appsettings.Development.example.json` — yukarıdaki `Ai` bloğu örneği (`Anthropic:ApiKey` boş, `Anthropic:Enabled: false`)
+- [x] `appsettings.Development.example.json` — `Ai` bloğu örneği, `Anthropic:Enabled: false`, `Anthropic:ApiKey` boş; admin toggle açıklaması yorum olarak
+
+#### ✅ Faz 2 — Genişletme (tamamlandı)
+
+**Anthropic cloud fallback**
+- [x] `AnthropicAssistantProvider` — Anthropic Messages API, **SSE streaming** parser (`event: content_block_delta` → text, `event: message_stop` → done) ([AnthropicAssistantProvider.cs](backend/XsltCraft.Infrastructure/Ai/AnthropicAssistantProvider.cs))
+- [x] Aynı dual-timeout (connect + firstToken) kalıbı; named `HttpClient "anthropic"`
+- [x] Koşullu DI: `Ai:Anthropic:Enabled=true` ise `IAiAssistantProvider`'a eklenir → orchestrator otomatik fallback'e dahil eder
+- [x] Header'lar: `x-api-key`, `anthropic-version: 2023-06-01`
+
+**Monaco ghost-text (inline completions)**
+- [x] Yeni `AiTaskKind.InlineComplete` + özel ghost-text prompt (markdown/açıklama yok, sadece eklenecek karakterler)
+- [x] `POST /api/ai/inline-complete` — `ai-ghost-text` rate limit, max 128 token ([AiAssistantController.cs](backend/XsltCraft/Controllers/AiAssistantController.cs))
+- [x] `registerInlineCompletionsProvider('xml')` — **500 ms debounce**, `AbortController` ile önceki istek iptal, attribute value içinde devre dışı, code-fence strip ([Xslteditor.tsx](frontend/xsltcraft-ui/src/components/Xslteditor.tsx))
+- [x] Monaco `inlineSuggest.enabled: true`, cursor değişiminde Monaco'nun kendi cancellation token'ı önceki öneriyi temizler
+- [x] **Toolbar'dan kullanıcı toggle'ı** (localStorage persist) — varsayılan kapalı; rate limit + maliyet için bilinçli karar
+
+**Refactor diff dialog**
+- [x] `AiRefactorDialog.tsx` — Monaco `DiffEditor` ile **before/after yan yana diff**, akış sırasında loader, "İptal" + "Yeniden üret" + "Reddet"/"Kabul et ve uygula" ([AiRefactorDialog.tsx](frontend/xsltcraft-ui/src/components/ai/AiRefactorDialog.tsx))
+- [x] **Kabul öncesi otomatik `validate-xslt` doğrulaması** — hatalıysa "Yine de uygula" seçeneği; **otomatik insert yapılmıyor**
+- [x] `XsltEditorPage` entegrasyonu — kabul edildiğinde seçim aralığı orijinal satırlarla değiştirilir
+
+**Monaco sağ tık menüsü AI eylemleri**
+- [x] "AI ile snippet üret" → AiAssistantPanel'de generate-snippet açar (imleç satırı bağlamı ile)
+- [x] "AI ile refactor et (seçim)" → AiRefactorDialog açar
+- [x] Aksiyonlar `aiEnabled` durumuna göre register/dispose edilir (runtime kapatıldığında kaybolur)
+
+#### ✅ Faz 3 — Güvenilirlik + UX paketi (tamamlandı)
+
+**Sağlayıcı & güvenilirlik**
+- [x] Anthropic için **ayrı timeout config bloğu** — `Ai.Anthropic.ConnectTimeoutSeconds` (default 5) + `FirstTokenTimeoutSeconds` (default 15); provider artık Ollama timeout'larını kullanmıyor ([AiOptions.cs](backend/XsltCraft.Application/Ai/AiOptions.cs), [AnthropicAssistantProvider.cs](backend/XsltCraft.Infrastructure/Ai/AnthropicAssistantProvider.cs))
+- [x] Anthropic SSE `error` event handling — `firstTokenReceived` öncesi exception (orchestrator fallback), sonrası inline error chunk; `message_delta.stop_reason=max_tokens` kullanıcıya bildirim
+- [x] `IAiProviderHealthService` + `GET /api/admin/feature-flags/ai/health` — Ollama'ya canlı `/api/tags` ping (model varlığı kontrolü), Anthropic için config kontrolü (token harcamamak için API çağrısı yok) ([AiProviderHealthService.cs](backend/XsltCraft.Infrastructure/Ai/AiProviderHealthService.cs), [AdminFeatureFlagsController.cs](backend/XsltCraft/Controllers/AdminFeatureFlagsController.cs))
+- [x] Admin sayfasında "Sağlayıcı Durumu" paneli — birincil/yedek rozeti, latency, model adı, hata mesajı, "Yenile" butonu ([AdminAiPage.tsx](frontend/xsltcraft-ui/src/pages/admin/AdminAiPage.tsx))
+
+**Prompt & kalite**
+- [x] AI panel **snippet apply öncesi otomatik `/api/preview/validate-xslt`** — XSLT-benzeri içerik geçici stylesheet'e sarılarak doğrulanır; geçerse `success` toast + ekle, hatalıysa `warning` toast + "Yine de ekle" seçeneği; XPath/HTML snippet'leri doğrulamayı atlar ([AiAssistantPanel.tsx](frontend/xsltcraft-ui/src/components/ai/AiAssistantPanel.tsx))
+
+**UX**
+- [x] **Global toast notification sistemi** — `useToastStore` (Zustand) + `ToastContainer` (info/success/warning/error variant, otomatik kapanma + manuel dismiss) ([toastStore.ts](frontend/xsltcraft-ui/src/store/toastStore.ts), [ToastContainer.tsx](frontend/xsltcraft-ui/src/components/ui/ToastContainer.tsx))
+- [x] AI panel'de `provider_unavailable` / `ollama_*` / `anthropic_*` error chunk'ı → otomatik error toast: `"AI asistan kullanılamıyor — ..."`
+
+**Dokümantasyon**
+- [x] [`HANDOFF.md`](HANDOFF.md) — yeni "AI Asistan (opsiyonel)" bölümü: Ollama kurulum komutları (`ollama pull qwen2.5-coder:7b && ollama serve`), Anthropic aktivasyon adımları, admin runtime toggle, mimari notları (mid-stream fallback yok, dual-CTS, NDJSON, rate limit), yeni AI özelliği eklerken adım listesi
+
+#### ✅ Faz 4 — Streaming & maliyet kontrolü
+
+**Streaming & maliyet kontrolü**
+- [x] Inline-complete için **prompt cache** — `IMemoryCache` SHA-256 keyed `(prefix, suffix)`, 30 sn TTL; cache hit'te upstream istek yok, response'a `(cached)` etiketi
+- [x] Inline-complete için **prefix-aware tetikleme heuristikleri** — `shouldTriggerGhostText()`: yalnızca boş satır, `<`, `</`, `>`, `/>` sonrası tetikleme; kelime ortasında debounce atılmaz
+- [x] Per-user **günlük token bütçesi** — `UserAiUsages` DB tablosu (UserId+Date PK), yaklaşık token = output_chars/4; bütçe dolunca 429 + admin sayfasında günlük rapor
+- [x] Orchestrator'a **provider seçim override** — `FeatureFlag(ai.preferred_provider)` DB kaydı; "auto" | "ollama" | "anthropic"; admin UI'dan runtime değişir, restart gerekmez
+
+**Prompt & kalite**
+- [x] Markdown render — panel cevabında ` ```xslt ``` ` blokları için Monaco read-only inline editor (syntax highlight)
+- [x] PromptTemplates'a **proje bağlamı** — UBL-TR sürümü, namespace deklarasyonları, kullanıcının aktif XSLT versiyonu (1.0/2.0) otomatik enjekte edilsin
+- [x] `<user_xml>` için **selection-aware kırpma** — Monaco'da seçim varsa öncelik selection, yoksa cursor etrafındaki ±N satır
+
+**UX**
+- [x] AI panel'de **konuşma geçmişi** — son 5 etkileşimi sekme/akordeon olarak sakla; "Yeni sohbet" butonu
+- [x] AI panel'in sağ panel sekmesi yerine **opsiyonel olarak ayrı resizable sidebar** — diğer sekmeler kaybolmasın
+
+**Dokümantasyon**
+- [ ] `README.md`'ye AI özelliklerinin **opsiyonel** olduğu ve admin paneli üzerinden açılıp kapatılabildiği notu
 
 ### Faz 7 tamamlanma kriterleri
 

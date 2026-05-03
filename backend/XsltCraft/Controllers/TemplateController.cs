@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Application.DTO;
+using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
@@ -15,7 +16,7 @@ namespace XsltCraft.Api.Controllers;
 
 [ApiController]
 [Route("api/templates")]
-public class TemplateController(AppDbContext db, IStorageService storage, IXsltGeneratorService generator) : ControllerBase
+public class TemplateController(AppDbContext db, IStorageService storage, IXsltGeneratorService generator, IUserActivityRecorder activity) : ControllerBase
 {
     // GET /api/templates  — tüm free theme'leri listele (public, auth gerektirmez)
     [HttpGet]
@@ -59,6 +60,12 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
             if (!await storage.ExistsAsync(template.XsltStoragePath))
                 return NotFound(new { message = "XSLT dosyası storage'da bulunamadı." });
 
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                var uid = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                await activity.RecordAsync(uid, UserActivityType.Download, template.Id, "Template");
+            }
+
             var freeStream = await storage.ReadAsync(template.XsltStoragePath);
             return File(freeStream, "application/xslt+xml", fileName);
         }
@@ -75,6 +82,7 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
         if (!string.IsNullOrEmpty(template.XsltStoragePath)
             && await storage.ExistsAsync(template.XsltStoragePath))
         {
+            await activity.RecordAsync(userId, UserActivityType.Download, template.Id, "Template");
             var cachedStream = await storage.ReadAsync(template.XsltStoragePath);
             return File(cachedStream, "application/xslt+xml", fileName);
         }
@@ -166,6 +174,7 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
 
         db.Templates.Add(template);
         await db.SaveChangesAsync();
+        await activity.RecordAsync(userId, UserActivityType.Save, template.Id, "Template");
 
         return CreatedAtAction(nameof(GetById), new { id = template.Id }, new TemplateDetailResponse
         {

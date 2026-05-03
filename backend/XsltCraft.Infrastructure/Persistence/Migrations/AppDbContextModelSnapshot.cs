@@ -60,6 +60,29 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.ToTable("Assets");
                 });
 
+            modelBuilder.Entity("XsltCraft.Domain.Entities.FeatureFlag", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("FeatureFlags");
+                });
+
             modelBuilder.Entity("XsltCraft.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -170,6 +193,14 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime?>("LastLoginAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
@@ -183,6 +214,13 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("NOW()");
 
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
@@ -192,7 +230,67 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("google_id IS NOT NULL");
 
+                    b.HasIndex("Username")
+                        .IsUnique();
+
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("XsltCraft.Domain.Entities.UserActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid?>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityKind")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("UserId", "Type");
+
+                    b.ToTable("UserActivities");
+                });
+
+            modelBuilder.Entity("XsltCraft.Domain.Entities.UserAiUsage", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int>("TokensUsed")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("UserId", "Date");
+
+                    b.HasIndex("Date");
+
+                    b.ToTable("UserAiUsages");
                 });
 
             modelBuilder.Entity("XsltCraft.Domain.Entities.UserSnippet", b =>
@@ -312,6 +410,28 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("XsltCraft.Domain.Entities.UserActivity", b =>
+                {
+                    b.HasOne("XsltCraft.Domain.Entities.User", "User")
+                        .WithMany("Activities")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("XsltCraft.Domain.Entities.UserAiUsage", b =>
+                {
+                    b.HasOne("XsltCraft.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("XsltCraft.Domain.Entities.UserSnippet", b =>
                 {
                     b.HasOne("XsltCraft.Domain.Entities.User", "Owner")
@@ -336,6 +456,8 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("XsltCraft.Domain.Entities.User", b =>
                 {
+                    b.Navigation("Activities");
+
                     b.Navigation("RefreshTokens");
                 });
 #pragma warning restore 612, 618

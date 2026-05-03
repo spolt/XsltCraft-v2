@@ -29,6 +29,12 @@ export interface GridBlockLayout {
   height: number  // mm
   zIndex?: number  // katman sırası (varsayılan 0)
   autoHeight?: boolean // dinamik içerikli bloklar için (InvoiceLineTable, ForEach, vb.)
+  // Görsel kenar boşlukları (mm) — yalnızca önizleme çıktısına uygulanır.
+  // Canvas konumunu ve sweep algoritmasını etkilemez (padding olarak render edilir).
+  marginTop?: number
+  marginBottom?: number
+  marginLeft?: number
+  marginRight?: number
 }
 
 export interface BlockTreeV2 {

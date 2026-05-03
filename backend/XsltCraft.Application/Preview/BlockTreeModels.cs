@@ -46,6 +46,18 @@ public sealed class GridBlockLayoutDto
 
     [JsonPropertyName("autoHeight")]
     public bool AutoHeight { get; set; }
+
+    [JsonPropertyName("marginTop")]
+    public double? MarginTop { get; set; }
+
+    [JsonPropertyName("marginBottom")]
+    public double? MarginBottom { get; set; }
+
+    [JsonPropertyName("marginLeft")]
+    public double? MarginLeft { get; set; }
+
+    [JsonPropertyName("marginRight")]
+    public double? MarginRight { get; set; }
 }
 
 public sealed class SectionDto
