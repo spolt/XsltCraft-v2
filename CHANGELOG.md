@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-05-12
+
+### Added
+- **`IntentClassifier`** (`Application/Ai/IntentClassifier.cs`): Kullanıcı mesajını üç dala ayırır — `Smalltalk` ("selam", "teşekkürler", "kimsin"), `General` ("XSLT nedir?", "XPath nasıl çalışır"), `Code` (kod referansı içeren veya varsayılan). Regex/heuristik tabanlı; Türkçe karakter folding'i `PatternSelector` ile aynı. Kelime sınırı kontrolü ile "sehir → hi" gibi false-positive'ler engellendi. `RefactorSelection` task'ı ve `Selection`/`XmlSelection` dolu olduğunda her zaman `Code`.
+- **`XsltSummarizer`** (`Application/Ai/XsltSummarizer.cs`): 6.000 karakteri aşan XSLT dosyalarını yapısal özete indirir — stylesheet header + `TEMPLATE INDEX` (imzalar + satır no) + odak template (kullanıcı seçimi varsa) veya ilk birkaç template gövdesi (4K char bütçesi). Regex tabanlı; invalid/mid-edit XSLT'ye toleranslı. Tipik 16K char XSLT için %40-60 küçülme.
+- **Ollama `keep_alive`** (`OllamaOptions.KeepAlive`, default `"30m"`): Modelin RAM'de tutulma süresi; cold-start gecikmesini ortadan kaldırır. `OllamaChatRequest` payload'una top-level alan olarak eklendi.
+- **Ollama `num_keep`** (`OllamaOptions.NumKeep`, default `1024`): Context window aşıldığında prompt başından korunacak token sayısı — Identity + Constraints (persona/güvenlik) hiçbir koşulda atılmaz.
+- **Test suite genişletildi**: `IntentClassifierTests` (26 case — smalltalk/general/code dalları, refactor override, kelime sınırı), `XsltSummarizerTests` (8 case — eşik altı raw, eşik üstü özet, odak template, malformed XML toleransı, küçülme oranı garantisi). Toplam Application.Tests: 27 → 67.
+
+### Changed
+- **System prompt sıralaması** (`PromptTemplates.cs`): Eski sıra `Identity → patterns → Constraints → project_context` idi. Yeni sıra **sabit → değişken** olarak yeniden düzenlendi: `Identity → Constraints → patterns → project_context`. Ollama KV prefix cache'i, oturum boyunca Identity + Constraints bloğunu tekrar prefill etmez; ardışık sorularda saniyeler kazanılır.
+- **`PromptTemplates.BuildMessages`** (Assistant modu): Niyete göre bağlam paketi şekillendirilir. Smalltalk → sadece Identity (patterns/Constraints/XSLT/XML hepsi atlanır, history 2 çift); General → Identity + Constraints + patterns + project_context (XSLT/XML atlanır, history 5 çift); Code → tam paket + `XsltSummarizer.Compose` ile büyük XSLT özetlenir (history 10 çift).
+- **`OllamaOptions.FirstTokenTimeoutSeconds`** (`AiOptions.cs`): Varsayılan `8 → 30`. Yerel model cold-start'ında ilk token gecikmesi 8 sn'yi sık aşıyordu; 3b/7b modeller için daha gerçekçi sınır. `appsettings.json` override değeri de `15 → 30` ve `appsettings.Development.example.json` `8 → 30`.
+- **`AiProviderOrchestrator` hata mesajı** (`AiProviderOrchestrator.cs`): Sabit "Ollama'yı başlatın (ollama serve)" suffix'i her durumda eklenmiyor. Mesaj artık hata koduna göre seçilir — `ollama_first_token_timeout` → "Yerel model ısınıyor olabilir, birkaç saniye sonra tekrar deneyin.", `ollama_connect_timeout` / `ollama_unavailable` → "Ollama'yı başlatın (ollama serve)…", `ollama_model_not_found` → "Modeli indirin: 'ollama pull <model>'.". Kullanıcı yanıltıcı "Gemini'ye bağlanılamadı" mesajıyla karşılaşmıyor.
+- **Varsayılan Ollama modeli** (`appsettings.json`, README): `qwen2.5-coder:7b → qwen2.5-coder:3b` — daha düşük RAM kullanımı, daha hızlı prefill.
+- **Golden snapshot'lar** yeniden onaylandı (3 dosya): `Refactor_RefactorSelection`, `Assistant_FirstTurn`, `Assistant_ThirdTurn_WithHistory` — system prompt sıra değişikliğini yansıtır.
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.2.1 → 1.3.0`.
+
+### Performance
+- **"Selam" senaryosu**: Eski prompt ~10K token (Identity + tüm patterns + Constraints + project_context + 16K char XSLT + history) → ~30 sn prefill. Yeni: yalnızca Identity → ~300 token → ~1-2 sn.
+- **Büyük XSLT teknik sorusu**: 16K char → 6-8K char özet (Katman 2) → prefill %40-60 azalır.
+- **Ardışık sorular aynı oturumda**: Sabit prefix Ollama KV cache hit (Katman 3) + model 30 dk RAM'de tutuluyor → ilk token cevabı ~3-5 sn (önceden her seferinde 15-30 sn cold-start).
+
+---
+
 ## [1.2.1] - 2026-05-03
 
 ### Fixed

@@ -4,7 +4,7 @@
 
 **Low-code XSLT template designer for Turkish e-Invoice (e-Fatura) and e-Waybill (e-İrsaliye) — with AI assistance**
 
-![Version](https://img.shields.io/badge/version-1.2.1-blue?style=flat)
+![Version](https://img.shields.io/badge/version-1.3.0-blue?style=flat)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?style=flat&logo=dotnet&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat&logo=typescript&logoColor=white)
@@ -47,7 +47,7 @@ XsltCraft is a web-based platform that lets you visually design XSLT print templ
 ### AI assistant *(optional, feature-flagged)*
 - **Chat panel** — UBL-TR–aware Turkish AI assistant docked to the editor; NDJSON streaming, cancel via `AbortController`, toast notifications.
 - **Refactor dialog** — select an XSLT range, ask for a transformation, preview the diff, apply on approval.
-- **Provider orchestrator** — primary: Ollama (`qwen2.5-coder:7b`); optional cloud fallback: Gemini. Separate timeouts for connect / first-token; per-user rate limit and daily token budget.
+- **Provider orchestrator** — primary: Ollama (`qwen2.5-coder:3b`); optional cloud fallback: Gemini. Separate timeouts for connect / first-token; per-user rate limit and daily token budget.
 - **Prompt registry** — 8 UBL-TR pattern packs (`InvoiceNote`, `InvoiceLine`, `LegalMonetaryTotal`, `InvoiceHeader`, `SupplierPartyAddress`, `CustomerPartyAddress`, `SupplierPartyPerson`, `CustomerPartyPerson`) loaded from embedded markdown; trigger-based selection with Turkish character folding (max 4 patterns / request).
 - **Admin AI page** — `/admin/ai` toggles the feature flag, picks the active provider, shows provider health and per-user daily usage.
 
@@ -68,7 +68,7 @@ XsltCraft is a web-based platform that lets you visually design XSLT print templ
 |-------|--------------|
 | Frontend | React 19, TypeScript 5.9, Vite 8, Zustand, TailwindCSS 4, @dnd-kit, React Router 7, Monaco Editor, lucide-react |
 | Backend | .NET 10, ASP.NET Core Web API, Clean Architecture (Api / Application / Domain / Infrastructure), Saxon HE 10.9 (XSLT 2.0 / XPath 2.0) |
-| AI | Ollama (`qwen2.5-coder:7b`) primary, Gemini cloud fallback; embedded markdown prompts; NDJSON streaming |
+| AI | Ollama (`qwen2.5-coder:3b`) primary, Gemini cloud fallback; embedded markdown prompts; NDJSON streaming |
 | Database | PostgreSQL 16, EF Core, Npgsql |
 | Storage | `IStorageService` abstraction — `LocalStorageService` (dev), `S3StorageService` / **MinIO** (prod, S3-compatible) |
 | Auth | JWT + refresh-token rotation, Google OAuth 2.0 |
@@ -115,7 +115,7 @@ XsltCraft/
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - [Node.js 20+](https://nodejs.org)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
-- *(Optional)* [Ollama](https://ollama.ai) running `qwen2.5-coder:7b` for the AI assistant
+- *(Optional)* [Ollama](https://ollama.ai) running `qwen2.5-coder:3b` for the AI assistant
 
 ### 1 — Start the database
 
@@ -165,7 +165,7 @@ dotnet user-secrets set "Admin:Password" "YourSecurePassword123"
 ### 5 — *(Optional)* Enable the AI assistant
 
 ```bash
-ollama pull qwen2.5-coder:7b
+ollama pull qwen2.5-coder:3b
 ollama serve
 ```
 

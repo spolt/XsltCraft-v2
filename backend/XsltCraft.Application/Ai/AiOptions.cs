@@ -17,11 +17,24 @@ public class OllamaOptions
 {
     public string BaseUrl { get; set; } = "http://localhost:11434";
     public string Model { get; set; } = "llama3.1:8b";
-    public int FirstTokenTimeoutSeconds { get; set; } = 8;
+    /// <summary>Yerel model cold-start (RAM'e yükleme) süresini hesaba kat; sıcakken ilk token ~1-2 sn.</summary>
+    public int FirstTokenTimeoutSeconds { get; set; } = 30;
     public int ConnectTimeoutSeconds { get; set; } = 3;
     public int MaxTokens { get; set; } = 4096;
     /// <summary>Ollama context window (token). Sistem promptu ~3-4K token; 2048 varsayılan bunu keser.</summary>
     public int NumCtx { get; set; } = 8192;
+
+    /// <summary>
+    /// Context taşınca prompt'un BAŞINDAN korunacak token sayısı (Identity + Constraints sığsın).
+    /// Identity ~600, Constraints ~150 → 1024 güvenli üst sınır.
+    /// </summary>
+    public int NumKeep { get; set; } = 1024;
+
+    /// <summary>
+    /// Modelin RAM'de tutulma süresi. Cold-start'ı eler — istek aralıkları kısaysa "30m" idealdir.
+    /// Ollama formatları: "5m", "30m", "1h", "-1" (sınırsız), "0" (yükle, hemen boşalt).
+    /// </summary>
+    public string KeepAlive { get; set; } = "30m";
 }
 
 public class GeminiOptions

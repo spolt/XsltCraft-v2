@@ -87,7 +87,7 @@ public class AiProviderOrchestrator
         }
 
         // Tüm sağlayıcılar başarısız.
-        var msg = lastError switch
+        var baseMsg = lastError switch
         {
             AiProviderTimeoutException tex => tex.Message,
             AiProviderUnavailableException uex => uex.Message,
@@ -98,11 +98,21 @@ public class AiProviderOrchestrator
                    ?? (lastError as AiProviderUnavailableException)?.Code
                    ?? "provider_unavailable";
 
+        // Hata koduna göre kullanıcıya yardımcı ipucu seç. Cold-start timeout'larında "Ollama'yı başlatın"
+        // önerisi yanıltıcı — servis zaten ayakta, model henüz ısınıyor.
+        var hint = code switch
+        {
+            "ollama_first_token_timeout" => " — Yerel model ısınıyor olabilir, birkaç saniye sonra tekrar deneyin.",
+            "ollama_connect_timeout" or "ollama_unavailable" => " — Ollama'yı başlatın (ollama serve) veya yöneticinize başvurun.",
+            "ollama_model_not_found" => " — Modeli indirin: 'ollama pull <model>'.",
+            _ => string.Empty,
+        };
+
         yield return new AiChunk
         {
             Type = "error",
             Code = code,
-            Message = msg + " — Ollama'yı başlatın (ollama serve) veya yöneticinize başvurun.",
+            Message = baseMsg + hint,
         };
     }
 }
