@@ -60,7 +60,13 @@ public class OllamaAssistantProvider : IAiAssistantProvider
             Model = ollama.Model,
             Stream = true,
             Messages = messages,
-            Options = new OllamaChatOptions { NumPredict = ollama.MaxTokens, NumCtx = ollama.NumCtx },
+            KeepAlive = ollama.KeepAlive,
+            Options = new OllamaChatOptions
+            {
+                NumPredict = ollama.MaxTokens,
+                NumCtx = ollama.NumCtx,
+                NumKeep = ollama.NumKeep,
+            },
         };
 
         using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -172,6 +178,10 @@ public class OllamaAssistantProvider : IAiAssistantProvider
         public bool Stream { get; set; }
         public List<OllamaMessage> Messages { get; set; } = new();
         public OllamaChatOptions? Options { get; set; }
+
+        /// <summary>Modelin RAM'de tutulma süresi (örn. "30m"). Cold-start'ı eler.</summary>
+        [JsonPropertyName("keep_alive")]
+        public string? KeepAlive { get; set; }
     }
 
     private sealed class OllamaMessage
@@ -186,6 +196,9 @@ public class OllamaAssistantProvider : IAiAssistantProvider
         public int NumPredict { get; set; }
         [JsonPropertyName("num_ctx")]
         public int NumCtx { get; set; }
+        /// <summary>Context overflow olduğunda promptun başından korunacak token sayısı.</summary>
+        [JsonPropertyName("num_keep")]
+        public int NumKeep { get; set; }
     }
 
     private sealed class OllamaChatResponse

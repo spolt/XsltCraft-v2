@@ -24,19 +24,35 @@ public static class PromptTemplates
 
     internal static IReadOnlyList<ProviderMessage> BuildMessages(AiRequest req, AiMode mode)
     {
-        var patterns = PatternSelector.Select(req);
+        // Refactor modunda her zaman tam paket; Assistant modunda niyete göre kısalt.
+        var intent = mode == AiMode.Refactor ? AiIntent.Code : IntentClassifier.Classify(req);
+        Debug.WriteLine($"[IntentClassifier] intent: {intent}");
+
+        var patterns = intent == AiIntent.Smalltalk
+            ? []
+            : PatternSelector.Select(req);
         Debug.WriteLine($"[PatternSelector] selected: [{string.Join(", ", patterns.Select(p => p.Id))}]");
 
-        // System message: Identity + selected patterns + Constraints + project_context
+        // System mesajı SABİT → DEĞİŞKEN sırasıyla kurulur ki Ollama prefix KV-cache'i
+        // daha sık tutsun:
+        //   1) Identity (gömülü, hiç değişmez)
+        //   2) Constraints (gömülü, hiç değişmez)  ← önceden patterns'tan sonraydı
+        //   3) patterns (soruya göre değişir)
+        //   4) project_context (XSLT'ye göre değişir)
         var systemSb = new StringBuilder();
         systemSb.Append(PromptRegistry.Identity);
-        foreach (var p in patterns)
-            systemSb.Append("\n\n").Append(p.Content);
-        systemSb.Append("\n\n").Append(PromptRegistry.Constraints);
 
-        var projectCtx = BuildProjectContext(req.UserXslt);
-        if (projectCtx != null)
-            systemSb.Append("\n\n<project_context>\n").Append(projectCtx).Append("\n</project_context>");
+        if (intent != AiIntent.Smalltalk)
+        {
+            systemSb.Append("\n\n").Append(PromptRegistry.Constraints);
+
+            foreach (var p in patterns)
+                systemSb.Append("\n\n").Append(p.Content);
+
+            var projectCtx = BuildProjectContext(req.UserXslt);
+            if (projectCtx != null)
+                systemSb.Append("\n\n<project_context>\n").Append(projectCtx).Append("\n</project_context>");
+        }
 
         var messages = new List<ProviderMessage> { new("system", systemSb.ToString()) };
 
@@ -65,25 +81,38 @@ public static class PromptTemplates
         }
         else // Assistant
         {
-            // Context message (user): fresh XSLT + XML each turn
+            // Bağlam paketi yalnızca Code niyetinde; smalltalk/general'da XSLT/XML gönderilmez.
             var ctxSb = new StringBuilder();
-            var xsltClipped = Clip(req.UserXslt, AssistantXsltLimitChars);
-            var xmlClipped = Clip(req.UserXml, ContextSoftLimitChars - AssistantXsltLimitChars);
+            if (intent == AiIntent.Code)
+            {
+                // Büyük XSLT'ler önce yapısal özete indirilir (prefill maliyetini azaltır);
+                // sonra Clip güvenlik ağı olarak kalır.
+                var xsltSummarized = XsltSummarizer.Compose(req.UserXslt, req.Selection);
+                var xsltClipped = Clip(xsltSummarized, AssistantXsltLimitChars);
+                var xmlClipped = Clip(req.UserXml, ContextSoftLimitChars - AssistantXsltLimitChars);
 
-            if (!string.IsNullOrWhiteSpace(xsltClipped))
-                ctxSb.Append("<user_xslt>\n").Append(xsltClipped).Append("\n</user_xslt>\n");
-            if (!string.IsNullOrWhiteSpace(req.XmlSelection))
-                ctxSb.Append("<user_xml_selection>\n").Append(req.XmlSelection).Append("\n</user_xml_selection>\n");
-            else if (!string.IsNullOrWhiteSpace(xmlClipped))
-                ctxSb.Append("<user_xml>\n").Append(xmlClipped).Append("\n</user_xml>\n");
+                if (!string.IsNullOrWhiteSpace(xsltClipped))
+                    ctxSb.Append("<user_xslt>\n").Append(xsltClipped).Append("\n</user_xslt>\n");
+                if (!string.IsNullOrWhiteSpace(req.XmlSelection))
+                    ctxSb.Append("<user_xml_selection>\n").Append(req.XmlSelection).Append("\n</user_xml_selection>\n");
+                else if (!string.IsNullOrWhiteSpace(xmlClipped))
+                    ctxSb.Append("<user_xml>\n").Append(xmlClipped).Append("\n</user_xml>\n");
 
-            if (ctxSb.Length > 0)
-                messages.Add(new("user", ctxSb.ToString().TrimEnd()));
+                if (ctxSb.Length > 0)
+                    messages.Add(new("user", ctxSb.ToString().TrimEnd()));
+            }
 
-            // History — son MaxHistoryPairs çifti al
+            // History — niyete göre limit: smalltalk 2 çift, general 5, code 10.
+            var historyLimit = intent switch
+            {
+                AiIntent.Smalltalk => 2,
+                AiIntent.General => 5,
+                _ => MaxHistoryPairs,
+            };
+
             var history = req.History ?? [];
-            if (history.Count > MaxHistoryPairs * 2)
-                history = history[^(MaxHistoryPairs * 2)..];
+            if (history.Count > historyLimit * 2)
+                history = history[^(historyLimit * 2)..];
 
             if (ctxSb.Length > 0 && history.Count > 0)
                 messages.Add(new("assistant", "Anladım, XSLT ve XML bağlamını aldım."));

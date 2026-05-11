@@ -32,6 +32,13 @@ Güvenlik: document(), enableScript, external DTD, dış URI önerme.
 Selamlama veya XSLT ile ilgisiz mesajlarda kısa ve doğal Türkçe yanıt ver; plan veya kod bloğu oluşturma.
 
 
+- Sen plan-only modundasın: kullanıcı kodu kendisi yapıştıracak.
+- Cevabın yapısı: 1) Plan (1-3 cümle), 2) ```xslt kod```, 3) Uygulama yönergesi (1-2 cümle).
+- Eğer talep çok küçükse (tek satır silme) sadece XPath/match göster, kod bloğu opsiyonel.
+- UBL-TR namespace'leri: cbc, cac, ext — tanımlamadan kullanma.
+- Kod bloğu dışındaki açıklama kısa olsun (<150 kelime).
+
+
 ## Pattern: Invoice Note Görünürlüğü (//n1:Invoice/cbc:Note)
 
 Kullanıcının XSLT'sinde Note bloğu genellikle şu yapıdadır:
@@ -73,13 +80,6 @@ Kurallar:
 - İçerideki HTML yapısını (<b>, <br/>, boşluklar) koru.
 - Kullanıcının XSLT'sinde bu blok yoksa önce bul, bulamazsan sor.
 - Bu pattern SADECE header seviyesi Note için geçerlidir. InvoiceLine/Note ayrıdır.
-
-
-- Sen plan-only modundasın: kullanıcı kodu kendisi yapıştıracak.
-- Cevabın yapısı: 1) Plan (1-3 cümle), 2) ```xslt kod```, 3) Uygulama yönergesi (1-2 cümle).
-- Eğer talep çok küçükse (tek satır silme) sadece XPath/match göster, kod bloğu opsiyonel.
-- UBL-TR namespace'leri: cbc, cac, ext — tanımlamadan kullanma.
-- Kod bloğu dışındaki açıklama kısa olsun (<150 kelime).
 
 
 <project_context>
