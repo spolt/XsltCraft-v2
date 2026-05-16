@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text.Json;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -91,19 +90,8 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
         if (string.IsNullOrEmpty(template.BlockTree))
             return BadRequest(new { message = "Bu şablonda henüz block eklenmemiş." });
 
-        // Block tree → XSLT üret
-        BlockTreeDto tree;
-        try
-        {
-            tree = JsonSerializer.Deserialize<BlockTreeDto>(template.BlockTree)
-                   ?? throw new InvalidOperationException("Boş ağaç.");
-        }
-        catch
-        {
-            return BadRequest(new { message = "Block tree okunamadı." });
-        }
-
-        var (xslt, genError) = generator.Generate(tree);
+        // Block tree → XSLT üret (V1/V2 otomatik dispatch)
+        var (xslt, genError) = generator.GenerateFromJson(template.BlockTree);
         if (xslt is null)
             return BadRequest(new { message = genError ?? "XSLT üretilemedi." });
 

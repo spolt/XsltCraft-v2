@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **V2 şablon indirme boş body üretiyordu** (`TemplateController.Download`): Endpoint, kayıtlı block tree'yi her zaman V1 (`BlockTreeDto`, section-tabanlı) olarak deserialize edip `generator.Generate(tree)` çağırıyordu. Grid-canvas editörü şablonu V2 formatında (`version: 2`, `blocks[*].gridLayout`, `sections` yok) kaydettiği için V1 üretici `tree.Sections` üzerinde dönerken hiç blok bulamıyor ve `<body><div class="page"></div></body>` çıktısı veriyordu. Fix: `generator.GenerateFromJson(template.BlockTree)` kullanılıyor — JSON'daki `version` alanına göre V1/V2 dispatch otomatik. `/api/preview` ve `/api/preview/xslt` zaten doğru dispatch ediyordu; tutarsızlık yalnızca kayıtlı şablon indirme yolundaydı.
+
 ---
 
 ## [1.3.0] - 2026-05-12
