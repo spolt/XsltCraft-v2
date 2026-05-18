@@ -4,7 +4,7 @@
 
 **Low-code XSLT template designer for Turkish e-Invoice (e-Fatura) and e-Waybill (e-İrsaliye) — with AI assistance**
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue?style=flat)
+![Version](https://img.shields.io/badge/version-1.3.1-blue?style=flat)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?style=flat&logo=dotnet&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat&logo=typescript&logoColor=white)
