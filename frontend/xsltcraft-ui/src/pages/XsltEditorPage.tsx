@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import {
@@ -62,6 +62,27 @@ function extractXmlParseErrors(xml: string): { message: string; line: number | n
     line: lineMatch ? Number(lineMatch[1]) : null,
     column: colMatch ? Number(colMatch[1]) : null,
   }]
+}
+
+// İlk satırda XML bildirimi (`<?xml version="1.0" encoding="UTF-8"?>`) var mı?
+// Eksikse problem panelinde gösterilecek hata öğesini döndürür.
+const XML_DECL_FIX = '<?xml version="1.0" encoding="UTF-8"?>'
+
+function xmlDeclarationProblem(xslt: string): ProblemItem | null {
+  if (!xslt.trim()) return null
+  const noBom = xslt.charCodeAt(0) === 0xfeff ? xslt.slice(1) : xslt
+  const firstLine = noBom.split('\n', 1)[0]
+  const hasDecl = /^\s*<\?xml\s+version\s*=\s*["'][^"']*["']/i.test(firstLine)
+  if (hasDecl) return null
+  return {
+    source: 'xslt',
+    ruleId: 'XML_DECL_MISSING',
+    severity: 'error',
+    ruleName: 'XML Bildirimi Eksik',
+    message: `XSLT dosyasının ilk satırında XML bildirimi bulunmuyor. İlk satıra \`${XML_DECL_FIX}\` eklenmelidir.`,
+    line: 1,
+    column: 1,
+  }
 }
 
 // ─── Compact Sidebar ─────────────────────────────────────────────────────────
@@ -171,6 +192,17 @@ export default function XsltEditorPage() {
   }
 
   function openAiForProblem(problem: ProblemItem) {
+    // XML bildirimi eksik hatası: tüm şablonu tekrar yazdırmadan, kısa ve hedefli yanıt iste
+    if (problem.ruleId === 'XML_DECL_MISSING') {
+      setAiInitialError(
+        `XSLT'nin ilk satırında XML bildirimi (\`${XML_DECL_FIX}\`) eksik. ` +
+        'Çok kısa açıkla (1-2 cümle) ve yalnızca eklenecek satırı, ardından dosyanın ilk 3-4 satırını içeren küçük bir kod bloğu göster. ' +
+        'Tüm şablonu tekrar yazma.'
+      )
+      setAiKey(k => k + 1)
+      setRightTab('ai')
+      return
+    }
     const errMsg = `${problem.ruleName ?? 'Hata'}: ${problem.message}` +
       (problem.line != null ? ` (satır ${problem.line}${problem.column ? `:${problem.column}` : ''})` : '')
     setAiInitialError(errMsg)
@@ -400,8 +432,13 @@ export default function XsltEditorPage() {
   }
 
   // ─── Preview → Editor navigation ───────────────────────────────────────────
-  const handlePreviewClick = useCallback((text: string) => {
+  const handlePreviewClick = useCallback((text: string, opts?: { exact?: boolean }) => {
     if (!goToRef.current) return
+    // Görsel tıklamaları: base64 imzasını birebir arat (kısaltma yapma)
+    if (opts?.exact) {
+      goToRef.current(text)
+      return
+    }
     // Try to find a meaningful short snippet to search for
     const searchTerm = text.length > 50 ? text.substring(0, 50) : text
     goToRef.current(searchTerm)
@@ -427,8 +464,12 @@ export default function XsltEditorPage() {
     }
   }
 
+  // İlk satırdaki XML bildirimi eksikse XSLT problemleri arasına ekle
+  const declProblem = useMemo(() => xmlDeclarationProblem(xsltContent), [xsltContent])
+
   const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null
-  const totalErrorCount = xsltErrors.length + xmlErrors.length + (ublTrErrorCount ?? 0)
+  const totalErrorCount =
+    xsltErrors.length + (declProblem ? 1 : 0) + xmlErrors.length + (ublTrErrorCount ?? 0)
 
   // XPath console — seçili ifadeyi konsola gönder, konsolu aç
   function handleEvaluateXPath(expression: string) {
@@ -749,6 +790,7 @@ export default function XsltEditorPage() {
                     xmlCursorLine={xmlCursorLine}
                     xmlSelection={xmlSelection}
                     initialErrorMessage={aiInitialError}
+                    xmlDeclarationMissing={declProblem != null}
                     onClose={() => setRightTab('preview')}
                   />
                 ) : (
@@ -786,14 +828,17 @@ export default function XsltEditorPage() {
 
         {showProblems && (
           <ProblemsPanel
-            xsltProblems={xsltErrors.map(e => ({
-              source: 'xslt' as const,
-              severity: 'error' as const,
-              ruleName: 'XSLT Sözdizimi',
-              message: e.message,
-              line: e.line,
-              column: e.column,
-            }))}
+            xsltProblems={[
+              ...(declProblem ? [declProblem] : []),
+              ...xsltErrors.map(e => ({
+                source: 'xslt' as const,
+                severity: 'error' as const,
+                ruleName: 'XSLT Sözdizimi',
+                message: e.message,
+                line: e.line,
+                column: e.column,
+              })),
+            ]}
             xmlProblems={xmlErrors.map(e => ({
               source: 'xml' as const,
               severity: 'error' as const,

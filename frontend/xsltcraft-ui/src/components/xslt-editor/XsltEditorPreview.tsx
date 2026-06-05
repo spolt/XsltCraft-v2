@@ -3,7 +3,7 @@ import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 
 interface Props {
   html: string
-  onElementClick?: (text: string) => void
+  onElementClick?: (text: string, opts?: { exact?: boolean }) => void
 }
 
 const CLICK_SCRIPT = `
@@ -11,6 +11,27 @@ const CLICK_SCRIPT = `
 document.addEventListener('click', function(e) {
   e.preventDefault();
   var el = e.target;
+  // Görsel tıklaması: base64 src'den ayırt edici bir parça çıkar
+  var img = el;
+  while (img && img !== document.body) {
+    if (img.tagName === 'IMG') {
+      var src = img.getAttribute('src') || '';
+      var idx = src.indexOf('base64,');
+      if (idx !== -1) {
+        var b64 = src.substring(idx + 7).replace(/\\s/g, '');
+        // İlk ~48 karakter çoğu formatta ortak başlık olduğundan atla,
+        // sonraki ~80 karakteri ayırt edici imza olarak kullan
+        var start = b64.length > 128 ? 48 : 0;
+        var fragment = b64.substr(start, 80);
+        if (fragment) {
+          window.parent.postMessage({ type: 'xslt-preview-click', text: fragment, exact: true }, '*');
+          return;
+        }
+      }
+    }
+    img = img.parentElement;
+  }
+  // Metin tıklaması
   while (el && el !== document.body) {
     var text = el.textContent ? el.textContent.trim().substring(0, 120) : '';
     if (text) {
@@ -43,7 +64,7 @@ export default function XsltEditorPreview({ html, onElementClick }: Props) {
     function handler(e: MessageEvent) {
       if (e.origin !== window.location.origin) return
       if (e.data?.type === 'xslt-preview-click' && e.data.text) {
-        onElementClick!(e.data.text)
+        onElementClick!(e.data.text, { exact: !!e.data.exact })
       }
     }
     window.addEventListener('message', handler)
