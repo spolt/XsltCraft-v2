@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Sparkles, X, StopCircle, Loader2,
-  RotateCcw,
+  RotateCcw, AlertTriangle,
 } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import { streamAi, type AiChunk, type AssistantMessage } from '../../services/aiAssistantService'
@@ -13,6 +13,7 @@ interface Props {
   xmlSelection?: string
   xmlCursorLine?: number
   initialErrorMessage?: string | null
+  xmlDeclarationMissing?: boolean
   onClose: () => void
 }
 
@@ -145,6 +146,7 @@ let msgIdCounter = 0
 export default function AiAssistantPanel({
   xslt, xml, xmlSelection, xmlCursorLine,
   initialErrorMessage,
+  xmlDeclarationMissing,
   onClose,
 }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -295,6 +297,18 @@ export default function AiAssistantPanel({
           <X size={14} />
         </button>
       </div>
+
+      {/* İlk satırda XML bildirimi eksik uyarısı */}
+      {xmlDeclarationMissing && (
+        <div className="px-3 py-1.5 border-b border-amber-700/40 bg-amber-900/20 flex items-start gap-1.5 text-[11px] text-amber-300 flex-shrink-0">
+          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+          <span>
+            XSLT'nin ilk satırında{' '}
+            <code className="font-mono text-amber-200">{'<?xml version="1.0" encoding="UTF-8"?>'}</code>{' '}
+            bildirimi eksik. İlk satıra eklemeniz gerekir.
+          </span>
+        </div>
+      )}
 
       {/* XML seçimi bilgi bandı */}
       {xmlSelection?.trim() && (
