@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.2] - 2026-06-08
+
+### Added
+- **Önizlemede görsele tıkla → base64 ara** (`XsltEditorPreview.tsx`, `XsltEditorPage.tsx`): Canlı önizlemede bir görsele tıklandığında, görselin `src` içindeki base64 verisinin ayırt edici bir parçası XSLT editöründe aranıp ilgili satıra gidiliyor. iframe tıklama script'i `<img>` (veya bir üst atası) algıladığında `base64,` sonrasındaki ilk ~48 baytı (çoğu JPEG/PNG'de ortak başlık) atlayıp sonraki ~80 karakteri benzersiz imza olarak gönderir; `exact` bayrağıyla bu parça kısaltılmadan birebir aratılır. Metin tıklamaları eski davranışını korur.
+- **İlk satırda XML bildirimi denetimi** (`XsltEditorPage.tsx`): XSLT'nin ilk satırında `<?xml version="1.0" encoding="UTF-8"?>` bildirimi yoksa Problemler panelinde "XML Bildirimi Eksik" hatası (`ruleId: XML_DECL_MISSING`) gösterilir ve toplam hata sayacına dahil edilir. BOM ve baştaki boşluğa toleranslı regex ile tespit edilir.
+
+### Changed
+- **"AI'ya sor" — XML bildirimi hatası için kısa yanıt** (`XsltEditorPage.openAiForProblem`): Bu hata için AI'a hedefli prompt gönderiliyor — "çok kısa açıkla, yalnızca eklenecek satırı ve dosyanın ilk 3-4 satırını göster, tüm şablonu tekrar yazma". AI artık tüm şablonu geri basmıyor. Diğer hatalar eskisi gibi detaylı açıklama almaya devam ediyor.
+
+---
+
 ## [1.3.1] - 2026-05-16
 
 ### Fixed
