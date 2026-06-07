@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **"AI'ya sor" — XML bildirimi hatası için kısa yanıt** (`XsltEditorPage.openAiForProblem`): Bu hata için AI'a hedefli prompt gönderiliyor — "çok kısa açıkla, yalnızca eklenecek satırı ve dosyanın ilk 3-4 satırını göster, tüm şablonu tekrar yazma". AI artık tüm şablonu geri basmıyor. Diğer hatalar eskisi gibi detaylı açıklama almaya devam ediyor.
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.3.1 → 1.3.2`.
 
 ---
 
