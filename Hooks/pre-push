@@ -109,8 +109,8 @@ fi
 echo -e "${CYAN}[4/6] Frontend ESLint...${NC}"
 if [[ -d "$FRONTEND_DIR/node_modules" ]]; then
   lint_output=$(cd "$FRONTEND_DIR" && npm run lint 2>&1 || true)
-  error_count=$(echo "$lint_output" | grep -cE "^\s+[0-9]+:[0-9]+\s+error" || echo "0")
-  warning_count=$(echo "$lint_output" | grep -cE "^\s+[0-9]+:[0-9]+\s+warning" || echo "0")
+  error_count=$(echo "$lint_output" | grep -cE "^\s+[0-9]+:[0-9]+\s+error" || true)
+  warning_count=$(echo "$lint_output" | grep -cE "^\s+[0-9]+:[0-9]+\s+warning" || true)
   if [[ "$error_count" -gt 0 ]]; then
     echo -e "  ${FAIL} HATA: ${error_count} ESLint hatası bulundu!"
     echo "$lint_output" | grep -E "error" | head -5 | sed 's/^/       /'
