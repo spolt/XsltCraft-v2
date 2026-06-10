@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-cd /opt/xsltcraft/XsltCraft-v2
+cd /opt/xsltcraft
 
 echo "==> Config yedekleniyor..."
 cp backend/XsltCraft/appsettings.Production.json /tmp/appsettings.Production.json.bak
