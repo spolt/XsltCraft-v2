@@ -86,11 +86,14 @@ function ActionMenu({ onDetail, onRoleChange, onResetPassword, onDelete }: {
 }) {
   const [open, setOpen] = useState(false)
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({})
+  const containerRef = useRef<HTMLDivElement>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     function handle(e: MouseEvent) {
-      if (btnRef.current && !btnRef.current.contains(e.target as Node)) setOpen(false)
+      // Dropdown, position:fixed olsa da DOM'da container'ın çocuğudur;
+      // bu yüzden menü öğelerine tıklama "dışarı tıklama" sayılmamalı.
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', handle)
     return () => document.removeEventListener('mousedown', handle)
@@ -118,7 +121,7 @@ function ActionMenu({ onDetail, onRoleChange, onResetPassword, onDelete }: {
   }
 
   return (
-    <div className="relative inline-block">
+    <div ref={containerRef} className="relative inline-block">
       <button
         ref={btnRef}
         onClick={handleToggle}

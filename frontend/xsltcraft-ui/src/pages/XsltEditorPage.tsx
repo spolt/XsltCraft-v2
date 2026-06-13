@@ -40,9 +40,14 @@ import {
   getUserXsltTemplate,
   createUserXsltTemplate,
   updateUserXsltTemplate,
+  acquireEditingLock,
+  releaseEditingLock,
 } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
+import { toast } from '../store/toastStore'
 import api from '../services/apiService'
+
+const LOCK_HEARTBEAT_MS = 30_000
 
 const PREVIEW_DEBOUNCE_MS = 1000
 const XSLT_VALIDATION_DEBOUNCE_MS = 1500
@@ -122,6 +127,12 @@ export default function XsltEditorPage() {
   const [xsltContent, setXsltContent] = useState('')
   const [xmlContent, setXmlContent] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
+
+  // Eşzamanlı düzenleme kilidi
+  const [lockedByOther, setLockedByOther] = useState(false)
+  const [lockOwnerName, setLockOwnerName] = useState<string | null>(null)
+  const loadedUpdatedAtRef = useRef<string | null>(null)
+  const wasLockedRef = useRef(false)
 
   // Validation
   const [xsltValid, setXsltValid] = useState<boolean | null>(null)
@@ -246,12 +257,19 @@ export default function XsltEditorPage() {
       // Ctrl+S / ⌘S — kaydet (sadece editör ekranı açıkken)
       if ((e.ctrlKey || e.metaKey) && e.key === 's' && xsltContent) {
         e.preventDefault()
-        setShowSaveDialog(true)
+        if (lockedByOther) {
+          toast.warning(
+            `Şu an ${lockOwnerName ?? 'başka bir kullanıcı'} bu şablonu düzenliyor. Salt-okunur modda kaydedemezsiniz.`,
+            { title: 'Şablon kilitli' },
+          )
+        } else {
+          setShowSaveDialog(true)
+        }
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [xsltContent])
+  }, [xsltContent, lockedByOther, lockOwnerName])
 
   // ─── Load saved template ────────────────────────────────────────────────────
   useEffect(() => {
@@ -263,11 +281,46 @@ export default function XsltEditorPage() {
         setTemplateName(t.name)
         setXsltContent(t.xsltContent)
         setXmlContent(t.xmlContent)
+        loadedUpdatedAtRef.current = t.updatedAt
         setIsDirty(false)
       })
       .catch(() => navigate('/xslt-editor'))
       .finally(() => setLoadingTemplate(false))
   }, [routeTemplateId, navigate])
+
+  // ─── Eşzamanlı düzenleme kilidi: kilit al + heartbeat ───────────────────────
+  useEffect(() => {
+    if (!templateId) return
+    let cancelled = false
+
+    async function tick() {
+      try {
+        const lock = await acquireEditingLock(templateId!)
+        if (cancelled) return
+        setLockedByOther(lock.lockedByOther)
+        setLockOwnerName(lock.editingUserName)
+        // Yalnızca kilitlenme anında (yükselen kenar) uyarı göster
+        if (lock.lockedByOther && !wasLockedRef.current) {
+          toast.warning(
+            `Şu an ${lock.editingUserName ?? 'başka bir kullanıcı'} bu şablonu düzenliyor. Salt-okunur açıldı.`,
+            { title: 'Şablon kilitli', durationMs: 6000 },
+          )
+        }
+        wasLockedRef.current = lock.lockedByOther
+      } catch {
+        // sessizce yoksay (yetki/ağ hatası)
+      }
+    }
+
+    tick()
+    const intervalId = setInterval(tick, LOCK_HEARTBEAT_MS)
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+      releaseEditingLock(templateId!).catch(() => {})
+      wasLockedRef.current = false
+    }
+  }, [templateId])
 
   // ─── File upload handlers ───────────────────────────────────────────────────
   function handleXsltFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -405,12 +458,14 @@ export default function XsltEditorPage() {
     setSaving(true)
     try {
       if (templateId) {
-        await updateUserXsltTemplate(templateId, {
+        const updated = await updateUserXsltTemplate(templateId, {
           name,
           xsltContent,
           xmlContent: xmlContent ?? undefined,
+          expectedUpdatedAt: loadedUpdatedAtRef.current ?? undefined,
         })
         setTemplateName(name)
+        loadedUpdatedAtRef.current = updated.updatedAt
       } else {
         const result = await createUserXsltTemplate({
           name,
@@ -419,16 +474,46 @@ export default function XsltEditorPage() {
         })
         setTemplateId(result.id)
         setTemplateName(result.name)
+        loadedUpdatedAtRef.current = result.updatedAt
         // Update URL without reload
         window.history.replaceState(null, '', `/xslt-editor/${result.id}`)
       }
       setIsDirty(false)
       setShowSaveDialog(false)
-    } catch {
-      alert('Kayıt sırasında bir hata oluştu.')
+      toast.success('Şablon kaydedildi.', { durationMs: 2500 })
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 423) {
+        // Başka kullanıcı düzenliyor — salt-okunura geç
+        setLockedByOther(true)
+        wasLockedRef.current = true
+        setShowSaveDialog(false)
+        toast.error('Bu şablonu şu an başka bir kullanıcı düzenliyor. Kaydedilemedi.', {
+          title: 'Şablon kilitli', durationMs: null,
+        })
+      } else if (status === 409) {
+        setShowSaveDialog(false)
+        toast.error('Şablon siz düzenlerken değiştirildi. Lütfen sayfayı yenileyip tekrar deneyin.', {
+          title: 'Çakışma', durationMs: null,
+        })
+      } else {
+        toast.error('Kayıt sırasında bir hata oluştu.')
+      }
     } finally {
       setSaving(false)
     }
+  }
+
+  // Kilitliyken kaydetmeyi engelle, kullanıcıyı uyar
+  function requestSave() {
+    if (lockedByOther) {
+      toast.warning(
+        `Şu an ${lockOwnerName ?? 'başka bir kullanıcı'} bu şablonu düzenliyor. Salt-okunur modda kaydedemezsiniz.`,
+        { title: 'Şablon kilitli' },
+      )
+      return
+    }
+    setShowSaveDialog(true)
   }
 
   // ─── Preview → Editor navigation ───────────────────────────────────────────
@@ -615,10 +700,20 @@ export default function XsltEditorPage() {
           onUploadXslt={handleXsltFile}
           onUploadXml={handleXmlFile}
           onDownload={handleDownload}
-          onSave={() => setShowSaveDialog(true)}
+          onSave={requestSave}
           onPrint={handlePrint}
           onShowShortcuts={() => setShowShortcuts(true)}
         />
+
+        {lockedByOther && (
+          <div className="px-4 py-2 text-xs text-amber-300 bg-amber-950 border-b border-amber-900 flex-shrink-0 flex items-center gap-2">
+            <TriangleAlert size={13} className="flex-shrink-0" />
+            <span>
+              Şu an <strong>{lockOwnerName ?? 'başka bir kullanıcı'}</strong> bu şablonu düzenliyor —
+              salt-okunur moddasınız, değişiklikleriniz kaydedilemez.
+            </span>
+          </div>
+        )}
 
         {previewError && (
           <div className="px-4 py-2 text-xs text-red-400 bg-red-950 border-b border-red-900 flex-shrink-0 flex items-start gap-2">
@@ -707,7 +802,7 @@ export default function XsltEditorPage() {
                     title="Snippet Kütüphanesi"
                   >
                     <BookMarked size={13} />
-                    <span className="hidden 2xl:inline">Snippet</span>
+                    <span className="hidden 2xl:inline">Kütüphane</span>
                     {userSnippets.length > 0 && (
                       <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-gray-600 text-gray-300 text-[10px] font-medium">
                         {userSnippets.length}
@@ -720,6 +815,7 @@ export default function XsltEditorPage() {
                 <XsltEditor
                   value={xsltContent}
                   onChange={(v) => { setXsltContent(v); setIsDirty(true) }}
+                  options={{ readOnly: lockedByOther }}
                   xmlContent={xmlContent}
                   userSnippets={userSnippets}
                   onEvaluateXPath={handleEvaluateXPath}

@@ -10,4 +10,10 @@ public class UserXsltTemplate
     public string? XmlContent { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    // Eşzamanlı düzenleme kilidi (heartbeat tabanlı, otomatik zaman aşımlı)
+    public Guid? EditingUserId { get; set; }
+    public DateTime? EditingHeartbeatAt { get; set; }
+
+    public ICollection<UserXsltTemplateShare> Shares { get; set; } = new List<UserXsltTemplateShare>();
 }

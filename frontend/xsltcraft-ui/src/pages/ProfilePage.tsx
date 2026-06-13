@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Download, Trash2 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { updateProfile, deleteAccount } from '../services/profileService'
+import { updateProfile, changePassword, deleteAccount } from '../services/profileService'
 import { getMyTemplates, downloadTemplate, type TemplateDetail } from '../services/templateService'
 
 const DOC_TYPE_LABEL: Record<string, string> = {
@@ -10,8 +10,10 @@ const DOC_TYPE_LABEL: Record<string, string> = {
   Despatch: 'e-İrsaliye',
 }
 
+const PASSWORD_RULES = /^(?=.*[A-Z])(?=.*\d).{8,}$/
+
 export default function ProfilePage() {
-  const { user, updateUser, logout } = useAuthStore()
+  const { user, updateUser, logout, setAccessToken } = useAuthStore()
   const navigate = useNavigate()
 
   // ── Profil formu ─────────────────────────────────────────────────────────────
@@ -38,6 +40,47 @@ export default function ProfilePage() {
       setProfileMsg({ type: 'err', text: msg })
     } finally {
       setProfileSaving(false)
+    }
+  }
+
+  // ── Şifre değiştirme ─────────────────────────────────────────────────────────
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault()
+    setPasswordMsg(null)
+
+    if (!PASSWORD_RULES.test(newPassword)) {
+      setPasswordMsg({
+        type: 'err',
+        text: 'Yeni şifre en az 8 karakter, 1 büyük harf ve 1 rakam içermelidir.',
+      })
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ type: 'err', text: 'Yeni şifreler eşleşmiyor.' })
+      return
+    }
+
+    setPasswordSaving(true)
+    try {
+      const { accessToken } = await changePassword({ currentPassword, newPassword })
+      setAccessToken(accessToken)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setPasswordMsg({ type: 'ok', text: 'Şifreniz güncellendi.' })
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Şifre değiştirilemedi.'
+      setPasswordMsg({ type: 'err', text: msg })
+    } finally {
+      setPasswordSaving(false)
     }
   }
 
@@ -131,6 +174,70 @@ export default function ProfilePage() {
             className="self-start px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {profileSaving ? 'Kaydediliyor…' : 'Kaydet'}
+          </button>
+        </form>
+      </section>
+
+      {/* ── Şifre değiştirme ── */}
+      <section className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col gap-4">
+        <h2 className="text-sm font-semibold text-gray-700">Şifre Değiştir</h2>
+        <form onSubmit={handleChangePassword} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Mevcut Şifre
+            </label>
+            <input
+              type="password"
+              required
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="••••••••"
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Yeni Şifre
+            </label>
+            <input
+              type="password"
+              required
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="••••••••"
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+            />
+            <p className="text-xs text-gray-400">En az 8 karakter, 1 büyük harf, 1 rakam</p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              Yeni Şifre (Tekrar)
+            </label>
+            <input
+              type="password"
+              required
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="••••••••"
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+            />
+          </div>
+          {passwordMsg && (
+            <p
+              className={`text-xs ${passwordMsg.type === 'ok' ? 'text-emerald-600' : 'text-red-500'}`}
+            >
+              {passwordMsg.text}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={passwordSaving}
+            className="self-start px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {passwordSaving ? 'Güncelleniyor…' : 'Şifreyi Değiştir'}
           </button>
         </form>
       </section>
