@@ -8,4 +8,6 @@ public sealed class UserXsltTemplateDetailResponse
     public string? XmlContent { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    public bool IsOwner { get; set; }
 }

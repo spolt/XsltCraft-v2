@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Code2, Eye, Pencil, Trash2, Check, X } from 'lucide-react'
+import { Code2, Eye, Pencil, Trash2, Check, X, Share2, Users } from 'lucide-react'
 import {
   getUserXsltTemplates,
   getUserXsltTemplate,
@@ -10,6 +10,7 @@ import {
 } from '../services/userXsltService'
 import { previewFromRawXslt } from '../services/previewService'
 import TemplatePreviewPanel from '../components/TemplatePreviewPanel'
+import ShareTemplateDialog from '../components/xslt-editor/ShareTemplateDialog'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 export default function MyXsltTemplatesPage() {
@@ -22,6 +23,7 @@ export default function MyXsltTemplatesPage() {
   const [previewName, setPreviewName] = useState('')
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -86,10 +88,11 @@ export default function MyXsltTemplatesPage() {
   }
 
   function toggleAll() {
-    if (selectedIds.size === templates.length) {
+    const ownedIds = templates.filter((t) => t.isOwner).map((t) => t.id)
+    if (selectedIds.size === ownedIds.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(templates.map((t) => t.id)))
+      setSelectedIds(new Set(ownedIds))
     }
   }
 
@@ -122,7 +125,8 @@ export default function MyXsltTemplatesPage() {
     )
   }
 
-  const allSelected = templates.length > 0 && selectedIds.size === templates.length
+  const ownedCount = templates.filter((t) => t.isOwner).length
+  const allSelected = ownedCount > 0 && selectedIds.size === ownedCount
   const someSelected = selectedIds.size > 0
 
   return (
@@ -204,6 +208,7 @@ export default function MyXsltTemplatesPage() {
                 onDelete={handleDelete}
                 onRename={handleRename}
                 onPreview={(id, name) => { setPreviewId(id); setPreviewName(name) }}
+                onShare={(id, name) => setShareTarget({ id, name })}
               />
             ))}
           </div>
@@ -219,6 +224,13 @@ export default function MyXsltTemplatesPage() {
           actionLabel="XSLT Editörde Aç"
           onAction={() => navigate(`/xslt-editor/${previewId}`)}
           onClose={() => setPreviewId(null)}
+        />
+      )}
+      {shareTarget && (
+        <ShareTemplateDialog
+          templateId={shareTarget.id}
+          templateName={shareTarget.name}
+          onClose={() => setShareTarget(null)}
         />
       )}
     </div>
@@ -253,6 +265,7 @@ function TemplateRow({
   onDelete,
   onRename,
   onPreview,
+  onShare,
 }: {
   template: UserXsltTemplateSummary
   selected: boolean
@@ -261,10 +274,12 @@ function TemplateRow({
   onDelete: (id: string) => void
   onRename: (id: string, name: string) => void
   onPreview: (id: string, name: string) => void
+  onShare: (id: string, name: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState(template.name)
   const [showConfirm, setShowConfirm] = useState(false)
+  const isOwner = template.isOwner
 
   function commitRename() {
     const trimmed = editName.trim()
@@ -282,12 +297,16 @@ function TemplateRow({
         selected ? 'border-blue-300 bg-blue-50/40' : 'border-gray-200 hover:border-gray-300'
       }`}
     >
-      <input
-        type="checkbox"
-        checked={selected}
-        onChange={() => onToggleSelect(template.id)}
-        className="w-4 h-4 rounded border-gray-300 text-blue-600 accent-blue-600 cursor-pointer flex-shrink-0"
-      />
+      {isOwner ? (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(template.id)}
+          className="w-4 h-4 rounded border-gray-300 text-blue-600 accent-blue-600 cursor-pointer flex-shrink-0"
+        />
+      ) : (
+        <span className="w-4 h-4 flex-shrink-0" />
+      )}
 
       <div className="flex-1 min-w-0 flex items-center gap-2">
         {editing ? (
@@ -312,6 +331,15 @@ function TemplateRow({
           </button>
         )}
         <span className="flex-shrink-0 text-xs text-purple-500 bg-purple-50 rounded-full px-2 py-0.5">XSLT</span>
+        {template.isShared && (
+          <span
+            title={`Sahibi: ${template.ownerName}`}
+            className="flex-shrink-0 flex items-center gap-1 text-xs text-amber-600 bg-amber-50 rounded-full px-2 py-0.5"
+          >
+            <Users size={11} />
+            Paylaşılan • {template.ownerName}
+          </span>
+        )}
       </div>
 
       <span className="text-xs text-gray-400 flex-shrink-0 hidden sm:block">
@@ -322,20 +350,27 @@ function TemplateRow({
         <button onClick={() => onPreview(template.id, template.name)} title="Önizle" className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
           <Eye size={14} />
         </button>
-        <button onClick={() => setEditing(true)} title="Yeniden adlandır" className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
-          <Pencil size={14} />
-        </button>
-        {showConfirm ? (
-          <div className="flex items-center gap-1 bg-red-50 rounded px-2 py-1 text-xs">
-            <span className="text-red-600">Emin misin?</span>
-            <button onClick={() => onDelete(template.id)} className="font-medium text-red-600 hover:text-red-700">Evet</button>
-            <span className="text-gray-300">/</span>
-            <button onClick={() => setShowConfirm(false)} className="text-gray-500 hover:text-gray-700">Hayır</button>
-          </div>
-        ) : (
-          <button onClick={() => setShowConfirm(true)} title="Sil" className="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-            <Trash2 size={14} />
-          </button>
+        {isOwner && (
+          <>
+            <button onClick={() => onShare(template.id, template.name)} title="Paylaş" className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+              <Share2 size={14} />
+            </button>
+            <button onClick={() => setEditing(true)} title="Yeniden adlandır" className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+              <Pencil size={14} />
+            </button>
+            {showConfirm ? (
+              <div className="flex items-center gap-1 bg-red-50 rounded px-2 py-1 text-xs">
+                <span className="text-red-600">Emin misin?</span>
+                <button onClick={() => onDelete(template.id)} className="font-medium text-red-600 hover:text-red-700">Evet</button>
+                <span className="text-gray-300">/</span>
+                <button onClick={() => setShowConfirm(false)} className="text-gray-500 hover:text-gray-700">Hayır</button>
+              </div>
+            ) : (
+              <button onClick={() => setShowConfirm(true)} title="Sil" className="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                <Trash2 size={14} />
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

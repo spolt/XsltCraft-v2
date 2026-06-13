@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Template> Templates => Set<Template>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<UserXsltTemplate> UserXsltTemplates => Set<UserXsltTemplate>();
+    public DbSet<UserXsltTemplateShare> UserXsltTemplateShares => Set<UserXsltTemplateShare>();
     public DbSet<UserSnippet> UserSnippets => Set<UserSnippet>();
     public DbSet<UserActivity> UserActivities => Set<UserActivity>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
@@ -99,6 +100,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(t => t.Owner)
                   .WithMany()
                   .HasForeignKey(t => t.OwnerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(t => t.EditingUserId);
+        });
+
+        modelBuilder.Entity<UserXsltTemplateShare>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.HasIndex(s => new { s.TemplateId, s.UserId }).IsUnique();
+            entity.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()");
+            entity.HasOne(s => s.Template)
+                  .WithMany(t => t.Shares)
+                  .HasForeignKey(s => s.TemplateId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(s => s.User)
+                  .WithMany()
+                  .HasForeignKey(s => s.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
