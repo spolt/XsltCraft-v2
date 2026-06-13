@@ -16,7 +16,7 @@ public class AiOptions
 public class OllamaOptions
 {
     public string BaseUrl { get; set; } = "http://localhost:11434";
-    public string Model { get; set; } = "llama3.1:8b";
+    public string Model { get; set; } = "qwen2.5-coder:3b";
     /// <summary>Yerel model cold-start (RAM'e yükleme) süresini hesaba kat; sıcakken ilk token ~1-2 sn.</summary>
     public int FirstTokenTimeoutSeconds { get; set; } = 30;
     public int ConnectTimeoutSeconds { get; set; } = 3;
