@@ -15,6 +15,14 @@ export async function updateProfile(params: {
   return data
 }
 
+export async function changePassword(params: {
+  currentPassword: string
+  newPassword: string
+}): Promise<{ accessToken: string }> {
+  const { data } = await api.post<{ accessToken: string }>('/api/auth/change-password', params)
+  return data
+}
+
 export async function deleteAccount(): Promise<void> {
   await api.delete('/api/auth/account')
 }

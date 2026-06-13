@@ -23,7 +23,8 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
     private const string RefreshTokenCookie = "refreshToken";
     private static readonly TimeSpan RefreshTokenExpiry = TimeSpan.FromDays(30);
 
-    private static readonly Regex UsernameRegex = new(@"^[a-zA-Z0-9_]{3,30}$", RegexOptions.Compiled);
+    private static readonly Regex UsernameRegex = new(@"^[a-zA-Z0-9_][a-zA-Z0-9_.]{1,28}[a-zA-Z0-9_]$", RegexOptions.Compiled);
+    private static readonly Regex PasswordRegex = new(@"^(?=.*[A-Z])(?=.*\d).{8,}$", RegexOptions.Compiled);
 
     // POST /api/auth/register
     [HttpPost("register")]
@@ -31,7 +32,7 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         if (!UsernameRegex.IsMatch(request.Username))
-            return BadRequest(new { message = "Kullanıcı adı 3-30 karakter olmalı, yalnızca harf, rakam ve alt çizgi içerebilir." });
+            return BadRequest(new { message = "Kullanıcı adı 3-30 karakter olmalı, yalnızca harf, rakam, alt çizgi ve nokta içerebilir; başında veya sonunda nokta olamaz." });
 
         if (await db.Users.AnyAsync(u => u.Username.ToLower() == request.Username.ToLower()))
             return Conflict(new { message = "Bu kullanıcı adı zaten kullanılıyor." });
@@ -234,6 +235,41 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
         await db.SaveChangesAsync();
 
         return Ok(new MeResponse(user.Id, user.Email, user.DisplayName, user.Role.ToString()));
+    }
+
+    // POST /api/auth/change-password  — mevcut şifreyi doğrulayıp yeni şifre belirle
+    [Authorize]
+    [HttpPost("change-password")]
+    [EnableRateLimiting("auth-sensitive")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var user = await db.Users.FindAsync(userId);
+        if (user is null) return NotFound();
+
+        if (user.PasswordHash is null)
+            return BadRequest(new { message = "Hesabınız Google ile oluşturulduğu için şifresi bulunmuyor." });
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+            return BadRequest(new { message = "Mevcut şifre hatalı." });
+
+        if (!PasswordRegex.IsMatch(request.NewPassword))
+            return BadRequest(new { message = "Yeni şifre en az 8 karakter, 1 büyük harf ve 1 rakam içermelidir." });
+
+        if (BCrypt.Net.BCrypt.Verify(request.NewPassword, user.PasswordHash))
+            return BadRequest(new { message = "Yeni şifre mevcut şifreyle aynı olamaz." });
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        // Güvenlik: tüm mevcut oturumları sonlandır, bu oturum için yeni token ver
+        await RevokeAllUserTokens(userId);
+        await db.SaveChangesAsync();
+
+        var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Role.ToString());
+        await SetNewRefreshToken(userId);
+
+        return Ok(new AuthResponse(accessToken));
     }
 
     // DELETE /api/auth/account  — hesabı sil

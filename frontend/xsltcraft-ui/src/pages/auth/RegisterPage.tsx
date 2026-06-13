@@ -15,11 +15,11 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,30}$/
+  const USERNAME_REGEX = /^[a-zA-Z0-9_][a-zA-Z0-9_.]{1,28}[a-zA-Z0-9_]$/
 
   const validate = (): string | null => {
     if (!USERNAME_REGEX.test(username))
-      return 'Kullanıcı adı 3-30 karakter olmalı, yalnızca harf, rakam ve alt çizgi içerebilir.'
+      return 'Kullanıcı adı 3-30 karakter olmalı, yalnızca harf, rakam, alt çizgi ve nokta içerebilir; başında veya sonunda nokta olamaz.'
     if (!PASSWORD_RULES.test(password))
       return 'Şifre en az 8 karakter, 1 büyük harf ve 1 rakam içermelidir.'
     return null
@@ -46,7 +46,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthLayout theme="A">
+    <AuthLayout theme="D">
       <h1 className="text-2xl font-bold text-white mb-2">Hesap Oluştur</h1>
       <p className="text-gray-400 text-sm mb-6">
         Zaten hesabın var mı?{' '}
@@ -73,7 +73,7 @@ export default function RegisterPage() {
             className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
             placeholder="kullanici_adi"
           />
-          <p className="mt-1 text-xs text-gray-500">3-30 karakter, harf/rakam/alt çizgi</p>
+          <p className="mt-1 text-xs text-gray-500">3-30 karakter, harf/rakam/alt çizgi/nokta</p>
         </div>
         <div>
           <label className="block text-sm text-gray-300 mb-1">Ad Soyad</label>
