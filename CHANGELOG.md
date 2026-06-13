@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-06-13
+
+### Added
+- **XSLT şablon paylaşımı** (`UserXsltTemplateShare` entity, `UserXsltTemplateController`): Şablon sahibi, kayıtlı bir XSLT şablonunu yetkilendirdiği başka kullanıcılarla paylaşabilir. Paylaşılan kullanıcı şablonu görüntüleyebilir **ve düzenleyebilir** (sahip ile aynı yetki seviyesi; ayrı view/edit ayrımı yok). Yeni uç noktalar: `GET/POST /api/user-xslt-templates/{id}/shares`, `DELETE /api/user-xslt-templates/{id}/shares/{userId}` (tümü yalnızca sahip). `GetById`/`Update` yetkisi `OwnerId == userId` yerine `CanAccess` (sahip **veya** paylaşılan); `Delete` ve paylaşım yönetimi sahip-only kalır. `GetAll` artık sahip olunan + benimle paylaşılanları birleştirir (`IsOwner`/`IsShared`/`OwnerName`).
+- **Eşzamanlı düzenleme kilidi** (`UserXsltTemplate.EditingUserId`/`EditingHeartbeatAt`): Birden fazla kullanıcının erişebildiği bir şablonda biri aktif düzenlerken diğerlerine şablon **salt-okunur** açılır ve "Şu an X düzenliyor" uyarısı gösterilir. Kalp atışı (heartbeat) tabanlı; 90 sn boyunca yenilenmeyen kilit otomatik serbest kalır. Yeni uç noktalar: `POST /api/user-xslt-templates/{id}/lock/acquire` (al/tazele), `POST .../lock/release`. Editör yüklemede kilit alır, 30 sn'de bir heartbeat atar, ayrılırken serbest bırakır.
+- **İyimser çakışma koruması** (`UpdateUserXsltRequest.ExpectedUpdatedAt`, `DateTimeOffset`): Kaydederken istemci yüklediği sürümün `updatedAt`'ini gönderir; DB'deki değer daha yeniyse (UTC, 1 sn tolerans) `409 Conflict` döner ve kullanıcıdan yeniden yükleme istenir. Kilitli kaynak için `Update` `423 Locked` döner.
+- **Kullanıcı arama uç noktası** (`UsersController`): `GET /api/users/search?query=…` — paylaşım kişi seçici için, oturumlu her kullanıcıya açık (admin gerekmez), kullanıcı adı/e-posta/isimde arar, kendisi hariç ilk 10 sonucu döndürür.
+- **`ShareTemplateDialog`** (`components/xslt-editor/ShareTemplateDialog.tsx`): Debounce'lı kullanıcı arama, avatarlı sonuç listesi ve mevcut paylaşımları kaldırma. `MyXsltTemplatesPage` artık paylaşılan şablonları "Paylaşılan • sahip adı" rozetiyle gösterir; sahip satırlarında Paylaş ikonu, paylaşılan satırlarda silme/yeniden-adlandırma gizli.
+- **Şifre değiştirme** (`POST /api/auth/change-password`, `ChangePasswordRequest`, `profileService.changePassword`, `ProfilePage`): Yerel hesaplar mevcut şifrelerini doğrulayıp yeni bir şifre belirleyebilir. Mevcut şifre BCrypt ile doğrulanır; yeni şifre kuralı (en az 8 karakter, 1 büyük harf, 1 rakam) ve "eskiyle aynı olamaz" denetimi uygulanır; Google ile oluşturulmuş (şifresiz) hesaplar reddedilir. Güvenlik için tüm mevcut oturum token'ları iptal edilir, bu oturum için yeni access/refresh token verilir. `auth-sensitive` rate-limit politikasına tabidir.
+
+### Changed
+- **Kullanıcı adında nokta desteği** (`AuthController.UsernameRegex`, `RegisterPage`): Kullanıcı adı regex'i `^[a-zA-Z0-9_]{3,30}$` → `^[a-zA-Z0-9_][a-zA-Z0-9_.]{1,28}[a-zA-Z0-9_]$`. Artık nokta içerebilir, ancak başında/sonunda nokta olamaz. Backend ve frontend doğrulama mesajları hizalandı.
+- **Kayıt sayfası teması** (`RegisterPage`): `AuthLayout` teması `A → D` (login ile aynı gri-mor tema).
+- **Varsayılan Ollama modeli** (`OllamaOptions.Model`): `llama3.1:8b → qwen2.5-coder:3b` — daha düşük RAM kullanımı, daha hızlı prefill (v1.3.0'daki `appsettings` hizalamasıyla tutarlı varsayılan).
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.3.2 → 1.4.0`.
+
+### Fixed
+- **Docker ENTRYPOINT yanlış assembly** (`backend/Dockerfile`): `dotnet XsltCraft.dll` → `dotnet XsltCraft.Api.dll`. API projesinin assembly adı `XsltCraft.Api` olduğundan container eski isimle başlatılamıyordu.
+- **Admin kullanıcılar — aksiyon menüsü dışarı tıklama** (`AdminUsersPage` `ActionMenu`): Menü `position:fixed` olduğu için öğelerine tıklamak "dışarı tıklama" sayılıp menüyü hemen kapatıyordu. Dışarı-tıklama testi artık `btnRef` yerine container `ref`'i üzerinden yapılıyor; menü öğeleri sorunsuz tıklanabiliyor.
+
+---
+
 ## [1.3.2] - 2026-06-08
 
 ### Improvement
