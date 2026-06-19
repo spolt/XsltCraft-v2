@@ -95,7 +95,7 @@ jobs:
         working-directory: backend
         env:
           ConnectionStrings__DefaultConnection: "Server=localhost;Port=5432;Database=xsltcraft_test;User Id=postgres;Password=postgres;"
-        run: dotnet test --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
+        run: dotnet test --no-build --configuration Release --filter "Category!=Eval" --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
 
       - name: Upload test results
         if: always()
@@ -103,6 +103,46 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}
           path: '**/test-results.trx'
+
+  # ECC eval harness — non-blocking. Bir regresyonu uyarı olarak raporlar ama PR'ı
+  # bloklamaz (continue-on-error). Olgunlaşınca continue-on-error kaldırılıp blocking'e geçilir.
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        working-directory: backend
+        run: dotnet restore
+
+      - name: Build
+        working-directory: backend
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Run XSLT eval cases (non-blocking)
+        id: eval
+        continue-on-error: true
+        working-directory: backend
+        env:
+          DiffEngine_Disabled: 'true'
+        run: dotnet test --no-build --configuration Release --filter "Category=Eval" --logger "trx;LogFileName=eval-results.trx"
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: '**/eval-results.trx'
+
+      - name: Warn on eval regression
+        if: steps.eval.outcome == 'failure'
+        run: echo "::warning title=ECC eval regression::XSLT eval case'lerinden biri başarısız (non-blocking). Eval artefaktını incele."
 
   validate-version:
     runs-on: ubuntu-latest

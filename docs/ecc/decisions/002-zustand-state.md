@@ -1,0 +1,3 @@
+# ADR 002 — Frontend state: Zustand
+
+**Context:** Editör (blok ağacı, seçim, undo/redo), XML ağacı, auth ve toast durumlarının React 19 uygulamasında paylaşılması gerekiyordu. **Alternatives:** Redux Toolkit (boilerplate ağır), React Context (sık re-render, büyük ağaçta maliyetli). **Decision:** Zustand — özellik bazlı küçük store'lar (`auth`, `editor`, `xml`, `toast`). **Reasoning:** minimal API, selector ile hedefli abonelik (gereksiz re-render yok), provider sarmalama gerektirmez, editör gibi yüksek-frekanslı güncellemelerde performanslı. **Consequences:** global state disiplinini geliştirici sağlar (store sınırlarını net tut); devtools Redux kadar zengin değil ama proje ölçeği için yeterli.

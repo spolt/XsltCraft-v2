@@ -1,0 +1,3 @@
+# ADR 004 — Kod editörü: Monaco
+
+**Context:** Dev mode'da ham XSLT düzenleme, snippet autocomplete, problems paneli, AI ghost-text ve format/folding gerekiyordu. **Alternatives:** CodeMirror 6 (hafif ama XML/XSLT dil servisi daha az hazır), basit `<textarea>` (yetersiz). **Decision:** **Monaco Editor** (VS Code'un editörü). **Reasoning:** zengin dil servisi, folding/format/problem marker API'leri, `Ctrl+Space` completion ve ghost-text (inline completion) yerleşik; ekibin VS Code aşinalığıyla uyumlu. **Consequences:** bundle boyutu büyük (Vite ile lazy-load gerekebilir); web worker konfigürasyonu ve dark tema entegrasyonu yönetilmeli. AI snippet/refactor apply Monaco API'leri üzerinden, kullanıcı onayıyla yapılır.
