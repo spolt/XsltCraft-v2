@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.5.0] - 2026-06-20
+
 ### Added
 - **AI — soru-bilinçli XSLT template retrieval** (`XsltSummarizer`, `TextFold`, `AiAssistantPanel`, `Xslteditor`): Büyük XSLT'lerde asistan, kullanıcının sorusunu bilmeden körlemesine ilk birkaç template'i gönderiyordu; geç sıradaki template'lerin gövdesini model hiç görmüyordu. Artık metin seçimi yoksa template'ler kullanıcının sorusuna **ve** XSLT editöründeki imleç satırına göre skorlanır (`RankTemplates`/`ScoreTemplate`: imza eşleşmesi +5, gövde +1, imleci kapsayan template +100; UBL prefix'leri `cbc:`/`cac:` local-name'e indirgenir) ve en alakalı template'ler tam gövdesiyle inline edilir. Inline bütçe 4K→8K char. Soru/imleç sinyali yoksa eski belge-sırası davranış korunur. XSLT seçimi + imleç satırı (`XsltSelection`/`XsltCursorLine`) artık assistant moduna uçtan uca taşınıyor (önceden yalnız XML seçimi gönderiliyordu).
 - **ECC geliştirme çerçevesi (Faz 0–2)** (`CLAUDE.md`, `.claude/agents`, `.claude/skills`, `docs/ecc/**`): Native Claude Code konvansiyonuyla hafif bir agent/skill/doküman katmanı. Agentlar: `reviewer`, `security-reviewer`, `test-engineer`, `architect`, `planner`, `refactorer`. Skill'ler: `review-checklist`, `xss-xxe-checklist`, `playwright-e2e`. Dokümanlar: bağlam (`context/*`), mimari (`architecture/{backend,frontend,database,ai-system}.md`), kararlar (ADR 001–006), `standards.md`, `workflows.md`. Üretim koduna dokunmaz; geliştirme akışını standartlaştırır.
@@ -16,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **AI `max_tokens` 2048 → 4096** (`appsettings.json`, `appsettings.Development.example.json`, `AiOptions.cs`): Hem Ollama hem Gemini için yanıt üst sınırı iki katına çıkarıldı; uzun açıklamalar "max_tokens limitine ulaşıldı" ile kesilmiyor. (Ollama tarafında `NumCtx` 8192 sabit kaldı.)
 - **`Fold` mantığı tekilleştirildi** (`TextFold`): Türkçe karakter folding'i `IntentClassifier`, `PatternSelector` ve `XsltSummarizer` arasında üç ayrı kopyaydı; tek `TextFold.Fold` yardımcısına çıkarıldı (tutarlı normalizasyon, duplicate logic giderme).
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.4.0 → 1.5.0`.
 
 ### Security
 - **XSLT SSRF / yerel dosya okuma açığı kapatıldı** (`XsltSafety`, `XsltGeneratorService`, `XsltTemplateRenderer`, `AdminController`): Kullanıcının binding XPath'i üretilen XSLT'ye verbatim gömülüyor ve Saxon render yolu `document()`/`doc()`/`unparsed-text()`/`collection()` fonksiyonlarını çalıştırıyordu → `/api/render` üzerinden SSRF/dosya-okuma. `XsltSafety.FindThreat` fail-closed tarama (XPath attribute'ları + harici import) ekler; generator doğrulaması ve admin tema yükleme tehdidi reddeder; Saxon `XsltCompiler`/`DocumentBuilder` `XmlResolver.ThrowingResolver` kullanır. Testler: `XsltSafetyTests` + eval case002 (reddi + benign regresyon).
