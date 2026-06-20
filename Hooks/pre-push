@@ -150,6 +150,12 @@ deep_secret_found=0
 if [[ -n "$CHANGED_FILES" ]]; then
   while IFS= read -r file; do
     [[ -f "$REPO_ROOT/$file" ]] || continue
+    # CI workflow YAML'ları + test/E2E fixture'ları (localhost test DB, sahte
+    # test şifresi) gerçek secret değil — pre-commit'le tutarlı şekilde atla.
+    # Gerçek CI secret'ları GitHub Secrets'tan gelir, koda literal yazılmaz.
+    if echo "$file" | grep -qE "^\.github/workflows/|\.(spec|test)\.(ts|tsx|js|jsx)$|(^|/)e2e/"; then
+      continue
+    fi
     for pattern in "${DEEP_PATTERNS[@]}"; do
       if grep -iE "$pattern" "$REPO_ROOT/$file" \
           | grep -qv -E "change-me|your-secret|example|placeholder|xxx|<secret>|<password>"; then
