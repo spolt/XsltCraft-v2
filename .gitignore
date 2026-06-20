@@ -76,3 +76,10 @@ XsltCraft_PRD_v2.md
 # Test run artifacts (trx, coverage)
 [Tt]est[Rr]esults/
 test-results/
+
+# Playwright (E2E) artifacts — browsers global, raporlar geçici
+playwright-report/
+blob-report/
+playwright/.cache/
+.last-run.json
+.playwright-mcp/
