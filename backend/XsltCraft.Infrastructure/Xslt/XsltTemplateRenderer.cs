@@ -48,7 +48,11 @@ public class XsltTemplateRenderer : IXsltTemplateRenderer
         var xslt = await reader.ReadToEndAsync();
 
         var processor = new Processor();
+        // Güvenlik (defense-in-depth): Asıl koruma kaynak taramasıdır (XsltSafety,
+        // document()/doc()/unparsed-text()/collection() gömülmesini engeller). Ek olarak
+        // motorda harici çözümlemeyi (xsl:import/include + giriş belgesi) reddediyoruz.
         var compiler = processor.NewXsltCompiler();
+        compiler.XmlResolver = System.Xml.XmlResolver.ThrowingResolver;
 
         using var xsltReader = new StringReader(xslt);
         var executable = compiler.Compile(xsltReader);
@@ -56,7 +60,9 @@ public class XsltTemplateRenderer : IXsltTemplateRenderer
 
         var xmlReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
         using var xmlReader = XmlReader.Create(new StringReader(xml.OuterXml), xmlReaderSettings);
-        var inputNode = processor.NewDocumentBuilder().Build(xmlReader);
+        var documentBuilder = processor.NewDocumentBuilder();
+        documentBuilder.XmlResolver = System.Xml.XmlResolver.ThrowingResolver;
+        var inputNode = documentBuilder.Build(xmlReader);
         transformer.InitialContextNode = inputNode;
 
         using var sw = new StringWriter();

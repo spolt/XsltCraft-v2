@@ -34,6 +34,10 @@ export interface AssistantBody {
   xslt: string
   xml: string | null
   xmlSelection?: string
+  /** XSLT editöründe seçili metin — varsa o template tam bağlam olarak gönderilir. */
+  xsltSelection?: string
+  /** XSLT editöründe imlecin satırı (1-tabanlı) — bakılan template alaka skorunda öne çıkar. */
+  xsltCursorLine?: number
   history: AssistantMessage[]
   message: string
 }

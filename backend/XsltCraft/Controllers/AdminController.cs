@@ -314,6 +314,12 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
             using var reader = new StreamReader(file.OpenReadStream());
             var content = await reader.ReadToEndAsync();
 
+            // Güvenlik: ham tema render edilirken Saxon document()/doc()/unparsed-text()'i
+            // çalıştırır → SSRF/dosya okuma. Bu fonksiyonları ve harici import'ları reddet.
+            var threat = XsltCraft.Application.Validation.XsltSafety.FindThreat(content);
+            if (threat is not null)
+                return threat;
+
             var xmlSettings = new XmlReaderSettings
             {
                 DtdProcessing = DtdProcessing.Prohibit,

@@ -32,6 +32,10 @@ type Props = {
   // ── AI ──────────────────────────────────────
   aiEnabled?: boolean
   onAiRefactor?: (selection: string, range: { startLine: number; endLine: number }) => void
+  /** AI bağlamı için: imlecin bulunduğu satır (1-tabanlı) her değiştiğinde çağrılır. */
+  onCursorLineChange?: (line: number) => void
+  /** AI bağlamı için: seçili metin (boşsa undefined) her değiştiğinde çağrılır. */
+  onSelectionChange?: (text: string | undefined) => void
 }
 
 /* ── XSLT 1.0 element definitions ── */
@@ -421,15 +425,19 @@ function registerXsltCompletions(monaco: Monaco) {
 
 export default function XsltEditor({
   value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, onEvaluateXPath, errors, options,
-  aiEnabled = false, onAiRefactor,
+  aiEnabled = false, onAiRefactor, onCursorLineChange, onSelectionChange,
 }: Props) {
 
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const onAiRefactorRef = useRef(onAiRefactor)
+  const onCursorLineChangeRef = useRef(onCursorLineChange)
+  const onSelectionChangeRef = useRef(onSelectionChange)
   const aiActionDisposablesRef = useRef<IDisposable[]>([])
 
   useEffect(() => { onAiRefactorRef.current = onAiRefactor }, [onAiRefactor])
+  useEffect(() => { onCursorLineChangeRef.current = onCursorLineChange }, [onCursorLineChange])
+  useEffect(() => { onSelectionChangeRef.current = onSelectionChange }, [onSelectionChange])
 
   useEffect(() => {
     currentXmlIndex = xmlContent ? buildXmlIndex(xmlContent) : null
@@ -476,6 +484,15 @@ export default function XsltEditor({
 
   function handleMount(editor: MonacoEditor.IStandaloneCodeEditor) {
     editorRef.current = editor
+
+    // AI bağlamı: imleç satırı + seçim değişimlerini üst bileşene bildir.
+    editor.onDidChangeCursorPosition(e => {
+      onCursorLineChangeRef.current?.(e.position.lineNumber)
+    })
+    editor.onDidChangeCursorSelection(e => {
+      const text = editor.getModel()?.getValueInRange(e.selection) ?? ''
+      onSelectionChangeRef.current?.(text.trim() || undefined)
+    })
 
     // Context menu: Resim Ekle
     editor.addAction({

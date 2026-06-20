@@ -12,7 +12,7 @@ Bu döküman, projeyi teslim alan geliştiricinin ilk 30 dakikada ortamı ayağa
 
 | Döküman | Ne anlatıyor |
 |---------|-------------|
-| `XsltCraft_PRD_v1_2.md` | Ürünün tamamı — mimari, data modelleri, API kontratları, storage stratejisi |
+| `XsltCraft_PRD_v2.md` | Ürünün tamamı — mimari, data modelleri, API kontratları, storage stratejisi |
 | `ROADMAP.md` (bu repo) | 6 fazlı geliştirme planı, checkbox'lı görev listeleri, tamamlanma kriterleri |
 
 PRD'yi en az bir kere baştan sona oku. Özellikle şu bölümlere dikkat et:
@@ -25,6 +25,8 @@ PRD'yi en az bir kere baştan sona oku. Özellikle şu bölümlere dikkat et:
 ---
 
 ## Mevcut durum (2026-03-27)
+
+> **Güncelleme (2026-06-20):** Bu doküman v1.4.0 sonrası kodla bağdaştırıldı. Eski/yanlış değerler düzeltildi: AI yedek sağlayıcı **Gemini** (Anthropic değil), Ollama modeli **`qwen2.5-coder:3b`**, backend proje adı **`XsltCraft.Api`** + test projeleri (`XsltCraft.Tests`, `XsltCraft.Application.Tests`), PartyInfo **tamamlandı**. Güncel ürün özeti için kök `README.md` esastır.
 
 Faz 1–5 büyük ölçüde tamamlandı. Son olarak aşağıdaki özellikler ve güvenlik düzeltmeleri eklendi:
 
@@ -49,7 +51,7 @@ Aşağıdaki açıklar kapatıldı ve commit'lendi:
 | 9 | Dev config secret | `appsettings.Development.json` zaten `.gitignore`'da — tracked değil |
 
 ### Açık kalan Faz 5 görevleri
-- `PartyInfo` block tipi (ROADMAP.md Faz 5 Görev grubu 6) — başlanmadı
+- ~~`PartyInfo` block tipi~~ — ✅ tamamlandı (generator handler + `Faz5Tests` mevcut)
 - Ödeme entegrasyonu ertelenmiş durumda
 
 ---
@@ -59,20 +61,21 @@ Aşağıdaki açıklar kapatıldı ve commit'lendi:
 ```
 xsltcraft/
 ├── backend/
-│   ├── XsltCraft/              ← ASP.NET Core Web API
-│   ├── XsltCraft.Application/  ← Servisler, DTO'lar, interface'ler
-│   ├── XsltCraft.Domain/       ← Entity'ler
-│   ├── XsltCraft.Infrastructure/ ← EF Core, Storage, XSLT engine
-│   ├── XsltCraft.Tests/
+│   ├── XsltCraft/                  ← ASP.NET Core Web API (proje adı: XsltCraft.Api)
+│   ├── XsltCraft.Application/      ← Servisler, DTO'lar, interface'ler, XSLT generator, AI pipeline
+│   ├── XsltCraft.Domain/           ← Entity'ler
+│   ├── XsltCraft.Infrastructure/   ← EF Core, Storage, AI provider orchestrator
+│   ├── XsltCraft.Tests/            ← Generator/preview testleri (xUnit)
+│   ├── XsltCraft.Application.Tests/ ← AI pipeline + Verify golden snapshot
 │   └── XsltCraft.slnx
 ├── frontend/
-│   └── xsltcraft-ui/           ← React 19 + TypeScript + Vite
+│   └── xsltcraft-ui/             ← React 19 + TypeScript + Vite
 ├── storage/
 │   ├── themes/
 │   └── assets/
-├── docker-compose.yml
+├── docker-compose.yml            ← Dev: Postgres + MinIO + minio-init
 ├── ROADMAP.md
-└── XsltCraft_PRD_v1_2.md
+└── XsltCraft_PRD_v2.md
 ```
 
 ---
@@ -215,11 +218,11 @@ Migration'lar uygulama başlarken `Program.cs` tarafından otomatik uygulanır.
 
 ## Nereden başlıyorum?
 
-**Şu an Faz 5 sonu / Faz 6 başındayız.**
+**Güncel durum (2026-06-20): v1.4.0 yayınlandı; Faz 7 (XSLT Editor Pro / AI) sürüyor, Faz 6 prod sertleştirme açık.** (Aşağıdaki liste teslim anındaki önceliklerdir; güncel yol haritası için kök `ROADMAP.md` + `docs/ecc/context/roadmap.md`.)
 
 Öncelikli açık görevler:
 
-1. **PartyInfo block tipi** — ROADMAP.md, Faz 5 Görev grubu 6 altındaki tüm checkbox'lar boş. Frontend + backend + XSLT generator birlikte tamamlanması gerekiyor.
+1. ~~**PartyInfo block tipi**~~ — ✅ tamamlandı (generator handler + `Faz5Tests`). Yeni öncelik: Faz 6 prod altyapısı + performans/NFR sertleştirme.
 2. **Faz 6 — S3/MinIO geçişi** — ✅ `S3StorageService` tamamlandı ve MinIO üzerinde uçtan uca test edildi. Kalan: production ortamı için TR bölge MinIO/S3 kurulumu (KVKK gereği).
 3. **Rate limiting** — ✅ Auth endpoint'lerinde uygulandı (ROADMAP Faz 6 Görev grubu 2).
 4. **Production altyapısı** — ROADMAP Faz 6 Görev grubu 4.
@@ -315,8 +318,8 @@ XSLT editöründe AI ile snippet üretme, refactor diff'i, hata açıklama ve Mo
 
 ```bash
 # 1) Ollama'yı kur — https://ollama.com/download
-# 2) Model indir (≈ 4.7 GB):
-ollama pull qwen2.5-coder:7b
+# 2) Model indir (≈ 1.9 GB):
+ollama pull qwen2.5-coder:3b
 
 # 3) Sunucuyu çalıştır (varsayılan port 11434):
 ollama serve
@@ -324,17 +327,17 @@ ollama serve
 
 Geliştirme makinesinde Ollama çalışmıyorsa AI istekleri `provider_unavailable` chunk'ı döner, kullanıcı toast olarak uyarı görür. Backend ayağa kalkmaya devam eder.
 
-### Yedek sağlayıcı: Anthropic (cloud, opsiyonel)
+### Yedek sağlayıcı: Gemini (cloud, opsiyonel)
 
 `appsettings.Development.json` (veya user-secrets):
 
 ```json
 "Ai": {
   "Enabled": true,
-  "Anthropic": {
+  "Gemini": {
     "Enabled": true,
-    "ApiKey": "<console.anthropic.com'dan>",
-    "Model": "claude-sonnet-4-6",
+    "ApiKey": "<Google AI Studio'dan>",
+    "Model": "gemini-2.5-flash",
     "ConnectTimeoutSeconds": 5,
     "FirstTokenTimeoutSeconds": 15,
     "MaxTokens": 2048
@@ -342,7 +345,7 @@ Geliştirme makinesinde Ollama çalışmıyorsa AI istekleri `provider_unavailab
 }
 ```
 
-`Anthropic:Enabled: true` olduğunda DI'a kaydedilir; orchestrator Ollama'ya ulaşamadığında veya ilk token gelmediğinde **otomatik** Anthropic'e düşer. Anthropic kapalıyken Ollama erişilemezse kullanıcıya net hata chunk'ı gönderilir.
+`Gemini:Enabled: true` olduğunda DI'a kaydedilir; orchestrator Ollama'ya ulaşamadığında veya ilk token gelmediğinde **otomatik** Gemini'ye düşer. Gemini kapalıyken Ollama erişilemezse kullanıcıya net hata chunk'ı gönderilir. (Kayıtlı sağlayıcılar: `OllamaAssistantProvider` + `GeminiAssistantProvider` — Anthropic sağlayıcısı kodda yoktur.)
 
 ### Açma/kapatma (admin)
 
@@ -350,7 +353,7 @@ Backend ayağa kalktıktan sonra:
 
 1. Admin olarak giriş yap → sol menüden **Admin → AI Asistan** sayfası
 2. **Etkin/Devre dışı** anahtarıyla tüm kullanıcılar için aç/kapa
-3. **Sağlayıcı Durumu** panelinden Ollama'nın canlı erişilebilirliğini ve Anthropic konfigürasyonunu kontrol et
+3. **Sağlayıcı Durumu** panelinden Ollama'nın canlı erişilebilirliğini ve Gemini konfigürasyonunu kontrol et
 
 DB'ye yazılan flag (`feature_flags` tablosu, key `ai.enabled`) `appsettings.Ai.Enabled` değerini override eder. Cache TTL 15 sn — değişiklik en geç 15 sn içinde tüm kullanıcılarda etkili olur.
 

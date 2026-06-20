@@ -65,5 +65,21 @@ Thumbs.db
 # PRD v2 (internal doc)
 XsltCraft_PRD_v2.md
 
-# Claude Code memory & session data
-.claude/
+# Claude Code — local settings & session data ignored; shared agents + skills tracked
+.claude/*
+!.claude/agents/
+!.claude/skills/
+
+# Verify (snapshot testing) — received files are transient, never commit
+*.received.*
+
+# Test run artifacts (trx, coverage)
+[Tt]est[Rr]esults/
+test-results/
+
+# Playwright (E2E) artifacts — browsers global, raporlar geçici
+playwright-report/
+blob-report/
+playwright/.cache/
+.last-run.json
+.playwright-mcp/

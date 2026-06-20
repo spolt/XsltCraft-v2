@@ -4,7 +4,7 @@
 
 **Low-code XSLT template designer for Turkish e-Invoice (e-Fatura) and e-Waybill (e-İrsaliye) — with AI assistance**
 
-![Version](https://img.shields.io/badge/version-1.4.0-blue?style=flat)
+![Version](https://img.shields.io/badge/version-1.5.0-blue?style=flat)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?style=flat&logo=dotnet&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat&logo=typescript&logoColor=white)
@@ -72,7 +72,7 @@ XsltCraft is a web-based platform that lets you visually design XSLT print templ
 | Database | PostgreSQL 16, EF Core, Npgsql |
 | Storage | `IStorageService` abstraction — `LocalStorageService` (dev), `S3StorageService` / **MinIO** (prod, S3-compatible) |
 | Auth | JWT + refresh-token rotation, Google OAuth 2.0 |
-| Tests | xUnit 2.9, Verify.Xunit (golden snapshots), 26 prompt-pipeline tests |
+| Tests | xUnit 2.9, Verify.Xunit (golden snapshots); XSLT-generator + AI prompt-pipeline tests, plus non-blocking ECC eval cases (`Category=Eval`) |
 | CI / CD | GitHub Actions (`ci.yml`, `release.yml`); production Docker stack (`docker-compose.prod.yml`, `nginx.conf`, `update.sh`) |
 
 ---
@@ -99,7 +99,7 @@ XsltCraft/
 │           └── pages/                  # Route-level components (Dashboard, Editor, Admin, About…)
 ├── storage/                            # Local dev: themes/, assets/
 ├── .github/workflows/                  # ci.yml, release.yml
-├── docker-compose.yml                  # Dev: Postgres
+├── docker-compose.yml                  # Dev: Postgres + MinIO (+ minio-init)
 ├── docker-compose.prod.yml             # Prod: Postgres + MinIO + Nginx + API + UI
 ├── CHANGELOG.md
 ├── ROADMAP.md
@@ -129,10 +129,10 @@ PostgreSQL 16 on port `5432`; EF Core migrations applied automatically on first 
 
 ```bash
 cd backend
-dotnet run --project XsltCraft.Api
+dotnet run --project XsltCraft/XsltCraft.Api.csproj
 ```
 
-API at `https://localhost:7001`.
+API at `http://localhost:5000` (default `http` profile; the `https` profile serves `https://localhost:7066`).
 
 ### 3 — Start the frontend
 
@@ -175,7 +175,8 @@ Then in `appsettings.Development.json` set the `Ai` section (Ollama base URL, mo
 
 ```bash
 cd backend
-dotnet test                          # 26/26 (prompt registry + pattern selector + golden snapshots)
+dotnet test                          # generator + prompt registry + pattern selector + golden snapshots
+dotnet test --filter "Category=Eval" # ECC XSLT eval cases (regression harness)
 ```
 
 ---

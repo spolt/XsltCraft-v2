@@ -87,7 +87,8 @@ public static class PromptTemplates
             {
                 // Büyük XSLT'ler önce yapısal özete indirilir (prefill maliyetini azaltır);
                 // sonra Clip güvenlik ağı olarak kalır.
-                var xsltSummarized = XsltSummarizer.Compose(req.UserXslt, req.Selection);
+                var xsltSummarized = XsltSummarizer.Compose(
+                    req.UserXslt, req.Selection, req.UserRequest, req.XsltCursorLine);
                 var xsltClipped = Clip(xsltSummarized, AssistantXsltLimitChars);
                 var xmlClipped = Clip(req.UserXml, ContextSoftLimitChars - AssistantXsltLimitChars);
 

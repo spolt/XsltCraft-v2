@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace XsltCraft.Application.Ai;
 
 public static class PatternSelector
@@ -64,24 +62,7 @@ public static class PatternSelector
             .ToList();
     }
 
-    // Türkçe karakter folding: ı/ş/ç/ğ/ü/ö → ASCII karşılıkları
-    // ToLowerInvariant sonrası uygulanır; hem trigger hem aday metin aynı Fold'dan geçer.
-    private static string Fold(string s)
-    {
-        var sb = new StringBuilder(s.Length);
-        foreach (var c in s.ToLowerInvariant())
-        {
-            sb.Append(c switch
-            {
-                'ı' => 'i',
-                'ş' => 's',
-                'ç' => 'c',
-                'ğ' => 'g',
-                'ü' => 'u',
-                'ö' => 'o',
-                _ => c,
-            });
-        }
-        return sb.ToString();
-    }
+    // Türkçe karakter folding: ı/ş/ç/ğ/ü/ö → ASCII karşılıkları (ortak TextFold).
+    // Hem trigger hem aday metin aynı Fold'dan geçer.
+    private static string Fold(string s) => TextFold.Fold(s);
 }

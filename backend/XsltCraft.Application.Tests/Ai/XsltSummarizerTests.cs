@@ -74,14 +74,53 @@ public class XsltSummarizerTests
     }
 
     [Fact]
-    public void Selection_not_found_falls_back_to_inline()
+    public void Selection_not_found_falls_back_to_relevant_templates()
     {
         var xslt = BuildLargeXslt(templateCount: 6, bodyCharsEach: 900);
 
         var result = XsltSummarizer.Compose(xslt, selection: "<xsl:bilinmeyen-etiket/>");
 
         Assert.DoesNotContain("FOCUSED TEMPLATE", result);
-        Assert.Contains("INLINE TEMPLATES", result);
+        Assert.Contains("RELEVANT TEMPLATES", result);
+    }
+
+    [Fact]
+    public void Question_promotes_relevant_late_template_body()
+    {
+        // 20 template; bütçeye ilk ~8 template sığar → tpl15 körlemesine gelmezdi.
+        var xslt = BuildLargeXslt(templateCount: 20, bodyCharsEach: 800);
+
+        // Soru geç sıradaki bir template'in match adını anıyor.
+        var result = XsltSummarizer.Compose(
+            xslt, selection: null, userRequest: "tpl15 şablonu neden böyle davranıyor?");
+
+        // İlgili template'in gövdesi (marker) inline gelmiş olmalı.
+        Assert.Contains("BODY-MARKER-15", result);
+    }
+
+    [Fact]
+    public void Cursor_line_promotes_covering_template_body()
+    {
+        // BuildLargeXslt deterministik: header 3 satır, her template 4 satır.
+        // tpl15 (i=15) Line = 4 + 15*4 = 64. İmleç 65. satırda (marker satırı).
+        var xslt = BuildLargeXslt(templateCount: 20, bodyCharsEach: 800);
+
+        var result = XsltSummarizer.Compose(
+            xslt, selection: null, userRequest: null, cursorLine: 65);
+
+        Assert.Contains("BODY-MARKER-15", result);
+    }
+
+    [Fact]
+    public void No_signal_preserves_document_order_first_templates()
+    {
+        // Soru/imleç yokken eski davranış: ilk template'ler gelir, geç olanlar gelmez.
+        var xslt = BuildLargeXslt(templateCount: 20, bodyCharsEach: 800);
+
+        var result = XsltSummarizer.Compose(xslt, selection: null);
+
+        Assert.Contains("BODY-MARKER-0", result);
+        Assert.DoesNotContain("BODY-MARKER-19", result);
     }
 
     [Fact]

@@ -12,6 +12,8 @@ interface Props {
   xml: string | null
   xmlSelection?: string
   xmlCursorLine?: number
+  xsltSelection?: string
+  xsltCursorLine?: number
   initialErrorMessage?: string | null
   xmlDeclarationMissing?: boolean
   onClose: () => void
@@ -145,6 +147,7 @@ let msgIdCounter = 0
 
 export default function AiAssistantPanel({
   xslt, xml, xmlSelection, xmlCursorLine,
+  xsltSelection, xsltCursorLine,
   initialErrorMessage,
   xmlDeclarationMissing,
   onClose,
@@ -210,6 +213,8 @@ export default function AiAssistantPanel({
           xslt,
           xml: effectiveXml,
           xmlSelection: xmlSelection?.trim() || undefined,
+          xsltSelection: xsltSelection?.trim() || undefined,
+          xsltCursorLine,
           history: historyForRequest.slice(0, -1), // son user mesajı zaten message param'ı
           message,
         },
@@ -315,6 +320,14 @@ export default function AiAssistantPanel({
         <div className="px-3 py-1 border-b border-gray-700 bg-gray-850 flex items-center gap-1.5 text-[10px] text-violet-400 flex-shrink-0">
           <Sparkles size={10} />
           XML seçimi bağlam olarak kullanılıyor ({xmlSelection.split('\n').length} satır)
+        </div>
+      )}
+
+      {/* XSLT seçimi bilgi bandı */}
+      {xsltSelection?.trim() && (
+        <div className="px-3 py-1 border-b border-gray-700 bg-gray-850 flex items-center gap-1.5 text-[10px] text-violet-400 flex-shrink-0">
+          <Sparkles size={10} />
+          XSLT seçimi bağlam olarak kullanılıyor ({xsltSelection.split('\n').length} satır)
         </div>
       )}
 
