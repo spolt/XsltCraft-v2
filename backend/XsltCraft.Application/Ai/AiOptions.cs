@@ -42,7 +42,7 @@ public class GeminiOptions
     public bool Enabled { get; set; }
     public string ApiKey { get; set; } = string.Empty;
     public string Model { get; set; } = "gemini-2.5-flash";
-    public int MaxTokens { get; set; } = 2048;
+    public int MaxTokens { get; set; } = 4096;
     /// <summary>Cloud için Ollama'dan daha cömert default; ağ üzerinden TLS handshake var.</summary>
     public int ConnectTimeoutSeconds { get; set; } = 5;
     /// <summary>Cloud için ilk token genelde 1-3 sn'de gelir; soğuk başlangıç + retry payı bırakır.</summary>

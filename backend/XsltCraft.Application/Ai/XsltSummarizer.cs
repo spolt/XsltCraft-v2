@@ -12,7 +12,9 @@ namespace XsltCraft.Application.Ai;
 /// 1) Stylesheet header (xmlns deklarasyonlarına kadar) + xsl:param listesi tam alınır.
 /// 2) Her xsl:template için yalnızca SIGNATURE (match/name/mode/priority) + satır no listelenir.
 /// 3) Eğer kullanıcı bir seçim yaptıysa, seçimin DÜŞTÜĞÜ template tam içeriğiyle eklenir.
-/// 4) Seçim yoksa, ilk birkaç template'in gövdesi token bütçesi dahilinde eklenir.
+/// 4) Aksi halde template'ler kullanıcının SORUSUNA (+ imleç satırına) göre skorlanır;
+///    en alakalı template'lerin gövdesi token bütçesi dahilinde tam eklenir.
+///    Soru sinyali yoksa eski davranış (ilk template'ler) korunur.
 ///
 /// Regex tabanlıdır; invalid/mid-edit XSLT'lerde güvenli çalışır. XDocument.Parse kullanılmaz.
 /// </remarks>
@@ -22,7 +24,7 @@ public static class XsltSummarizer
     public const int RawThresholdChars = 6_000;
 
     /// <summary>Özetlenmiş çıktıda inline template gövdeleri için toplam karakter bütçesi.</summary>
-    private const int InlineBodyBudgetChars = 4_000;
+    private const int InlineBodyBudgetChars = 8_000;
 
     private const string TemplateOpenLiteral = "<xsl:template";
     private const string TemplateCloseLiteral = "</xsl:template>";
@@ -31,7 +33,11 @@ public static class XsltSummarizer
         @"<xsl:template\b([^>]*)>",
         RegexOptions.Compiled);
 
-    public static string Compose(string? xslt, string? selection)
+    // Soru token'ı sayılması için minimum uzunluk (çok kısa kelimeler gürültü).
+    private const int MinTokenLen = 3;
+
+    public static string Compose(
+        string? xslt, string? selection, string? userRequest = null, int? cursorLine = null)
     {
         if (string.IsNullOrEmpty(xslt)) return string.Empty;
         if (xslt.Length <= RawThresholdChars) return xslt;
@@ -63,15 +69,19 @@ public static class XsltSummarizer
         }
         else
         {
-            // 4) Seçim yoksa ilk birkaç template'in gövdesini bütçeye sığdığınca ver.
-            sb.Append("\n<!-- INLINE TEMPLATES (token bütçesi içinde) -->\n");
+            // 4) Seçim yoksa: soruya (+ imleç satırına) göre en alakalı template'leri seç,
+            //    bütçe dahilinde gövdeleriyle inline et. Skor yoksa indeks sırası (eski davranış).
+            var ordered = RankTemplates(xslt, templates, userRequest, cursorLine);
+
+            sb.Append("\n<!-- RELEVANT TEMPLATES (soruya göre, token bütçesi içinde) -->\n");
             int budget = InlineBodyBudgetChars;
-            foreach (var t in templates)
+            foreach (var t in ordered)
             {
                 if (budget <= 0) break;
                 var len = t.EndIndex - t.StartIndex;
                 if (len > budget)
                 {
+                    sb.Append("<!-- L").Append(t.Line).Append(" (kırpıldı) -->\n");
                     sb.Append(xslt, t.StartIndex, budget).Append("\n<!-- ... kırpıldı -->\n");
                     break;
                 }
@@ -84,7 +94,82 @@ public static class XsltSummarizer
         return sb.ToString();
     }
 
-    internal sealed record TemplateRange(int StartIndex, int EndIndex, int Line, string Attributes);
+    /// <summary>
+    /// Template'leri kullanıcı sorusuna göre alaka skoruyla sıralar. Soru/imleç sinyali
+    /// yoksa orijinal (belge) sırada döner — eski "ilk template'ler" davranışıyla aynı.
+    /// </summary>
+    internal static List<TemplateRange> RankTemplates(
+        string xslt, List<TemplateRange> templates, string? userRequest, int? cursorLine)
+    {
+        var tokens = ExtractTokens(userRequest);
+        bool hasSignal = tokens.Count > 0 || cursorLine.HasValue;
+        if (!hasSignal) return templates; // erken çıkış — gereksiz skorlama yok
+
+        return templates
+            .Select((t, i) => (t, score: ScoreTemplate(xslt, t, tokens, cursorLine), order: i))
+            .OrderByDescending(x => x.score)
+            .ThenBy(x => x.order) // eşit skorda belge sırasını koru (stabil)
+            .Select(x => x.t)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Bir template'in soru token'larına alaka skoru. Sinyaller:
+    ///  • imza (match/name/mode) eşleşmesi en ağır,
+    ///  • gövdede token geçişi,
+    ///  • imleç satırını kapsayan template'e güçlü boost.
+    /// </summary>
+    private static int ScoreTemplate(
+        string xslt, TemplateRange t, IReadOnlyCollection<string> tokens, int? cursorLine)
+    {
+        int score = 0;
+
+        if (cursorLine is int line && line >= t.Line && line <= t.EndLine)
+            score += 100; // kullanıcının "baktığı" template
+
+        if (tokens.Count > 0)
+        {
+            var foldedSig = TextFold.Fold(t.Attributes);
+            var foldedBody = TextFold.Fold(xslt.Substring(t.StartIndex, t.EndIndex - t.StartIndex));
+            foreach (var tok in tokens)
+            {
+                if (foldedSig.Contains(tok, StringComparison.Ordinal)) score += 5; // imza eşleşmesi ağır
+                else if (foldedBody.Contains(tok, StringComparison.Ordinal)) score += 1;
+            }
+        }
+
+        return score;
+    }
+
+    /// <summary>
+    /// Sorudan alaka token'larını çıkarır: foldlanır, sözcüklere bölünür, UBL prefix'leri
+    /// (cbc:/cac:/n1:) local-name'e indirgenir, çok kısa kelimeler atılır.
+    /// </summary>
+    internal static HashSet<string> ExtractTokens(string? userRequest)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(userRequest)) return set;
+
+        var folded = TextFold.Fold(userRequest);
+        foreach (var raw in folded.Split(TokenSeparators, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var tok = raw;
+            // "cbc:invoicednote" → hem tam hem ":" sonrası local-name eklenir.
+            int colon = tok.LastIndexOf(':');
+            if (colon >= 0 && colon < tok.Length - 1)
+            {
+                var local = tok[(colon + 1)..];
+                if (local.Length >= MinTokenLen) set.Add(local);
+            }
+            if (tok.Length >= MinTokenLen) set.Add(tok);
+        }
+        return set;
+    }
+
+    private static readonly char[] TokenSeparators =
+        [' ', '\t', '\n', '\r', ',', '.', ';', '?', '!', '"', '\'', '(', ')', '[', ']', '<', '>', '/', '=', '`'];
+
+    internal sealed record TemplateRange(int StartIndex, int EndIndex, int Line, int EndLine, string Attributes);
 
     internal static List<TemplateRange> ParseTemplates(string xslt)
     {
@@ -103,7 +188,8 @@ public static class XsltSummarizer
 
             int endIndex = endTagStart + TemplateCloseLiteral.Length;
             int line = CountLines(xslt, m.Index);
-            result.Add(new TemplateRange(m.Index, endIndex, line, m.Groups[1].Value));
+            int endLine = CountLines(xslt, endTagStart);
+            result.Add(new TemplateRange(m.Index, endIndex, line, endLine, m.Groups[1].Value));
         }
         return result;
     }

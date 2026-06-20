@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace XsltCraft.Application.Ai;
 
 public enum AiIntent
@@ -144,23 +142,6 @@ public static class IntentClassifier
         return false;
     }
 
-    // PatternSelector'la aynı folding — tutarlı davranış için.
-    private static string Fold(string s)
-    {
-        var sb = new StringBuilder(s.Length);
-        foreach (var c in s.ToLowerInvariant())
-        {
-            sb.Append(c switch
-            {
-                'ı' => 'i',
-                'ş' => 's',
-                'ç' => 'c',
-                'ğ' => 'g',
-                'ü' => 'u',
-                'ö' => 'o',
-                _ => c,
-            });
-        }
-        return sb.ToString();
-    }
+    // PatternSelector/XsltSummarizer ile aynı folding — tutarlı davranış için (ortak TextFold).
+    private static string Fold(string s) => TextFold.Fold(s);
 }

@@ -57,6 +57,8 @@ public class AiAssistantController : ControllerBase
             UserXslt = req.Xslt,
             UserXml = req.Xml,
             XmlSelection = req.XmlSelection,
+            Selection = req.XsltSelection,
+            XsltCursorLine = req.XsltCursorLine,
             History = req.History?.Select(h => new AssistantMessage(h.Role, h.Content)).ToList(),
             UserRequest = req.Message,
         }, ct);
@@ -159,7 +161,9 @@ public record AssistantRequest(
     string? Xml,
     string? XmlSelection,
     List<AssistantMessageDto>? History,
-    string Message
+    string Message,
+    string? XsltSelection = null,
+    int? XsltCursorLine = null
 );
 
 public record AssistantMessageDto(string Role, string Content);

@@ -175,6 +175,10 @@ export default function XsltEditorPage() {
   const [xmlCursorLine, setXmlCursorLine] = useState<number | undefined>()
   const [xmlSelection, setXmlSelection] = useState<string | undefined>()
 
+  // XSLT editor cursor / selection — AI template alaka skoru için
+  const [xsltCursorLine, setXsltCursorLine] = useState<number | undefined>()
+  const [xsltSelection, setXsltSelection] = useState<string | undefined>()
+
   // AI panel
   const aiEnabled = useAiStore(s => s.enabled === true)
   const refreshAi = useAiStore(s => s.refresh)
@@ -830,6 +834,8 @@ export default function XsltEditorPage() {
                   errors={xsltErrors}
                   aiEnabled={aiEnabled}
                   onAiRefactor={handleAiRefactor}
+                  onCursorLineChange={setXsltCursorLine}
+                  onSelectionChange={setXsltSelection}
                 />
               </div>
             </div>
@@ -885,6 +891,8 @@ export default function XsltEditorPage() {
                     xml={xmlContent}
                     xmlCursorLine={xmlCursorLine}
                     xmlSelection={xmlSelection}
+                    xsltCursorLine={xsltCursorLine}
+                    xsltSelection={xsltSelection}
                     initialErrorMessage={aiInitialError}
                     xmlDeclarationMissing={declProblem != null}
                     onClose={() => setRightTab('preview')}

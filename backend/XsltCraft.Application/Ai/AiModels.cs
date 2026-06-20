@@ -16,6 +16,8 @@ public class AiRequest
     public string? UserRequest { get; set; }
     public string? Selection { get; set; }
     public string? XmlSelection { get; set; }
+    /// <summary>XSLT editöründe imlecin bulunduğu satır (1-tabanlı); template alaka skorunda boost için.</summary>
+    public int? XsltCursorLine { get; set; }
     public List<AssistantMessage>? History { get; set; }
     public int MaxTokens { get; set; } = 2048;
 }
