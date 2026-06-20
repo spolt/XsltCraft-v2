@@ -1,7 +1,7 @@
 # CLAUDE.md — XsltCraft
 
 > Bu dosya her oturumda otomatik yüklenir. Kısa tutulur; **tek doğru kaynak** budur.
-> Derin bağlam: `docs/ecc/context/*` · Mimari kararlar: `docs/ecc/decisions/*` · Standartlar: `docs/ecc/standards.md`
+> Derin bağlam: `docs/ecc/context/*` · Mimari: `docs/ecc/architecture/*` · Kararlar: `docs/ecc/decisions/*` · Standartlar: `docs/ecc/standards.md`
 
 ## Proje
 Türk e-Fatura / e-İrsaliye (UBL-TR 2.1) için **low-code XSLT şablon tasarımcısı** + opsiyonel AI asistanı. Kullanıcı A4 grid canvas'a blok sürükler, XML ağacından XPath bağlar, UBL-TR kurallarına göre doğrular ve production-hazır `.xslt` indirir.
@@ -16,7 +16,7 @@ Türk e-Fatura / e-İrsaliye (UBL-TR 2.1) için **low-code XSLT şablon tasarım
 
 ## Kritik kısıtlar
 - UBL-TR 2.1 namespace'lerini **asla bozma** (`n1`/`cbc`/`cac`/`ext`, `urn:oasis:names:specification:...`). Üretilen stylesheet `version="2.0"`.
-- GİB: çıktı UTF-8, makul boyut (~150KB hedef), QR/ETTN bütünlüğü.
+- GİB: çıktı UTF-8, makul boyut (~250KB hedef), QR/ETTN bütünlüğü.
 - **XXE/XSLT-injection guard zorunlu** her XML/XSLT okuma noktasında (`DtdProcessing.Prohibit`, `XmlResolver=null`, `XsltSettings(enableDocumentFunction:false, enableScript:false)`). Detay: `docs/ecc/context/constraints.md`.
 
 ## Standartlar (özet)
