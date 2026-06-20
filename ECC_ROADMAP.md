@@ -46,6 +46,10 @@ Hemen değer üreten minimum set. Önce bunları gerçekten kullan.
 - `docs/ecc/evaluations/xslt/` ve `.../preview/` altında case'ler
 - `case001`: request + requirements (namespace/format/template KORUNMALI) + "değişken silme / loop kırma yasak". Verify.Xunit'e bağla.
 
+**Skills (`.claude/skills/`):**
+- `review-checklist/SKILL.md` — bug / SOLID / edge case / perf checklist. **Not:** `reviewer` agent'ı bunu çağırır; çakıştırma. Solo akışta agent'ı atlayıp skill'i in-context kullanmak çoğu zaman yeter.
+- `xss-xxe-checklist/SKILL.md` — XXE / XPath injection / SSRF / path traversal; `security-reviewer` agent'ı bunu kullanır.
+
 **MCP:** Serena (kod gezme), Context7 (React/Saxon/.NET/Tailwind dokümanı), GitHub MCP (PR/issue/release).
 
 **Bitiş kriteri:** En az 1 gerçek PR'ı reviewer + security-reviewer'dan geçirdin, eval harness 1 regresyonu yakaladı.
@@ -61,6 +65,7 @@ Hemen değer üreten minimum set. Önce bunları gerçekten kullan.
   - `refactor`: Architect → Refactorer → Reviewer → Tests → Merge
 - **Eval'i genişlet:** `prompt/` (AI pattern pack'leri) + `xpath/`
 - **Playwright MCP** E2E: Upload XML, Upload XSLT, Edit blocks, Generate preview, Validate output
+- **Skill:** `playwright-e2e/SKILL.md` — yukarıdaki E2E senaryolarını yazma/koşturma adımları (Playwright MCP ile eşleşir)
 - **Mimari doküman:** `backend.md`, `frontend.md`, `database.md`, `ai-system.md`
 
 ---

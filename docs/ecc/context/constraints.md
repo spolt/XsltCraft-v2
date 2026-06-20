@@ -14,7 +14,7 @@ Bu kısıtlar XsltCraft'a özeldir; agent/eval'ler bunları **ihlal eden değiş
 - `xsl:for-each` / `xsl:variable` / `xsl:template` yapısını "kısaltma" amacıyla kırmak yasak — loop ve binding bütünlüğü korunmalı.
 
 ## GİB
-- Çıktı **UTF-8**. Makul boyut hedefi (~150KB); görseller base64 gömülür ama gereksiz şişirme yapma.
+- Çıktı **UTF-8**. Makul boyut hedefi (~250KB); görseller base64 gömülür ama gereksiz şişirme yapma.
 - QR / ETTN (UUID) blokları üretilen XSLT'de bozulmadan kalmalı.
 
 ## Güvenlik — her XML/XSLT okuma noktasında zorunlu guard
