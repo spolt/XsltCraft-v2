@@ -6,6 +6,8 @@ public record UserListItem(
     string Email,
     string? DisplayName,
     string Role,
+    string Plan,
+    DateTime? PlanExpiresAt,
     bool IsActive,
     int SaveCount,
     int DownloadCount,
@@ -27,6 +29,9 @@ public record UserListResponse(
 public record SetRoleRequest(string Role);
 
 public record SetActiveRequest(bool IsActive);
+
+/// <summary>Admin'in bir kullanıcıya plan ataması (comp/grant). Plan: "Free" | "Pro". ExpiresAt null = süresiz.</summary>
+public record SetPlanRequest(string Plan, DateTime? ExpiresAt);
 
 public record CreateManagedUserRequest(
     string Username,

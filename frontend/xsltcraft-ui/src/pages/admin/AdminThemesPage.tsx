@@ -18,6 +18,7 @@ function UploadForm({ onCreated }: { onCreated: (t: FreeTheme) => void }) {
   const [name, setName] = useState('')
   const [docType, setDocType] = useState('Invoice')
   const [file, setFile] = useState<File | null>(null)
+  const [isPremium, setIsPremium] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -28,11 +29,12 @@ function UploadForm({ onCreated }: { onCreated: (t: FreeTheme) => void }) {
     setLoading(true)
     setError(null)
     try {
-      const created = await createTheme({ name, documentType: docType, file })
+      const created = await createTheme({ name, documentType: docType, file, isPremium })
       onCreated(created)
       setName('')
       setDocType('Invoice')
       setFile(null)
+      setIsPremium(false)
       if (fileRef.current) fileRef.current.value = ''
     } catch (err: unknown) {
       const msg =
@@ -94,10 +96,20 @@ function UploadForm({ onCreated }: { onCreated: (t: FreeTheme) => void }) {
         </div>
       </div>
 
+      <label className="flex items-center gap-2 mb-4 text-sm text-gray-700 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={isPremium}
+          onChange={(e) => setIsPremium(e.target.checked)}
+          className="w-4 h-4 rounded border-gray-300 text-amber-600 accent-amber-600"
+        />
+        Ücretli tema (yalnız Pro/Editör/Admin kullanabilir; herkes önizleyebilir)
+      </label>
+
       <button
         type="submit"
         disabled={loading || !file}
-        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition"
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition block"
       >
         {loading ? 'Yükleniyor…' : 'Yükle'}
       </button>
@@ -116,6 +128,7 @@ function UpdateRow({
   const [name, setName] = useState(theme.name)
   const [docType, setDocType] = useState<string>(theme.documentType)
   const [file, setFile] = useState<File | null>(null)
+  const [isPremium, setIsPremium] = useState(theme.isPremium)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -129,6 +142,7 @@ function UpdateRow({
         name,
         documentType: docType,
         file: file ?? undefined,
+        isPremium,
       })
       onUpdated(updated)
       setFile(null)
@@ -167,6 +181,15 @@ function UpdateRow({
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="text-xs border border-gray-300 rounded-lg px-2 py-1.5"
         />
+        <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={isPremium}
+            onChange={(e) => setIsPremium(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-gray-300 text-amber-600 accent-amber-600"
+          />
+          Ücretli
+        </label>
         <button
           type="submit"
           disabled={loading}
@@ -257,7 +280,7 @@ export default function AdminThemesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Admin Paneli</h1>
-          <p className="text-gray-500 text-sm mt-1">Ücretsiz XSLT temalarını yönetin.</p>
+          <p className="text-gray-500 text-sm mt-1">Hazır XSLT temalarını yönetin (ücretsiz / ücretli).</p>
         </div>
         <Link
           to="/dashboard"
@@ -287,6 +310,7 @@ export default function AdminThemesPage() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Ad</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Tip</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Ücret</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Yükleme Tarihi</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -309,6 +333,15 @@ export default function AdminThemesPage() {
                   </td>
                   <td className="px-4 py-4 text-gray-600">
                     {DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}
+                  </td>
+                  <td className="px-4 py-4">
+                    {theme.isPremium ? (
+                      <span className="inline-flex items-center text-xs font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">
+                        Ücretli
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">Ücretsiz</span>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-gray-500">
                     {new Date(theme.createdAt).toLocaleDateString('tr-TR')}

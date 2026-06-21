@@ -9,6 +9,8 @@ public sealed class TemplateDetailResponse
     public string? BlockTree { get; set; }
     public bool HasStoredXslt { get; set; }
     public string? ThumbnailUrl { get; set; }
+    public Guid? FolderId { get; set; }
+    public bool IsFavorite { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

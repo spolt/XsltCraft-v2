@@ -8,6 +8,7 @@ import ProfilePage from './pages/ProfilePage'
 import AdminThemesPage from './pages/admin/AdminThemesPage'
 import AdminSnippetsPage from './pages/admin/AdminSnippetsPage'
 import AdminUsersPage from './pages/admin/AdminUsersPage'
+import AdminUsagePage from './pages/admin/AdminUsagePage'
 import AdminAiPage from './pages/admin/AdminAiPage'
 import EditorPage from './pages/EditorPage'
 import ThemeUsePage from './pages/ThemeUsePage'
@@ -15,15 +16,18 @@ import DevModePage from './pages/DevModePage'
 import XsltEditorPage from './pages/XsltEditorPage'
 import MyXsltTemplatesPage from './pages/MyXsltTemplatesPage'
 import AboutPage from './pages/AboutPage'
+import PricingPage from './pages/PricingPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
 import AppLayout from './components/layout/AppLayout'
 import ToastContainer from './components/ui/ToastContainer'
+import UpgradeModal from './components/UpgradeModal'
 
 export default function App() {
   return (
     <BrowserRouter>
       <ToastContainer />
+      <UpgradeModal />
       <Routes>
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/register" element={<RegisterPage />} />
@@ -37,6 +41,7 @@ export default function App() {
             <Route path="/my-xslt-templates" element={<MyXsltTemplatesPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
           </Route>
           {/* Editor ve ThemeUse kendi layout'larını yönetir */}
           <Route path="/editor/new" element={<EditorPage />} />
@@ -53,6 +58,7 @@ export default function App() {
             <Route path="/admin/themes" element={<AdminThemesPage />} />
             <Route path="/admin/snippets" element={<AdminSnippetsPage />} />
             <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/usage" element={<AdminUsagePage />} />
             <Route path="/admin/ai" element={<AdminAiPage />} />
           </Route>
         </Route>

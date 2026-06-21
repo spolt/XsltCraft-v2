@@ -83,6 +83,41 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.ToTable("FeatureFlags");
                 });
 
+            modelBuilder.Entity("XsltCraft.Domain.Entities.Folder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId", "Kind");
+
+                    b.ToTable("Folders");
+                });
+
             modelBuilder.Entity("XsltCraft.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -135,8 +170,21 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("FolderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsFavorite")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsFreeTheme")
                         .HasColumnType("boolean");
+
+                    b.Property<bool>("IsPremium")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -160,6 +208,8 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(1000)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FolderId");
 
                     b.HasIndex("OwnerId");
 
@@ -204,6 +254,16 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Free");
+
+                    b.Property<DateTime?>("PlanExpiresAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -277,6 +337,16 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
 
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
+
+                    b.Property<int>("AiRequestCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("TemplateExportCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<int>("TokensUsed")
                         .HasColumnType("integer");
@@ -357,6 +427,14 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("EditingUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("FolderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsFavorite")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -380,6 +458,8 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EditingUserId");
+
+                    b.HasIndex("FolderId");
 
                     b.HasIndex("OwnerId");
 
@@ -427,6 +507,17 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("XsltCraft.Domain.Entities.Folder", b =>
+                {
+                    b.HasOne("XsltCraft.Domain.Entities.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
             modelBuilder.Entity("XsltCraft.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("XsltCraft.Domain.Entities.User", "User")
@@ -440,10 +531,17 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("XsltCraft.Domain.Entities.Template", b =>
                 {
+                    b.HasOne("XsltCraft.Domain.Entities.Folder", "Folder")
+                        .WithMany()
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("XsltCraft.Domain.Entities.User", "Owner")
                         .WithMany()
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Folder");
 
                     b.Navigation("Owner");
                 });
@@ -483,11 +581,18 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("XsltCraft.Domain.Entities.UserXsltTemplate", b =>
                 {
+                    b.HasOne("XsltCraft.Domain.Entities.Folder", "Folder")
+                        .WithMany()
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("XsltCraft.Domain.Entities.User", "Owner")
                         .WithMany()
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Folder");
 
                     b.Navigation("Owner");
                 });

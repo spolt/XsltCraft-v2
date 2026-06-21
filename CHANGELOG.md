@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-21
+
+### Added
+- **Taslaklarım & Şablonlarım — arama, klasörleme ve favoriler** (`Folder` entity + `FolderKind`, `FolderController`, `components/storage/*`, `DraftsPage`/`MyXsltTemplatesPage`): Her iki XSLT şablon deposuna **anlık isim araması**, **düz (tek seviye) klasörler** (oluştur/yeniden adlandır/renk/sil — klasör silinince şablonlar silinmez, "Tümü"ne düşer), satır içi ve **toplu klasöre taşıma**, **favori (★)** ve sıralama (son güncelleme / oluşturulma / ad) eklendi. Klasörler `FolderKind {Draft, XsltTemplate}` ile alana göre izoledir; cross-kind taşıma engelli. Aktif klasör URL parametresinde (`?folder=`) tutulur, sol klasör kenar çubuğu + ortak `useTemplateLibrary` filtre/sıralama hook'u iki sayfada paylaşılır. Yeni uçlar: `GET/POST/PUT/DELETE /api/folders`, `PATCH /api/templates/{id}/folder|favorite`, `PATCH /api/user-xslt-templates/{id}/folder|favorite`. Sahiplik (IDOR) backend-zorunlu; paylaşılan XSLT'lerde klasör/favori bilgisi sahibe özeldir, listede sızmaz.
+- **Rol yönetimi + XsltCraft Pro üyelik modeli** (`MembershipPlan`, `IEntitlementService`/`EntitlementPolicy`, `IUsageQuotaService`, `MeController`, `BillingController`): Mevcut `UserRole {User, Editor, Admin}` enum'una **dik** bir `Plan {Free, Pro}` ekseni eklendi (`User.Plan` + `User.PlanExpiresAt`). Etkin yetkiler rol + plan + abonelik geçerliliğinden hesaplanır (`EntitlementPolicy.Compute`, saf/test edilebilir); **Editör ve Admin tüm kotaları bypass eder**, süresi geçen Pro otomatik Free'ye düşer. Politika appsettings `Membership` bölümünden ayarlanır (limitlerde `0 = sınırsız`). Gate'ler **backend-zorunlu** (frontend yalnız UX):
+  - **Standart (Free):** grid-canvas şablonu tasarlar/taslak kaydeder ama **XSLT indiremez** (402 → upsell); ham XSLT içeriğine erişemez; ücretsiz temaları kullanır/indirir; XSLT Editör'de düzenler/indirir ama **Şablonlarım'a kaydedemez** (Pro); AI **günde 1 soru**.
+  - **Pro:** tam erişim ama **günde 3 indirme** (4.'te 429) + **50.000 token/gün**; ücretli temaların kilidi açılır.
+  - Yeni günlük sayaçlar `UserAiUsages` tablosunda (`AiRequestCount`, `TemplateExportCount`; UTC gece yarısı sıfırlanır). `AiTokenBudgetService` → plan-bilinçli `UsageQuotaService` olarak genişletildi.
+- **Ücretli/ücretsiz tema ayrımı** (`Template.IsPremium`, `AdminController`, `AdminThemesPage`): Admin hazır şablonlar panelinde tema "Ücretli" işaretlenebilir. Tema kütüphanesinde ücretli temalar **önizlenebilir** fakat "Bu temayı kullan" kilitlidir (Pro gerektirir); kart üzerinde "Ücretli" rozeti ve kilitli buton gösterilir.
+- **Pro upsell akışı + admin grant** (`UpgradeModal`, `PricingPage` `/pricing`, `entitlementStore`, `PATCH /api/admin/users/{id}/plan`): Gate'li her işlemde açılan global yükseltme modalı; Free vs Pro karşılaştırma sayfası; Navbar'da plan rozeti / "Pro'ya Geç" CTA. Ödeme entegrasyonu (iyzico/PayTR) **Faz 2** — şimdilik `POST /api/billing/checkout` stub'dır ve Pro, admin panelinden (kullanıcı planı + bitiş tarihi) elle tanımlanır.
+- **Admin Kullanım Raporu** (`IUsageReportService`, `AdminUsageController`, `AdminUsagePage` `/admin/usage`): Kullanıcı başına token, AI soru, kaydetme ve indirme — geçmişe dönük ve anlık. `UserAiUsages` (günlük token/istek/export) + `UserActivities` (save/download olayları) birleştirilir. Tarih aralığı (Bugün / Son 7-30-90 gün / özel), özet kartları + kullanıcı bazlı tablo + toplam satırı, günlük toplam trendi ve **CSV indirme**. Uçlar: `GET /api/admin/usage/report`, `GET /api/admin/usage/daily`. Sol menüye "Kullanım Raporu" eklendi.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.5.0 → 1.6.0`.
+
+### Security
+- **Klasör uçları için sunucu tarafı girdi doğrulama** (`FolderController`): Klasör adı uzunluk sınırı (≤100) ve renk **allowlist**'i (`blue|emerald|amber|rose|violet|slate`; eşleşmeyen → `null`) backend'de zorlanır — ham `DbUpdateException`/500 ve API'yi tüketen başka istemcilerde olası stored-XSS yüzeyi önlenir. (security-reviewer bulgusu.)
+- **Ham XSLT sızıntı noktaları kapatıldı** (`PreviewController`): `POST /api/preview/xslt` (kaydedilmemiş grid şablonu indirme yolu) artık `[Authorize]` + indirme kotasına tabidir; `GET /api/preview/theme/{id}/xslt-content` (geliştirici modu) **ücretli temalarda** Pro yetkisi ister. Plan kontrolleri JWT claim'ine değil **DB'ye** dayanır (para-ilişkili gate'ler otoritatif); ücretli tema XSLT'si yetkisiz kullanıcıya sunulmaz.
+
 ---
 
 ## [1.5.0] - 2026-06-20

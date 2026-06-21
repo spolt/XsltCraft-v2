@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserActivity> UserActivities => Set<UserActivity>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
     public DbSet<UserAiUsage> UserAiUsages => Set<UserAiUsage>();
+    public DbSet<Folder> Folders => Set<Folder>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(u => u.GoogleId).IsUnique().HasFilter("google_id IS NOT NULL");
             entity.Property(u => u.DisplayName).HasMaxLength(100);
             entity.Property(u => u.Role).HasConversion<string>();
+            entity.Property(u => u.Plan).HasConversion<string>().HasMaxLength(20).HasDefaultValue(MembershipPlan.Free);
             entity.Property(u => u.IsActive).HasDefaultValue(true);
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
             entity.Property(u => u.UpdatedAt).HasDefaultValueSql("NOW()");
@@ -65,6 +67,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Name).HasMaxLength(255).IsRequired();
             entity.Property(t => t.DocumentType).HasConversion<string>();
+            entity.Property(t => t.IsPremium).HasDefaultValue(false);
             entity.Property(t => t.BlockTree).HasColumnType("jsonb");
             entity.Property(t => t.XsltStoragePath).HasMaxLength(1000);
             entity.Property(t => t.ThumbnailUrl).HasMaxLength(500);
@@ -75,6 +78,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                   .HasForeignKey(t => t.OwnerId)
                   .IsRequired(false)
                   .OnDelete(DeleteBehavior.SetNull);
+            entity.Property(t => t.IsFavorite).HasDefaultValue(false);
+            entity.HasOne(t => t.Folder)
+                  .WithMany()
+                  .HasForeignKey(t => t.FolderId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(t => t.FolderId);
+        });
+
+        modelBuilder.Entity<Folder>(entity =>
+        {
+            entity.HasKey(f => f.Id);
+            entity.Property(f => f.Name).HasMaxLength(100).IsRequired();
+            entity.Property(f => f.Kind).HasConversion<string>().HasMaxLength(20);
+            entity.Property(f => f.Color).HasMaxLength(30);
+            entity.Property(f => f.CreatedAt).HasDefaultValueSql("NOW()");
+            entity.HasIndex(f => new { f.OwnerId, f.Kind });
+            entity.HasOne(f => f.Owner)
+                  .WithMany()
+                  .HasForeignKey(f => f.OwnerId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Asset>(entity =>
@@ -102,6 +125,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                   .HasForeignKey(t => t.OwnerId)
                   .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(t => t.EditingUserId);
+            entity.Property(t => t.IsFavorite).HasDefaultValue(false);
+            entity.HasOne(t => t.Folder)
+                  .WithMany()
+                  .HasForeignKey(t => t.FolderId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(t => t.FolderId);
         });
 
         modelBuilder.Entity<UserXsltTemplateShare>(entity =>
@@ -131,6 +160,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasKey(u => new { u.UserId, u.Date });
             entity.Property(u => u.Date).HasColumnType("date");
+            entity.Property(u => u.AiRequestCount).HasDefaultValue(0);
+            entity.Property(u => u.TemplateExportCount).HasDefaultValue(0);
             entity.Property(u => u.UpdatedAt).HasDefaultValueSql("NOW()");
             entity.HasIndex(u => u.Date);
             entity.HasOne(u => u.User)

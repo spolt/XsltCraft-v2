@@ -12,4 +12,8 @@ public sealed class UserXsltTemplateResponse
     public bool IsShared { get; set; }
     public Guid OwnerId { get; set; }
     public string OwnerName { get; set; } = string.Empty;
+
+    // Klasörleme (yalnız sahip için anlamlı; paylaşılan şablonlarda null)
+    public Guid? FolderId { get; set; }
+    public bool IsFavorite { get; set; }
 }

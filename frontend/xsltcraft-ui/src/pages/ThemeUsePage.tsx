@@ -20,6 +20,10 @@ import { getTemplate } from '../services/templateService'
 import { previewFromStoredXslt, fetchThemeXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
 import { createUserXsltTemplate } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
+import { useEntitlementStore } from '../store/entitlementStore'
+import { openUpgradeModal } from '../store/upgradeModalStore'
+import { parseGateError } from '../services/entitlementService'
+import { toast } from '../store/toastStore'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 const DEBOUNCE_MS = 1200
@@ -302,8 +306,18 @@ export default function ThemeUsePage() {
         setXslt(content)
         xsltReadyRef.current = true
       })
-      .catch(() => {})
-  }, [templateId])
+      .catch(async (err) => {
+        // Ücretli tema doğrudan URL ile açıldıysa backend 402 döner → Pro'ya yönlendir.
+        const gate = await parseGateError(err)
+        if (gate.status === 402) {
+          openUpgradeModal({
+            title: 'Ücretli tema',
+            message: gate.message ?? 'Bu temayı kullanmak için XsltCraft Pro üyeliği gerekir.',
+          })
+          navigate('/templates')
+        }
+      })
+  }, [templateId, navigate])
 
   // Logo/imza/IBAN değişince enjeksiyonu XSLT'e göm
   useEffect(() => {
@@ -358,13 +372,33 @@ export default function ThemeUsePage() {
 
   async function handleSave() {
     if (!xslt || isSaving) return
+
+    // Proaktif gate: ham XSLT'yi "Şablonlarım"a saklamak Pro üyelik gerektirir.
+    const ent = useEntitlementStore.getState().entitlements
+    if (ent && !ent.canSaveRawXslt && !ent.isPrivileged) {
+      openUpgradeModal({
+        title: 'Kaydetme Pro üyelik gerektirir',
+        message: "Şablonu indirebilirsin, ancak 'Şablonlarım'da saklamak XsltCraft Pro’ya dahildir.",
+      })
+      return
+    }
+
     setIsSaving(true)
     try {
       await createUserXsltTemplate({ name: templateName, xsltContent: xslt, xmlContent })
       setSaveSuccess(true)
       setTimeout(() => { navigate('/my-xslt-templates') }, 800)
-    } catch { alert('Kaydetme başarısız.') }
-    finally { setIsSaving(false) }
+    } catch (err) {
+      const gate = await parseGateError(err)
+      if (gate.status === 402) {
+        openUpgradeModal({
+          title: 'Kaydetme Pro üyelik gerektirir',
+          message: gate.message ?? "'Şablonlarım'da saklama XsltCraft Pro’ya dahildir.",
+        })
+      } else {
+        toast.error('Kaydetme başarısız.')
+      }
+    } finally { setIsSaving(false) }
   }
 
   function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {

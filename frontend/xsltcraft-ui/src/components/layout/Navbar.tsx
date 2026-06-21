@@ -1,7 +1,8 @@
-import { LogOut, Menu } from 'lucide-react'
+import { LogOut, Menu, Crown } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../../services/apiService'
 import { useAuthStore } from '../../store/authStore'
+import { useEntitlementStore } from '../../store/entitlementStore'
 
 interface NavbarProps {
   onToggleSidebar: () => void
@@ -9,6 +10,7 @@ interface NavbarProps {
 
 export default function Navbar({ onToggleSidebar }: NavbarProps) {
   const { user, logout } = useAuthStore()
+  const entitlements = useEntitlementStore((s) => s.entitlements)
   const navigate = useNavigate()
 
   const handleLogout = async () => {
@@ -34,6 +36,22 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
             Admin
           </span>
+        )}
+        {/* Plan rozeti: ayrıcalıklı olmayan (User) kullanıcılar için. Pro → rozet, Free → CTA. */}
+        {entitlements && !entitlements.isPrivileged && (
+          entitlements.plan === 'Pro' ? (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+              <Crown size={12} /> Pro
+            </span>
+          ) : (
+            <Link
+              to="/pricing"
+              className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+              title="XsltCraft Pro'ya geç"
+            >
+              <Crown size={12} /> Pro'ya Geç
+            </Link>
+          )
         )}
         <Link
           to="/profile"

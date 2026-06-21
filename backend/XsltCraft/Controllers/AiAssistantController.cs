@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
 using XsltCraft.Application.Ai;
+using XsltCraft.Application.Interfaces;
 using XsltCraft.Infrastructure.Ai;
 
 namespace XsltCraft.Controllers;
@@ -18,7 +19,7 @@ public class AiAssistantController : ControllerBase
 {
     private readonly AiProviderOrchestrator _orchestrator;
     private readonly IAiFeatureFlagService _flag;
-    private readonly IAiTokenBudgetService _tokenBudget;
+    private readonly IUsageQuotaService _quota;
     private readonly ILogger<AiAssistantController> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -30,12 +31,12 @@ public class AiAssistantController : ControllerBase
     public AiAssistantController(
         AiProviderOrchestrator orchestrator,
         IAiFeatureFlagService flag,
-        IAiTokenBudgetService tokenBudget,
+        IUsageQuotaService quota,
         ILogger<AiAssistantController> logger)
     {
         _orchestrator = orchestrator;
         _flag = flag;
-        _tokenBudget = tokenBudget;
+        _quota = quota;
         _logger = logger;
     }
 
@@ -84,11 +85,25 @@ public class AiAssistantController : ControllerBase
         }
 
         var userId = GetUserId();
-        if (userId.HasValue && !await _tokenBudget.IsWithinBudgetAsync(userId.Value, ct))
+        if (userId.HasValue)
         {
-            Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            await WriteJsonAsync(new { error = "budget_exceeded", message = "Günlük AI token bütçeniz doldu. Yarın tekrar deneyin." }, ct);
-            return;
+            var check = await _quota.CheckAiAllowedAsync(userId.Value, ct);
+            if (!check.Allowed)
+            {
+                if (check.Reason == QuotaDenyReason.AiRequestLimit)
+                {
+                    // Free kullanıcı günlük 1 soru hakkını doldurdu → Pro'ya yönlendir.
+                    Response.StatusCode = StatusCodes.Status402PaymentRequired;
+                    await WriteJsonAsync(new { error = "ai_request_limit", upgrade = true, message = "Günlük 1 AI soru hakkınız doldu. Sınırsız soru ve 50.000 token/gün için XsltCraft Pro'ya geçin." }, ct);
+                }
+                else
+                {
+                    // Pro kullanıcı günlük token bütçesini doldurdu.
+                    Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                    await WriteJsonAsync(new { error = "budget_exceeded", message = "Günlük AI token bütçeniz doldu. Yarın tekrar deneyin." }, ct);
+                }
+                return;
+            }
         }
 
         Response.StatusCode = StatusCodes.Status200OK;
@@ -128,8 +143,9 @@ public class AiAssistantController : ControllerBase
         finally
         {
             await writer.CompleteAsync();
-            if (userId.HasValue && totalOutputChars > 0)
-                await _tokenBudget.IncrementAsync(userId.Value, totalOutputChars / 4 + 1, CancellationToken.None);
+            // Gate'i geçen her istek soru sayacını tüketir (Free 1/gün); token de yaklaşık olarak eklenir.
+            if (userId.HasValue)
+                await _quota.IncrementAiAsync(userId.Value, totalOutputChars > 0 ? totalOutputChars / 4 + 1 : 0, CancellationToken.None);
         }
     }
 

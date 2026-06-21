@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, Calendar, Clock, Download, ExternalLink, Plus, Save, Search, Shield, Trash2, Users, X } from 'lucide-react'
+import { AlertCircle, Calendar, Clock, Crown, Download, ExternalLink, Plus, Save, Search, Shield, Trash2, Users, X } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import {
   createUser,
@@ -7,9 +7,21 @@ import {
   listUsers,
   resetPassword,
   setActive,
+  setPlan,
   updateRole,
   type UserListItem,
 } from '../../services/adminUserService'
+
+function PlanBadge({ user }: { user: UserListItem }) {
+  if (user.plan === 'Pro') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+        <Crown size={10} /> Pro
+      </span>
+    )
+  }
+  return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Free</span>
+}
 
 const ROLE_COLORS: Record<string, string> = {
   Admin: 'bg-purple-100 text-purple-700',
@@ -78,9 +90,10 @@ function ActiveToggle({ user, disabled, onChange }: {
 }
 
 // ─── Action menu ─────────────────────────────────────────────────────────────
-function ActionMenu({ onDetail, onRoleChange, onResetPassword, onDelete }: {
+function ActionMenu({ onDetail, onRoleChange, onPlanChange, onResetPassword, onDelete }: {
   onDetail: () => void
   onRoleChange: () => void
+  onPlanChange: () => void
   onResetPassword: () => void
   onDelete: () => void
 }) {
@@ -145,6 +158,12 @@ function ActionMenu({ onDetail, onRoleChange, onResetPassword, onDelete }: {
             Rol Değiştir
           </button>
           <button
+            onClick={() => { setOpen(false); onPlanChange() }}
+            className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700"
+          >
+            Plan / Üyelik
+          </button>
+          <button
             onClick={() => { setOpen(false); onResetPassword() }}
             className="w-full text-left px-4 py-2 hover:bg-gray-50 text-gray-700"
           >
@@ -201,6 +220,7 @@ function DetailCard({ user, onClose, onRoleChange, onResetPassword, onDelete, is
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-700'}`}>
                 <Shield size={10} className="mr-1" />{user.role}
               </span>
+              <PlanBadge user={user} />
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${user.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
                 {user.isActive ? 'Aktif' : 'Pasif'}
               </span>
@@ -339,6 +359,79 @@ function RoleModal({ user, onClose, onDone }: {
         <div className="flex gap-3 justify-end mt-6">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition">İptal</button>
           <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition">
+            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Plan / üyelik modal ──────────────────────────────────────────────────────
+function PlanModal({ user, onClose, onDone }: {
+  user: UserListItem
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [plan, setPlanValue] = useState<'Free' | 'Pro'>(user.plan)
+  const [expiresAt, setExpiresAt] = useState<string>(
+    user.planExpiresAt ? user.planExpiresAt.slice(0, 10) : ''
+  )
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      // Pro + tarih verilmişse gün sonunu (UTC) gönder; boşsa süresiz.
+      const iso = plan === 'Pro' && expiresAt ? new Date(`${expiresAt}T23:59:59Z`).toISOString() : null
+      await setPlan(user.id, plan, iso)
+      onDone()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setError(msg ?? 'Plan değiştirilemedi.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+        <h3 className="text-base font-semibold text-gray-900 mb-1">Üyelik Planı</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          {user.displayName || user.email} için Pro üyelik tanımlayın veya kaldırın.
+        </p>
+        {error && (
+          <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+            <AlertCircle size={14} /> {error}
+          </div>
+        )}
+        <div className="flex flex-col gap-2">
+          {(['Free', 'Pro'] as const).map(p => (
+            <label key={p} className={`flex items-center gap-3 px-3 py-2.5 border rounded-lg cursor-pointer ${plan === p ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+              <input type="radio" name="plan" value={p} checked={plan === p} onChange={() => setPlanValue(p)} className="accent-emerald-600" />
+              <div className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
+                {p === 'Pro' && <Crown size={13} className="text-emerald-600" />}{p}
+              </div>
+            </label>
+          ))}
+        </div>
+        {plan === 'Pro' && (
+          <div className="mt-3">
+            <label className="text-xs font-medium text-gray-600 block mb-1">Bitiş tarihi (boş = süresiz)</label>
+            <input
+              type="date"
+              value={expiresAt}
+              onChange={e => setExpiresAt(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+        )}
+        <div className="flex gap-3 justify-end mt-6">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition">İptal</button>
+          <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-lg transition">
             {saving ? 'Kaydediliyor…' : 'Kaydet'}
           </button>
         </div>
@@ -551,6 +644,7 @@ export default function AdminUsersPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [detailTarget, setDetailTarget] = useState<UserListItem | null>(null)
   const [roleTarget, setRoleTarget] = useState<UserListItem | null>(null)
+  const [planTarget, setPlanTarget] = useState<UserListItem | null>(null)
   const [pwdTarget, setPwdTarget] = useState<UserListItem | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserListItem | null>(null)
 
@@ -669,6 +763,7 @@ export default function AdminUsersPage() {
               <tr className="text-left text-xs uppercase text-gray-500 tracking-wide">
                 <th className="px-4 py-3 font-medium">Kullanıcı</th>
                 <th className="px-4 py-3 font-medium">Rol</th>
+                <th className="px-4 py-3 font-medium">Plan</th>
                 <th className="px-4 py-3 font-medium">Durum</th>
                 <th className="px-4 py-3 font-medium text-right">Kaydet</th>
                 <th className="px-4 py-3 font-medium text-right">İndirme</th>
@@ -680,7 +775,7 @@ export default function AdminUsersPage() {
             <tbody className="divide-y divide-gray-100">
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400 text-sm">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400 text-sm">
                     Kullanıcı bulunamadı.
                   </td>
                 </tr>
@@ -708,6 +803,7 @@ export default function AdminUsersPage() {
                         {u.role}
                       </span>
                     </td>
+                    <td className="px-4 py-3"><PlanBadge user={u} /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <ActiveToggle
@@ -733,6 +829,7 @@ export default function AdminUsersPage() {
                           <ActionMenu
                             onDetail={() => setDetailTarget(u)}
                             onRoleChange={() => setRoleTarget(u)}
+                            onPlanChange={() => setPlanTarget(u)}
                             onResetPassword={() => setPwdTarget(u)}
                             onDelete={() => setDeleteTarget(u)}
                           />
@@ -805,6 +902,13 @@ export default function AdminUsersPage() {
           user={roleTarget}
           onClose={() => setRoleTarget(null)}
           onDone={() => { setRoleTarget(null); load() }}
+        />
+      )}
+      {planTarget && (
+        <PlanModal
+          user={planTarget}
+          onClose={() => setPlanTarget(null)}
+          onDone={() => { setPlanTarget(null); load() }}
         />
       )}
       {pwdTarget && (

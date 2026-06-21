@@ -45,6 +45,8 @@ import {
 } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
 import { toast } from '../store/toastStore'
+import { useEntitlementStore } from '../store/entitlementStore'
+import { openUpgradeModal } from '../store/upgradeModalStore'
 import api from '../services/apiService'
 
 const LOCK_HEARTBEAT_MS = 30_000
@@ -487,7 +489,14 @@ export default function XsltEditorPage() {
       toast.success('Şablon kaydedildi.', { durationMs: 2500 })
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
-      if (status === 423) {
+      if (status === 402) {
+        // Standart kullanıcı saklama yapamaz → Pro'ya yönlendir.
+        setShowSaveDialog(false)
+        openUpgradeModal({
+          title: 'Kaydetme Pro üyelik gerektirir',
+          message: "'Şablonlarım'da saklama XsltCraft Pro’ya dahildir.",
+        })
+      } else if (status === 423) {
         // Başka kullanıcı düzenliyor — salt-okunura geç
         setLockedByOther(true)
         wasLockedRef.current = true
@@ -515,6 +524,15 @@ export default function XsltEditorPage() {
         `Şu an ${lockOwnerName ?? 'başka bir kullanıcı'} bu şablonu düzenliyor. Salt-okunur modda kaydedemezsiniz.`,
         { title: 'Şablon kilitli' },
       )
+      return
+    }
+    // Ham XSLT'yi "Şablonlarım"a saklamak Pro üyelik gerektirir (Standart kullanıcı indirebilir ama saklayamaz).
+    const ent = useEntitlementStore.getState().entitlements
+    if (ent && !ent.canSaveRawXslt && !ent.isPrivileged) {
+      openUpgradeModal({
+        title: 'Kaydetme Pro üyelik gerektirir',
+        message: "XSLT’yi indirebilirsin, ancak 'Şablonlarım'da saklamak XsltCraft Pro’ya dahildir.",
+      })
       return
     }
     setShowSaveDialog(true)

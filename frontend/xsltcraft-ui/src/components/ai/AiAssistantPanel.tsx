@@ -6,6 +6,8 @@ import {
 import Editor from '@monaco-editor/react'
 import { streamAi, type AiChunk, type AssistantMessage } from '../../services/aiAssistantService'
 import { toast } from '../../store/toastStore'
+import { useEntitlementStore } from '../../store/entitlementStore'
+import { openUpgradeModal } from '../../store/upgradeModalStore'
 
 interface Props {
   xslt: string
@@ -234,7 +236,12 @@ export default function AiAssistantPanel({
             setMessages(prev => prev.map(m =>
               m.id === assistantId ? { ...m, content: `⚠️ ${msg}` } : m
             ))
-            if (
+            if (chunk.code === 'http_402') {
+              // Free kullanıcı günlük 1 soru hakkını doldurdu → Pro'ya yönlendir.
+              openUpgradeModal({ title: 'AI soru hakkınız doldu', message: msg })
+            } else if (chunk.code === 'http_429') {
+              toast.warning(msg, { title: 'Günlük AI limiti' })
+            } else if (
               chunk.code === 'provider_unavailable' ||
               chunk.code?.startsWith('ollama_') ||
               chunk.code?.startsWith('gemini_')
@@ -254,6 +261,8 @@ export default function AiAssistantPanel({
     } finally {
       setStreaming(false)
       abortRef.current = null
+      // AI kotası (Free 1 soru/gün, Pro token) güncel kalsın.
+      useEntitlementStore.getState().refresh()
     }
   }
 

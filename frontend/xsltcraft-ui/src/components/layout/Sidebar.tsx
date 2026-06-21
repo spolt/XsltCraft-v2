@@ -17,6 +17,7 @@ import {
   Library,
   Users,
   Sparkles,
+  BarChart3,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -173,6 +174,13 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                 >
                   <Users size={16} className="flex-shrink-0" />
                   <span>Kullanıcıları Yönet</span>
+                </Link>
+                <Link
+                  to="/admin/usage"
+                  className={`${itemBase} ${isActive('/admin/usage') ? itemActive : itemInactive}`}
+                >
+                  <BarChart3 size={16} className="flex-shrink-0" />
+                  <span>Kullanım Raporu</span>
                 </Link>
                 <Link
                   to="/admin/ai"
