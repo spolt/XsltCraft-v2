@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { X } from 'lucide-react'
+import { X, Lock, Crown } from 'lucide-react'
 import { getFreeThemes, type FreeTheme } from '../services/templateService'
 import { previewFromStoredXslt } from '../services/previewService'
+import { useEntitlementStore } from '../store/entitlementStore'
+import { openUpgradeModal } from '../store/upgradeModalStore'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 const DOC_TYPE_LABEL: Record<string, string> = {
@@ -22,6 +24,20 @@ export default function TemplatesPage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const navigate = useNavigate()
+  const entitlements = useEntitlementStore((s) => s.entitlements)
+  const canUsePremium = !!(entitlements?.canUsePremiumThemes || entitlements?.isPrivileged)
+
+  // Ücretli tema: önizleme serbest, "kullan" Pro gerektirir.
+  function gatedUse(theme: FreeTheme) {
+    if (theme.isPremium && !canUsePremium) {
+      openUpgradeModal({
+        title: 'Ücretli tema',
+        message: 'Bu temayı kullanmak için XsltCraft Pro üyeliği gerekir. Önizleme serbesttir.',
+      })
+      return
+    }
+    navigate(`/theme-use/${theme.id}`)
+  }
 
   useEffect(() => {
     getFreeThemes()
@@ -44,7 +60,7 @@ export default function TemplatesPage() {
 
   function handleUse() {
     if (!selectedTheme) return
-    navigate(`/theme-use/${selectedTheme.id}`)
+    gatedUse(selectedTheme)
   }
 
   const filtered = typeFilter
@@ -92,7 +108,9 @@ export default function TemplatesPage() {
                 theme={theme}
                 selected={selectedTheme?.id === theme.id}
                 compact={!!selectedTheme}
+                locked={theme.isPremium && !canUsePremium}
                 onSelect={() => setSelectedTheme(theme)}
+                onUse={() => gatedUse(theme)}
               />
             ))}
           </div>
@@ -117,9 +135,9 @@ export default function TemplatesPage() {
             <button
               onClick={handleUse}
               disabled={previewLoading}
-              className="flex-shrink-0 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-1.5 transition-colors"
+              className="flex-shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-1.5 transition-colors"
             >
-              Bu temayı kullan
+              {selectedTheme.isPremium && !canUsePremium ? (<><Lock size={13} /> Pro ile aç</>) : 'Bu temayı kullan'}
             </button>
             <button
               onClick={() => setSelectedTheme(null)}
@@ -149,22 +167,32 @@ export default function TemplatesPage() {
 
 // ── Tema kartı ────────────────────────────────────────────────────────────────
 
+function PremiumBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">
+      <Crown size={11} /> Ücretli
+    </span>
+  )
+}
+
 function ThemeCard({
   theme,
   selected,
   compact,
+  locked,
   onSelect,
+  onUse,
 }: {
   theme: FreeTheme
   selected: boolean
   compact: boolean
+  locked: boolean
   onSelect: () => void
+  onUse: () => void
 }) {
-  const navigate = useNavigate()
-
   function handleUse(e: React.MouseEvent) {
     e.stopPropagation()
-    navigate(`/theme-use/${theme.id}`)
+    onUse()
   }
 
   return (
@@ -180,25 +208,31 @@ function ThemeCard({
         /* Önizleme açıkken: badge+isim sola, "Seç" sağa */
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
-            <span className="inline-block text-xs font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 mb-1">
-              {DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}
-            </span>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="inline-block text-xs font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">
+                {DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}
+              </span>
+              {theme.isPremium && <PremiumBadge />}
+            </div>
             <h2 className="text-sm font-semibold text-gray-800 truncate">{theme.name}</h2>
           </div>
           <button
             onClick={handleUse}
-            className="flex-shrink-0 text-xs font-medium text-blue-600 border border-blue-500 hover:bg-blue-600 hover:text-white rounded-lg px-3 py-1.5 transition-colors"
+            className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium text-blue-600 border border-blue-500 hover:bg-blue-600 hover:text-white rounded-lg px-3 py-1.5 transition-colors"
           >
-            Seç
+            {locked && <Lock size={11} />} Seç
           </button>
         </div>
       ) : (
         /* Normal mod: badge + isim üstte, "Ön İzleme" butonu altta */
         <>
           <div>
-            <span className="inline-block text-xs font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5 mb-2">
-              {DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}
-            </span>
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="inline-block text-xs font-medium text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">
+                {DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}
+              </span>
+              {theme.isPremium && <PremiumBadge />}
+            </div>
             <h2 className="text-sm font-semibold text-gray-800">{theme.name}</h2>
           </div>
           <button

@@ -14,7 +14,7 @@ namespace XsltCraft.Api.Controllers;
 [ApiController]
 [Route("api/user-xslt-templates")]
 [Authorize]
-public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder activity) : ControllerBase
+public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder activity, IEntitlementService entitlements) : ControllerBase
 {
     // Heartbeat'i bu süreden eski olan kilit "pasif" sayılır ve devralınabilir.
     private static readonly TimeSpan LockTimeout = TimeSpan.FromSeconds(90);
@@ -90,6 +90,10 @@ public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder a
     {
         var userId = CurrentUserId;
 
+        // Ham XSLT'yi "Şablonlarım"a kaydetme/saklama Pro üyeliği gerektirir (Standart kullanıcı indirebilir ama saklayamaz).
+        var saveGate = await GateSaveAsync();
+        if (saveGate is not null) return saveGate;
+
         if (string.IsNullOrWhiteSpace(request.XsltContent))
             return BadRequest(new { message = "XSLT içeriği boş olamaz." });
 
@@ -135,6 +139,10 @@ public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder a
 
         if (!CanAccess(template, userId))
             return Forbid();
+
+        // Kaydetme/saklama Pro üyeliği gerektirir (downgrade olmuş ya da paylaşılan Standart kullanıcı dahil).
+        var saveGate = await GateSaveAsync();
+        if (saveGate is not null) return saveGate;
 
         // Başka kullanıcı aktif olarak düzenliyorsa kaydetmeyi engelle
         if (IsLockedByOther(template, userId, now))
@@ -360,4 +368,16 @@ public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder a
 
     private static bool CanAccess(UserXsltTemplate template, Guid userId) =>
         template.OwnerId == userId || template.Shares.Any(s => s.UserId == userId);
+
+    /// <summary>
+    /// Ham XSLT kaydetme/saklama yetki kapısı. İzinliyse null; değilse 402 (Pro'ya yönlendir).
+    /// Editör/Admin ve Pro izinli; Standart (Free) değil.
+    /// </summary>
+    private async Task<IActionResult?> GateSaveAsync()
+    {
+        var ent = await entitlements.GetAsync(CurrentUserId);
+        if (ent.CanSaveRawXslt) return null;
+        return StatusCode(StatusCodes.Status402PaymentRequired,
+            new { error = "upgrade_required", upgrade = true, message = "Şablon kaydetme ve 'Şablonlarım'da saklama XsltCraft Pro üyeliği gerektirir. XSLT'yi indirebilirsiniz ancak saklamak için Pro'ya geçin." });
+    }
 }

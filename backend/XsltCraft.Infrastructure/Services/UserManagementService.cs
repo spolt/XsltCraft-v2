@@ -59,6 +59,7 @@ public class UserManagementService(AppDbContext db) : IUserManagementService
 
             return new UserListItem(
                 u.Id, u.Username, u.Email, u.DisplayName, u.Role.ToString(),
+                u.Plan.ToString(), u.PlanExpiresAt,
                 u.IsActive, saveCount, downloadCount,
                 lastAt == default ? null : lastAt,
                 u.LastLoginAt, u.CreatedAt);
@@ -86,6 +87,7 @@ public class UserManagementService(AppDbContext db) : IUserManagementService
 
         return new UserListItem(
             u.Id, u.Username, u.Email, u.DisplayName, u.Role.ToString(),
+            u.Plan.ToString(), u.PlanExpiresAt,
             u.IsActive, saveCount, downloadCount, lastAt, u.LastLoginAt, u.CreatedAt);
     }
 
@@ -101,6 +103,25 @@ public class UserManagementService(AppDbContext db) : IUserManagementService
         if (user is null) return (false, "Kullanıcı bulunamadı.");
 
         user.Role = roleEnum;
+        user.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> SetPlanAsync(Guid targetUserId, string plan, DateTime? expiresAt)
+    {
+        if (!Enum.TryParse<MembershipPlan>(plan, ignoreCase: true, out var planEnum))
+            return (false, "Geçersiz plan. Geçerli değerler: Free, Pro");
+
+        if (planEnum == MembershipPlan.Pro && expiresAt is not null && expiresAt <= DateTime.UtcNow)
+            return (false, "Bitiş tarihi gelecekte olmalıdır.");
+
+        var user = await db.Users.FindAsync(targetUserId);
+        if (user is null) return (false, "Kullanıcı bulunamadı.");
+
+        user.Plan = planEnum;
+        // Free'ye düşürürken bitiş tarihini temizle; Pro'da verilen tarihi (null = süresiz) uygula.
+        user.PlanExpiresAt = planEnum == MembershipPlan.Pro ? expiresAt : null;
         user.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return (true, null);

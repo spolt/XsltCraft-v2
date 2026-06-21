@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Rol yönetimi + XsltCraft Pro üyelik modeli** (`MembershipPlan`, `IEntitlementService`/`EntitlementPolicy`, `IUsageQuotaService`, `MeController`, `BillingController`): Mevcut `UserRole {User, Editor, Admin}` enum'una **dik** bir `Plan {Free, Pro}` ekseni eklendi (`User.Plan` + `User.PlanExpiresAt`). Etkin yetkiler rol + plan + abonelik geçerliliğinden hesaplanır (`EntitlementPolicy.Compute`, saf/test edilebilir); **Editör ve Admin tüm kotaları bypass eder**, süresi geçen Pro otomatik Free'ye düşer. Politika appsettings `Membership` bölümünden ayarlanır (limitlerde `0 = sınırsız`). Gate'ler **backend-zorunlu** (frontend yalnız UX):
+  - **Standart (Free):** grid-canvas şablonu tasarlar/taslak kaydeder ama **XSLT indiremez** (402 → upsell); ham XSLT içeriğine erişemez; ücretsiz temaları kullanır/indirir; XSLT Editör'de düzenler/indirir ama **Şablonlarım'a kaydedemez** (Pro); AI **günde 1 soru**.
+  - **Pro:** tam erişim ama **günde 3 indirme** (4.'te 429) + **50.000 token/gün**; ücretli temaların kilidi açılır.
+  - Yeni günlük sayaçlar `UserAiUsages` tablosunda (`AiRequestCount`, `TemplateExportCount`; UTC gece yarısı sıfırlanır). `AiTokenBudgetService` → plan-bilinçli `UsageQuotaService` olarak genişletildi.
+- **Ücretli/ücretsiz tema ayrımı** (`Template.IsPremium`, `AdminController`, `AdminThemesPage`): Admin hazır şablonlar panelinde tema "Ücretli" işaretlenebilir. Tema kütüphanesinde ücretli temalar **önizlenebilir** fakat "Bu temayı kullan" kilitlidir (Pro gerektirir); kart üzerinde "Ücretli" rozeti ve kilitli buton gösterilir.
+- **Pro upsell akışı + admin grant** (`UpgradeModal`, `PricingPage` `/pricing`, `entitlementStore`, `PATCH /api/admin/users/{id}/plan`): Gate'li her işlemde açılan global yükseltme modalı; Free vs Pro karşılaştırma sayfası; Navbar'da plan rozeti / "Pro'ya Geç" CTA. Ödeme entegrasyonu (iyzico/PayTR) **Faz 2** — şimdilik `POST /api/billing/checkout` stub'dır ve Pro, admin panelinden (kullanıcı planı + bitiş tarihi) elle tanımlanır.
+- **Admin Kullanım Raporu** (`IUsageReportService`, `AdminUsageController`, `AdminUsagePage` `/admin/usage`): Kullanıcı başına token, AI soru, kaydetme ve indirme — geçmişe dönük ve anlık. `UserAiUsages` (günlük token/istek/export) + `UserActivities` (save/download olayları) birleştirilir. Tarih aralığı (Bugün / Son 7-30-90 gün / özel), özet kartları + kullanıcı bazlı tablo + toplam satırı, günlük toplam trendi ve **CSV indirme**. Uçlar: `GET /api/admin/usage/report`, `GET /api/admin/usage/daily`. Sol menüye "Kullanım Raporu" eklendi.
+
+### Security
+- **Ham XSLT sızıntı noktaları kapatıldı** (`PreviewController`): `POST /api/preview/xslt` (kaydedilmemiş grid şablonu indirme yolu) artık `[Authorize]` + indirme kotasına tabidir; `GET /api/preview/theme/{id}/xslt-content` (geliştirici modu) **ücretli temalarda** Pro yetkisi ister. Plan kontrolleri JWT claim'ine değil **DB'ye** dayanır (para-ilişkili gate'ler otoritatif); ücretli tema XSLT'si yetkisiz kullanıcıya sunulmaz.
+
 ---
 
 ## [1.5.0] - 2026-06-20

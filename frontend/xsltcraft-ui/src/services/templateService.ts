@@ -4,6 +4,7 @@ export interface FreeTheme {
   id: string
   name: string
   documentType: 'Invoice' | 'Despatch'
+  isPremium: boolean
   thumbnailUrl: string | null
   createdAt: string
   updatedAt: string

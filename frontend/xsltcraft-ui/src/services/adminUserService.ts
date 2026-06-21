@@ -6,6 +6,8 @@ export interface UserListItem {
   email: string
   displayName: string | null
   role: 'User' | 'Editor' | 'Admin'
+  plan: 'Free' | 'Pro'
+  planExpiresAt: string | null
   isActive: boolean
   saveCount: number
   downloadCount: number
@@ -56,6 +58,10 @@ export async function createUser(request: CreateUserRequest): Promise<void> {
 
 export async function updateRole(userId: string, role: string): Promise<void> {
   await api.patch(`/api/admin/users/${userId}/role`, { role })
+}
+
+export async function setPlan(userId: string, plan: 'Free' | 'Pro', expiresAt?: string | null): Promise<void> {
+  await api.patch(`/api/admin/users/${userId}/plan`, { plan, expiresAt: expiresAt ?? null })
 }
 
 export async function setActive(userId: string, isActive: boolean): Promise<void> {

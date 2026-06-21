@@ -23,6 +23,10 @@ import {
   downloadTemplate,
 } from '../services/templateService'
 import { generateXslt } from '../services/previewService'
+import { useEntitlementStore } from '../store/entitlementStore'
+import { openUpgradeModal } from '../store/upgradeModalStore'
+import { exportsRemaining, parseGateError } from '../services/entitlementService'
+import { toast } from '../store/toastStore'
 import type { BlockTree, BlockTreeV1 } from '../types/template'
 import type { BlockType } from '../types/blocks'
 import { migrateV1toV2 } from '../utils/treeMigration'
@@ -259,6 +263,21 @@ export default function EditorPage() {
   const handleDownload = useCallback(async (forceName?: string) => {
     const hasBlocks = Object.keys(blocks).length > 0
     if (isDownloading || !hasBlocks) return
+
+    // Proaktif gate (backend yine de zorunlu kılar): Standart indiremez → upsell; Pro günlük 3 dolduysa uyar.
+    const ent = useEntitlementStore.getState().entitlements
+    if (ent && !ent.canDownloadGridXslt && !ent.isPrivileged) {
+      openUpgradeModal({
+        title: 'İndirme Pro üyelik gerektirir',
+        message: 'Tasarladığın şablonun production XSLT’sini indirmek XsltCraft Pro’ya dahildir.',
+      })
+      return
+    }
+    if (ent && !ent.isPrivileged && exportsRemaining(ent) === 0) {
+      toast.warning('Bugünkü 3 şablon indirme hakkınız doldu. Yarın tekrar deneyebilirsiniz.', { title: 'Günlük limit' })
+      return
+    }
+
     if (!templateId && !forceName) {
       setNamePrompt('download')
       return
@@ -284,11 +303,22 @@ export default function EditorPage() {
       if (downloadSuccessTimer.current) clearTimeout(downloadSuccessTimer.current)
       setDownloadSuccess(true)
       downloadSuccessTimer.current = setTimeout(() => setDownloadSuccess(false), 3000)
-
+      // İndirme sayacını tazele (Pro "x/3" rozeti güncel kalsın).
+      useEntitlementStore.getState().refresh()
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setSaveError(msg ?? 'XSLT indirilemedi.')
-      setTimeout(() => setSaveError(null), 4000)
+      const gate = await parseGateError(err)
+      if (gate.status === 402) {
+        openUpgradeModal({
+          title: 'İndirme Pro üyelik gerektirir',
+          message: gate.message ?? 'Bu işlem XsltCraft Pro’ya dahildir.',
+        })
+      } else if (gate.status === 429) {
+        toast.warning(gate.message ?? 'Günlük indirme limitiniz doldu.', { title: 'Günlük limit' })
+        useEntitlementStore.getState().refresh()
+      } else {
+        setSaveError(gate.message ?? 'XSLT indirilemedi.')
+        setTimeout(() => setSaveError(null), 4000)
+      }
     } finally {
       setIsDownloading(false)
     }

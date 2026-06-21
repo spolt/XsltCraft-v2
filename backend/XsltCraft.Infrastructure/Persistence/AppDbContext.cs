@@ -30,6 +30,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(u => u.GoogleId).IsUnique().HasFilter("google_id IS NOT NULL");
             entity.Property(u => u.DisplayName).HasMaxLength(100);
             entity.Property(u => u.Role).HasConversion<string>();
+            entity.Property(u => u.Plan).HasConversion<string>().HasMaxLength(20).HasDefaultValue(MembershipPlan.Free);
             entity.Property(u => u.IsActive).HasDefaultValue(true);
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
             entity.Property(u => u.UpdatedAt).HasDefaultValueSql("NOW()");
@@ -65,6 +66,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Name).HasMaxLength(255).IsRequired();
             entity.Property(t => t.DocumentType).HasConversion<string>();
+            entity.Property(t => t.IsPremium).HasDefaultValue(false);
             entity.Property(t => t.BlockTree).HasColumnType("jsonb");
             entity.Property(t => t.XsltStoragePath).HasMaxLength(1000);
             entity.Property(t => t.ThumbnailUrl).HasMaxLength(500);
@@ -131,6 +133,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasKey(u => new { u.UserId, u.Date });
             entity.Property(u => u.Date).HasColumnType("date");
+            entity.Property(u => u.AiRequestCount).HasDefaultValue(0);
+            entity.Property(u => u.TemplateExportCount).HasDefaultValue(0);
             entity.Property(u => u.UpdatedAt).HasDefaultValueSql("NOW()");
             entity.HasIndex(u => u.Date);
             entity.HasOne(u => u.User)

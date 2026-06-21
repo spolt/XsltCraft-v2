@@ -59,6 +59,15 @@ public class AdminUsersController(IUserManagementService userMgmt) : ControllerB
         return NoContent();
     }
 
+    // PATCH /api/admin/users/:id/plan  — Pro üyelik tanımla/kaldır (comp/grant)
+    [HttpPatch("{id:guid}/plan")]
+    public async Task<IActionResult> SetPlan(Guid id, [FromBody] SetPlanRequest request)
+    {
+        var (success, error) = await userMgmt.SetPlanAsync(id, request.Plan, request.ExpiresAt);
+        if (!success) return BadRequest(new { message = error });
+        return NoContent();
+    }
+
     // PATCH /api/admin/users/:id/active
     [HttpPatch("{id:guid}/active")]
     public async Task<IActionResult> SetActive(Guid id, [FromBody] SetActiveRequest request)

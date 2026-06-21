@@ -15,7 +15,7 @@ namespace XsltCraft.Api.Controllers;
 
 [ApiController]
 [Route("api/templates")]
-public class TemplateController(AppDbContext db, IStorageService storage, IXsltGeneratorService generator, IUserActivityRecorder activity) : ControllerBase
+public class TemplateController(AppDbContext db, IStorageService storage, IXsltGeneratorService generator, IUserActivityRecorder activity, IUsageQuotaService quota, IEntitlementService entitlements) : ControllerBase
 {
     // GET /api/templates  — tüm free theme'leri listele (public, auth gerektirmez)
     [HttpGet]
@@ -29,6 +29,7 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
                 Id = t.Id,
                 Name = t.Name,
                 DocumentType = t.DocumentType.ToString(),
+                IsPremium = t.IsPremium,
                 ThumbnailUrl = t.ThumbnailUrl,
                 CreatedAt = t.CreatedAt,
                 UpdatedAt = t.UpdatedAt
@@ -50,7 +51,7 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
 
         var fileName = $"{template.Name.Replace(" ", "_")}.xslt";
 
-        // ── Free theme: admin-yüklü XSLT'yi oku ──────────────────────────────
+        // ── Tema (admin-yüklü XSLT) ──────────────────────────────────────────
         if (template.IsFreeTheme)
         {
             if (string.IsNullOrEmpty(template.XsltStoragePath))
@@ -59,6 +60,26 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
             if (!await storage.ExistsAsync(template.XsltStoragePath))
                 return NotFound(new { message = "XSLT dosyası storage'da bulunamadı." });
 
+            // Ücretli tema: kimlik + Pro yetkisi (CanUsePremiumThemes) gerekir. Ücretli temalar sabit bir
+            // katalogdur; günlük 3 indirme kotası grid-canvas özel üretimine özgüdür — burada uygulanmaz.
+            if (template.IsPremium)
+            {
+                if (User.Identity?.IsAuthenticated != true)
+                    return StatusCode(StatusCodes.Status402PaymentRequired,
+                        new { error = "upgrade_required", upgrade = true, message = "Bu ücretli tema XsltCraft Pro üyeliği gerektirir." });
+
+                var premiumUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                var ent = await entitlements.GetAsync(premiumUserId);
+                if (!ent.CanUsePremiumThemes)
+                    return StatusCode(StatusCodes.Status402PaymentRequired,
+                        new { error = "upgrade_required", upgrade = true, message = "Bu ücretli tema XsltCraft Pro üyeliği gerektirir." });
+
+                await activity.RecordAsync(premiumUserId, UserActivityType.Download, template.Id, "Template");
+                var premiumStream = await storage.ReadAsync(template.XsltStoragePath);
+                return File(premiumStream, "application/xslt+xml", fileName);
+            }
+
+            // Ücretsiz tema: public — herkes (anonim dahil) indirebilir.
             if (User.Identity?.IsAuthenticated == true)
             {
                 var uid = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -77,11 +98,16 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
         if (template.OwnerId != userId)
             return Forbid();
 
+        // Standart kullanıcı grid şablonunu indiremez; Pro günde 3 ile sınırlı (Editör/Admin sınırsız).
+        var exportGate = await GateExportAsync(userId);
+        if (exportGate is not null) return exportGate;
+
         // Yeniden indirme: daha önce üretildiyse storage'dan oku
         if (!string.IsNullOrEmpty(template.XsltStoragePath)
             && await storage.ExistsAsync(template.XsltStoragePath))
         {
             await activity.RecordAsync(userId, UserActivityType.Download, template.Id, "Template");
+            await quota.IncrementTemplateExportAsync(userId);
             var cachedStream = await storage.ReadAsync(template.XsltStoragePath);
             return File(cachedStream, "application/xslt+xml", fileName);
         }
@@ -105,8 +131,27 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
         await db.SaveChangesAsync();
 
         // Dosyayı stream et
+        await activity.RecordAsync(userId, UserActivityType.Download, template.Id, "Template");
+        await quota.IncrementTemplateExportAsync(userId);
         var resultStream = await storage.ReadAsync(storagePath);
         return File(resultStream, "application/xslt+xml", fileName);
+    }
+
+    /// <summary>
+    /// Production XSLT indirme kota kapısı. İzinliyse null döner; değilse uygun hatayı:
+    /// 402 (plan izin vermiyor → Pro'ya yönlendir) veya 429 (Pro günlük 3 limit doldu).
+    /// Editör/Admin her zaman izinlidir.
+    /// </summary>
+    private async Task<IActionResult?> GateExportAsync(Guid userId)
+    {
+        var check = await quota.CheckTemplateExportAsync(userId);
+        if (check.Allowed) return null;
+
+        return check.Reason == QuotaDenyReason.ExportDailyLimit
+            ? StatusCode(StatusCodes.Status429TooManyRequests,
+                new { error = "daily_export_limit", message = "Bugünkü 3 şablon indirme hakkınız doldu. Yarın tekrar deneyebilir veya ek paket alabilirsiniz." })
+            : StatusCode(StatusCodes.Status402PaymentRequired,
+                new { error = "upgrade_required", upgrade = true, message = "Şablon indirme XsltCraft Pro üyeliği gerektirir. Pro'ya geçerek günde 3 şablon indirebilirsiniz." });
     }
 
     // GET /api/templates/:id  — tekil template'i getir (sahibi veya admin)

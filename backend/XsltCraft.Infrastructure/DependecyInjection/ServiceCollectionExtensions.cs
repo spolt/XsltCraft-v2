@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 using XsltCraft.Application.Interfaces;
+using XsltCraft.Application.Membership;
 using XsltCraft.Application.Preview;
 using XsltCraft.Application.Services;
 using XsltCraft.Application.Validation;
@@ -98,6 +99,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserManagementService, UserManagementService>();
 
         // -------------------------------------------------
+        // Membership / Entitlements / Quota
+        // -------------------------------------------------
+
+        services.Configure<MembershipOptions>(configuration.GetSection(MembershipOptions.SectionName));
+        services.AddScoped<IEntitlementService, EntitlementService>();
+        services.AddScoped<IUsageQuotaService, UsageQuotaService>();
+        services.AddScoped<IUsageReportService, UsageReportService>();
+
+        // -------------------------------------------------
         // AI Assistant
         // -------------------------------------------------
 
@@ -129,7 +139,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AiProviderOrchestrator>();
         services.AddScoped<IAiFeatureFlagService, AiFeatureFlagService>();
         services.AddScoped<IAiProviderHealthService, AiProviderHealthService>();
-        services.AddScoped<IAiTokenBudgetService, AiTokenBudgetService>();
 
         return services;
     }

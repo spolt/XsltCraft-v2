@@ -29,6 +29,7 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         [FromForm] string name,
         [FromForm] string documentType,
         IFormFile file,
+        [FromForm] bool isPremium = false,
         IFormFile? thumbnailFile = null)
     {
         var validationError = await ValidateXsltFileAsync(file);
@@ -64,6 +65,7 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
             Name = name,
             DocumentType = docType,
             IsFreeTheme = true,
+            IsPremium = isPremium,
             XsltStoragePath = relativePath,
             ThumbnailUrl = thumbnailUrl,
             CreatedAt = DateTime.UtcNow,
@@ -90,11 +92,15 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         Guid id,
         [FromForm] string? name,
         [FromForm] string? documentType,
+        [FromForm] bool? isPremium = null,
         IFormFile? file = null)
     {
         var template = await db.Templates.FindAsync(id);
         if (template is null)
             return NotFound();
+
+        if (isPremium.HasValue)
+            template.IsPremium = isPremium.Value;
 
         if (file is not null)
         {
@@ -352,6 +358,7 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         Id = t.Id,
         Name = t.Name,
         DocumentType = t.DocumentType.ToString(),
+        IsPremium = t.IsPremium,
         ThumbnailUrl = t.ThumbnailUrl,
         CreatedAt = t.CreatedAt,
         UpdatedAt = t.UpdatedAt

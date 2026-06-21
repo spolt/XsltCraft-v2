@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using XsltCraft.Application.DTO;
+using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
@@ -23,6 +24,8 @@ public class PreviewController : ControllerBase
     private readonly IStorageService _storage;
     private readonly AppDbContext _db;
     private readonly IWebHostEnvironment _env;
+    private readonly IUsageQuotaService _quota;
+    private readonly IEntitlementService _entitlements;
     private readonly ILogger<PreviewController> _logger;
 
     public PreviewController(
@@ -30,12 +33,16 @@ public class PreviewController : ControllerBase
         IStorageService storage,
         AppDbContext db,
         IWebHostEnvironment env,
+        IUsageQuotaService quota,
+        IEntitlementService entitlements,
         ILogger<PreviewController> logger)
     {
         _generator = generator;
         _storage = storage;
         _db = db;
         _env = env;
+        _quota = quota;
+        _entitlements = entitlements;
         _logger = logger;
     }
 
@@ -219,6 +226,20 @@ public class PreviewController : ControllerBase
         if (string.IsNullOrEmpty(template.XsltStoragePath))
             return BadRequest(new { error = "Bu tema için XSLT dosyası tanımlı değil." });
 
+        // Ücretli temanın ham XSLT'si (geliştirici modu) yalnız Pro/Editör/Admin'e açıktır.
+        if (template.IsPremium)
+        {
+            if (User.Identity?.IsAuthenticated != true)
+                return StatusCode(StatusCodes.Status402PaymentRequired,
+                    new { error = "upgrade_required", upgrade = true, message = "Bu ücretli tema XsltCraft Pro üyeliği gerektirir." });
+
+            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var ent = await _entitlements.GetAsync(userId);
+            if (!ent.CanUsePremiumThemes)
+                return StatusCode(StatusCodes.Status402PaymentRequired,
+                    new { error = "upgrade_required", upgrade = true, message = "Bu ücretli tema XsltCraft Pro üyeliği gerektirir." });
+        }
+
         await using var stream = await _storage.ReadAsync(template.XsltStoragePath);
         using var reader = new StreamReader(stream);
         var xslt = await reader.ReadToEndAsync();
@@ -274,12 +295,22 @@ public class PreviewController : ControllerBase
     }
 
     /// <summary>
-    /// Block tree'den ham XSLT üretir — dosya indirme için.
-    /// Response: raw XSLT text (application/xslt+xml)
+    /// Block tree'den ham XSLT üretir — dosya indirme için (kaydedilmemiş grid şablonu yolu).
+    /// Production indirme olduğundan TemplateController.Download ile aynı kotaya tabidir:
+    /// Standart indiremez (402), Pro günde 3 (4.'te 429), Editör/Admin sınırsız.
     /// </summary>
-    [HttpPost("xslt")]
+    [HttpPost("xslt"), Authorize]
     public async Task<IActionResult> GenerateXslt([FromBody] PreviewRequest request)
     {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var check = await _quota.CheckTemplateExportAsync(userId);
+        if (!check.Allowed)
+            return check.Reason == QuotaDenyReason.ExportDailyLimit
+                ? StatusCode(StatusCodes.Status429TooManyRequests,
+                    new { error = "daily_export_limit", message = "Bugünkü 3 şablon indirme hakkınız doldu. Yarın tekrar deneyebilir veya ek paket alabilirsiniz." })
+                : StatusCode(StatusCodes.Status402PaymentRequired,
+                    new { error = "upgrade_required", upgrade = true, message = "Şablon indirme XsltCraft Pro üyeliği gerektirir." });
+
         var assetBase64 = await BuildAssetBase64Async(request.Blocks);
         string? xslt;
         string? error;
@@ -297,6 +328,8 @@ public class PreviewController : ControllerBase
 
         if (xslt is null)
             return BadRequest(new { error });
+
+        await _quota.IncrementTemplateExportAsync(userId);
         return Content(xslt, "application/xslt+xml");
     }
 

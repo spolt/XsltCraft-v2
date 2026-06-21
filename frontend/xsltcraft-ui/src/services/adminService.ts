@@ -10,23 +10,26 @@ export async function createTheme(form: {
   name: string
   documentType: string
   file: File
+  isPremium?: boolean
 }): Promise<FreeTheme> {
   const body = new FormData()
   body.append('name', form.name)
   body.append('documentType', form.documentType)
   body.append('file', form.file)
+  body.append('isPremium', String(form.isPremium ?? false))
   const { data } = await api.post<FreeTheme>('/api/admin/themes', body)
   return data
 }
 
 export async function updateTheme(
   id: string,
-  form: { name?: string; documentType?: string; file?: File }
+  form: { name?: string; documentType?: string; file?: File; isPremium?: boolean }
 ): Promise<FreeTheme> {
   const body = new FormData()
   if (form.name) body.append('name', form.name)
   if (form.documentType) body.append('documentType', form.documentType)
   if (form.file) body.append('file', form.file)
+  if (form.isPremium !== undefined) body.append('isPremium', String(form.isPremium))
   const { data } = await api.put<FreeTheme>(`/api/admin/themes/${id}`, body)
   return data
 }

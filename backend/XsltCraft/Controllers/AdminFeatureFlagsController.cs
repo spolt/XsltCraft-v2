@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
 using XsltCraft.Application.Ai;
+using XsltCraft.Application.Interfaces;
 using XsltCraft.Infrastructure.Ai;
 
 namespace XsltCraft.Controllers;
@@ -14,18 +15,18 @@ public class AdminFeatureFlagsController : ControllerBase
 {
     private readonly IAiFeatureFlagService _aiFlag;
     private readonly IAiProviderHealthService _aiHealth;
-    private readonly IAiTokenBudgetService _tokenBudget;
+    private readonly IUsageQuotaService _quota;
     private readonly AiOptions _aiOptions;
 
     public AdminFeatureFlagsController(
         IAiFeatureFlagService aiFlag,
         IAiProviderHealthService aiHealth,
-        IAiTokenBudgetService tokenBudget,
+        IUsageQuotaService quota,
         IOptions<AiOptions> aiOptions)
     {
         _aiFlag = aiFlag;
         _aiHealth = aiHealth;
-        _tokenBudget = tokenBudget;
+        _quota = quota;
         _aiOptions = aiOptions.Value;
     }
 
@@ -78,7 +79,7 @@ public class AdminFeatureFlagsController : ControllerBase
             ? d
             : DateOnly.FromDateTime(DateTime.UtcNow);
 
-        var users = await _tokenBudget.GetDailyUsageAsync(targetDate, ct);
+        var users = await _quota.GetDailyUsageAsync(targetDate, ct);
         var limit = _aiOptions.DailyTokenBudgetPerUser;
         return Ok(new { date = targetDate, limit, users });
     }
