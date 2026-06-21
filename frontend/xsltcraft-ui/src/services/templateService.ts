@@ -18,6 +18,8 @@ export interface TemplateDetail {
   blockTree: string | null
   hasStoredXslt: boolean
   thumbnailUrl: string | null
+  folderId: string | null
+  isFavorite: boolean
   createdAt: string
   updatedAt: string
 }
@@ -66,6 +68,14 @@ export async function cloneTemplate(id: string): Promise<TemplateDetail> {
 
 export async function deleteTemplate(id: string): Promise<void> {
   await api.delete(`/api/templates/${id}`)
+}
+
+export async function moveTemplateToFolder(id: string, folderId: string | null): Promise<void> {
+  await api.patch(`/api/templates/${id}/folder`, { folderId })
+}
+
+export async function setTemplateFavorite(id: string, isFavorite: boolean): Promise<void> {
+  await api.patch(`/api/templates/${id}/favorite`, { isFavorite })
 }
 
 export async function downloadTemplate(id: string, fileName: string): Promise<void> {

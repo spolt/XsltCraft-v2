@@ -9,6 +9,8 @@ export interface UserXsltTemplateSummary {
   isShared: boolean
   ownerId: string
   ownerName: string
+  folderId: string | null
+  isFavorite: boolean
 }
 
 export interface UserXsltTemplateDetail extends UserXsltTemplateSummary {
@@ -66,6 +68,14 @@ export async function updateUserXsltTemplate(
 
 export async function deleteUserXsltTemplate(id: string): Promise<void> {
   await api.delete(`/api/user-xslt-templates/${id}`)
+}
+
+export async function moveUserXsltToFolder(id: string, folderId: string | null): Promise<void> {
+  await api.patch(`/api/user-xslt-templates/${id}/folder`, { folderId })
+}
+
+export async function setUserXsltFavorite(id: string, isFavorite: boolean): Promise<void> {
+  await api.patch(`/api/user-xslt-templates/${id}/favorite`, { isFavorite })
 }
 
 // --- Paylaşım ---

@@ -14,6 +14,10 @@ public class Template
     public string? BlockTree { get; set; }
     public string? XsltStoragePath { get; set; }
     public string? ThumbnailUrl { get; set; }
+    /// <summary>Kullanıcının atadığı düz klasör (null → "Tümü"). Klasör silinince SetNull olur.</summary>
+    public Guid? FolderId { get; set; }
+    public Folder? Folder { get; set; }
+    public bool IsFavorite { get; set; } = false;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

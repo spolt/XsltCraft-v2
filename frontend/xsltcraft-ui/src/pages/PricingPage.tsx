@@ -39,7 +39,7 @@ export default function PricingPage() {
     try {
       const res = await startCheckout('Pro')
       // Faz 1: ödeme stub'ı — "yakında" mesajı. (Admin grant ile Pro tanımlandıysa tazele.)
-      toast.info(res.message, { title: 'XsltCraft Pro' })
+      toast.info(res.message, { title: 'XsltCraft Pro', durationMs: 4000 })
       await refresh()
     } catch {
       toast.error('İşlem başlatılamadı. Lütfen tekrar deneyin.')

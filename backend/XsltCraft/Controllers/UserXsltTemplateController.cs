@@ -50,7 +50,10 @@ public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder a
                 IsOwner = t.OwnerId == userId,
                 IsShared = t.OwnerId != userId,
                 OwnerId = t.OwnerId,
-                OwnerName = string.IsNullOrWhiteSpace(t.Owner.DisplayName) ? t.Owner.Username : t.Owner.DisplayName!
+                OwnerName = string.IsNullOrWhiteSpace(t.Owner.DisplayName) ? t.Owner.Username : t.Owner.DisplayName!,
+                // Klasör/favori yalnız sahibin görünümü içindir; paylaşılan şablonlarda gösterilmez.
+                FolderId = t.OwnerId == userId ? t.FolderId : null,
+                IsFavorite = t.OwnerId == userId && t.IsFavorite
             })
             .ToListAsync();
 
@@ -363,6 +366,47 @@ public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder a
             await db.SaveChangesAsync();
         }
 
+        return NoContent();
+    }
+
+    // PATCH /api/user-xslt-templates/:id/folder — şablonu klasöre taşı / çıkar (yalnız sahip)
+    [HttpPatch("{id:guid}/folder")]
+    public async Task<IActionResult> MoveToFolder(Guid id, [FromBody] MoveToFolderRequest request)
+    {
+        var userId = CurrentUserId;
+
+        var template = await db.UserXsltTemplates.FindAsync(id);
+        if (template is null)
+            return NotFound(new { message = "Şablon bulunamadı." });
+        if (template.OwnerId != userId)
+            return Forbid();
+
+        if (request.FolderId is not null)
+        {
+            var folder = await db.Folders.FindAsync(request.FolderId.Value);
+            if (folder is null || folder.OwnerId != userId || folder.Kind != FolderKind.XsltTemplate)
+                return BadRequest(new { message = "Geçersiz klasör." });
+        }
+
+        template.FolderId = request.FolderId;
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    // PATCH /api/user-xslt-templates/:id/favorite — favori durumunu değiştir (yalnız sahip)
+    [HttpPatch("{id:guid}/favorite")]
+    public async Task<IActionResult> SetFavorite(Guid id, [FromBody] SetFavoriteRequest request)
+    {
+        var userId = CurrentUserId;
+
+        var template = await db.UserXsltTemplates.FindAsync(id);
+        if (template is null)
+            return NotFound(new { message = "Şablon bulunamadı." });
+        if (template.OwnerId != userId)
+            return Forbid();
+
+        template.IsFavorite = request.IsFavorite;
+        await db.SaveChangesAsync();
         return NoContent();
     }
 

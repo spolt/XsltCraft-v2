@@ -8,6 +8,10 @@ public class UserXsltTemplate
     public User Owner { get; set; } = null!;
     public string XsltContent { get; set; } = string.Empty;
     public string? XmlContent { get; set; }
+    /// <summary>Sahibinin atadığı düz klasör (null → "Tümü"). Klasör silinince SetNull olur.</summary>
+    public Guid? FolderId { get; set; }
+    public Folder? Folder { get; set; }
+    public bool IsFavorite { get; set; } = false;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

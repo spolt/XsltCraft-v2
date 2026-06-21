@@ -178,6 +178,8 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
             BlockTree = template.BlockTree,
             HasStoredXslt = template.XsltStoragePath is not null,
             ThumbnailUrl = template.ThumbnailUrl,
+            FolderId = template.FolderId,
+            IsFavorite = template.IsFavorite,
             CreatedAt = template.CreatedAt,
             UpdatedAt = template.UpdatedAt
         });
@@ -283,12 +285,57 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
                 DocumentType = t.DocumentType.ToString(),
                 IsFreeTheme = t.IsFreeTheme,
                 ThumbnailUrl = t.ThumbnailUrl,
+                FolderId = t.FolderId,
+                IsFavorite = t.IsFavorite,
                 CreatedAt = t.CreatedAt,
                 UpdatedAt = t.UpdatedAt
             })
             .ToListAsync();
 
         return Ok(templates);
+    }
+
+    // PATCH /api/templates/:id/folder  — şablonu klasöre taşı / klasörden çıkar (sahip)
+    [Authorize]
+    [HttpPatch("{id:guid}/folder")]
+    public async Task<IActionResult> MoveToFolder(Guid id, [FromBody] MoveToFolderRequest request)
+    {
+        var template = await db.Templates.FindAsync(id);
+        if (template is null)
+            return NotFound(new { message = "Template bulunamadı." });
+
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (template.OwnerId != userId)
+            return Forbid();
+
+        if (request.FolderId is not null)
+        {
+            var folder = await db.Folders.FindAsync(request.FolderId.Value);
+            if (folder is null || folder.OwnerId != userId || folder.Kind != FolderKind.Draft)
+                return BadRequest(new { message = "Geçersiz klasör." });
+        }
+
+        template.FolderId = request.FolderId;
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    // PATCH /api/templates/:id/favorite  — favori durumunu değiştir (sahip)
+    [Authorize]
+    [HttpPatch("{id:guid}/favorite")]
+    public async Task<IActionResult> SetFavorite(Guid id, [FromBody] SetFavoriteRequest request)
+    {
+        var template = await db.Templates.FindAsync(id);
+        if (template is null)
+            return NotFound(new { message = "Template bulunamadı." });
+
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (template.OwnerId != userId)
+            return Forbid();
+
+        template.IsFavorite = request.IsFavorite;
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 
     // POST /api/templates/:id/clone  — free theme'i veya kendi template'ini klonla

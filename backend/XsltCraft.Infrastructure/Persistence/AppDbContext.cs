@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserActivity> UserActivities => Set<UserActivity>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
     public DbSet<UserAiUsage> UserAiUsages => Set<UserAiUsage>();
+    public DbSet<Folder> Folders => Set<Folder>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -77,6 +78,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                   .HasForeignKey(t => t.OwnerId)
                   .IsRequired(false)
                   .OnDelete(DeleteBehavior.SetNull);
+            entity.Property(t => t.IsFavorite).HasDefaultValue(false);
+            entity.HasOne(t => t.Folder)
+                  .WithMany()
+                  .HasForeignKey(t => t.FolderId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(t => t.FolderId);
+        });
+
+        modelBuilder.Entity<Folder>(entity =>
+        {
+            entity.HasKey(f => f.Id);
+            entity.Property(f => f.Name).HasMaxLength(100).IsRequired();
+            entity.Property(f => f.Kind).HasConversion<string>().HasMaxLength(20);
+            entity.Property(f => f.Color).HasMaxLength(30);
+            entity.Property(f => f.CreatedAt).HasDefaultValueSql("NOW()");
+            entity.HasIndex(f => new { f.OwnerId, f.Kind });
+            entity.HasOne(f => f.Owner)
+                  .WithMany()
+                  .HasForeignKey(f => f.OwnerId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Asset>(entity =>
@@ -104,6 +125,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                   .HasForeignKey(t => t.OwnerId)
                   .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(t => t.EditingUserId);
+            entity.Property(t => t.IsFavorite).HasDefaultValue(false);
+            entity.HasOne(t => t.Folder)
+                  .WithMany()
+                  .HasForeignKey(t => t.FolderId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(t => t.FolderId);
         });
 
         modelBuilder.Entity<UserXsltTemplateShare>(entity =>
