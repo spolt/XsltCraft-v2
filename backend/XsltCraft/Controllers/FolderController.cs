@@ -17,6 +17,19 @@ public class FolderController(AppDbContext db) : ControllerBase
 {
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    private const int MaxNameLength = 100; // AppDbContext: Folder.Name HasMaxLength(100)
+
+    // Frontend (folderColors.ts) ile birebir aynı allowlist. Bilinmeyen değer → null (varsayılan ton).
+    private static readonly HashSet<string> AllowedColors =
+        new(StringComparer.OrdinalIgnoreCase) { "blue", "emerald", "amber", "rose", "violet", "slate" };
+
+    private static string? NormalizeColor(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return null;
+        var trimmed = color.Trim();
+        return AllowedColors.Contains(trimmed) ? trimmed.ToLowerInvariant() : null;
+    }
+
     private static FolderResponse ToResponse(Folder f) => new()
     {
         Id = f.Id,
@@ -56,6 +69,8 @@ public class FolderController(AppDbContext db) : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest(new { message = "Klasör adı boş olamaz." });
+        if (request.Name.Trim().Length > MaxNameLength)
+            return BadRequest(new { message = $"Klasör adı en fazla {MaxNameLength} karakter olabilir." });
         if (!Enum.TryParse<FolderKind>(request.Kind, ignoreCase: true, out var folderKind))
             return BadRequest(new { message = "Geçersiz kind. 'Draft' veya 'XsltTemplate' olmalı." });
 
@@ -65,7 +80,7 @@ public class FolderController(AppDbContext db) : ControllerBase
             OwnerId = CurrentUserId,
             Name = request.Name.Trim(),
             Kind = folderKind,
-            Color = string.IsNullOrWhiteSpace(request.Color) ? null : request.Color.Trim(),
+            Color = NormalizeColor(request.Color),
             CreatedAt = DateTime.UtcNow
         };
 
@@ -89,10 +104,12 @@ public class FolderController(AppDbContext db) : ControllerBase
         {
             if (string.IsNullOrWhiteSpace(request.Name))
                 return BadRequest(new { message = "Klasör adı boş olamaz." });
+            if (request.Name.Trim().Length > MaxNameLength)
+                return BadRequest(new { message = $"Klasör adı en fazla {MaxNameLength} karakter olabilir." });
             folder.Name = request.Name.Trim();
         }
         if (request.Color is not null)
-            folder.Color = string.IsNullOrWhiteSpace(request.Color) ? null : request.Color.Trim();
+            folder.Color = NormalizeColor(request.Color);
 
         await db.SaveChangesAsync();
         return Ok(ToResponse(folder));
