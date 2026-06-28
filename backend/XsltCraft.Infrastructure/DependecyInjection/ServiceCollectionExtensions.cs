@@ -8,6 +8,7 @@ using XsltCraft.Application.Preview;
 using XsltCraft.Application.Services;
 using XsltCraft.Application.Validation;
 using XsltCraft.Application.XPath;
+using XsltCraft.Application.Xslt;
 
 using XsltCraft.Application.Ai;
 
@@ -84,6 +85,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IXsltGeneratorService, XsltGeneratorService>();
         services.AddSingleton<IUblTrBusinessRuleService, UblTrBusinessRuleService>();
         services.AddSingleton<IXPathEvaluator, XPathEvaluator>();
+        services.AddSingleton<IFixedNoteInjector, FixedNoteInjector>();
 
         // -------------------------------------------------
         // Repositories

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Xml;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -6,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Application.DTO;
 using XsltCraft.Application.Interfaces;
+using XsltCraft.Application.Validation;
+using XsltCraft.Application.Xslt;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 
@@ -14,10 +17,18 @@ namespace XsltCraft.Api.Controllers;
 [ApiController]
 [Route("api/user-xslt-templates")]
 [Authorize]
-public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder activity, IEntitlementService entitlements) : ControllerBase
+public class UserXsltTemplateController(
+    AppDbContext db,
+    IUserActivityRecorder activity,
+    IEntitlementService entitlements,
+    IFixedNoteInjector noteInjector) : ControllerBase
 {
     // Heartbeat'i bu süreden eski olan kilit "pasif" sayılır ve devralınabilir.
     private static readonly TimeSpan LockTimeout = TimeSpan.FromSeconds(90);
+
+    // Toplu yükleme sınırları (admin tema yüklemesiyle tutarlı).
+    private const int MaxBulkItems = 100;
+    private const int MaxXsltChars = 2 * 1024 * 1024;
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -125,6 +136,134 @@ public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder a
             UpdatedAt = template.UpdatedAt,
             IsOwner = true
         });
+    }
+
+    // POST /api/user-xslt-templates/bulk — klasör olarak toplu XSLT yükle (yalnız sahip; Pro gerekli)
+    [HttpPost("bulk")]
+    public async Task<IActionResult> BulkUpload([FromBody] BulkUploadUserXsltRequest request)
+    {
+        var userId = CurrentUserId;
+
+        var saveGate = await GateSaveAsync();
+        if (saveGate is not null) return saveGate;
+
+        var items = request.Items ?? [];
+        if (items.Count == 0)
+            return BadRequest(new { message = "Yüklenecek dosya yok." });
+        if (items.Count > MaxBulkItems)
+            return BadRequest(new { message = $"Tek seferde en fazla {MaxBulkItems} dosya yüklenebilir." });
+
+        // Hedef klasör doğrulaması (MoveToFolder ile aynı: sahip + Kind=XsltTemplate)
+        if (request.FolderId is not null)
+        {
+            var folder = await db.Folders.FindAsync(request.FolderId.Value);
+            if (folder is null || folder.OwnerId != userId || folder.Kind != FolderKind.XsltTemplate)
+                return BadRequest(new { message = "Geçersiz klasör." });
+        }
+
+        var response = new BulkUploadResultResponse();
+        var now = DateTime.UtcNow;
+
+        foreach (var item in items)
+        {
+            var name = string.IsNullOrWhiteSpace(item.Name) ? "Yeni Şablon" : item.Name.Trim();
+            var reason = ValidateXslt(item.XsltContent);
+            if (reason is not null)
+            {
+                response.Skipped.Add(new BulkUploadSkipped { Name = name, Reason = reason });
+                continue;
+            }
+
+            var template = new UserXsltTemplate
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                OwnerId = userId,
+                XsltContent = item.XsltContent,
+                FolderId = request.FolderId,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            db.UserXsltTemplates.Add(template);
+            response.Created.Add(new BulkUploadCreated { Id = template.Id, Name = template.Name });
+        }
+
+        if (response.Created.Count > 0)
+        {
+            await db.SaveChangesAsync();
+            foreach (var created in response.Created)
+                await activity.RecordAsync(userId, UserActivityType.Save, created.Id, "Xslt");
+        }
+
+        return Ok(response);
+    }
+
+    // POST /api/user-xslt-templates/bulk-add-note — seçili şablonların not bölümüne sabit not göm (yalnız sahip; Pro)
+    [HttpPost("bulk-add-note")]
+    public async Task<IActionResult> BulkAddFixedNote([FromBody] BulkAddFixedNoteRequest request)
+    {
+        var userId = CurrentUserId;
+        var now = DateTime.UtcNow;
+
+        var saveGate = await GateSaveAsync();
+        if (saveGate is not null) return saveGate;
+
+        var noteText = request.NoteText?.Trim() ?? string.Empty;
+        if (noteText.Length == 0)
+            return BadRequest(new { message = "Not metni boş olamaz." });
+        if (noteText.Length > 1000)
+            return BadRequest(new { message = "Not metni 1000 karakteri aşamaz." });
+
+        var ids = (request.Ids ?? []).Distinct().ToList();
+        if (ids.Count == 0)
+            return BadRequest(new { message = "Şablon seçilmedi." });
+
+        var mode = string.Equals(request.Mode, "append", StringComparison.OrdinalIgnoreCase)
+            ? FixedNoteMode.Append
+            : FixedNoteMode.Replace;
+
+        // Yalnız sahip olunan şablonlar (IDOR koruması).
+        var templates = await db.UserXsltTemplates
+            .Where(t => ids.Contains(t.Id) && t.OwnerId == userId)
+            .ToListAsync();
+
+        var response = new BulkAddFixedNoteResultResponse();
+        var changed = false;
+
+        foreach (var template in templates)
+        {
+            if (IsLockedByOther(template, userId, now))
+            {
+                response.Results.Add(new BulkAddFixedNoteItemResult { Id = template.Id, Name = template.Name, Status = "locked" });
+                continue;
+            }
+
+            var result = noteInjector.Inject(template.XsltContent, noteText, mode);
+            switch (result.Status)
+            {
+                case FixedNoteStatus.Updated:
+                    template.XsltContent = result.Xslt;
+                    template.UpdatedAt = now;
+                    changed = true;
+                    response.Results.Add(new BulkAddFixedNoteItemResult { Id = template.Id, Name = template.Name, Status = "updated" });
+                    break;
+                case FixedNoteStatus.NoNotesSection:
+                    response.Results.Add(new BulkAddFixedNoteItemResult { Id = template.Id, Name = template.Name, Status = "no_notes" });
+                    break;
+                default:
+                    response.Results.Add(new BulkAddFixedNoteItemResult { Id = template.Id, Name = template.Name, Status = "failed" });
+                    break;
+            }
+        }
+
+        if (changed)
+        {
+            await db.SaveChangesAsync();
+            foreach (var r in response.Results.Where(r => r.Status == "updated"))
+                await activity.RecordAsync(userId, UserActivityType.Save, r.Id, "Xslt");
+        }
+
+        return Ok(response);
     }
 
     // PUT /api/user-xslt-templates/:id — şablonu güncelle (sahip veya paylaşılan kullanıcı)
@@ -412,6 +551,32 @@ public class UserXsltTemplateController(AppDbContext db, IUserActivityRecorder a
 
     private static bool CanAccess(UserXsltTemplate template, Guid userId) =>
         template.OwnerId == userId || template.Shares.Any(s => s.UserId == userId);
+
+    /// <summary>
+    /// Toplu yüklemede her XSLT'yi fail-closed doğrular: boyut, iyi-biçimli XML (XXE kapalı) ve
+    /// <see cref="XsltSafety"/> taraması. Sorun varsa açıklayıcı sebep; temizse null.
+    /// </summary>
+    private static string? ValidateXslt(string? xslt)
+    {
+        if (string.IsNullOrWhiteSpace(xslt))
+            return "XSLT içeriği boş.";
+        if (xslt.Length > MaxXsltChars)
+            return "Dosya çok büyük (2 MB sınırı).";
+
+        try
+        {
+            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+            using var sr = new StringReader(xslt);
+            using var reader = XmlReader.Create(sr, settings);
+            while (reader.Read()) { }
+        }
+        catch (XmlException ex)
+        {
+            return $"Geçersiz XML: {ex.Message}";
+        }
+
+        return XsltSafety.FindThreat(xslt);
+    }
 
     /// <summary>
     /// Ham XSLT kaydetme/saklama yetki kapısı. İzinliyse null; değilse 402 (Pro'ya yönlendir).

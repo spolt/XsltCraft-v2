@@ -78,6 +78,51 @@ export async function setUserXsltFavorite(id: string, isFavorite: boolean): Prom
   await api.patch(`/api/user-xslt-templates/${id}/favorite`, { isFavorite })
 }
 
+// --- Toplu yükleme (klasör olarak) ---
+
+export interface BulkUploadItem {
+  name: string
+  xsltContent: string
+}
+
+export interface BulkUploadResult {
+  created: { id: string; name: string }[]
+  skipped: { name: string; reason: string }[]
+}
+
+export async function bulkUploadUserXslt(
+  folderId: string | null,
+  items: BulkUploadItem[],
+): Promise<BulkUploadResult> {
+  const { data } = await api.post<BulkUploadResult>('/api/user-xslt-templates/bulk', {
+    folderId,
+    items,
+  })
+  return data
+}
+
+// --- Toplu sabit not ekleme ---
+
+export type FixedNoteMode = 'replace' | 'append'
+export type FixedNoteItemStatus = 'updated' | 'no_notes' | 'locked' | 'failed'
+
+export interface BulkAddFixedNoteResult {
+  results: { id: string; name: string; status: FixedNoteItemStatus }[]
+}
+
+export async function bulkAddFixedNote(
+  ids: string[],
+  noteText: string,
+  mode: FixedNoteMode,
+): Promise<BulkAddFixedNoteResult> {
+  const { data } = await api.post<BulkAddFixedNoteResult>('/api/user-xslt-templates/bulk-add-note', {
+    ids,
+    noteText,
+    mode,
+  })
+  return data
+}
+
 // --- Paylaşım ---
 
 export async function getTemplateShares(id: string): Promise<TemplateShare[]> {
