@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Code2, Eye, Pencil, Trash2, Check, X, Share2, Users, FolderInput, LayoutGrid, Star } from 'lucide-react'
+import { Code2, Eye, Pencil, Trash2, Check, X, Share2, Users, FolderInput, LayoutGrid, Star, Upload, StickyNote } from 'lucide-react'
 import {
   getUserXsltTemplates,
   getUserXsltTemplate,
@@ -8,7 +8,10 @@ import {
   updateUserXsltTemplate,
   moveUserXsltToFolder,
   setUserXsltFavorite,
+  bulkAddFixedNote,
   type UserXsltTemplateSummary,
+  type FixedNoteMode,
+  type BulkAddFixedNoteResult,
 } from '../services/userXsltService'
 import {
   createFolder,
@@ -23,6 +26,9 @@ import ShareTemplateDialog from '../components/xslt-editor/ShareTemplateDialog'
 import FolderSidebar from '../components/storage/FolderSidebar'
 import StorageToolbar from '../components/storage/StorageToolbar'
 import MoveToFolderMenu from '../components/storage/MoveToFolderMenu'
+import BulkUploadModal from '../components/storage/BulkUploadModal'
+import BulkAddNoteModal from '../components/storage/BulkAddNoteModal'
+import BulkNoteResultDialog from '../components/storage/BulkNoteResultDialog'
 import { useTemplateLibrary, type SortKey } from '../components/storage/useTemplateLibrary'
 import { toast } from '../store/toastStore'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
@@ -35,6 +41,9 @@ export default function MyXsltTemplatesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
+  const [bulkNoteOpen, setBulkNoteOpen] = useState(false)
+  const [noteResult, setNoteResult] = useState<BulkAddFixedNoteResult | null>(null)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<SortKey>('updated')
   const [previewId, setPreviewId] = useState<string | null>(null)
@@ -198,6 +207,30 @@ export default function MyXsltTemplatesPage() {
     } catch { toast.error('Toplu silme sırasında hata oluştu.') } finally { setBulkConfirm(false) }
   }
 
+  async function handleBulkUploaded(folderId: string | null) {
+    await load()
+    if (folderId) setActiveKey(folderId)
+  }
+
+  async function handleBulkAddNote(noteText: string, mode: FixedNoteMode) {
+    const ids = [...selectedIds]
+    try {
+      const res = await bulkAddFixedNote(ids, noteText, mode)
+      setBulkNoteOpen(false)
+      setNoteResult(res)
+      // Etkilenen şablonların updatedAt'ı değişti; listeyi tazele.
+      const updatedIds = new Set(res.results.filter((r) => r.status === 'updated').map((r) => r.id))
+      if (updatedIds.size > 0) {
+        const tpls = await getUserXsltTemplates()
+        setTemplates(tpls)
+        setSelectedIds(new Set())
+      }
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      toast.error(status === 402 ? 'Sabit not ekleme XsltCraft Pro üyeliği gerektirir.' : 'Sabit not eklenemedi.', { durationMs: 5000 })
+    }
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center py-24"><p className="text-gray-400 text-sm">Yükleniyor...</p></div>
   }
@@ -242,13 +275,22 @@ export default function MyXsltTemplatesPage() {
           <h1 className="text-xl font-semibold text-gray-800">Şablonlarım</h1>
           <p className="text-sm text-gray-400 mt-0.5">{templates.length} XSLT şablon</p>
         </div>
-        <Link
-          to="/xslt-editor"
-          className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors"
-        >
-          <Code2 size={15} />
-          XSLT Editör
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setBulkUploadOpen(true)}
+            className="flex items-center gap-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
+          >
+            <Upload size={15} />
+            Toplu Yükle
+          </button>
+          <Link
+            to="/xslt-editor"
+            className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors"
+          >
+            <Code2 size={15} />
+            XSLT Editör
+          </Link>
+        </div>
       </div>
 
       {templates.length === 0 ? (
@@ -271,6 +313,12 @@ export default function MyXsltTemplatesPage() {
                   <MoveToFolderMenu folders={sortedFolders} onMove={handleBulkMove} onClose={() => setBulkMoveOpen(false)} />
                 )}
               </div>
+              <button
+                onClick={() => setBulkNoteOpen(true)}
+                className="flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
+              >
+                <StickyNote size={14} /> Sabit Not Ekle
+              </button>
               {bulkConfirm ? (
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-red-600 font-medium">Emin misin?</span>
@@ -345,6 +393,33 @@ export default function MyXsltTemplatesPage() {
           templateId={shareTarget.id}
           templateName={shareTarget.name}
           onClose={() => setShareTarget(null)}
+        />
+      )}
+      {bulkUploadOpen && (
+        <BulkUploadModal
+          folders={sortedFolders}
+          defaultFolderId={activeKey !== 'all' && activeKey !== 'favorites' && activeKey !== 'shared' ? activeKey : null}
+          onClose={() => setBulkUploadOpen(false)}
+          onUploaded={handleBulkUploaded}
+        />
+      )}
+      {bulkNoteOpen && (
+        <BulkAddNoteModal
+          count={selectedIds.size}
+          onClose={() => setBulkNoteOpen(false)}
+          onConfirm={handleBulkAddNote}
+        />
+      )}
+      {noteResult && (
+        <BulkNoteResultDialog
+          result={noteResult}
+          onClose={() => setNoteResult(null)}
+          onPreview={(id) => {
+            const r = noteResult.results.find((x) => x.id === id)
+            setPreviewId(id)
+            setPreviewName(r?.name ?? '')
+            setNoteResult(null)
+          }}
         />
       )}
     </div>

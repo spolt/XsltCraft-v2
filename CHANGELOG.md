@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-28
+
+### Added
+- **Şablonlarım — klasör olarak toplu XSLT yükleme** (`UserXsltTemplateController.BulkUpload` → `POST /api/user-xslt-templates/bulk`, `BulkUploadUserXsltRequest`, `components/storage/BulkUploadModal.tsx`, `MyXsltTemplatesPage`): Tek "Toplu Yükle" modalından birden çok `.xslt` dosyası **veya** bir disk klasörü (`webkitdirectory`) seçilip **yeni ya da mevcut** bir klasöre tek seferde aktarılır. Her dosya sunucuda **fail-closed** doğrulanır (iyi-biçimli XML — `DtdProcessing.Prohibit` + `XmlResolver=null` — ve `XsltSafety.FindThreat`); geçersizler atlanıp dosya-bazında raporlanır, geçerliler tek transaction'da yazılır. Pro-gated (`GateSaveAsync`; Free → 402 upsell), sınırlar ≤100 dosya ve ≤2 MB/dosya. Yükleme bitince hedef klasöre yönlendirir.
+- **Şablonlarım — toplu sabit not ekleme** (`IFixedNoteInjector`/`FixedNoteInjector`, `UserXsltTemplateController.BulkAddFixedNote` → `POST /api/user-xslt-templates/bulk-add-note`, `BulkAddFixedNoteRequest`, `components/storage/BulkAddNoteModal.tsx` + `BulkNoteResultDialog.tsx`): Toplu seçilen şablonların **koşulsuz** not gösterim döngüsüne (`//n1:Invoice/cbc:Note` ve `//n1:DespatchAdvice/cbc:Note`) sabit bir not metni gömülür. Snippet, döngünün **kendi gövdesinden türetilir** (şablonun `<b>Not:</b>`/`<tr><td>` stili korunur) ve döngüden hemen sonra **tam bir kez** render edecek şekilde dosyaya cerrahi olarak yerleştirilir (dosyanın geri kalanı byte-byte korunur — tüm XSLT yeniden serialize edilmez). Atası `xsl:if/when/choose` olan **koşullu (SGK vb.) notlara dokunulmaz**. Gizli marker yorumları (`<!-- xc:fixed-note -->`) ile idempotenttir: varsayılan **"değiştir"** modu mevcut sabit notu günceller (çoğalmaz), **"yeni not olarak ekle"** modu blok içine yeni satır ekler. Şablon başına sonuç (eklendi / not bölümü yok / kilitli / hata) bir diyalogda gösterilir ve "Önizle" ile mevcut önizleme paneline yönlendirilir. Owner-scoped (IDOR), başkasınca aktif düzenlenen şablonlar atlanır, Pro-gated.
+
+### Changed
+- **"Sabit Not Ekle" modalı sadeleştirildi** (`BulkAddNoteModal.tsx`): Kullanıcıya XPath/iç-işleyiş detayı veren teknik bilgi kutusu kaldırıldı. Ayrıca yeni toplu-işlem bildirimlerine süre (`durationMs: 5000`) eklendi.
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.6.0 → 1.7.0`.
+
+### Fixed
+- **Toplu yükleme 30 MB istek sınırında başarısız oluyordu** (`BulkUploadModal.tsx`): Çok sayıda büyük XSLT'nin (gerçek GİB e-fatura şablonları ~250 KB+) tüm içeriği tek JSON gövdesinde gönderiliyor ve Kestrel'in varsayılan 30 MB istek-gövdesi sınırını aşıp bağlantı resetine ("provisional headers / 0 B transferred") yol açıyordu. Yükleme artık boyut-bazlı **partilere** bölünüyor (`buildBatches`: ≤10 MB ham içerik **ve** ≤50 dosya/istek); partiler sırayla gönderilip sonuçlar toplanır, "yeni klasör" tek kez oluşturulup tüm partiler aynı `folderId`'yi kullanır, buton parti ilerlemesini gösterir.
+- **Sabit not, `xsl:variable` içindeki not döngüsüne gömülebiliyordu** (`FixedNoteInjector`): Bir `<xsl:variable>` (ör. `vareczanehizmetbedeli`) içinde tanımlı `//n1:Invoice/cbc:Note` döngüsü, atasında `if/when/choose` olmadığı için yanlışlıkla hedef seçilip not, çıktıya render edilmeyen bir değer-hesabına gömülüyordu. Tespit artık atasında **`variable`/`param`/`with-param`** de bulunan döngüleri dışlar — yalnız görünür gösterim döngüsü seçilir. Ek olarak enjeksiyon **kendini onarır** (`StripMarkerBlock`): mevcut marker bloğu önce çıkarılıp not doğru konuma yeniden yerleştirilir → "değiştir" çalıştırıldığında daha önce yanlış yere gömülmüş notlar otomatik düzelir; "ekle" modunda önceki notlar korunup birlikte taşınır.
+
+### Security
+- **Toplu uçlar için fail-closed XSLT doğrulama** (`UserXsltTemplateController`, `FixedNoteInjector`): Toplu yüklenen her XSLT, kalıcılaştırılmadan önce `DtdProcessing.Prohibit` + `XmlResolver=null` ile ayrıştırılır ve `XsltSafety.FindThreat` taramasından geçirilir (tekil `Create` yolunda bulunmayan kontrol — boşluk kapatıldı). Sabit not metni **kullanıcı girdisidir**; yalnızca `xsl:text` değer düğümü olarak gömülür (XML kaçışı otomatik) → markup/XSLT injection engellenir; enjeksiyon sonucu tekrar `XsltSafety` ile fail-closed taranır.
+
+### Tests
+- **`FixedNoteInjectorTests`** (`XsltCraft.Application.Tests/Xslt/`, 9 case): koşullu/koşulsuz döngü ayrımı, **`xsl:variable` içindeki döngülerin atlanması**, tek-kez render, XML kaçışı, idempotent "değiştir", "ekle" modu, **yanlış konuma gömülen notun kendini onarması**, Invoice + DespatchAdvice yolları, `NoNotesSection`/malformed XSLT. Application.Tests: 80 → **89**.
+
 ## [1.6.0] - 2026-06-21
 
 ### Added
