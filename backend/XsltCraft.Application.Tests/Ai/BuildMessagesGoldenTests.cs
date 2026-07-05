@@ -44,6 +44,21 @@ public class BuildMessagesGoldenTests
     }
 
     [Fact]
+    public Task Assistant_WithXsltSelection()
+    {
+        var req = new AiRequest
+        {
+            Task = AiTaskKind.Assistant,
+            UserRequest = "seçtiğim kısım ne ifade ediyor",
+            UserXslt = SimpleXslt,
+            Selection = "<xsl:for-each select=\"//n1:Invoice/cbc:Note\"/>",
+            History = [],
+        };
+        var messages = PromptTemplates.BuildMessages(req, AiMode.Assistant);
+        return Verifier.Verify(messages).UseDirectory("__snapshots__");
+    }
+
+    [Fact]
     public Task Assistant_ThirdTurn_WithHistory()
     {
         var req = new AiRequest

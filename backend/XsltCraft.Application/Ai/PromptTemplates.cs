@@ -94,6 +94,12 @@ public static class PromptTemplates
 
                 if (!string.IsNullOrWhiteSpace(xsltClipped))
                     ctxSb.Append("<user_xslt>\n").Append(xsltClipped).Append("\n</user_xslt>\n");
+                // Kullanıcının seçtiği XSLT bölgesi ayrı ve etiketli sunulur; tam
+                // stylesheet içinde kaybolmasın (dosya boyutundan bağımsız).
+                if (!string.IsNullOrWhiteSpace(req.Selection))
+                    ctxSb.Append("<user_xslt_selection>\n")
+                         .Append(Clip(req.Selection, AssistantXsltLimitChars))
+                         .Append("\n</user_xslt_selection>\n");
                 if (!string.IsNullOrWhiteSpace(req.XmlSelection))
                     ctxSb.Append("<user_xml_selection>\n").Append(req.XmlSelection).Append("\n</user_xml_selection>\n");
                 else if (!string.IsNullOrWhiteSpace(xmlClipped))

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-07-06
+
+### Fixed
+- **XSLT Editör — AI sohbeti sekme değişiminde sıfırlanıyordu** (`XsltEditorPage.tsx`): AI paneli, Önizleme/XML Kaynak sekmesine geçilince React ağacından unmount edildiği için tüm konuşma kayboluyordu. Panel artık ilk açılıştan sonra mount'ta tutulur ve aktif değilken CSS (`hidden`) ile gizlenir; sekmeler arası geçişte sohbet (ve süren streaming yanıtı) korunur. Düz AI açılışı (`openAiBlank`) remount tetiklemez; taze sohbet yalnızca "Yeni sohbet" (↺) düğmesiyle ya da Problemler panelinden "AI'ya sor" akışında (bilinçli `key` değişimi) başlar.
+- **AI, seçili XSLT bölgesine dair soruda alakasız yanıt veriyordu** (`PromptTemplates`, `Prompts/Core/Identity.md`): Kullanıcının editörde seçtiği XSLT, XML seçiminin aksine prompt'ta kendi etiketli bloğunu almıyor, yalnızca `XsltSummarizer`'a ipucu olarak geçiyordu; büyük şablonlarda seçili satırlar tüm template içinde erir ve 16K `Clip` penceresinde kırpılabiliyordu. Assistant prompt'una `<user_xslt_selection>` bloğu eklendi (tam stylesheet korunur, seçim ek ve ham blok olarak sunulur) ve sistem yönergesine "kullanıcı bir bölge seçtiyse yanıtını ona odakla" kuralı eklendi. Böylece dosya boyutundan bağımsız olarak model doğru bölgeye yanıt verir.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.7.0 → 1.7.2`.
+
+### Tests
+- **`BuildMessagesGoldenTests.Assistant_WithXsltSelection`** eklendi: seçim varken prompt'ta `<user_xslt_selection>` bloğunun ve odaklanma yönergesinin yer aldığını doğrular; mevcut üç golden snapshot sistem-mesajı değişikliğine göre yenilendi. Application.Tests: 89 → **90**.
+
 ## [1.7.0] - 2026-06-28
 
 ### Added

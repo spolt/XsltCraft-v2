@@ -93,26 +93,15 @@ Namespace bildirimleri: xmlns:xsl="http://www.w3.org/1999/XSL/Transform", xmlns:
   {
     Role: user,
     Content:
-<output_format>
-Verilen seçimi refactor et. Önce kısa bir özet, sonra ```xslt ... ``` bloğu içinde TAM yeni hâli (before değil after) ver.
-</output_format>
-
-<user_xml>
-<Invoice><cbc:Note>ETF:100</cbc:Note></Invoice>
-</user_xml>
-
 <user_xslt>
 <?xml version="1.0"?><xsl:stylesheet version="2.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:n1="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cbc="urn:oasis:names:tc:ubl:schema:xsd:CommonBasicComponents-2" xmlns:cac="urn:oasis:names:tc:ubl:schema:xsd:CommonAggregateComponents-2"><xsl:for-each select="//n1:Invoice/cbc:Note"/></xsl:stylesheet>
 </user_xslt>
-
-<user_selection>
-<xsl:for-each select="//n1:Invoice/cbc:Note">
-  <b>Not: </b><xsl:value-of select="."/>
-</xsl:for-each>
-</user_selection>
-
-<user_request>
-note prefix gizle ETF
-</user_request>
+<user_xslt_selection>
+<xsl:for-each select="//n1:Invoice/cbc:Note"/>
+</user_xslt_selection>
+  },
+  {
+    Role: user,
+    Content: seçtiğim kısım ne ifade ediyor
   }
 ]
