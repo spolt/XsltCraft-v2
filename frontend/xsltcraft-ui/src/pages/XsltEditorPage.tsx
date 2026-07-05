@@ -186,6 +186,9 @@ export default function XsltEditorPage() {
   const refreshAi = useAiStore(s => s.refresh)
   const [aiInitialError, setAiInitialError] = useState<string | null>(null)
   const [aiKey, setAiKey] = useState(0)
+  // AI paneli ilk açılışta mount olur; sonrasında hep mount kalır (gizlense de),
+  // böylece sekme değiştirince sohbet yok olmaz.
+  const [aiMounted, setAiMounted] = useState(false)
   const [refactorState, setRefactorState] = useState<{
     selection: string
     range: { startLine: number; endLine: number }
@@ -217,6 +220,7 @@ export default function XsltEditorPage() {
         'Tüm şablonu tekrar yazma.'
       )
       setAiKey(k => k + 1)
+      setAiMounted(true)
       setRightTab('ai')
       return
     }
@@ -224,12 +228,15 @@ export default function XsltEditorPage() {
       (problem.line != null ? ` (satır ${problem.line}${problem.column ? `:${problem.column}` : ''})` : '')
     setAiInitialError(errMsg)
     setAiKey(k => k + 1)
+    setAiMounted(true)
     setRightTab('ai')
   }
 
+  // Düz AI açılışı: yalnızca paneli göster; key'i değiştirmez, dolayısıyla
+  // remount olmaz ve mevcut sohbet korunur. Sohbeti kullanıcı "Yeni sohbet" (↺)
+  // düğmesiyle kendisi sıfırlar.
   function openAiBlank() {
-    setAiInitialError(null)
-    setAiKey(k => k + 1)
+    setAiMounted(true)
     setRightTab('ai')
   }
 
@@ -897,23 +904,10 @@ export default function XsltEditorPage() {
 
               {/* Sağ panel içerik */}
               <div className="flex-1 overflow-hidden">
-                {rightTab === 'preview' ? (
+                {rightTab !== 'ai' && (rightTab === 'preview' ? (
                   <XsltEditorPreview
                     html={previewHtml}
                     onElementClick={handlePreviewClick}
-                  />
-                ) : rightTab === 'ai' ? (
-                  <AiAssistantPanel
-                    key={aiKey}
-                    xslt={xsltContent}
-                    xml={xmlContent}
-                    xmlCursorLine={xmlCursorLine}
-                    xmlSelection={xmlSelection}
-                    xsltCursorLine={xsltCursorLine}
-                    xsltSelection={xsltSelection}
-                    initialErrorMessage={aiInitialError}
-                    xmlDeclarationMissing={declProblem != null}
-                    onClose={() => setRightTab('preview')}
                   />
                 ) : (
                   <Editor
@@ -941,6 +935,24 @@ export default function XsltEditorPage() {
                       folding: true,
                     }}
                   />
+                ))}
+                {/* AI paneli bir kez açıldıktan sonra mount'ta kalır; sekme aktif
+                    değilken CSS ile gizlenir, böylece sohbet korunur. */}
+                {aiEnabled && aiMounted && (
+                  <div className={rightTab === 'ai' ? 'h-full' : 'hidden'}>
+                    <AiAssistantPanel
+                      key={aiKey}
+                      xslt={xsltContent}
+                      xml={xmlContent}
+                      xmlCursorLine={xmlCursorLine}
+                      xmlSelection={xmlSelection}
+                      xsltCursorLine={xsltCursorLine}
+                      xsltSelection={xsltSelection}
+                      initialErrorMessage={aiInitialError}
+                      xmlDeclarationMissing={declProblem != null}
+                      onClose={() => setRightTab('preview')}
+                    />
+                  </div>
                 )}
               </div>
             </div>
