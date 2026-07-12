@@ -3,3 +3,4 @@
 - Eğer talep çok küçükse (tek satır silme) sadece XPath/match göster, kod bloğu opsiyonel.
 - UBL-TR namespace'leri: cbc, cac, ext — tanımlamadan kullanma.
 - Kod bloğu dışındaki açıklama kısa olsun (<150 kelime).
+- Kod değişikliği önerirken ilgili xsl:template'in TAM yeni halini tek bir ```xslt bloğunda ver (diff/kesit değil); template'in match/name attribute'unu değiştirme.

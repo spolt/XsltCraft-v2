@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
     public DbSet<UserAiUsage> UserAiUsages => Set<UserAiUsage>();
     public DbSet<Folder> Folders => Set<Folder>();
+    public DbSet<AiFeedback> AiFeedbacks => Set<AiFeedback>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -182,6 +183,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(s => s.Owner)
                   .WithMany()
                   .HasForeignKey(s => s.OwnerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AiFeedback>(entity =>
+        {
+            entity.HasKey(f => f.Id);
+            entity.Property(f => f.Rating).HasConversion<string>().HasMaxLength(10);
+            entity.Property(f => f.UserMessage).HasMaxLength(2000);
+            entity.Property(f => f.AssistantAnswer).HasMaxLength(8000);
+            entity.Property(f => f.CreatedAt).HasDefaultValueSql("NOW()");
+            // Exemplar erişim sorgusu: Rating==Positive && (UserId==x || IsGlobal), son N kayıt.
+            entity.HasIndex(f => new { f.UserId, f.Rating, f.CreatedAt });
+            entity.HasIndex(f => f.CreatedAt).HasFilter("\"IsGlobal\" = TRUE");
+            entity.HasOne(f => f.User)
+                  .WithMany()
+                  .HasForeignKey(f => f.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
     }

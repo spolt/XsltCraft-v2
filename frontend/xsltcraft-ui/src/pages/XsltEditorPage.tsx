@@ -243,6 +243,13 @@ export default function XsltEditorPage() {
     setRefactorState(null)
   }
 
+  // AI sohbetinden gelen değişikliği uygula: hesaplanmış TAM doküman doğrudan yazılır.
+  // Controlled value → @monaco-editor/react executeEdits ile tek adımlık geri-alınabilir edit.
+  function applyAiChange(newDoc: string) {
+    setXsltContent(newDoc)
+    setIsDirty(true)
+  }
+
   function openAiForProblem(problem: ProblemItem) {
     // XML bildirimi eksik hatası: tüm şablonu tekrar yazdırmadan, kısa ve hedefli yanıt iste
     if (problem.ruleId === 'XML_DECL_MISSING') {
@@ -1030,6 +1037,7 @@ export default function XsltEditorPage() {
                         xsltSelection={xsltSelection}
                         initialErrorMessage={aiInitialError}
                         xmlDeclarationMissing={declProblem != null}
+                        onApplyXslt={applyAiChange}
                         onClose={() => setRightTab('preview')}
                       />
                     </div>

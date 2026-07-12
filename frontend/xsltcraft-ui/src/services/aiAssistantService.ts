@@ -104,6 +104,65 @@ export async function streamAi(
   }
 }
 
+// ── Geri bildirim (feedback) ─────────────────────────────────────────────────
+
+export interface AiFeedbackBody {
+  rating: 'positive' | 'negative'
+  userMessage: string
+  assistantAnswer: string
+  applied?: boolean
+}
+
+export async function submitAiFeedback(body: AiFeedbackBody): Promise<{ id: string }> {
+  const { data } = await api.post<{ id: string }>('/api/ai/feedback', body)
+  return data
+}
+
+export async function updateAiFeedback(
+  id: string,
+  body: { rating: 'positive' | 'negative'; applied: boolean },
+): Promise<void> {
+  await api.put(`/api/ai/feedback/${id}`, body)
+}
+
+// ── Admin — geri bildirim havuzu ─────────────────────────────────────────────
+
+export interface AdminAiFeedbackItem {
+  id: string
+  userId: string
+  username: string | null
+  email: string
+  rating: 'Positive' | 'Negative'
+  userMessage: string
+  assistantAnswer: string
+  applied: boolean
+  isGlobal: boolean
+  createdAt: string
+}
+
+export interface AdminAiFeedbackPage {
+  items: AdminAiFeedbackItem[]
+  total: number
+}
+
+export async function getAdminAiFeedback(params: {
+  rating?: 'positive' | 'negative' | 'all'
+  q?: string
+  page?: number
+  pageSize?: number
+}): Promise<AdminAiFeedbackPage> {
+  const { data } = await api.get<AdminAiFeedbackPage>('/api/admin/ai-feedback', { params })
+  return data
+}
+
+export async function setAiFeedbackGlobal(id: string, isGlobal: boolean): Promise<void> {
+  await api.put(`/api/admin/ai-feedback/${id}/global`, { isGlobal })
+}
+
+export async function deleteAiFeedback(id: string): Promise<void> {
+  await api.delete(`/api/admin/ai-feedback/${id}`)
+}
+
 // Admin
 export async function getAdminAiFlag(): Promise<{ enabled: boolean }> {
   const { data } = await api.get<{ enabled: boolean }>('/api/admin/feature-flags/ai')

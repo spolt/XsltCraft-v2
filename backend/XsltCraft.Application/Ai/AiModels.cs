@@ -19,8 +19,13 @@ public class AiRequest
     /// <summary>XSLT editöründe imlecin bulunduğu satır (1-tabanlı); template alaka skorunda boost için.</summary>
     public int? XsltCursorLine { get; set; }
     public List<AssistantMessage>? History { get; set; }
+    /// <summary>Geçmiş başarılı örnekler (few-shot). Prompt'ta system'a değil ilk user bağlamına enjekte edilir.</summary>
+    public List<AiExemplar>? Exemplars { get; set; }
     public int MaxTokens { get; set; } = 2048;
 }
+
+/// <summary>Kullanıcının geçmişte işine yaramış bir soru→cevap örneği (few-shot exemplar).</summary>
+public record AiExemplar(string Question, string Answer);
 
 public class AiChunk
 {

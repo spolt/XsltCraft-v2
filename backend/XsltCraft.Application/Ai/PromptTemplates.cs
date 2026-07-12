@@ -105,6 +105,20 @@ public static class PromptTemplates
                 else if (!string.IsNullOrWhiteSpace(xmlClipped))
                     ctxSb.Append("<user_xml>\n").Append(xmlClipped).Append("\n</user_xml>\n");
 
+                // Öğrenilen örnekler: system mesajına DEĞİL (KV-cache prefix'i bozmamak için)
+                // değişken user bağlamına enjekte edilir.
+                if (req.Exemplars is { Count: > 0 })
+                {
+                    ctxSb.Append("<successful_examples>\n")
+                         .Append("Bu kullanıcının geçmişte işine yaramış örnek soru-cevaplar. Benzer bir soruda aynı yaklaşımı ve üslubu izle:\n");
+                    var n = 1;
+                    foreach (var ex in req.Exemplars.Take(2))
+                        ctxSb.Append("### Örnek ").Append(n++).Append('\n')
+                             .Append("Soru: ").Append(ex.Question).Append('\n')
+                             .Append("Cevap:\n").Append(Clip(ex.Answer, 2_000)).Append('\n');
+                    ctxSb.Append("</successful_examples>\n");
+                }
+
                 if (ctxSb.Length > 0)
                     messages.Add(new("user", ctxSb.ToString().TrimEnd()));
             }

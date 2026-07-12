@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-07-13
+
+### Added
+- **AI sohbet — önerilen değişikliği editöre uygula** (`utils/xsltApply.ts`, `components/ai/AiApplyDialog.tsx`, `AiAssistantPanel.tsx`, `XsltEditorPage.applyAiChange`): Asistan yanıtında bir XSLT kod bloğu varsa mesaj altında **"Uygula"** düğmesi çıkar. Tıklanınca Monaco `DiffEditor` ile eski/yeni karşılaştırması gösterilir, `POST /api/preview/validate-xslt` ile doğrulanır (geçersizse "Yine de uygula") ve kabul edilince editördeki XSLT'ye uygulanır (tek adımda `Ctrl+Z` ile geri alınabilir). Hedefleme algoritması (`computeApplyTarget`): tam stylesheet → tüm belge; aktif seçim dokümanda varsa → seçim; blok bir `xsl:template` ise aynı `match`/`name`/`mode` imzalı tek template → o template; aksi hâlde **no-match** (tahmin yok, "Panoya kopyala").
+- **AI sohbet — işe yaradı / işe yaramadı geri bildirimi** (`AiFeedback` entity + migration, `IAiFeedbackService`, `POST/PUT /api/ai/feedback`): Her tamamlanmış asistan yanıtı için 👍/👎 oy. "Uygula" örtük pozitif kaydeder. 👎 seçilince iki seçenek açılır: **"Farklı yaklaşım dene"** (önceki yanıtın işe yaramadığı bilgisiyle otomatik yeniden sorar) ve **"Detay vereyim"** (input'a odaklanır). Free kullanıcı da oy verebilir (kota tüketmez).
+- **AI öğrenme — geçmiş başarılı örnekler few-shot enjeksiyonu** (`ExemplarScorer`, `IAiExemplarService`, `AiRequest.Exemplars`, `PromptTemplates`): Kullanıcının (ve admin onaylı global havuzun) pozitif geri bildirimleri, yeni soruya token-örtüşmesiyle (embedding YOK, v1) skorlanıp en alakalı 1-2 örnek prompt'a eklenir. Örnekler **system mesajına değil ilk user bağlam mesajına** (`<successful_examples>`) girer — Ollama prefix KV-cache prefix'i korunur, hız düşmez.
+- **Admin — AI geri bildirim havuzu** (`AdminAiFeedbackController` → `/api/admin/ai-feedback`, `pages/admin/AdminAiFeedbackPage.tsx`, `/admin/ai-feedback`): Geri bildirimleri listeler/arar; kaliteli pozitif örnekleri **global havuza** terfi eder (tüm kullanıcıların prompt'una girer) veya siler. Terfi öncesi kişisel/fatura verisi uyarısı gösterilir.
+
+### Changed
+- **AI çıktı formatı** (`Prompts/Core/Constraints.md`): Model kod değişikliği önerirken ilgili `xsl:template`'in TAM yeni halini tek bir ```xslt bloğunda vermeye yönlendirildi (diff/kesit değil; match/name attribute'unu değiştirmeden) — "Uygula" hedeflemesini güvenilir kılar.
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.7.4 → 1.8.0`.
+
+### Tests
+- **`ExemplarScorerTests`** (7 case): token eşiği, top-2 skor+yenilik sıralaması, Türkçe folding, boş/kısa istek. **`BuildMessagesGoldenTests.Assistant_WithExemplars`** golden case'i eklendi; mevcut 4 snapshot Constraints değişikliği için yeniden kabul edildi. Application.Tests: 82 test yeşil.
+
 ## [1.7.4] - 2026-07-12
 
 ### Added

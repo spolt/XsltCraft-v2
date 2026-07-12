@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 
 using XsltCraft.Application.Ai;
 using XsltCraft.Application.Interfaces;
+using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Ai;
 
 namespace XsltCraft.Controllers;
@@ -20,6 +21,8 @@ public class AiAssistantController : ControllerBase
     private readonly AiProviderOrchestrator _orchestrator;
     private readonly IAiFeatureFlagService _flag;
     private readonly IUsageQuotaService _quota;
+    private readonly IAiExemplarService _exemplars;
+    private readonly IAiFeedbackService _feedback;
     private readonly ILogger<AiAssistantController> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -32,11 +35,15 @@ public class AiAssistantController : ControllerBase
         AiProviderOrchestrator orchestrator,
         IAiFeatureFlagService flag,
         IUsageQuotaService quota,
+        IAiExemplarService exemplars,
+        IAiFeedbackService feedback,
         ILogger<AiAssistantController> logger)
     {
         _orchestrator = orchestrator;
         _flag = flag;
         _quota = quota;
+        _exemplars = exemplars;
+        _feedback = feedback;
         _logger = logger;
     }
 
@@ -75,6 +82,54 @@ public class AiAssistantController : ControllerBase
             UserRequest = req.Goal ?? "Seçimi okunabilirlik ve doğruluk açısından iyileştir.",
         }, ct);
 
+    /// <summary>
+    /// AI yanıtı için geri bildirim kaydeder. Kota tüketmez (Free kullanıcı da oy verebilir).
+    /// Pozitif kayıtlar sonraki sorularda örnek olarak kullanılır.
+    /// </summary>
+    [HttpPost("feedback")]
+    public async Task<IActionResult> Feedback([FromBody] AiFeedbackRequest req, CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (!userId.HasValue) return Unauthorized();
+
+        if (!TryParseRating(req.Rating, out var rating))
+            return BadRequest(new { error = "invalid_rating" });
+        if (string.IsNullOrWhiteSpace(req.UserMessage) || string.IsNullOrWhiteSpace(req.AssistantAnswer))
+            return BadRequest(new { error = "empty_content" });
+
+        var id = await _feedback.RecordAsync(
+            userId.Value,
+            new AiFeedbackInput(rating, req.UserMessage, req.AssistantAnswer, req.Applied),
+            ct);
+        return Ok(new { id });
+    }
+
+    /// <summary>
+    /// Mevcut geri bildirimi günceller (ör. "Uygula" örtük pozitif kaydını kullanıcı sonradan
+    /// "işe yaramadı"ya çevirdiğinde). Sahiplik doğrulanır.
+    /// </summary>
+    [HttpPut("feedback/{id:guid}")]
+    public async Task<IActionResult> UpdateFeedback(Guid id, [FromBody] AiFeedbackUpdateRequest req, CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (!userId.HasValue) return Unauthorized();
+
+        if (!TryParseRating(req.Rating, out var rating))
+            return BadRequest(new { error = "invalid_rating" });
+
+        var ok = await _feedback.UpdateAsync(userId.Value, id, rating, req.Applied, ct);
+        return ok ? NoContent() : NotFound();
+    }
+
+    private static bool TryParseRating(string? value, out AiFeedbackRating rating)
+    {
+        rating = AiFeedbackRating.Positive;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (value.Equals("positive", StringComparison.OrdinalIgnoreCase)) { rating = AiFeedbackRating.Positive; return true; }
+        if (value.Equals("negative", StringComparison.OrdinalIgnoreCase)) { rating = AiFeedbackRating.Negative; return true; }
+        return false;
+    }
+
     private async Task StreamAsync(AiRequest req, CancellationToken ct)
     {
         if (!await _flag.IsEnabledAsync(ct))
@@ -105,6 +160,12 @@ public class AiAssistantController : ControllerBase
                 return;
             }
         }
+
+        // Öğrenme: kullanıcının (ve global) geçmiş pozitif örneklerinden benzer olanları
+        // prompt'a enjekte et. Yalnızca assistant görevinde ve boş olmayan istekte.
+        // Hata olursa exemplar servisi boş liste döner; sohbet asla kırılmaz.
+        if (req.Task == AiTaskKind.Assistant && userId.HasValue && !string.IsNullOrWhiteSpace(req.UserRequest))
+            req.Exemplars = [.. await _exemplars.GetExemplarsAsync(userId.Value, req.UserRequest, ct)];
 
         Response.StatusCode = StatusCodes.Status200OK;
         Response.ContentType = "application/x-ndjson";
@@ -184,3 +245,12 @@ public record AssistantRequest(
 
 public record AssistantMessageDto(string Role, string Content);
 public record RefactorSelectionRequest(string? Xslt, string Selection, string? Goal);
+
+public record AiFeedbackRequest(
+    string Rating,
+    string UserMessage,
+    string AssistantAnswer,
+    bool Applied = false
+);
+
+public record AiFeedbackUpdateRequest(string Rating, bool Applied);

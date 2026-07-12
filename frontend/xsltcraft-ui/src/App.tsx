@@ -10,6 +10,7 @@ import AdminSnippetsPage from './pages/admin/AdminSnippetsPage'
 import AdminUsersPage from './pages/admin/AdminUsersPage'
 import AdminUsagePage from './pages/admin/AdminUsagePage'
 import AdminAiPage from './pages/admin/AdminAiPage'
+import AdminAiFeedbackPage from './pages/admin/AdminAiFeedbackPage'
 import EditorPage from './pages/EditorPage'
 import ThemeUsePage from './pages/ThemeUsePage'
 import DevModePage from './pages/DevModePage'
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="/admin/usage" element={<AdminUsagePage />} />
             <Route path="/admin/ai" element={<AdminAiPage />} />
+            <Route path="/admin/ai-feedback" element={<AdminAiFeedbackPage />} />
           </Route>
         </Route>
 
