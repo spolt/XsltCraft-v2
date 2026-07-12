@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-07-12
+
+### Fixed
+- **XSLT Editör — önizleme yatay kaydırması sayfanın sol kenarına ulaşamıyordu** (`XsltEditorPreview.tsx`): Kaydırılabilir önizleme alanı, ölçeklenmiş (transform: `scale`) A4 sayfasını flex `justify-center` ile ortalıyordu. Monaco editörü genişletilip önizleme paneli daraltıldığında (ya da yakınlaştırıldığında) sayfa kapsayıcıdan daha geniş hale geliyor; ortalanan bir flex öğesi taşınca taşma iki yana eşit dağılıyor, oysa kaydırma kapsayıcısı yalnızca sona (sağa) kaydırabildiği için sayfanın **sol** kenarı erişilemez oluyordu. Hizalama `justify-content: safe center` ile değiştirildi: içerik sığdığında yine ortalanır, taştığında başlangıç hizalamasına düşerek her iki kenara da kaydırılabilir.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.7.2 → 1.7.3`.
+
 ## [1.7.2] - 2026-07-06
 
 ### Fixed
