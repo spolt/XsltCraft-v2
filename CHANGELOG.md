@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-07-12
+
+### Added
+- **XSLT Editör — AI sohbetini önizleme ile bölünmüş kullanma** (`XsltEditorPage.tsx`): AI sekmesindeyken sağ üstteki **"Önizlemeyle Böl"** düğmesiyle sağ panel dikey olarak ikiye ayrılır — **üstte canlı önizleme, altta AI sohbet** — böylece sohbet ederken önizleme aynı anda görülebilir. Aradaki tutamaç sürüklenerek oran ayarlanır (varsayılan 50/50, her pane min. %15). Bölme özel bir flexbox + pointer-drag ile uygulanır (`react-resizable-panels`'ın çalışma-anında panel ekleme/çıkarma davranışı beyaz ekrana yol açtığından kütüphane bu bölmede kullanılmadı); sürükleme boyunca önizleme iframe'i ve sohbet Monaco editörleri `pointer-events:none` yapılır — aksi halde fare iframe üzerine gelince `pointermove` kesilip sürükleme takılıyordu. Sohbet paneli sabit `key` ile mount'ta tutulur; "Böl" açılıp kapanınca konuşma korunur.
+
+### Changed
+- **AI sohbet — Enter ile gönder** (`AiAssistantPanel.tsx`): Mesaj göndermek artık yalnızca **Enter** ile yapılır (önceki `Ctrl+Enter` kaldırıldı); **Shift+Enter** yeni satır ekler. IME kompozisyonu (`isComposing`) sürerken gönderim engellenir. Input altına kalıcı ipucu (`Enter ile gönder · Shift+Enter ile yeni satır`) ve güncellenmiş placeholder eklendi.
+- **AI sohbet — daha okunur yazı** (`AiAssistantPanel.tsx`): Mesaj balonları ve metin blokları `text-xs → text-sm` (12→14px), boş-durum ipucu büyütüldü, kod blokları Monaco font boyutu 12→13, input alanı 12→14px.
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.7.3 → 1.7.4`.
+
 ## [1.7.3] - 2026-07-12
 
 ### Fixed

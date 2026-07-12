@@ -99,7 +99,7 @@ function MarkdownOutput({ text }: { text: string }) {
           return (
             <div
               key={i}
-              className="text-xs text-gray-200 whitespace-pre-wrap leading-relaxed break-words"
+              className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed break-words"
             >
               {seg.content}
             </div>
@@ -126,7 +126,7 @@ function MarkdownOutput({ text }: { text: string }) {
                 minimap: { enabled: false },
                 lineNumbers: 'off',
                 folding: false,
-                fontSize: 12,
+                fontSize: 13,
                 wordWrap: 'on',
                 scrollBeyondLastLine: false,
                 scrollbar: { vertical: 'auto', horizontal: 'hidden', alwaysConsumeMouseWheel: false },
@@ -343,16 +343,16 @@ export default function AiAssistantPanel({
       {/* Mesaj listesi */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {messages.length === 0 && !streaming && (
-          <div className="text-xs text-gray-500 italic text-center mt-8">
+          <div className="text-sm text-gray-500 italic text-center mt-8">
             XSLT şablonunu doğal dille düzenlemek için mesaj yaz.<br />
-            <span className="text-gray-600">Örn: "PartyName altındaki cbc:Note alanını kaldır"</span>
+            <span className="text-gray-600 text-xs">Örn: "PartyName altındaki cbc:Note alanını kaldır"</span>
           </div>
         )}
 
         {messages.map((msg) => (
           <div key={msg.id} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
             <div
-              className={`max-w-[90%] rounded-lg px-3 py-2 text-xs leading-relaxed ${
+              className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
                 msg.role === 'user'
                   ? 'bg-violet-700 text-white'
                   : 'bg-gray-800 text-gray-100 border border-gray-700'
@@ -395,23 +395,28 @@ export default function AiAssistantPanel({
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => {
-              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              // Enter → gönder · Shift+Enter → yeni satır (IME kompozisyonu sürerken gönderme)
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
                 handleSend()
               }
             }}
             rows={2}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-violet-500 resize-none font-mono"
-            placeholder="Buraya yaz… (Ctrl+Enter ile gönder)"
+            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-violet-500 resize-none font-mono"
+            placeholder="Buraya yaz… (Enter ile gönder)"
             disabled={streaming}
           />
           <button
             onClick={handleSend}
             disabled={streaming || !input.trim()}
-            className="self-stretch px-3 rounded bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed text-xs text-white font-medium"
+            className="self-stretch px-3 rounded bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm text-white font-medium"
           >
             Gönder
           </button>
+        </div>
+        <div className="mt-1 text-[10px] text-gray-500 select-none">
+          <kbd className="font-mono text-gray-400">Enter</kbd> ile gönder ·{' '}
+          <kbd className="font-mono text-gray-400">Shift+Enter</kbd> ile yeni satır
         </div>
       </div>
     </div>

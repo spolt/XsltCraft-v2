@@ -18,6 +18,7 @@ import {
   BookMarked,
   Library,
   Sparkles,
+  Rows2,
 } from 'lucide-react'
 import { useAiStore } from '../store/aiStore'
 import AiAssistantPanel from '../components/ai/AiAssistantPanel'
@@ -172,6 +173,12 @@ export default function XsltEditorPage() {
 
   // Right panel tab: preview | xml | ai
   const [rightTab, setRightTab] = useState<'preview' | 'xml' | 'ai'>('preview')
+  // AI sekmesinde bölünmüş görünüm: üstte önizleme, altta sohbet.
+  // Üst önizlemenin yüzdesel yüksekliği; tutamaç sürüklenerek ayarlanır (varsayılan 50/50).
+  const [aiSplit, setAiSplit] = useState(false)
+  const [aiSplitTopPct, setAiSplitTopPct] = useState(50)
+  const [aiDragging, setAiDragging] = useState(false)
+  const aiSplitContainerRef = useRef<HTMLDivElement>(null)
 
   // XML editor cursor / selection — AI bağlam kırpma için
   const [xmlCursorLine, setXmlCursorLine] = useState<number | undefined>()
@@ -195,6 +202,31 @@ export default function XsltEditorPage() {
   } | null>(null)
 
   useEffect(() => { refreshAi() }, [refreshAi])
+
+  // AI bölme tutamacı sürükleme: üst önizleme yüksekliğini (%) fare Y'sine göre ayarla.
+  // Sürükleme boyunca `aiDragging` ile önizleme iframe'i ve sohbet Monaco editörleri
+  // pointer-events:none yapılır; aksi halde fare iframe üzerine gelince window
+  // pointermove olayları kesilir ve sürükleme takılır.
+  function handleAiSplitDrag(e: React.PointerEvent) {
+    e.preventDefault()
+    const container = aiSplitContainerRef.current
+    if (!container) return
+    setAiDragging(true)
+    function onMove(ev: PointerEvent) {
+      const rect = container!.getBoundingClientRect()
+      const pct = ((ev.clientY - rect.top) / rect.height) * 100
+      setAiSplitTopPct(Math.min(85, Math.max(15, pct)))
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.userSelect = ''
+      setAiDragging(false)
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
 
   function handleAiRefactor(selection: string, range: { startLine: number; endLine: number }) {
     setRefactorState({ selection, range })
@@ -900,6 +932,22 @@ export default function XsltEditorPage() {
                     <Sparkles size={12} /> AI
                   </button>
                 )}
+                {aiEnabled && rightTab === 'ai' && (
+                  <button
+                    onClick={() => setAiSplit(s => !s)}
+                    className={`ml-auto px-3 py-1.5 rounded-md text-xs font-semibold border flex items-center gap-1.5 transition-colors ${
+                      aiSplit
+                        ? 'bg-violet-600 border-violet-500 text-white hover:bg-violet-500'
+                        : 'bg-gray-700 border-gray-500 text-gray-100 hover:bg-gray-600 hover:border-gray-400'
+                    }`}
+                    title={aiSplit
+                      ? 'Bölünmüş görünümü kapat (yalnızca sohbet)'
+                      : 'Önizleme ile böl — üstte önizleme, altta sohbet'}
+                  >
+                    <Rows2 size={14} />
+                    {aiSplit ? 'Bölmeyi Kapat' : 'Önizlemeyle Böl'}
+                  </button>
+                )}
               </div>
 
               {/* Sağ panel içerik */}
@@ -937,21 +985,54 @@ export default function XsltEditorPage() {
                   />
                 ))}
                 {/* AI paneli bir kez açıldıktan sonra mount'ta kalır; sekme aktif
-                    değilken CSS ile gizlenir, böylece sohbet korunur. */}
+                    değilken CSS ile gizlenir, böylece sohbet korunur.
+                    Bölünmüş görünümde (aiSplit) üstte önizleme, altta sohbet gösterilir
+                    ve aradaki tutamaç ile dikey olarak yeniden boyutlandırılabilir.
+                    Panellere sabit `key`/`id` verilir; böylece "Böl" açılıp kapanınca
+                    sohbet paneli (key="ai-chat") remount olmaz ve konuşma korunur.
+                    Bölünmüş önizleme yalnızca AI sekmesi aktifken mount edilir; aksi
+                    halde ana önizleme ile iki ayrı tıklama dinleyicisi çakışırdı. */}
                 {aiEnabled && aiMounted && (
-                  <div className={rightTab === 'ai' ? 'h-full' : 'hidden'}>
-                    <AiAssistantPanel
-                      key={aiKey}
-                      xslt={xsltContent}
-                      xml={xmlContent}
-                      xmlCursorLine={xmlCursorLine}
-                      xmlSelection={xmlSelection}
-                      xsltCursorLine={xsltCursorLine}
-                      xsltSelection={xsltSelection}
-                      initialErrorMessage={aiInitialError}
-                      xmlDeclarationMissing={declProblem != null}
-                      onClose={() => setRightTab('preview')}
-                    />
+                  <div
+                    ref={aiSplitContainerRef}
+                    className={rightTab === 'ai' ? 'h-full flex flex-col min-h-0' : 'hidden'}
+                  >
+                    {aiSplit && rightTab === 'ai' && (
+                      <div
+                        key="ai-preview"
+                        className={`min-h-0 flex-shrink-0 ${aiDragging ? 'pointer-events-none' : ''}`}
+                        style={{ height: `${aiSplitTopPct}%` }}
+                      >
+                        <XsltEditorPreview
+                          html={previewHtml}
+                          onElementClick={handlePreviewClick}
+                        />
+                      </div>
+                    )}
+                    {aiSplit && rightTab === 'ai' && (
+                      <div
+                        key="ai-divider"
+                        onPointerDown={handleAiSplitDrag}
+                        className={`h-1.5 flex-shrink-0 cursor-row-resize transition-colors ${
+                          aiDragging ? 'bg-blue-500' : 'bg-gray-700 hover:bg-blue-500'
+                        }`}
+                        title="Sürükleyerek yeniden boyutlandır"
+                      />
+                    )}
+                    <div key="ai-chat" className={`flex-1 min-h-0 ${aiDragging ? 'pointer-events-none' : ''}`}>
+                      <AiAssistantPanel
+                        key={aiKey}
+                        xslt={xsltContent}
+                        xml={xmlContent}
+                        xmlCursorLine={xmlCursorLine}
+                        xmlSelection={xmlSelection}
+                        xsltCursorLine={xsltCursorLine}
+                        xsltSelection={xsltSelection}
+                        initialErrorMessage={aiInitialError}
+                        xmlDeclarationMissing={declProblem != null}
+                        onClose={() => setRightTab('preview')}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
