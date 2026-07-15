@@ -42,8 +42,15 @@ public class AiProviderOrchestrator
         var preferred = await _flagService.GetStringAsync("ai.preferred_provider", ct)
                         ?? _options.PreferredProvider;
 
+        // "auto" modda büyük XSLT → Gemini öncelikli (tam dosyayı görür); açık tercih kazanır.
+        var effective = ProviderRouting.Resolve(
+            preferred, req.Task, req.UserXslt?.Length ?? 0, _options.LargeXsltGeminiThresholdChars);
+        if (effective == "gemini" && preferred != "gemini")
+            _logger.LogInformation(
+                "Büyük XSLT ({Len} kr) → Gemini öncelikli yönlendirme (auto).", req.UserXslt?.Length ?? 0);
+
         // "gemini" öncelikli: Gemini varsa önce dene, Ollama yedek.
-        List<IAiAssistantProvider> providers = preferred == "gemini" && _others.Count > 0
+        List<IAiAssistantProvider> providers = effective == "gemini" && _others.Count > 0
             ? [.. _others, _ollama]
             : [(IAiAssistantProvider)_ollama, .. _others];
 

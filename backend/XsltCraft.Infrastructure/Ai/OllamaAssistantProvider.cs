@@ -40,7 +40,8 @@ public class OllamaAssistantProvider : IAiAssistantProvider
         List<OllamaMessage> messages;
         if (req.Task == AiTaskKind.Assistant)
         {
-            var providerMessages = PromptTemplates.BuildAssistant(req);
+            // Küçük pencere (NumCtx) → özetlenmiş XSLT bütçesi.
+            var providerMessages = PromptTemplates.BuildAssistant(req, ollama.ContextBudget);
             messages = providerMessages
                 .Where(m => m.Role != "system")
                 .Select(m => new OllamaMessage { Role = m.Role, Content = m.Content })

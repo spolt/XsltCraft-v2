@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-13
+
+### Changed
+- **AI — sağlayıcıya özel bağlam bütçesi: model artık şablonun TAMAMINI görebiliyor** (`AiContextBudget`, `PromptTemplates.BuildAssistant(req, budget)`, `AiOptions`): Önceden her sağlayıcıya aynı kırpılmış bağlam gidiyordu — 6K karakter üzeri XSLT yapısal özete indirilip 16K'da kırpılıyordu, 1M token pencereli Gemini bile yalnız özeti görüyordu. Artık her sağlayıcı kendi penceresine göre bütçe alır: **Gemini tam `.xslt` dosyasını HAM gönderir** (400K karaktere kadar → tipik ~250KB GİB şablonu bütünüyle), **Ollama** yapılandırılabilir bütçeyle çalışır. "X alanını değiştir/kaldır" tarzı sorulara doğru yanıt için şablonun tamamı modelin önünde olur. Tüm sınırlar appsettings'ten ayarlanır; varsayılan bütçe eski davranışı birebir korur (golden snapshot'lar değişmedi).
+- **AI — büyük şablonda otomatik Gemini yönlendirmesi** (`ProviderRouting`, `AiProviderOrchestrator`): `auto` modda XSLT `LargeXsltGeminiThresholdChars`'ı (varsayılan 64K karakter) aşarsa istek Gemini'ye öncelikli yönlenir (tam dosyayı gördüğü için), Ollama yedek kalır. Açık tercih (`ollama`/`gemini` flag'i) her zaman kazanır; `0` ile kapatılır.
+- **Ollama bağlam penceresi büyütüldü** (`appsettings*.json`): `NumCtx 8192/16384 → 32768` (qwen2.5-coder 3b/7b native üst sınırı) ve XSLT ham bütçesi `MaxXsltChars: 64000` — 64K karaktere kadar şablon Ollama'ya da özetlenmeden gider. KV cache maliyeti 3b ≈ +1.2GB, 7b ≈ +1.8GB.
+
+### Tests
+- **`ContextBudgetTests`** (9 case): büyük bütçede tam ham dosya gönderimi, varsayılanda özetleme, limit aşımında kırpma + 6 `ProviderRouting` yönlendirme senaryosu. Application.Tests: 98 → **107** yeşil; mevcut golden snapshot'lar bayt-bayt korundu.
+
 ## [1.8.0] - 2026-07-13
 
 ### Added
