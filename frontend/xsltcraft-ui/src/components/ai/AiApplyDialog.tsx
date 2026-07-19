@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DiffEditor, Editor } from '@monaco-editor/react'
-import { Sparkles, X, Check, Loader2, Copy, ClipboardCheck } from 'lucide-react'
+import { Sparkles, X, Check, Loader2, Copy, ClipboardCheck, AlertTriangle, MousePointerClick } from 'lucide-react'
 import type { ApplyTarget } from '../../utils/xsltApply'
 
 interface Props {
@@ -15,7 +15,7 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000'
 const KIND_LABEL: Record<ApplyTarget['kind'], string> = {
   'whole-doc': 'Tüm belge değiştirilecek',
   'selection': 'Seçili bölge değiştirilecek',
-  'template': 'Eşleşen template değiştirilecek',
+  'element': 'Eşleşen blok değiştirilecek',
   'no-match': 'Otomatik hedef bulunamadı',
 }
 
@@ -85,40 +85,71 @@ export default function AiApplyDialog({ target, onAccept, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="flex-1 min-h-0 relative">
-          {noMatch ? (
-            <Editor
-              height="100%"
-              language="xml"
-              theme="vs-dark"
-              value={target.newText}
-              options={{ readOnly: true, minimap: { enabled: false }, fontSize: 13, scrollBeyondLastLine: false }}
-            />
-          ) : (
-            <DiffEditor
-              height="100%"
-              language="xml"
-              theme="vs-dark"
-              original={target.oldText}
-              modified={target.newText}
-              options={{
-                readOnly: true,
-                renderSideBySide: true,
-                minimap: { enabled: false },
-                fontSize: 13,
-                originalEditable: false,
-                scrollBeyondLastLine: false,
-              }}
-            />
+        <div className="flex-1 min-h-0 flex flex-col">
+          {noMatch && (
+            <div className="flex-shrink-0 mx-3 mt-3 rounded-lg border border-amber-500/60 bg-amber-950/50 px-4 py-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={20} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-amber-200">
+                    Otomatik uygulanamadı — bu bloğu elle yerleştirmen gerekiyor
+                  </div>
+                  {target.reason && (
+                    <p className="mt-1 text-xs text-amber-100/80 leading-relaxed">{target.reason}</p>
+                  )}
+                  <div className="mt-2.5 flex flex-col gap-1.5 text-xs text-amber-50">
+                    <div className="flex items-start gap-2">
+                      <MousePointerClick size={14} className="text-amber-300 flex-shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Önerilen:</strong> Editörde değiştirmek istediğin bloğu <strong>seçip</strong> AI'ya
+                        aynı soruyu tekrar sor — seçili bölge birebir değiştirilir, hedef kesinleşir.
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Copy size={14} className="text-amber-300 flex-shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Ya da:</strong> Aşağıdaki kodu <strong>"Panoya kopyala"</strong> ile alıp editörde ilgili
+                        yere elle yapıştır.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
+          <div className="flex-1 min-h-0">
+            {noMatch ? (
+              <Editor
+                height="100%"
+                language="xml"
+                theme="vs-dark"
+                value={target.newText}
+                options={{ readOnly: true, minimap: { enabled: false }, fontSize: 13, scrollBeyondLastLine: false }}
+              />
+            ) : (
+              <DiffEditor
+                height="100%"
+                language="xml"
+                theme="vs-dark"
+                original={target.oldText}
+                modified={target.newText}
+                options={{
+                  readOnly: true,
+                  renderSideBySide: true,
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  originalEditable: false,
+                  scrollBeyondLastLine: false,
+                }}
+              />
+            )}
+          </div>
         </div>
 
         {/* Footer */}
         <div className="px-4 py-3 border-t border-gray-700 flex items-center gap-3">
-          <span className="text-[11px] text-gray-500">
-            {noMatch
-              ? 'Bloğun editörde otomatik uygulanacağı yer bulunamadı — kopyalayıp elle yerleştirin.'
-              : 'Sol: mevcut · Sağ: AI önerisi.'}
+          <span className="text-[11px] text-gray-500 max-w-[60%]">
+            {noMatch ? 'AI önerisi otomatik yerleştirilemedi.' : 'Sol: mevcut · Sağ: AI önerisi.'}
           </span>
           {validateError && (
             <span className="text-[11px] text-amber-400 ml-auto">{validateError}</span>
@@ -133,9 +164,9 @@ export default function AiApplyDialog({ target, onAccept, onClose }: Props) {
             {noMatch ? (
               <button
                 onClick={copyBlock}
-                className="px-3 py-1.5 text-xs rounded bg-violet-600 hover:bg-violet-500 text-white flex items-center gap-1"
+                className="px-4 py-2 text-sm font-medium rounded bg-violet-600 hover:bg-violet-500 text-white flex items-center gap-1.5"
               >
-                {copied ? <ClipboardCheck size={12} /> : <Copy size={12} />}
+                {copied ? <ClipboardCheck size={14} /> : <Copy size={14} />}
                 {copied ? 'Kopyalandı' : 'Panoya kopyala'}
               </button>
             ) : validateError ? (

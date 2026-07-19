@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.9.0] - 2026-07-13
+## [1.9.1] - 2026-07-20
+
+### Fixed
+- **AI sohbet — "Uygula" artık seçim yapmadan da hedefi bulabiliyor** (`utils/xsltApply.ts`): Hedefleme yalnızca tüm-stylesheet, kullanıcı seçimi ve `<xsl:template>` imzasını tanıyordu; model bir `<xsl:for-each>`/`<xsl:if>`/`<xsl:variable>` bloğu önerince (kullanıcı da seçim yapmamışsa) hep "otomatik hedef bulunamadı" oluyordu. Hedefleme **her XSLT konteyner elemanına** genelleştirildi: bloğun kök elemanı + ayırt edici imza attribute'u (`for-each→select`, `template→match/name`, `if/when→test`, `variable/param→name`) ile dokümanda **tam 1 eşleşen** eleman aranır. İç içe aynı adlı elemanlar (ör. for-each içinde for-each) için **dengeli etiket eşleştirmesi** (derinlik sayımı) ve attribute değerindeki `>` için alıntı-duyarlı tarama eklendi.
+
+### Changed
+- **AI "Uygula" — hedef bulunamayınca açıklayıcı yönlendirme** (`utils/xsltApply.ts`, `components/ai/AiApplyDialog.tsx`): no-match durumu artık **nedenini** söylüyor (ör. "en dış eleman `<xsl:for-each select=…>` N karakterlik şablonda bulunamadı — model bloğu yeniden yapılandırmış olabilir" veya "imza şablonda N kez geçiyor, belirsiz"). Diyalogda küçük gri metin yerine **belirgin amber uyarı bandı**: ikon + başlık + iki net adım (1: bloğu editörde **seçip** tekrar sor → seçili bölge birebir değişir; 2: **"Panoya kopyala"** ile elle yapıştır). Kopyala düğmesi birincil aksiyon olarak büyütüldü.
+- **AI prompt — model bloğu yeniden yapılandırmasın** (`Prompts/Core/Constraints.md`): Model artık değiştireceği bloğun EN DIŞ etiketini aynen korumaya, yeni sarmalayıcı eklememeye ve mevcut XPath'i bölmemeye (ör. `select="a/b/c"`'yi `a/b`+`c` diye ayırmama) yönlendiriliyor — böylece öneri dosyadaki tek bir elemanla eşleşir ve otomatik uygulanabilir. (5 golden snapshot yeniden kabul edildi.)
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.9.0 → 1.9.1`.
+
+## [1.9.0] - 2026-07-15
 
 ### Changed
 - **AI — sağlayıcıya özel bağlam bütçesi: model artık şablonun TAMAMINI görebiliyor** (`AiContextBudget`, `PromptTemplates.BuildAssistant(req, budget)`, `AiOptions`): Önceden her sağlayıcıya aynı kırpılmış bağlam gidiyordu — 6K karakter üzeri XSLT yapısal özete indirilip 16K'da kırpılıyordu, 1M token pencereli Gemini bile yalnız özeti görüyordu. Artık her sağlayıcı kendi penceresine göre bütçe alır: **Gemini tam `.xslt` dosyasını HAM gönderir** (400K karaktere kadar → tipik ~250KB GİB şablonu bütünüyle), **Ollama** yapılandırılabilir bütçeyle çalışır. "X alanını değiştir/kaldır" tarzı sorulara doğru yanıt için şablonun tamamı modelin önünde olur. Tüm sınırlar appsettings'ten ayarlanır; varsayılan bütçe eski davranışı birebir korur (golden snapshot'lar değişmedi).

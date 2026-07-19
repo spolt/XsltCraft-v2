@@ -1,17 +1,19 @@
 // AI sohbet yanıtındaki XSLT kod bloğunu editördeki dokümana uygulamak için saf yardımcılar.
 // Model yanıtı serbest metindir; bloğu güvenle uygulayabilmek için hedefi (tüm doküman /
-// seçim / imzası eşleşen template) tespit eder. Tahmin yapmaz — belirsizse 'no-match' döner.
+// seçim / imzası eşleşen XSLT elemanı) tespit eder. Tahmin yapmaz — belirsizse 'no-match' döner.
 
-export type ApplyKind = 'whole-doc' | 'selection' | 'template' | 'no-match'
+export type ApplyKind = 'whole-doc' | 'selection' | 'element' | 'no-match'
 
 export interface ApplyTarget {
   kind: ApplyKind
   /** Değişiklik uygulandığında oluşacak TAM doküman (no-match'te undefined). */
   newDoc?: string
-  /** Diff sol tarafı: değişen bölge (tüm doküman, seçim ya da eşleşen template). */
+  /** Diff sol tarafı: değişen bölge (tüm doküman, seçim ya da eşleşen eleman). */
   oldText: string
   /** Diff sağ tarafı: uygulanacak blok. */
   newText: string
+  /** no-match'te neden hedef bulunamadığını açıklayan tanı metni. */
+  reason?: string
 }
 
 const FENCE_RE = /```(\w*)\n([\s\S]*?)\n```/g
@@ -34,48 +36,132 @@ export function extractApplicableBlock(content: string): string | null {
   return last
 }
 
-/** `<xsl:template ...>` açılış etiketinden match/name/mode attribute'larını çıkarır. */
-function parseTemplateSignature(block: string): { match?: string; name?: string; mode?: string } | null {
-  const open = /<xsl:template\b([^>]*)>/.exec(block.trimStart())
-  // Blok bir template ile başlamıyorsa imza yok.
-  if (!open || block.trimStart().indexOf('<xsl:template') !== 0) return null
-  const attrs = open[1]
-  const attr = (n: string) => {
-    const m = new RegExp(`\\b${n}\\s*=\\s*["']([^"']*)["']`).exec(attrs)
-    return m ? m[1].trim() : undefined
-  }
-  const sig = { match: attr('match'), name: attr('name'), mode: attr('mode') }
-  return sig.match || sig.name ? sig : null
+// ── XML/XSLT ayrıştırma yardımcıları (regex değil, alıntı-duyarlı tarama) ──────
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** Dokümanda aynı imzalı `<xsl:template>` bloğunun [start,end) aralığını bulur; tam 1 eşleşme şart. */
-function findTemplateRegion(
-  doc: string,
-  sig: { match?: string; name?: string; mode?: string },
-): { start: number; end: number } | null {
-  const openRe = /<xsl:template\b([^>]*)>/g
-  let m: RegExpExecArray | null
-  const hits: { start: number; end: number }[] = []
-  while ((m = openRe.exec(doc)) !== null) {
-    const attrs = m[1]
-    const attr = (n: string) => {
-      const a = new RegExp(`\\b${n}\\s*=\\s*["']([^"']*)["']`).exec(attrs)
-      return a ? a[1].trim() : undefined
+/** `<` konumundan başlayıp etiketi kapatan `>`'ı bulur; attribute değeri içindeki `>`'ı atlar. */
+function findTagEnd(doc: string, tagStart: number): number {
+  let quote = ''
+  for (let i = tagStart; i < doc.length; i++) {
+    const c = doc[i]
+    if (quote) {
+      if (c === quote) quote = ''
+    } else if (c === '"' || c === "'") {
+      quote = c
+    } else if (c === '>') {
+      return i
     }
-    if (attr('match') !== sig.match || attr('name') !== sig.name || attr('mode') !== sig.mode) continue
-    // Template'ler iç içe olamaz → ilk kapanış etiketine kadar.
-    const close = doc.indexOf('</xsl:template>', openRe.lastIndex)
-    if (close === -1) continue
-    hits.push({ start: m.index, end: close + '</xsl:template>'.length })
   }
-  return hits.length === 1 ? hits[0] : null
+  return -1
+}
+
+/** Bir açılış etiketinin attribute metninden verilen attribute değerini okur. */
+function readAttr(attrs: string, name: string): string | undefined {
+  const re = new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*("([^"]*)"|'([^']*)')`)
+  const m = re.exec(attrs)
+  return m ? (m[2] ?? m[3]) : undefined
+}
+
+// Kök elemanı tanımlayan ayırt edici attribute'lar, öncelik sırasıyla.
+// template→match/name, for-each→select, if/when→test, variable/param/call-template→name.
+const SIGNATURE_ATTRS = ['match', 'name', 'select', 'test'] as const
+
+/** Bloğun başındaki boşluk ve XML yorumlarını atlar (kök elemanı bulmak için). */
+function stripLeading(block: string): string {
+  let s = block.trimStart()
+  while (s.startsWith('<!--')) {
+    const end = s.indexOf('-->')
+    if (end === -1) break
+    s = s.slice(end + 3).trimStart()
+  }
+  return s
+}
+
+/** Bloğun kök XSLT elemanının adını ve ayırt edici imza attribute'unu çıkarır. */
+function parseRootSignature(block: string): { name: string; attr: string; value: string } | null {
+  const head = stripLeading(block)
+  const m = /^<(xsl:[\w-]+)\b/.exec(head)
+  if (!m) return null
+  const tagEnd = findTagEnd(head, 0)
+  if (tagEnd === -1) return null
+  const attrs = head.slice(m[0].length, tagEnd)
+  for (const a of SIGNATURE_ATTRS) {
+    const v = readAttr(attrs, a)?.trim()
+    if (v) return { name: m[1], attr: a, value: v }
+  }
+  return null
+}
+
+/**
+ * `openStart`'taki (açılış etiketinin `<`'ı) elemanın kapanışını dengeli olarak bulur.
+ * Aynı adlı iç içe elemanları (ör. for-each içinde for-each) doğru sayar; kendinden-kapanan
+ * (`<.../>`) elemanlar derinliği artırmaz. Elemanın bittiği (kapanış `>`'ından sonraki) indeksi döner.
+ */
+function findElementEnd(doc: string, name: string, openStart: number): number | null {
+  const re = new RegExp(`<(/?)${escapeRegExp(name)}(?=[\\s/>])`, 'g')
+  re.lastIndex = openStart
+  let depth = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(doc)) !== null) {
+    if (m[1] === '/') {
+      depth--
+      if (depth === 0) {
+        const gt = doc.indexOf('>', m.index)
+        return gt === -1 ? null : gt + 1
+      }
+    } else {
+      const gt = findTagEnd(doc, m.index)
+      if (gt === -1) return null
+      if (doc[gt - 1] !== '/') depth++ // kendinden-kapanan derinliği artırmaz
+      re.lastIndex = gt + 1            // attribute bölgesini atla
+    }
+  }
+  return null
+}
+
+/** Dokümanda `name` elemanı + `attr="value"` imzasına sahip TÜM aralıkları bulur. */
+function findElementRegions(
+  doc: string,
+  name: string,
+  attr: string,
+  value: string,
+): { start: number; end: number }[] {
+  const openNeedle = '<' + name
+  const hits: { start: number; end: number }[] = []
+  let idx = 0
+  while ((idx = doc.indexOf(openNeedle, idx)) !== -1) {
+    const after = doc[idx + openNeedle.length]
+    // Gerçek etiket sınırı mı? (ör. <xsl:for-each ama <xsl:for-each-group değil)
+    if (after === undefined || /[\s/>]/.test(after)) {
+      const tagEnd = findTagEnd(doc, idx)
+      if (tagEnd !== -1) {
+        const selfClosing = doc[tagEnd - 1] === '/'
+        const attrs = doc.slice(idx + openNeedle.length, selfClosing ? tagEnd - 1 : tagEnd)
+        if (readAttr(attrs, attr)?.trim() === value) {
+          if (selfClosing) {
+            hits.push({ start: idx, end: tagEnd + 1 })
+          } else {
+            const end = findElementEnd(doc, name, idx)
+            if (end !== null) hits.push({ start: idx, end })
+          }
+        }
+        idx = tagEnd + 1
+        continue
+      }
+    }
+    idx += openNeedle.length
+  }
+  return hits
 }
 
 /**
  * Bloğun dokümana nasıl uygulanacağını hesaplar. Öncelik sırası:
  * 1) Tam stylesheet → tüm doküman
  * 2) Aktif seçim dokümanda birebir varsa → seçimi değiştir
- * 3) Aynı imzalı tek template → o template'i değiştir
+ * 3) Aynı imzalı tek XSLT elemanı (for-each/template/if/when/variable…) → o elemanı değiştir
  * 4) Aksi hâlde → no-match (tahmin yok)
  */
 export function computeApplyTarget(doc: string, block: string, selection?: string): ApplyTarget {
@@ -94,17 +180,29 @@ export function computeApplyTarget(doc: string, block: string, selection?: strin
     return { kind: 'selection', newDoc, oldText: sel, newText: block }
   }
 
-  // 3) Template imza eşleşmesi
-  const sig = parseTemplateSignature(block)
+  // 3) İmza eşleşen tek XSLT elemanı (kullanıcı seçim yapmasa da bulur)
+  const sig = parseRootSignature(block)
   if (sig) {
-    const region = findTemplateRegion(doc, sig)
-    if (region) {
-      const oldText = doc.slice(region.start, region.end)
-      const newDoc = doc.slice(0, region.start) + block + doc.slice(region.end)
-      return { kind: 'template', newDoc, oldText, newText: block }
+    const regions = findElementRegions(doc, sig.name, sig.attr, sig.value)
+    if (regions.length === 1) {
+      const { start, end } = regions[0]
+      const oldText = doc.slice(start, end)
+      const newDoc = doc.slice(0, start) + block + doc.slice(end)
+      return { kind: 'element', newDoc, oldText, newText: block }
     }
+    // Tanı: dosyayı okuduk (docLen), aradık ama eşleşmedi → nedenini söyle.
+    const anchor = `<${sig.name} ${sig.attr}="${sig.value}">`
+    const reason = regions.length === 0
+      ? `Önerinin en dış elemanı ${anchor}, ${doc.length.toLocaleString('tr-TR')} karakterlik şablonda bulunamadı. Model bloğu yeniden yapılandırmış olabilir (mevcut bloğu birebir korumamış). Editörde ilgili bloğu seçip tekrar sorabilir ya da bloğu elle yapıştırabilirsin.`
+      : `${anchor} imzası şablonda ${regions.length} kez geçiyor; hangisinin değiştirileceği belirsiz. İlgili bloğu editörde seçip tekrar sor.`
+    return { kind: 'no-match', oldText: '', newText: block, reason }
   }
 
-  // 4) Hedef bulunamadı — dürüstçe elle uygulamaya bırak.
-  return { kind: 'no-match', oldText: '', newText: block }
+  // 4) Tanınabilir bir kök eleman yok — dürüstçe elle uygulamaya bırak.
+  return {
+    kind: 'no-match',
+    oldText: '',
+    newText: block,
+    reason: 'Öneri tanınabilir bir XSLT elemanıyla (xsl:for-each / xsl:template / xsl:if…) başlamıyor, otomatik hedeflenemiyor.',
+  }
 }
