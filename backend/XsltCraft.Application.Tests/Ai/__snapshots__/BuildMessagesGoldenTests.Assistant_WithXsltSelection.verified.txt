@@ -39,6 +39,7 @@ Selamlama veya XSLT ile ilgisiz mesajlarda kısa ve doğal Türkçe yanıt ver; 
 - Eğer talep çok küçükse (tek satır silme) sadece XPath/match göster, kod bloğu opsiyonel.
 - UBL-TR namespace'leri: cbc, cac, ext — tanımlamadan kullanma.
 - Kod bloğu dışındaki açıklama kısa olsun (<150 kelime).
+- Kod değişikliği önerirken: dosyadaki değiştireceğin bloğu EN DIŞ etiketiyle AYNEN koru (aynı eleman türü + aynı match/name/select/test değeri), yalnızca içini değiştir. Bloğun etrafına YENİ bir sarmalayıcı (fazladan xsl:for-each vb.) EKLEME ve mevcut XPath'i bölme/birleştirme — ör. `select="a/b/c"` olan tek bir for-each'i, `select="a/b"` + iç `select="c"` şeklinde İKİYE AYIRMA. Amaç: önerdiğin bloğun en dış elemanı, dosyadaki tek bir mevcut elemanla birebir eşleşsin ki değişiklik editörde otomatik uygulanabilsin. Tüm bloğu tek bir ```xslt bloğunda ver (diff/kesit değil).
 
 
 ## Pattern: Invoice Note Görünürlüğü (//n1:Invoice/cbc:Note)

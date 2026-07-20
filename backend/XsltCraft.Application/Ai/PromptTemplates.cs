@@ -8,8 +8,8 @@ public record ProviderMessage(string Role, string Content);
 
 public static class PromptTemplates
 {
-    private const int AssistantXsltLimitChars = 16_000;
-    private const int ContextSoftLimitChars = 24_000;
+    // Assistant bağlam sınırları artık sağlayıcıya özel: AiContextBudget (varsayılan = eski değerler).
+    private const int ContextSoftLimitChars = 24_000; // refactor (tek-turn) yolu için
     private const int MaxHistoryPairs = 10;
 
     private static readonly Regex VersionRe = new(
@@ -22,8 +22,10 @@ public static class PromptTemplates
 
     // ── Core builder ──────────────────────────────────────────────────────────
 
-    internal static IReadOnlyList<ProviderMessage> BuildMessages(AiRequest req, AiMode mode)
+    internal static IReadOnlyList<ProviderMessage> BuildMessages(AiRequest req, AiMode mode, AiContextBudget? budget = null)
     {
+        // Sağlayıcıya özel bağlam bütçesi: küçük pencere (Ollama) özet, büyük pencere (Gemini) tam dosya.
+        var b = budget ?? AiContextBudget.Default;
         // Refactor modunda her zaman tam paket; Assistant modunda niyete göre kısalt.
         var intent = mode == AiMode.Refactor ? AiIntent.Code : IntentClassifier.Classify(req);
         Debug.WriteLine($"[IntentClassifier] intent: {intent}");
@@ -85,12 +87,14 @@ public static class PromptTemplates
             var ctxSb = new StringBuilder();
             if (intent == AiIntent.Code)
             {
-                // Büyük XSLT'ler önce yapısal özete indirilir (prefill maliyetini azaltır);
-                // sonra Clip güvenlik ağı olarak kalır.
-                var xsltSummarized = XsltSummarizer.Compose(
-                    req.UserXslt, req.Selection, req.UserRequest, req.XsltCursorLine);
-                var xsltClipped = Clip(xsltSummarized, AssistantXsltLimitChars);
-                var xmlClipped = Clip(req.UserXml, ContextSoftLimitChars - AssistantXsltLimitChars);
+                // Bütçenin ham eşiğine sığan XSLT olduğu gibi gönderilir — model şablonun
+                // TAMAMINI bilir (Gemini: ~400K karaktere kadar). Sığmayanlar yapısal özete
+                // indirilir (Ollama prefill maliyeti); Clip güvenlik ağı olarak kalır.
+                var xsltForModel = req.UserXslt != null && req.UserXslt.Length <= b.RawXsltThresholdChars
+                    ? req.UserXslt
+                    : XsltSummarizer.Compose(req.UserXslt, req.Selection, req.UserRequest, req.XsltCursorLine);
+                var xsltClipped = Clip(xsltForModel, b.XsltLimitChars);
+                var xmlClipped = Clip(req.UserXml, b.XmlLimitChars);
 
                 if (!string.IsNullOrWhiteSpace(xsltClipped))
                     ctxSb.Append("<user_xslt>\n").Append(xsltClipped).Append("\n</user_xslt>\n");
@@ -98,12 +102,26 @@ public static class PromptTemplates
                 // stylesheet içinde kaybolmasın (dosya boyutundan bağımsız).
                 if (!string.IsNullOrWhiteSpace(req.Selection))
                     ctxSb.Append("<user_xslt_selection>\n")
-                         .Append(Clip(req.Selection, AssistantXsltLimitChars))
+                         .Append(Clip(req.Selection, b.XsltLimitChars))
                          .Append("\n</user_xslt_selection>\n");
                 if (!string.IsNullOrWhiteSpace(req.XmlSelection))
                     ctxSb.Append("<user_xml_selection>\n").Append(req.XmlSelection).Append("\n</user_xml_selection>\n");
                 else if (!string.IsNullOrWhiteSpace(xmlClipped))
                     ctxSb.Append("<user_xml>\n").Append(xmlClipped).Append("\n</user_xml>\n");
+
+                // Öğrenilen örnekler: system mesajına DEĞİL (KV-cache prefix'i bozmamak için)
+                // değişken user bağlamına enjekte edilir.
+                if (req.Exemplars is { Count: > 0 })
+                {
+                    ctxSb.Append("<successful_examples>\n")
+                         .Append("Bu kullanıcının geçmişte işine yaramış örnek soru-cevaplar. Benzer bir soruda aynı yaklaşımı ve üslubu izle:\n");
+                    var n = 1;
+                    foreach (var ex in req.Exemplars.Take(2))
+                        ctxSb.Append("### Örnek ").Append(n++).Append('\n')
+                             .Append("Soru: ").Append(ex.Question).Append('\n')
+                             .Append("Cevap:\n").Append(Clip(ex.Answer, 2_000)).Append('\n');
+                    ctxSb.Append("</successful_examples>\n");
+                }
 
                 if (ctxSb.Length > 0)
                     messages.Add(new("user", ctxSb.ToString().TrimEnd()));
@@ -150,9 +168,10 @@ public static class PromptTemplates
     /// <summary>
     /// Multi-turn assistant: dönen listenin ilk elemanı "system" mesajıdır.
     /// Sonraki mesajlar user/assistant olarak sıralanır; son mesaj her zaman "user"dır.
+    /// Sağlayıcı kendi bağlam bütçesini geçer (null = Ollama uyumlu varsayılan).
     /// </summary>
-    public static IReadOnlyList<ProviderMessage> BuildAssistant(AiRequest req)
-        => BuildMessages(req, AiMode.Assistant);
+    public static IReadOnlyList<ProviderMessage> BuildAssistant(AiRequest req, AiContextBudget? budget = null)
+        => BuildMessages(req, AiMode.Assistant, budget);
 
     // ── Yardımcı metodlar ─────────────────────────────────────────────────────
 

@@ -59,6 +59,29 @@ public class BuildMessagesGoldenTests
     }
 
     [Fact]
+    public Task Assistant_WithExemplars()
+    {
+        var req = new AiRequest
+        {
+            Task = AiTaskKind.Assistant,
+            UserRequest = "satıcı adresini sadece şehir ve ilçe göster",
+            UserXslt = SimpleXslt,
+            History = [],
+            Exemplars =
+            [
+                new AiExemplar(
+                    "satıcı adresini kısalt şehir ilçe",
+                    "PostalAddress bloğundan StreetName ve BuildingNumber kaldırın; sadece CityName ve CitySubdivisionName bırakın."),
+                new AiExemplar(
+                    "adres bilgisini sadeleştir",
+                    "cac:PostalAddress içinde yalnız cbc:CityName ve cbc:CitySubdivisionName render edin."),
+            ],
+        };
+        var messages = PromptTemplates.BuildMessages(req, AiMode.Assistant);
+        return Verifier.Verify(messages).UseDirectory("__snapshots__");
+    }
+
+    [Fact]
     public Task Assistant_ThirdTurn_WithHistory()
     {
         var req = new AiRequest

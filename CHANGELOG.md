@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-07-21
+
+### Fixed
+- **AI sohbet — akış sırasında yukarı kaydırmak artık mümkün** (`AiAssistantPanel`): Her token'da `scrollIntoView({behavior:'smooth'})` çağrılıyordu; bu hem panelin ATALARINI da kaydırıyor (panel resizable panel içinde) hem de token başına bir animasyon kuyruğa alıyordu — kullanıcı önceki mesajı okumak için yukarı kaydırdığında anında dibe geri fırlatılıyordu. Artık dibe yakınlık takip ediliyor (`stickRef`, 64px eşik): kullanıcı yukarıdaysa hiç dokunulmuyor, dipteyken doğrudan `scrollTop` ile takip ediliyor (akışta anlık, yeni mesajda yumuşak). Monaco kod bloğu mount sonrası yükseklik değiştirdiği için `ResizeObserver` ile dip yeniden yakalanıyor. Yukarı kaydırınca **"En alta in"** düğmesi çıkıyor.
+- **AI sohbet — "AI'ya sor" mevcut konuşmayı artık silmiyor** (`AiAssistantPanel`, `XsltEditorPage.askAi`): Problems panelinden bir hataya AI'ya sorulduğunda `aiKey` artırılıp panel **remount** ediliyordu; tüm konuşma uyarısız kayboluyordu. Yerine **nonce tabanlı `prompt` prop'u** geldi: soru mevcut sohbete eklenir, panel remount edilmez. Nonce monotonik artan bir ref olduğu için aynı hataya iki kez sorulduğunda (metin özdeş olsa da) ikinci tetikleme de çalışır. Akış sürerken gelen soru mevcut akışı iptal eder ve iptal edilen yanıt `cancelled` olarak ekranda kalır. `handleNewChat` (↺) tek sıfırlama yolu olarak korundu.
+- **AI sohbet — iptal/kopma sonrası donuk "Yanıt hazırlanıyor…" balonu** (`AiAssistantPanel`): `cancel()` yalnızca `setStreaming(false)` yapıyordu; ilk token gelmeden iptal edilirse balon **kalıcı olarak** spinner'da kalıyor ve aksiyon düğmeleri hiç çıkmıyordu. Kırılgan `msg.meta && !content.startsWith('⚠️')` koşulu açık bir **`status: 'streaming' | 'done' | 'cancelled' | 'error'`** alanıyla değiştirildi ve `finally` içine emniyet ağı kondu — bu ağ yalnız kullanıcı iptalini değil, **ağ kopmasını ve sunucunun `done` chunk'ı göndermeden akışı kapatmasını** da kapsıyor (`aiAssistantService` döngüsü bu durumda sessizce bitiyordu). Yarış koruması: `finally` temizliği yalnız `abortRef.current === ac` iken çalışır, aksi halde iptal sonrası başlayan yeni akışın `setStreaming(true)`'su eziliyordu. Ayrıca `cancel()` aktif akış yokken bayrağı kirletmiyor — "Yeni sohbet" de `cancel()` çağırdığı için takılı bayrak, `done` göndermeden biten bir sonraki yanıtı yanlışlıkla "iptal edildi" damgalayıp Uygula/oy düğmelerini gizliyordu.
+- **AI sohbet — hata balonları artık modele geri gönderilmiyor** (`toHistory`): `⚠️` içerikli hata balonları, boş balonlar ve **cevabı hataya düşmüş öksüz kullanıcı soruları** history'ye giriyordu — bağlam kirliliği, boşa token ve arka arkaya iki `user` turu (bazı sağlayıcılarda 400). Artık history çiftler hâlinde yürünüyor: yalnız `status==='done'` ve dolu yanıtı olan turlar gönderiliyor. Hata metni `content`'i de ezmiyor; kısmi yanıt korunup hata ayrı bir alanda (`errorMessage`) taşınıyor ve ayrı bir uyarı bloğunda gösteriliyor.
+
+### Added
+- **AI yanıtlarında markdown render** (`utils/markdownLite.ts`, `components/ai/MarkdownMessage.tsx`): Önceden yalnız ``` fence'leri ayrıştırılıyordu; `**kalın**`, listeler, başlıklar, `` `inline kod` `` ve linkler ham karakter olarak görünüyordu. Yeni bağımlılık **eklenmedi** (bundle zaten 872KB ve Vite uyarı veriyor) — LLM çıktısında geçen alt küme için ~330 satırlık saf ayrıştırıcı yazıldı: blok düzeyi (h1-h3, sırasız/sıralı liste, paragraf, hr) + satır içi (kalın, italik, inline kod, link). **Güvenlik:** React element ağacı kurulur, `dangerouslySetInnerHTML` kullanılmaz; link href'i yalnız `http(s)`/`mailto` kabul eder, `javascript:`/`data:` düz metne düşer. **XSLT/XPath koruması:** yanıtlar `select="//*"`, `@*`, `node()*` içerdiği için tek `*` yalnızca "sözcük gibi" bir karakterle devam ediyorsa vurgu açılışı sayılır — az biçimlendirmek XPath'i bozmaktan iyidir. Satır içi ayrıştırma regex değil elle yazılmış O(n) tarayıcıdır: streaming'de fonksiyon her token'da uzayan metin üzerinde çalışır ve tembel regex'ler kapanış yokken katastrofik backtracking'e girebilirdi. Kapanışı olmayan her işaretleyici düz metne düşer (yarım markdown zarifçe bozulmaz). 39 birim testiyle doğrulandı.
+- **AI kod bloklarında "Kopyala" düğmesi** (`MarkdownMessage`): Başlık çubuğu artık **her zaman** render ediliyor (önceden yalnız dil etiketi varsa çıkıyordu); sağında kopyala düğmesi var (`AiApplyDialog` kalıbı). Akış sürerken gizli — yarım kod kopyalatmak yanıltıcı olurdu.
+- **AI streaming göstergesi netleşti**: Yazılmakta olan kod bloğu Monaco yerine `<pre>` ile render ediliyor (Monaco her token'da `setValue`+layout yapıp yüksekliği zıplatıyor ve scroll'un dibe yapışmasını bozuyordu); blok kapanınca Monaco'ya geçiliyor, ölçüler eşlendiği için geçiş görünmüyor. Tamamlanmamış açılış fence'i render'dan düşürülüyor — kullanıcı hiçbir anda ham ``` görmüyor. İçerik akarken yanıp sönen imleç görünür kalıyor (önceden içerik gelir gelmez kayboluyordu).
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.9.2 → 1.9.3`.
+
+## [1.9.2] - 2026-07-20
+
+### Fixed
+- **XSLT hata mesajları artık gerçek sebebi gösteriyor** (`PreviewController.DescribeXsltError`): `XslCompiledTransform.Load` derleme hatalarında dıştaki `XsltException`'ın mesajı **her zaman** jenerik `"XSLT compile error."`tır; asıl neden (geçersiz XPath, yanlış konumlanmış eleman vb.) `InnerException` zincirinde saklıdır ve tamamen çöpe gidiyordu. Yeni yardımcı zincirdeki tüm anlamlı mesajları `" → "` ile birleştiriyor, dıştaki satır/kolon `0` ise inner `XsltException`'dan dolduruyor. 5 yakalama noktasının hepsine (4 preview + `validate-xslt`) bağlandı — Problemler paneli ve AI'ya giden soru artık teşhis edilebilir metin taşıyor.
+- **"AI'ya sor" hatalı kodu modele gösteriyor** (`XsltEditorPage.buildErrorRegion`): Önceden AI'ya yalnızca `"XSLT compile error. (satır 836:63)"` gibi içeriksiz bir metin gidiyordu; model 400K karakterlik bağlamda "836. satırı" sayarak bulamadığı ve bağlam paketleyici (`XsltSummarizer`) büyük şablonu 8K bütçe dolunca gövde **ortasından** kestiği için, kesik CDATA artefaktını görüp "dosyanız kırpılmış, orijinali geri yükleyin" şeklinde **yanlış** teşhis koyuyordu. Artık hatalı satırın ±18 satırlık penceresi, **gerçek satır numaralarıyla** ve hatalı satır `>>` ile işaretlenmiş hâlde soruya gömülüyor (XSLT hatası → `xsltContent`, XML/UBL-TR hatası → `xmlContent`). Bağlam özetleme/kırpma ne yaparsa yapsın model asıl hatalı kodu garanti görüyor.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.9.1 → 1.9.2`.
+
+## [1.9.1] - 2026-07-20
+
+### Fixed
+- **AI sohbet — "Uygula" artık seçim yapmadan da hedefi bulabiliyor** (`utils/xsltApply.ts`): Hedefleme yalnızca tüm-stylesheet, kullanıcı seçimi ve `<xsl:template>` imzasını tanıyordu; model bir `<xsl:for-each>`/`<xsl:if>`/`<xsl:variable>` bloğu önerince (kullanıcı da seçim yapmamışsa) hep "otomatik hedef bulunamadı" oluyordu. Hedefleme **her XSLT konteyner elemanına** genelleştirildi: bloğun kök elemanı + ayırt edici imza attribute'u (`for-each→select`, `template→match/name`, `if/when→test`, `variable/param→name`) ile dokümanda **tam 1 eşleşen** eleman aranır. İç içe aynı adlı elemanlar (ör. for-each içinde for-each) için **dengeli etiket eşleştirmesi** (derinlik sayımı) ve attribute değerindeki `>` için alıntı-duyarlı tarama eklendi.
+
+### Changed
+- **AI "Uygula" — hedef bulunamayınca açıklayıcı yönlendirme** (`utils/xsltApply.ts`, `components/ai/AiApplyDialog.tsx`): no-match durumu artık **nedenini** söylüyor (ör. "en dış eleman `<xsl:for-each select=…>` N karakterlik şablonda bulunamadı — model bloğu yeniden yapılandırmış olabilir" veya "imza şablonda N kez geçiyor, belirsiz"). Diyalogda küçük gri metin yerine **belirgin amber uyarı bandı**: ikon + başlık + iki net adım (1: bloğu editörde **seçip** tekrar sor → seçili bölge birebir değişir; 2: **"Panoya kopyala"** ile elle yapıştır). Kopyala düğmesi birincil aksiyon olarak büyütüldü.
+- **AI prompt — model bloğu yeniden yapılandırmasın** (`Prompts/Core/Constraints.md`): Model artık değiştireceği bloğun EN DIŞ etiketini aynen korumaya, yeni sarmalayıcı eklememeye ve mevcut XPath'i bölmemeye (ör. `select="a/b/c"`'yi `a/b`+`c` diye ayırmama) yönlendiriliyor — böylece öneri dosyadaki tek bir elemanla eşleşir ve otomatik uygulanabilir. (5 golden snapshot yeniden kabul edildi.)
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.9.0 → 1.9.1`.
+
+## [1.9.0] - 2026-07-15
+
+### Changed
+- **AI — sağlayıcıya özel bağlam bütçesi: model artık şablonun TAMAMINI görebiliyor** (`AiContextBudget`, `PromptTemplates.BuildAssistant(req, budget)`, `AiOptions`): Önceden her sağlayıcıya aynı kırpılmış bağlam gidiyordu — 6K karakter üzeri XSLT yapısal özete indirilip 16K'da kırpılıyordu, 1M token pencereli Gemini bile yalnız özeti görüyordu. Artık her sağlayıcı kendi penceresine göre bütçe alır: **Gemini tam `.xslt` dosyasını HAM gönderir** (400K karaktere kadar → tipik ~250KB GİB şablonu bütünüyle), **Ollama** yapılandırılabilir bütçeyle çalışır. "X alanını değiştir/kaldır" tarzı sorulara doğru yanıt için şablonun tamamı modelin önünde olur. Tüm sınırlar appsettings'ten ayarlanır; varsayılan bütçe eski davranışı birebir korur (golden snapshot'lar değişmedi).
+- **AI — büyük şablonda otomatik Gemini yönlendirmesi** (`ProviderRouting`, `AiProviderOrchestrator`): `auto` modda XSLT `LargeXsltGeminiThresholdChars`'ı (varsayılan 64K karakter) aşarsa istek Gemini'ye öncelikli yönlenir (tam dosyayı gördüğü için), Ollama yedek kalır. Açık tercih (`ollama`/`gemini` flag'i) her zaman kazanır; `0` ile kapatılır.
+- **Ollama bağlam penceresi büyütüldü** (`appsettings*.json`): `NumCtx 8192/16384 → 32768` (qwen2.5-coder 3b/7b native üst sınırı) ve XSLT ham bütçesi `MaxXsltChars: 64000` — 64K karaktere kadar şablon Ollama'ya da özetlenmeden gider. KV cache maliyeti 3b ≈ +1.2GB, 7b ≈ +1.8GB.
+
+### Tests
+- **`ContextBudgetTests`** (9 case): büyük bütçede tam ham dosya gönderimi, varsayılanda özetleme, limit aşımında kırpma + 6 `ProviderRouting` yönlendirme senaryosu. Application.Tests: 98 → **107** yeşil; mevcut golden snapshot'lar bayt-bayt korundu.
+
+## [1.8.0] - 2026-07-13
+
+### Added
+- **AI sohbet — önerilen değişikliği editöre uygula** (`utils/xsltApply.ts`, `components/ai/AiApplyDialog.tsx`, `AiAssistantPanel.tsx`, `XsltEditorPage.applyAiChange`): Asistan yanıtında bir XSLT kod bloğu varsa mesaj altında **"Uygula"** düğmesi çıkar. Tıklanınca Monaco `DiffEditor` ile eski/yeni karşılaştırması gösterilir, `POST /api/preview/validate-xslt` ile doğrulanır (geçersizse "Yine de uygula") ve kabul edilince editördeki XSLT'ye uygulanır (tek adımda `Ctrl+Z` ile geri alınabilir). Hedefleme algoritması (`computeApplyTarget`): tam stylesheet → tüm belge; aktif seçim dokümanda varsa → seçim; blok bir `xsl:template` ise aynı `match`/`name`/`mode` imzalı tek template → o template; aksi hâlde **no-match** (tahmin yok, "Panoya kopyala").
+- **AI sohbet — işe yaradı / işe yaramadı geri bildirimi** (`AiFeedback` entity + migration, `IAiFeedbackService`, `POST/PUT /api/ai/feedback`): Her tamamlanmış asistan yanıtı için 👍/👎 oy. "Uygula" örtük pozitif kaydeder. 👎 seçilince iki seçenek açılır: **"Farklı yaklaşım dene"** (önceki yanıtın işe yaramadığı bilgisiyle otomatik yeniden sorar) ve **"Detay vereyim"** (input'a odaklanır). Free kullanıcı da oy verebilir (kota tüketmez).
+- **AI öğrenme — geçmiş başarılı örnekler few-shot enjeksiyonu** (`ExemplarScorer`, `IAiExemplarService`, `AiRequest.Exemplars`, `PromptTemplates`): Kullanıcının (ve admin onaylı global havuzun) pozitif geri bildirimleri, yeni soruya token-örtüşmesiyle (embedding YOK, v1) skorlanıp en alakalı 1-2 örnek prompt'a eklenir. Örnekler **system mesajına değil ilk user bağlam mesajına** (`<successful_examples>`) girer — Ollama prefix KV-cache prefix'i korunur, hız düşmez.
+- **Admin — AI geri bildirim havuzu** (`AdminAiFeedbackController` → `/api/admin/ai-feedback`, `pages/admin/AdminAiFeedbackPage.tsx`, `/admin/ai-feedback`): Geri bildirimleri listeler/arar; kaliteli pozitif örnekleri **global havuza** terfi eder (tüm kullanıcıların prompt'una girer) veya siler. Terfi öncesi kişisel/fatura verisi uyarısı gösterilir.
+
+### Changed
+- **AI çıktı formatı** (`Prompts/Core/Constraints.md`): Model kod değişikliği önerirken ilgili `xsl:template`'in TAM yeni halini tek bir ```xslt bloğunda vermeye yönlendirildi (diff/kesit değil; match/name attribute'unu değiştirmeden) — "Uygula" hedeflemesini güvenilir kılar.
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.7.4 → 1.8.0`.
+
+### Tests
+- **`ExemplarScorerTests`** (7 case): token eşiği, top-2 skor+yenilik sıralaması, Türkçe folding, boş/kısa istek. **`BuildMessagesGoldenTests.Assistant_WithExemplars`** golden case'i eklendi; mevcut 4 snapshot Constraints değişikliği için yeniden kabul edildi. Application.Tests: 82 test yeşil.
+
+## [1.7.4] - 2026-07-12
+
+### Added
+- **XSLT Editör — AI sohbetini önizleme ile bölünmüş kullanma** (`XsltEditorPage.tsx`): AI sekmesindeyken sağ üstteki **"Önizlemeyle Böl"** düğmesiyle sağ panel dikey olarak ikiye ayrılır — **üstte canlı önizleme, altta AI sohbet** — böylece sohbet ederken önizleme aynı anda görülebilir. Aradaki tutamaç sürüklenerek oran ayarlanır (varsayılan 50/50, her pane min. %15). Bölme özel bir flexbox + pointer-drag ile uygulanır (`react-resizable-panels`'ın çalışma-anında panel ekleme/çıkarma davranışı beyaz ekrana yol açtığından kütüphane bu bölmede kullanılmadı); sürükleme boyunca önizleme iframe'i ve sohbet Monaco editörleri `pointer-events:none` yapılır — aksi halde fare iframe üzerine gelince `pointermove` kesilip sürükleme takılıyordu. Sohbet paneli sabit `key` ile mount'ta tutulur; "Böl" açılıp kapanınca konuşma korunur.
+
+### Changed
+- **AI sohbet — Enter ile gönder** (`AiAssistantPanel.tsx`): Mesaj göndermek artık yalnızca **Enter** ile yapılır (önceki `Ctrl+Enter` kaldırıldı); **Shift+Enter** yeni satır ekler. IME kompozisyonu (`isComposing`) sürerken gönderim engellenir. Input altına kalıcı ipucu (`Enter ile gönder · Shift+Enter ile yeni satır`) ve güncellenmiş placeholder eklendi.
+- **AI sohbet — daha okunur yazı** (`AiAssistantPanel.tsx`): Mesaj balonları ve metin blokları `text-xs → text-sm` (12→14px), boş-durum ipucu büyütüldü, kod blokları Monaco font boyutu 12→13, input alanı 12→14px.
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.7.3 → 1.7.4`.
+
+## [1.7.3] - 2026-07-12
+
+### Fixed
+- **XSLT Editör — önizleme yatay kaydırması sayfanın sol kenarına ulaşamıyordu** (`XsltEditorPreview.tsx`): Kaydırılabilir önizleme alanı, ölçeklenmiş (transform: `scale`) A4 sayfasını flex `justify-center` ile ortalıyordu. Monaco editörü genişletilip önizleme paneli daraltıldığında (ya da yakınlaştırıldığında) sayfa kapsayıcıdan daha geniş hale geliyor; ortalanan bir flex öğesi taşınca taşma iki yana eşit dağılıyor, oysa kaydırma kapsayıcısı yalnızca sona (sağa) kaydırabildiği için sayfanın **sol** kenarı erişilemez oluyordu. Hizalama `justify-content: safe center` ile değiştirildi: içerik sığdığında yine ortalanır, taştığında başlangıç hizalamasına düşerek her iki kenara da kaydırılabilir.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, `XsltCraft.Api.csproj`, `XsltCraft.Application.csproj`, `XsltCraft.Domain.csproj`, `XsltCraft.Infrastructure.csproj` ve README rozeti `1.7.2 → 1.7.3`.
+
 ## [1.7.2] - 2026-07-06
 
 ### Fixed

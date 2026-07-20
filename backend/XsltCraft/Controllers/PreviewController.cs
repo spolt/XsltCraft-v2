@@ -81,7 +81,8 @@ public class PreviewController : ControllerBase
         }
         catch (XsltException ex)
         {
-            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            var (message, line, column) = DescribeXsltError(ex);
+            return BadRequest(new { error = message, line, column });
         }
         catch (XmlException ex)
         {
@@ -134,7 +135,8 @@ public class PreviewController : ControllerBase
         }
         catch (XsltException ex)
         {
-            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            var (message, line, column) = DescribeXsltError(ex);
+            return BadRequest(new { error = message, line, column });
         }
         catch (XmlException ex)
         {
@@ -200,7 +202,8 @@ public class PreviewController : ControllerBase
         }
         catch (XsltException ex)
         {
-            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            var (message, line, column) = DescribeXsltError(ex);
+            return BadRequest(new { error = message, line, column });
         }
         catch (XmlException ex)
         {
@@ -281,7 +284,8 @@ public class PreviewController : ControllerBase
         }
         catch (XsltException ex)
         {
-            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            var (message, line, column) = DescribeXsltError(ex);
+            return BadRequest(new { error = message, line, column });
         }
         catch (XmlException ex)
         {
@@ -333,6 +337,33 @@ public class PreviewController : ControllerBase
         return Content(xslt, "application/xslt+xml");
     }
 
+    /// <summary>
+    /// XslCompiledTransform.Load derleme hatalarında dıştaki XsltException'ın mesajı her zaman
+    /// jenerik "XSLT compile error."tır; asıl neden (geçersiz XPath, yanlış konumlanmış eleman vb.)
+    /// InnerException zincirinde saklıdır. Zincirdeki tüm anlamlı mesajları birleştirir ve
+    /// dıştaki satır/kolon 0 ise inner XsltException'dan doldurur.
+    /// </summary>
+    private static (string Message, int Line, int Column) DescribeXsltError(XsltException ex)
+    {
+        int line = ex.LineNumber;
+        int column = ex.LinePosition;
+
+        var messages = new List<string>();
+        for (Exception? cur = ex; cur != null; cur = cur.InnerException)
+        {
+            if (!string.IsNullOrWhiteSpace(cur.Message))
+                messages.Add(cur.Message.Trim());
+            if ((line == 0 || column == 0) && cur is XsltException xe && xe.LineNumber != 0)
+            {
+                line = xe.LineNumber;
+                column = xe.LinePosition;
+            }
+        }
+
+        var message = string.Join(" → ", messages.Distinct());
+        return (message, line, column);
+    }
+
     /// <summary>XSLT sözdizimini doğrular — geliştirici aracı.</summary>
     [HttpPost("validate-xslt")]
     [RequestSizeLimit(MaxXsltBodyBytes)]
@@ -349,7 +380,8 @@ public class PreviewController : ControllerBase
         }
         catch (XsltException ex)
         {
-            return Ok(new { valid = false, error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            var (message, line, column) = DescribeXsltError(ex);
+            return Ok(new { valid = false, error = message, line, column });
         }
         catch (XmlException ex)
         {

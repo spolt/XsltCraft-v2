@@ -141,6 +141,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AiProviderOrchestrator>();
         services.AddScoped<IAiFeatureFlagService, AiFeatureFlagService>();
         services.AddScoped<IAiProviderHealthService, AiProviderHealthService>();
+        services.AddScoped<IAiFeedbackService, AiFeedbackService>();
+        services.AddScoped<IAiExemplarService, AiExemplarService>();
 
         return services;
     }

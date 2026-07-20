@@ -120,8 +120,15 @@ export default function XsltEditorPreview({ html, onElementClick }: Props) {
         </div>
       </div>
 
-      {/* Scrollable preview area */}
-      <div className="flex-1 overflow-auto bg-gray-300 flex justify-center py-2">
+      {/* Scrollable preview area.
+          `justify-content: safe center` centers the scaled page when it fits, but
+          falls back to start-alignment when it overflows — otherwise a centered
+          flex item that is wider than the container clips its left edge and the
+          horizontal scrollbar can't reach it. */}
+      <div
+        className="flex-1 overflow-auto bg-gray-300 flex py-2"
+        style={{ justifyContent: 'safe center' }}
+      >
         {/*
           Wrapper reports scaled dimensions to layout engine.
           iframe inside is full-size, scaled via transform.

@@ -54,7 +54,8 @@ public class GeminiAssistantProvider : IAiAssistantProvider
         GeminiRequest payload;
         if (req.Task == AiTaskKind.Assistant)
         {
-            var providerMessages = PromptTemplates.BuildAssistant(req);
+            // 1M token pencere → TAM .xslt dosyası ham gönderilir; model şablonun tamamını bilir.
+            var providerMessages = PromptTemplates.BuildAssistant(req, cfg.ContextBudget);
             var systemMsg = providerMessages.FirstOrDefault(m => m.Role == "system");
             var contents = providerMessages
                 .Where(m => m.Role != "system")

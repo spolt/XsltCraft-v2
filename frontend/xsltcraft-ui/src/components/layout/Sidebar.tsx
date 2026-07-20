@@ -18,6 +18,7 @@ import {
   Users,
   Sparkles,
   BarChart3,
+  ThumbsUp,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
@@ -188,6 +189,13 @@ export default function Sidebar({ collapsed }: SidebarProps) {
                 >
                   <Sparkles size={16} className="flex-shrink-0" />
                   <span>AI Asistan</span>
+                </Link>
+                <Link
+                  to="/admin/ai-feedback"
+                  className={`${itemBase} ${isActive('/admin/ai-feedback') ? itemActive : itemInactive}`}
+                >
+                  <ThumbsUp size={16} className="flex-shrink-0" />
+                  <span>AI Geri Bildirim</span>
                 </Link>
               </div>
             )}
