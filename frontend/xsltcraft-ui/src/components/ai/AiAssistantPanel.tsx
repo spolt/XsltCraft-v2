@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Sparkles, X, StopCircle, Loader2,
+  Sparkles, X, StopCircle, Loader2, ChevronDown,
   RotateCcw, AlertTriangle, ThumbsUp, ThumbsDown, Wand2, RefreshCcw, PencilLine,
 } from 'lucide-react'
-import Editor from '@monaco-editor/react'
 import {
   streamAi, submitAiFeedback, updateAiFeedback,
   type AiChunk, type AssistantMessage,
@@ -13,6 +12,17 @@ import { useEntitlementStore } from '../../store/entitlementStore'
 import { openUpgradeModal } from '../../store/upgradeModalStore'
 import { extractApplicableBlock, computeApplyTarget, type ApplyTarget } from '../../utils/xsltApply'
 import AiApplyDialog from './AiApplyDialog'
+import MarkdownMessage from './MarkdownMessage'
+
+/** Dışarıdan tetiklenen soru (ör. Problems panelinden "AI'ya sor"). */
+export interface AiPrompt {
+  /**
+   * Monotonik artan. Aynı metin tekrar sorulsa bile nonce değiştiği için yeni istek
+   * tetiklenir; metin/nesne karşılaştırması ikinci tıklamayı yutardı.
+   */
+  nonce: number
+  text: string
+}
 
 interface Props {
   xslt: string
@@ -21,7 +31,8 @@ interface Props {
   xmlCursorLine?: number
   xsltSelection?: string
   xsltCursorLine?: number
-  initialErrorMessage?: string | null
+  /** Dışarıdan gelen soru. Panel REMOUNT EDİLMEZ → mevcut sohbet korunur. */
+  prompt?: AiPrompt | null
   xmlDeclarationMissing?: boolean
   /** AI önerisini editördeki XSLT'ye uygular (TAM doküman). Yoksa "Uygula" gösterilmez. */
   onApplyXslt?: (newDoc: string) => void
@@ -30,15 +41,41 @@ interface Props {
 
 // ─── Chat mesaj tipi ─────────────────────────────────────────────────────────
 
+type ChatStatus = 'streaming' | 'done' | 'cancelled' | 'error'
+
 interface ChatMessage {
   id: number
   role: 'user' | 'assistant'
   content: string
+  /** Balonun yaşam döngüsü. Kullanıcı mesajları daima 'done'. */
+  status: ChatStatus
+  /** Hata metni — içeriğe '⚠️' önekiyle gömülmez, kısmi yanıt korunur. */
+  errorMessage?: string
   meta?: { provider?: string; model?: string; ms?: number }
   /** Geri bildirim durumu (per-mesaj). */
   feedback?: 'up' | 'down'
   feedbackId?: string
   applied?: boolean
+}
+
+/**
+ * Modele yalnız TAMAMLANMIŞ ve dolu turlar gider. Hata/iptal/boş balonlar ve cevabı
+ * hataya düşmüş "öksüz" kullanıcı soruları dışlanır — aksi halde hem bağlam kirlenir
+ * hem de arka arkaya iki `user` turu bazı sağlayıcılarda 400 üretir.
+ */
+function toHistory(msgs: ChatMessage[]): AssistantMessage[] {
+  const out: AssistantMessage[] = []
+  for (let i = 0; i < msgs.length; i++) {
+    const q = msgs[i]
+    if (q.role !== 'user') continue
+    const a = msgs[i + 1]
+    if (a?.role === 'assistant' && a.status === 'done' && a.content.trim()) {
+      out.push({ role: 'user', content: q.content })
+      out.push({ role: 'assistant', content: a.content })
+      i++
+    }
+  }
+  return out
 }
 
 // ─── XML bağlam kırpma ────────────────────────────────────────────────────────
@@ -66,102 +103,17 @@ function getEffectiveXml(
   return xml
 }
 
-// ─── Markdown / kod bloğu ayrıştırma ─────────────────────────────────────────
-
-type Segment =
-  | { kind: 'text'; content: string }
-  | { kind: 'code'; lang: string; content: string }
-
-function parseSegments(text: string): Segment[] {
-  const segments: Segment[] = []
-  const re = /```(\w*)\n([\s\S]*?)\n```/g
-  let last = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) {
-      const txt = text.slice(last, m.index)
-      if (txt.trim()) segments.push({ kind: 'text', content: txt })
-    }
-    const content = m[2].trimEnd()
-    if (content) segments.push({ kind: 'code', lang: m[1] || 'plaintext', content })
-    last = m.index + m[0].length
-  }
-  if (last < text.length) {
-    const txt = text.slice(last)
-    if (txt.trim()) segments.push({ kind: 'text', content: txt })
-  }
-  return segments.length > 0 ? segments : [{ kind: 'text', content: text }]
-}
-
-function toMonacoLang(lang: string): string {
-  if (lang === 'xslt' || lang === 'xml' || lang === 'html') return 'xml'
-  if (lang === 'json') return 'json'
-  return 'plaintext'
-}
-
-// ─── Segment render bileşeni ──────────────────────────────────────────────────
-
-function MarkdownOutput({ text }: { text: string }) {
-  const segments = parseSegments(text)
-  return (
-    <div className="space-y-2">
-      {segments.map((seg, i) => {
-        if (seg.kind === 'text') {
-          return (
-            <div
-              key={i}
-              className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed break-words"
-            >
-              {seg.content}
-            </div>
-          )
-        }
-        const lang = toMonacoLang(seg.lang)
-        const lineCount = seg.content.split('\n').length
-        const height = Math.min(Math.max(lineCount * 19 + 18, 48), 320)
-        return (
-          <div key={i} className="rounded overflow-hidden border border-gray-700">
-            {seg.lang && (
-              <div className="px-2 py-0.5 bg-gray-800 border-b border-gray-700 text-[10px] text-gray-400 font-mono">
-                {seg.lang}
-              </div>
-            )}
-            <Editor
-              height={height}
-              language={lang}
-              value={seg.content}
-              theme="vs-dark"
-              loading={<div className="bg-gray-900 animate-pulse" style={{ height }} />}
-              options={{
-                readOnly: true,
-                minimap: { enabled: false },
-                lineNumbers: 'off',
-                folding: false,
-                fontSize: 13,
-                wordWrap: 'on',
-                scrollBeyondLastLine: false,
-                scrollbar: { vertical: 'auto', horizontal: 'hidden', alwaysConsumeMouseWheel: false },
-                overviewRulerLanes: 0,
-                renderLineHighlight: 'none',
-                contextmenu: false,
-                padding: { top: 8, bottom: 8 },
-              }}
-            />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
 
 let msgIdCounter = 0
 
+/** Dibe bu mesafeden yakınsa "takip" modunda sayılır. */
+const NEAR_BOTTOM_PX = 64
+
 export default function AiAssistantPanel({
   xslt, xml, xmlSelection, xmlCursorLine,
   xsltSelection, xsltCursorLine,
-  initialErrorMessage,
+  prompt,
   xmlDeclarationMissing,
   onApplyXslt,
   onClose,
@@ -172,11 +124,24 @@ export default function AiAssistantPanel({
   const [lastMeta, setLastMeta] = useState<{ provider?: string; model?: string; ms?: number } | null>(null)
   // Açık "Uygula" diyaloğu (hangi mesaj + hesaplanmış hedef).
   const [applyState, setApplyState] = useState<{ messageId: number; target: ApplyTarget } | null>(null)
+  const [showJump, setShowJump] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const initializedRef = useRef(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  /**
+   * `streaming` state'i async closure'da bayat kalır; aynı tick'te iki istek gelirse
+   * ikisi de `false` görüp paralel akış başlatırdı. Bu ref senkron kilittir.
+   */
+  const streamingRef = useRef(false)
+  /** İptali `finally`'ye bildirir (status'ü orada tek yerden yazıyoruz). */
+  const cancelledRef = useRef(false)
+  const lastPromptNonceRef = useRef(0)
+
+  // Scroll takibi
+  const listRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const stickRef = useRef(true)
+  const prevLenRef = useRef(0)
 
   // Bir asistan mesajının hemen öncesindeki kullanıcı sorusunu bulur (feedback bağlamı).
   function precedingUserMessage(assistantId: number): string {
@@ -255,28 +220,84 @@ export default function AiAssistantPanel({
     setTimeout(() => inputRef.current?.focus(), 0)
   }
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  useEffect(() => {
-    if (initialErrorMessage && !initializedRef.current) {
-      initializedRef.current = true
-      runChat(`Şu hatanın sebebini ve nasıl düzeltileceğini açıkla:\n\n${initialErrorMessage}`)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialErrorMessage])
-
-  function cancel() {
-    abortRef.current?.abort()
-    abortRef.current = null
-    setStreaming(false)
+  // ── Scroll takibi ───────────────────────────────────────────────────────────
+  // Kullanıcı dibe yakınsa takip et; yukarı kaydırdıysa DOKUNMA. Önceki sürümde her
+  // token'da scrollIntoView({behavior:'smooth'}) çağrılıyordu — hem atalarını da
+  // kaydırıyor (panel resizable panel içinde) hem de token başına bir animasyon
+  // kuyruğa alıyordu; streaming sırasında yukarı kaydırmak imkânsızdı.
+  function handleScroll() {
+    const el = listRef.current
+    if (!el) return
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX
+    stickRef.current = near
+    setShowJump(!near)
   }
 
-  async function runChat(message: string) {
-    if (!message.trim() || streaming) return
+  function scrollToBottom(smooth = false) {
+    const el = listRef.current
+    if (!el) return
+    stickRef.current = true
+    setShowJump(false)
+    if (smooth) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    else el.scrollTop = el.scrollHeight
+  }
 
-    const userMsg: ChatMessage = { id: ++msgIdCounter, role: 'user', content: message }
+  useEffect(() => {
+    const el = listRef.current
+    if (!el || !stickRef.current) return
+    const isNewMessage = messages.length !== prevLenRef.current
+    prevLenRef.current = messages.length
+    // Yeni mesaj: yumuşak. Akış sırasında: anlık — animasyonlar üst üste binmesin.
+    if (isNewMessage && !streamingRef.current) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    else el.scrollTop = el.scrollHeight
+  }, [messages])
+
+  // Monaco kod bloğu mount olduktan sonra yükseklik değiştirir (loading placeholder →
+  // editör); yukarıdaki efekt o büyümeden önce çalıştığı için dip kaçardı.
+  useEffect(() => {
+    const content = contentRef.current
+    const el = listRef.current
+    if (!content || !el) return
+    let raf = 0
+    const ro = new ResizeObserver(() => {
+      if (!stickRef.current) return
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
+    })
+    ro.observe(content)
+    return () => { cancelAnimationFrame(raf); ro.disconnect() }
+  }, [])
+
+  // ── Dışarıdan gelen soru (Problems panelinden "AI'ya sor") ──────────────────
+  useEffect(() => {
+    if (!prompt || prompt.nonce <= lastPromptNonceRef.current) return
+    lastPromptNonceRef.current = prompt.nonce
+    void runChat(prompt.text, { interrupt: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt])
+
+  function cancel() {
+    // Aktif akış yoksa BAYRAĞI KİRLETME: handleNewChat() de cancel() çağırıyor ve
+    // takılı kalan bayrak, `done` chunk'ı göndermeden biten bir sonraki yanıtı
+    // yanlışlıkla "iptal edildi" damgalayıp aksiyon satırını gizlerdi.
+    if (!abortRef.current) return
+    // Status'ü `finally` yazar; burada yalnız niyeti işaretliyoruz.
+    cancelledRef.current = true
+    abortRef.current.abort()
+  }
+
+  async function runChat(message: string, opts?: { interrupt?: boolean }) {
+    if (!message.trim()) return
+    if (streamingRef.current) {
+      // Manuel gönderim yolunda input/düğme zaten disabled; bu guard savunma amaçlı.
+      if (!opts?.interrupt) return
+      // "AI'ya sor" kasıtlı bir kullanıcı eylemi: mevcut akışı iptal et. İptal edilen
+      // yanıt 'cancelled' olarak ekranda kalır, hiçbir şey kaybolmaz.
+      cancel()
+    }
+    streamingRef.current = true
+
+    const userMsg: ChatMessage = { id: ++msgIdCounter, role: 'user', content: message, status: 'done' }
     const assistantId = ++msgIdCounter
 
     setMessages(prev => [...prev, userMsg])
@@ -286,17 +307,14 @@ export default function AiAssistantPanel({
 
     const effectiveXml = getEffectiveXml(xml, xmlSelection, xmlCursorLine)
 
-    // History = all messages except the one we're about to stream
-    const historyForRequest: AssistantMessage[] = [...messages, userMsg].map(m => ({
-      role: m.role,
-      content: m.content,
-    }))
+    // Yalnız tamamlanmış turlar; hata/iptal balonları ve öksüz sorular dışlanır.
+    const historyForRequest = toHistory(messages)
 
     const ac = new AbortController()
     abortRef.current = ac
 
     // Boş assistant mesajı ekle (streaming için)
-    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }])
+    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '', status: 'streaming' }])
 
     let finalMeta: { provider?: string; model?: string; ms?: number } | null = null
 
@@ -309,7 +327,7 @@ export default function AiAssistantPanel({
           xmlSelection: xmlSelection?.trim() || undefined,
           xsltSelection: xsltSelection?.trim() || undefined,
           xsltCursorLine,
-          history: historyForRequest.slice(0, -1), // son user mesajı zaten message param'ı
+          history: historyForRequest,
           message,
         },
         (chunk: AiChunk) => {
@@ -321,12 +339,14 @@ export default function AiAssistantPanel({
             finalMeta = { provider: chunk.provider, model: chunk.model, ms: chunk.ms }
             setLastMeta(finalMeta)
             setMessages(prev => prev.map(m =>
-              m.id === assistantId ? { ...m, meta: finalMeta ?? undefined } : m
+              m.id === assistantId ? { ...m, meta: finalMeta ?? undefined, status: 'done' } : m
             ))
           } else if (chunk.type === 'error') {
             const msg = chunk.message ?? 'Bilinmeyen hata.'
+            // `content`'e DOKUNMA: o ana kadar akmış kısmi yanıt korunur, hata ayrı
+            // bir alanda taşınır (eski kod içeriği '⚠️ …' ile eziyordu).
             setMessages(prev => prev.map(m =>
-              m.id === assistantId ? { ...m, content: `⚠️ ${msg}` } : m
+              m.id === assistantId ? { ...m, status: 'error', errorMessage: msg } : m
             ))
             if (chunk.code === 'http_402') {
               // Free kullanıcı günlük 1 soru hakkını doldurdu → Pro'ya yönlendir.
@@ -345,14 +365,36 @@ export default function AiAssistantPanel({
         ac.signal,
       )
     } catch (e) {
-      if ((e as { name?: string }).name === 'AbortError') return
-      const msg = (e as Error).message ?? 'AI isteği başarısız.'
-      setMessages(prev => prev.map(m =>
-        m.id === assistantId ? { ...m, content: `⚠️ ${msg}` } : m
-      ))
+      if ((e as { name?: string }).name !== 'AbortError') {
+        const msg = (e as Error).message ?? 'AI isteği başarısız.'
+        setMessages(prev => prev.map(m =>
+          m.id === assistantId ? { ...m, status: 'error', errorMessage: msg } : m
+        ))
+      }
+      // AbortError: status'ü aşağıdaki emniyet ağı 'cancelled' yapar.
     } finally {
-      setStreaming(false)
-      abortRef.current = null
+      const wasCancelled = cancelledRef.current
+      // YARIŞ KORUMASI: `cancel()` ile yeni bir akış başlatıldığında bu `finally`
+      // asenkron çalışır ve yeni akışın setStreaming(true)'sunu ezebilirdi. Temizliği
+      // yalnız hâlâ AKTİF akış bizsek yap.
+      if (abortRef.current === ac) {
+        abortRef.current = null
+        streamingRef.current = false
+        setStreaming(false)
+        cancelledRef.current = false
+      }
+      // Emniyet ağı: yalnız kullanıcı iptalini değil, ağ kopmasını ve sunucunun `done`
+      // göndermeden akışı kapatmasını da kapsar — aksi halde balon sonsuza dek
+      // "Yanıt hazırlanıyor…" spinner'ında kalırdı.
+      setMessages(prev => prev.map(m =>
+        m.id === assistantId && m.status === 'streaming'
+          ? {
+              ...m,
+              status: wasCancelled ? 'cancelled' : (m.content ? 'done' : 'error'),
+              errorMessage: !wasCancelled && !m.content ? 'Yanıt alınamadı.' : m.errorMessage,
+            }
+          : m
+      ))
       // AI kotası (Free 1 soru/gün, Pro token) güncel kalsın.
       useEntitlementStore.getState().refresh()
     }
@@ -363,7 +405,8 @@ export default function AiAssistantPanel({
     setMessages([])
     setInput('')
     setLastMeta(null)
-    initializedRef.current = false
+    // Sıfırlama sonrası son prompt yeniden oynatılmasın.
+    lastPromptNonceRef.current = prompt?.nonce ?? 0
   }
 
   function handleSend() {
@@ -433,7 +476,9 @@ export default function AiAssistantPanel({
       )}
 
       {/* Mesaj listesi */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+      <div className="flex-1 relative min-h-0">
+      <div ref={listRef} onScroll={handleScroll} className="h-full overflow-y-auto px-3 py-3">
+        <div ref={contentRef} className="space-y-3">
         {messages.length === 0 && !streaming && (
           <div className="text-sm text-gray-500 italic text-center mt-8">
             XSLT şablonunu doğal dille düzenlemek için mesaj yaz.<br />
@@ -453,11 +498,38 @@ export default function AiAssistantPanel({
               {msg.role === 'user' ? (
                 <span className="whitespace-pre-wrap break-words">{msg.content}</span>
               ) : msg.content ? (
-                <MarkdownOutput text={msg.content} />
-              ) : (
+                <>
+                  <MarkdownMessage text={msg.content} />
+                  {/* Yazıyor göstergesi: içerik akarken de görünür kalsın. */}
+                  {msg.status === 'streaming' && (
+                    <span className="inline-block w-2 h-3 bg-violet-400 animate-pulse align-text-bottom ml-0.5" />
+                  )}
+                </>
+              ) : msg.status === 'streaming' ? (
                 <span className="flex items-center gap-1 text-gray-500">
                   <Loader2 size={12} className="animate-spin" /> Yanıt hazırlanıyor…
                 </span>
+              ) : msg.status === 'cancelled' ? (
+                <span className="flex items-center gap-1 text-gray-500">
+                  <StopCircle size={12} /> İptal edildi
+                </span>
+              ) : (
+                <span className="text-gray-500">—</span>
+              )}
+
+              {/* İptal edilmiş kısmi yanıt: içeriğin altında etiketle. */}
+              {msg.status === 'cancelled' && msg.content && (
+                <div className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-500">
+                  <StopCircle size={10} /> İptal edildi — yanıt yarım
+                </div>
+              )}
+
+              {/* Hata ayrı blokta; kısmi yanıt yukarıda korunur. */}
+              {msg.status === 'error' && msg.errorMessage && (
+                <div className="mt-1.5 flex items-start gap-1.5 rounded border border-rose-800/60 bg-rose-950/40 px-2 py-1 text-[11px] text-rose-300">
+                  <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
+                  <span className="break-words">{msg.errorMessage}</span>
+                </div>
               )}
             </div>
             {msg.role === 'assistant' && msg.meta?.provider && (
@@ -466,8 +538,10 @@ export default function AiAssistantPanel({
               </span>
             )}
 
-            {/* Aksiyon satırı: yalnız tamamlanmış (meta set), dolu ve hatasız asistan yanıtlarında */}
-            {msg.role === 'assistant' && msg.meta && msg.content && !msg.content.startsWith('⚠️') && (
+            {/* Aksiyon satırı: yalnız TAMAMLANMIŞ ve dolu yanıtlarda. İptal edilmiş
+                yarım yanıtta gösterilmez — thumbs-up eğitim verisini kirletir,
+                "Uygula" yarım XSLT uygular. */}
+            {msg.role === 'assistant' && msg.status === 'done' && msg.content.trim() !== '' && (
               <div className="flex items-center gap-1.5 px-1 flex-wrap">
                 {onApplyXslt && extractApplicableBlock(msg.content) && (
                   <button
@@ -527,16 +601,19 @@ export default function AiAssistantPanel({
           </div>
         ))}
 
-        {/* Streaming cursor — son mesaj zaten güncellendiği için sadece boş içerik ise göster */}
-        {streaming && messages[messages.length - 1]?.role === 'assistant' && messages[messages.length - 1]?.content === '' && (
-          <div className="flex items-start">
-            <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
-              <span className="inline-block w-2 h-3 bg-violet-400 animate-pulse align-text-bottom" />
-            </div>
-          </div>
-        )}
+        </div>
+      </div>
 
-        <div ref={messagesEndRef} />
+      {/* Kullanıcı yukarı kaydırdıysa dibe dönüş kısayolu */}
+      {showJump && (
+        <button
+          onClick={() => scrollToBottom(true)}
+          className="absolute bottom-3 right-3 h-8 w-8 flex items-center justify-center rounded-full bg-gray-800 border border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white shadow-lg transition-colors"
+          title="En alta in"
+        >
+          <ChevronDown size={16} />
+        </button>
+      )}
       </div>
 
       {/* Input alanı */}

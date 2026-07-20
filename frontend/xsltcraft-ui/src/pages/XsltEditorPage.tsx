@@ -21,10 +21,11 @@ import {
   Rows2,
 } from 'lucide-react'
 import { useAiStore } from '../store/aiStore'
-import AiAssistantPanel from '../components/ai/AiAssistantPanel'
+import AiAssistantPanel, { type AiPrompt } from '../components/ai/AiAssistantPanel'
 import AiRefactorDialog from '../components/ai/AiRefactorDialog'
 import type { ProblemItem } from '../components/xslt-editor/ProblemsPanel'
 import Editor from '@monaco-editor/react'
+import xmlFormatter from 'xml-formatter'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
 import XsltEditorToolbar from '../components/xslt-editor/XsltEditorToolbar'
@@ -75,6 +76,30 @@ function extractXmlParseErrors(xml: string): { message: string; line: number | n
 // İlk satırda XML bildirimi (`<?xml version="1.0" encoding="UTF-8"?>`) var mı?
 // Eksikse problem panelinde gösterilecek hata öğesini döndürür.
 const XML_DECL_FIX = '<?xml version="1.0" encoding="UTF-8"?>'
+
+// UBL faturaları genelde tek satıra minify edilmiş gelir; Monaco bunu tek dev satır
+// olarak sarmalayınca okunamaz hâle gelir. "Minify edilmiş" sayılma ölçütü: kayda değer
+// boyutta olup ya birkaç satırdan ibaret ya da satır başına ortalama çok uzun olması.
+function looksMinified(xml: string): boolean {
+  if (xml.length < 2_000) return false
+  const lineCount = xml.split('\n').length
+  return lineCount <= 3 || xml.length / lineCount > 400
+}
+
+// Görüntüleme için pretty-print eder. HAM `xmlContent`'e DOKUNMAZ: ham metin dönüşümün
+// (ve XAdES imza sindirimlerinin) tek doğru kaynağıdır — girinti eklemek boşluk metin
+// düğümleri yaratıp önizleme çıktısını değiştirebilirdi. Geçersiz XML'de ham metne düşer.
+function formatXmlForDisplay(xml: string): string {
+  try {
+    return xmlFormatter(xml, {
+      indentation: '  ',
+      collapseContent: true,
+      lineSeparator: '\n',
+    })
+  } catch {
+    return xml
+  }
+}
 
 // Hata satırının çevresindeki pencereyi SATIR NUMARALARIYLA çıkarır. Modeller ham metinde
 // "836. satır"ı sayarak bulamaz; hatalı bölgeyi numaralı ve etiketli vererek AI'nın doğru
@@ -189,6 +214,9 @@ export default function XsltEditorPage() {
 
   // Right panel tab: preview | xml | ai
   const [rightTab, setRightTab] = useState<'preview' | 'xml' | 'ai'>('preview')
+  // XML Kaynak görünümü biçimlendirilsin mi? Varsayılan açık; kullanıcı ham baytları
+  // (ör. imza sindirimlerini birebir) görmek isterse kapatabilir.
+  const [xmlPretty, setXmlPretty] = useState(true)
   // AI sekmesinde bölünmüş görünüm: üstte önizleme, altta sohbet.
   // Üst önizlemenin yüzdesel yüksekliği; tutamaç sürüklenerek ayarlanır (varsayılan 50/50).
   const [aiSplit, setAiSplit] = useState(false)
@@ -207,8 +235,9 @@ export default function XsltEditorPage() {
   // AI panel
   const aiEnabled = useAiStore(s => s.enabled === true)
   const refreshAi = useAiStore(s => s.refresh)
-  const [aiInitialError, setAiInitialError] = useState<string | null>(null)
-  const [aiKey, setAiKey] = useState(0)
+  // Dışarıdan tetiklenen AI sorusu. Panel remount EDİLMEZ — bkz. askAi().
+  const [aiPrompt, setAiPrompt] = useState<AiPrompt | null>(null)
+  const aiNonceRef = useRef(0)
   // AI paneli ilk açılışta mount olur; sonrasında hep mount kalır (gizlense de),
   // böylece sekme değiştirince sohbet yok olmaz.
   const [aiMounted, setAiMounted] = useState(false)
@@ -266,17 +295,26 @@ export default function XsltEditorPage() {
     setIsDirty(true)
   }
 
+  /**
+   * AI panelini açar ve soruyu kuyruğa koyar. Panel REMOUNT EDİLMEZ — mevcut sohbet
+   * korunur. (Önceden `key` artırılıyordu ve konuşma uyarısız siliniyordu.)
+   * Nonce sayacı ref: aynı soru iki kez sorulursa metin özdeş olur, artan sayaç
+   * ikinci tetiklemeyi garantiler.
+   */
+  function askAi(text: string) {
+    setAiPrompt({ nonce: ++aiNonceRef.current, text })
+    setAiMounted(true)
+    setRightTab('ai')
+  }
+
   function openAiForProblem(problem: ProblemItem) {
     // XML bildirimi eksik hatası: tüm şablonu tekrar yazdırmadan, kısa ve hedefli yanıt iste
     if (problem.ruleId === 'XML_DECL_MISSING') {
-      setAiInitialError(
+      askAi(
         `XSLT'nin ilk satırında XML bildirimi (\`${XML_DECL_FIX}\`) eksik. ` +
         'Çok kısa açıkla (1-2 cümle) ve yalnızca eklenecek satırı, ardından dosyanın ilk 3-4 satırını içeren küçük bir kod bloğu göster. ' +
         'Tüm şablonu tekrar yazma.'
       )
-      setAiKey(k => k + 1)
-      setAiMounted(true)
-      setRightTab('ai')
       return
     }
     let errMsg = `${problem.ruleName ?? 'Hata'}: ${problem.message}` +
@@ -293,15 +331,11 @@ export default function XsltEditorPage() {
         '```xml\n' + region + '\n```'
     }
 
-    setAiInitialError(errMsg)
-    setAiKey(k => k + 1)
-    setAiMounted(true)
-    setRightTab('ai')
+    askAi(errMsg)
   }
 
-  // Düz AI açılışı: yalnızca paneli göster; key'i değiştirmez, dolayısıyla
-  // remount olmaz ve mevcut sohbet korunur. Sohbeti kullanıcı "Yeni sohbet" (↺)
-  // düğmesiyle kendisi sıfırlar.
+  // Düz AI açılışı: yalnızca paneli göster, soru gönderme; mevcut sohbet korunur.
+  // Sohbeti kullanıcı "Yeni sohbet" (↺) düğmesiyle kendisi sıfırlar.
   function openAiBlank() {
     setAiMounted(true)
     setRightTab('ai')
@@ -648,6 +682,25 @@ export default function XsltEditorPage() {
   // İlk satırdaki XML bildirimi eksikse XSLT problemleri arasına ekle
   const declProblem = useMemo(() => xmlDeclarationProblem(xsltContent), [xsltContent])
 
+  // XML Kaynak sekmesinde gösterilecek metin. Yalnızca minify edilmiş belgeler
+  // biçimlendirilir: zaten satırlara yayılmış bir XML'e dokunmayınca problem panelinden
+  // "satıra git" ve AI'ya giden imleç-penceresi ham metinle birebir hizalı kalır.
+  // Yalnızca well-formed belgeler biçimlendirilir: xml-formatter bozuk XML'de hata
+  // fırlatmak yerine eksik kapanış etiketlerini KENDİSİ ekliyor — kullanıcıya dosyasında
+  // olmayan içerik göstermek, tam da XML'i incelemeye çalışırken yanıltıcı olurdu.
+  const xmlDisplay = useMemo(() => {
+    if (!xmlContent) return ''
+    if (!xmlPretty || xmlValid !== true || !looksMinified(xmlContent)) return xmlContent
+    return formatXmlForDisplay(xmlContent)
+  }, [xmlContent, xmlPretty, xmlValid])
+
+  // Görüntülenen metin ham metinden farklıysa satır numaraları da kayar; kullanıcıyı uyar.
+  const xmlDisplayReformatted = xmlContent != null && xmlDisplay !== xmlContent
+
+  // Biçimli görünümde imleç satırı ham XML ile farklı koordinat uzayındadır; AI bağlamı
+  // ham metni bu satıra göre pencerelediğinden yanlış (hatta boş) pencere üretirdi.
+  const aiXmlCursorLine = xmlDisplayReformatted ? undefined : xmlCursorLine
+
   const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null
   const totalErrorCount =
     xsltErrors.length + (declProblem ? 1 : 0) + xmlErrors.length + (ublTrErrorCount ?? 0)
@@ -661,6 +714,10 @@ export default function XsltEditorPage() {
   // XML editor'da ilgili satıra git (sekmeyi XML'e çevir + reveal)
   function handleLocateXmlLine(line: number, column?: number | null) {
     setRightTab('xml')
+    // Problem satır/kolon numaraları HAM xmlContent üzerinden hesaplanır. Biçimlendirilmiş
+    // görünümde satırlar kaydığı için hedefi ıskalardık — ham görünüme dönerek konumun
+    // birebir doğru kalmasını sağlıyoruz.
+    if (xmlDisplayReformatted) setXmlPretty(false)
     setTimeout(() => {
       if (xmlEditorRef.current) {
         xmlEditorRef.current.revealLineInCenter(line)
@@ -956,6 +1013,22 @@ export default function XsltEditorPage() {
                 >
                   XML Kaynak
                 </button>
+                {rightTab === 'xml' && xmlContent && (
+                  <button
+                    onClick={() => setXmlPretty(p => !p)}
+                    className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition-colors ${
+                      xmlPretty
+                        ? 'bg-blue-600/30 text-blue-300 border border-blue-600/50 hover:bg-blue-600/50'
+                        : 'text-gray-400 border border-transparent hover:bg-gray-700'
+                    }`}
+                    title={xmlPretty
+                      ? 'Biçimlendirme açık — ham baytları görmek için kapatın'
+                      : 'Ham görünüm — okunabilir girintileme için açın'}
+                  >
+                    <WandSparkles size={11} />
+                    {xmlPretty ? 'Biçimli' : 'Ham'}
+                  </button>
+                )}
                 {aiEnabled && (
                   <button
                     onClick={() => { if (rightTab !== 'ai') openAiBlank(); else setRightTab('preview') }}
@@ -993,11 +1066,18 @@ export default function XsltEditorPage() {
                     onElementClick={handlePreviewClick}
                   />
                 ) : (
+                  <div className="h-full flex flex-col">
+                    {xmlDisplayReformatted && (
+                      <div className="px-3 py-1 text-[11px] text-blue-300/80 bg-blue-950/30 border-b border-blue-900/40 flex-shrink-0">
+                        Okunabilirlik için biçimlendirildi — satır numaraları kaynak dosyayla birebir örtüşmez.
+                      </div>
+                    )}
+                    <div className="flex-1 min-h-0">
                   <Editor
                     height="100%"
                     language="xml"
                     theme="vs-dark"
-                    value={xmlContent ?? ''}
+                    value={xmlDisplay}
                     onMount={(editor) => {
                       xmlEditorRef.current = editor
                       editor.onDidChangeCursorPosition(e => {
@@ -1018,6 +1098,8 @@ export default function XsltEditorPage() {
                       folding: true,
                     }}
                   />
+                    </div>
+                  </div>
                 ))}
                 {/* AI paneli bir kez açıldıktan sonra mount'ta kalır; sekme aktif
                     değilken CSS ile gizlenir, böylece sohbet korunur.
@@ -1056,14 +1138,13 @@ export default function XsltEditorPage() {
                     )}
                     <div key="ai-chat" className={`flex-1 min-h-0 ${aiDragging ? 'pointer-events-none' : ''}`}>
                       <AiAssistantPanel
-                        key={aiKey}
                         xslt={xsltContent}
                         xml={xmlContent}
-                        xmlCursorLine={xmlCursorLine}
+                        xmlCursorLine={aiXmlCursorLine}
                         xmlSelection={xmlSelection}
                         xsltCursorLine={xsltCursorLine}
                         xsltSelection={xsltSelection}
-                        initialErrorMessage={aiInitialError}
+                        prompt={aiPrompt}
                         xmlDeclarationMissing={declProblem != null}
                         onApplyXslt={applyAiChange}
                         onClose={() => setRightTab('preview')}
