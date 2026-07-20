@@ -76,6 +76,22 @@ function extractXmlParseErrors(xml: string): { message: string; line: number | n
 // Eksikse problem panelinde gösterilecek hata öğesini döndürür.
 const XML_DECL_FIX = '<?xml version="1.0" encoding="UTF-8"?>'
 
+// Hata satırının çevresindeki pencereyi SATIR NUMARALARIYLA çıkarır. Modeller ham metinde
+// "836. satır"ı sayarak bulamaz; hatalı bölgeyi numaralı ve etiketli vererek AI'nın doğru
+// yeri görmesini garanti eder — bağlam özetleme/kırpma ne yaparsa yapsın bu blok korunur.
+function buildErrorRegion(content: string, errorLine: number, radius = 18): string {
+  const lines = content.split('\n')
+  const start = Math.max(1, errorLine - radius)
+  const end = Math.min(lines.length, errorLine + radius)
+  const width = String(end).length
+  const out: string[] = []
+  for (let ln = start; ln <= end; ln++) {
+    const marker = ln === errorLine ? '>>' : '  '
+    out.push(`${marker} ${String(ln).padStart(width, ' ')} | ${lines[ln - 1] ?? ''}`)
+  }
+  return out.join('\n')
+}
+
 function xmlDeclarationProblem(xslt: string): ProblemItem | null {
   if (!xslt.trim()) return null
   const noBom = xslt.charCodeAt(0) === 0xfeff ? xslt.slice(1) : xslt
@@ -263,8 +279,20 @@ export default function XsltEditorPage() {
       setRightTab('ai')
       return
     }
-    const errMsg = `${problem.ruleName ?? 'Hata'}: ${problem.message}` +
+    let errMsg = `${problem.ruleName ?? 'Hata'}: ${problem.message}` +
       (problem.line != null ? ` (satır ${problem.line}${problem.column ? `:${problem.column}` : ''})` : '')
+
+    // Hatalı satırın çevresini numaralı olarak göm. XSLT hataları xsltContent'e,
+    // XML/UBL-TR hataları xmlContent'e karşılık gelir. Bu blok, modele bağlamdaki
+    // (kırpılmış olabilen) tam dosyadan bağımsız olarak asıl hatalı kodu gösterir.
+    const sourceContent = problem.source === 'xslt' ? xsltContent : (xmlContent ?? '')
+    if (problem.line != null && sourceContent) {
+      const region = buildErrorRegion(sourceContent, problem.line)
+      errMsg +=
+        `\n\nHatanın bulunduğu bölge (">>" ile işaretli satır sorunlu; numaralar dosyadaki gerçek satırlardır):\n` +
+        '```xml\n' + region + '\n```'
+    }
+
     setAiInitialError(errMsg)
     setAiKey(k => k + 1)
     setAiMounted(true)

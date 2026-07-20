@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-07-20
+
+### Fixed
+- **XSLT hata mesajları artık gerçek sebebi gösteriyor** (`PreviewController.DescribeXsltError`): `XslCompiledTransform.Load` derleme hatalarında dıştaki `XsltException`'ın mesajı **her zaman** jenerik `"XSLT compile error."`tır; asıl neden (geçersiz XPath, yanlış konumlanmış eleman vb.) `InnerException` zincirinde saklıdır ve tamamen çöpe gidiyordu. Yeni yardımcı zincirdeki tüm anlamlı mesajları `" → "` ile birleştiriyor, dıştaki satır/kolon `0` ise inner `XsltException`'dan dolduruyor. 5 yakalama noktasının hepsine (4 preview + `validate-xslt`) bağlandı — Problemler paneli ve AI'ya giden soru artık teşhis edilebilir metin taşıyor.
+- **"AI'ya sor" hatalı kodu modele gösteriyor** (`XsltEditorPage.buildErrorRegion`): Önceden AI'ya yalnızca `"XSLT compile error. (satır 836:63)"` gibi içeriksiz bir metin gidiyordu; model 400K karakterlik bağlamda "836. satırı" sayarak bulamadığı ve bağlam paketleyici (`XsltSummarizer`) büyük şablonu 8K bütçe dolunca gövde **ortasından** kestiği için, kesik CDATA artefaktını görüp "dosyanız kırpılmış, orijinali geri yükleyin" şeklinde **yanlış** teşhis koyuyordu. Artık hatalı satırın ±18 satırlık penceresi, **gerçek satır numaralarıyla** ve hatalı satır `>>` ile işaretlenmiş hâlde soruya gömülüyor (XSLT hatası → `xsltContent`, XML/UBL-TR hatası → `xmlContent`). Bağlam özetleme/kırpma ne yaparsa yapsın model asıl hatalı kodu garanti görüyor.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.9.1 → 1.9.2`.
+
 ## [1.9.1] - 2026-07-20
 
 ### Fixed
