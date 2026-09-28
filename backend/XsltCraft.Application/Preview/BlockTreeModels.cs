@@ -21,6 +21,10 @@ public sealed class BlockTreeV2Dto
     [JsonPropertyName("version")]
     public int Version { get; set; } = 2;
 
+    /// <summary>"Invoice" (varsayılan) | "Despatch" — n1 namespace'ini ve hazır blokların UBL yollarını belirler.</summary>
+    [JsonPropertyName("documentType")]
+    public string? DocumentType { get; set; }
+
     [JsonPropertyName("blocks")]
     public Dictionary<string, BlockDto> Blocks { get; set; } = [];
 }

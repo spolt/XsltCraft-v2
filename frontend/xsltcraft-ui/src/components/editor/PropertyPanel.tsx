@@ -1413,7 +1413,7 @@ function GibKarekodPanel({ config, update }: { config: Config<'GibKarekod'>; upd
   return (
     <>
       <p className="text-xs text-gray-400 bg-gray-50 rounded p-2">
-        GİB standart e-Fatura karekodu. XPath değerleri sabittir.
+        GİB standart karekodu (e-Fatura veya e-İrsaliye, şablon türüne göre). XPath değerleri sabittir.
       </p>
       <div className="flex gap-2">
         <Field label="Genişlik (px)">
@@ -1908,6 +1908,23 @@ function InvoiceLineTablePanel({ config, update }: { config: Config<'InvoiceLine
   )
 }
 
+// ── ShipmentInfo — e-İrsaliye taşıyıcı / araç / şoför bilgileri ─────────────
+
+function ShipmentInfoPanel({ config, update }: { config: Config<'ShipmentInfo'>; update: UpdateFn }) {
+  return (
+    <>
+      <p className="text-xs text-gray-400 bg-gray-50 rounded p-2">
+        Taşıyıcı firma, araç/dorse plakası, şoför ve teslim eden bilgileri XML'de varsa otomatik gösterilir.
+      </p>
+      <Field label="Başlık">
+        <TextInput value={config.title} onChange={(v) => update({ title: v })} placeholder="TAŞIYICI BİLGİLERİ" />
+      </Field>
+      <Checkbox label="Başlığı göster" checked={config.showTitle} onChange={(v) => update({ showTitle: v })} />
+      <InvoiceHeaderPanel config={config} update={update} />
+    </>
+  )
+}
+
 // ── Properties content ────────────────────────────────────────────────────────
 
 function PropertiesContent() {
@@ -1956,6 +1973,7 @@ function PropertiesContent() {
         {block.type === 'InvoiceLineTable' && <InvoiceLineTablePanel config={cfg} update={update} />}
         {block.type === 'InvoiceHeader' && <InvoiceHeaderPanel config={cfg} update={update} />}
         {block.type === 'InvoiceTotals' && <InvoiceTotalsPanel config={cfg} update={update} />}
+        {block.type === 'ShipmentInfo' && <ShipmentInfoPanel config={cfg} update={update} />}
       </div>
     </div>
   )

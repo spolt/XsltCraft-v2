@@ -10,6 +10,7 @@ export default function EditorPreviewPanel() {
   const blocks = useEditorStore((s) => s.blocks)
   const templateId = useEditorStore((s) => s.templateId)
   const hasStoredXslt = useEditorStore((s) => s.hasStoredXslt)
+  const documentType = useEditorStore((s) => s.documentType)
   const xmlFiles = useXmlStore((s) => s.xmlFiles)
   const activeXmlId = useXmlStore((s) => s.activeXmlId)
   const activeXml = xmlFiles.find((f) => f.id === activeXmlId)
@@ -35,7 +36,7 @@ export default function EditorPreviewPanel() {
       try {
         const result = useStoredXslt
           ? await previewFromStoredXslt(templateId!, activeXml.content)
-          : await previewFromBlockTree(blocks, activeXml.content)
+          : await previewFromBlockTree(blocks, activeXml.content, documentType)
         // srcDoc iframe'lerinin base URL'i about:srcdoc olduğu için
         // relative asset URL'leri (/api/assets/...) çalışmaz.
         // <base> tag ekleyerek API sunucusuna yönlendiriyoruz.
@@ -55,7 +56,7 @@ export default function EditorPreviewPanel() {
     }, DEBOUNCE_MS)
 
     return () => clearTimeout(t)
-  }, [blocks, activeXml?.content, useStoredXslt]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [blocks, activeXml?.content, useStoredXslt, documentType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col border-l border-gray-200 bg-white" style={{ width: expanded ? 860 : 420, flexShrink: 0 }}>

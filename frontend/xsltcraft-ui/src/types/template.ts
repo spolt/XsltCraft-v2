@@ -37,8 +37,13 @@ export interface GridBlockLayout {
   marginRight?: number
 }
 
+/** Şablonun hedef belgesi — hazır blokların UBL yollarını ve üretilen XSLT'nin n1 namespace'ini belirler. */
+export type DocumentType = 'Invoice' | 'Despatch'
+
 export interface BlockTreeV2 {
   version: 2
+  /** Yoksa 'Invoice' kabul edilir (eski şablonlar). */
+  documentType?: DocumentType
   blocks: Record<string, GridBlock>
 }
 

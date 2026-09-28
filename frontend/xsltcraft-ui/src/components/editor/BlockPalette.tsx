@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import type { BlockType } from '../../types/blocks'
+import { useEditorStore } from '../../store/editorStore'
 
 interface BlockPaletteProps {
   isOpen: boolean
@@ -14,25 +15,40 @@ interface PaletteItem {
   configOverride?: Record<string, unknown>
 }
 
-const CATEGORIES: { name: string; items: PaletteItem[] }[] = [
+const INVOICE_READY_BLOCKS: PaletteItem[] = [
   {
-    name: 'HAZIR BLOKLAR',
-    items: [
-      {
-        id: 'SupplierInfo', type: 'PartyInfo', label: 'Satıcı Bilgileri', icon: '⊞',
-        configOverride: { partyType: 'SupplierParty', title: 'SATICI' },
-      },
-      {
-        id: 'BuyerInfo', type: 'PartyInfo', label: 'Alıcı Bilgileri', icon: '⊞',
-        configOverride: { partyType: 'CustomerParty', title: 'ALICI' },
-      },
-      { id: 'InvoiceHeader',    type: 'InvoiceHeader',    label: 'Fatura Başlığı',       icon: '☰' },
-      { id: 'InvoiceLineTable', type: 'InvoiceLineTable', label: 'Fatura Satırları',      icon: '⊟' },
-      { id: 'InvoiceTotals',    type: 'InvoiceTotals',    label: 'Fatura Dip Toplamları', icon: '₸' },
-      { id: 'Notes',            type: 'Notes',            label: 'Notlar',                icon: '✎' },
-      { id: 'BankInfo',         type: 'BankInfo',         label: 'Banka Bilgisi',         icon: '₺' },
-    ],
+    id: 'SupplierInfo', type: 'PartyInfo', label: 'Satıcı Bilgileri', icon: '⊞',
+    configOverride: { partyType: 'SupplierParty', title: 'SATICI' },
   },
+  {
+    id: 'BuyerInfo', type: 'PartyInfo', label: 'Alıcı Bilgileri', icon: '⊞',
+    configOverride: { partyType: 'CustomerParty', title: 'ALICI' },
+  },
+  { id: 'InvoiceHeader',    type: 'InvoiceHeader',    label: 'Fatura Başlığı',       icon: '☰' },
+  { id: 'InvoiceLineTable', type: 'InvoiceLineTable', label: 'Fatura Satırları',      icon: '⊟' },
+  { id: 'InvoiceTotals',    type: 'InvoiceTotals',    label: 'Fatura Dip Toplamları', icon: '₸' },
+  { id: 'Notes',            type: 'Notes',            label: 'Notlar',                icon: '✎' },
+  { id: 'BankInfo',         type: 'BankInfo',         label: 'Banka Bilgisi',         icon: '₺' },
+]
+
+const DESPATCH_READY_BLOCKS: PaletteItem[] = [
+  {
+    id: 'DespatchSupplierInfo', type: 'PartyInfo', label: 'Gönderici Bilgileri', icon: '⊞',
+    configOverride: { partyType: 'DespatchSupplierParty', title: 'GÖNDERİCİ' },
+  },
+  {
+    id: 'DeliveryCustomerInfo', type: 'PartyInfo', label: 'Alıcı Bilgileri', icon: '⊞',
+    configOverride: { partyType: 'DeliveryCustomerParty', title: 'SAYIN' },
+  },
+  { id: 'DespatchHeader',    type: 'InvoiceHeader',    label: 'İrsaliye Başlığı',   icon: '☰' },
+  { id: 'DespatchLineTable', type: 'InvoiceLineTable', label: 'İrsaliye Satırları', icon: '⊟' },
+  { id: 'DespatchTotals',    type: 'InvoiceTotals',    label: 'Toplam Tutar',       icon: '₸' },
+  { id: 'ShipmentInfo',      type: 'ShipmentInfo',     label: 'Taşıyıcı Bilgileri', icon: '⛟' },
+  { id: 'Notes',             type: 'Notes',            label: 'Notlar',             icon: '✎' },
+  { id: 'BankInfo',          type: 'BankInfo',         label: 'Banka Bilgisi',      icon: '₺' },
+]
+
+const COMMON_CATEGORIES: { name: string; items: PaletteItem[] }[] = [
   {
     name: 'METİN',
     items: [
@@ -122,15 +138,20 @@ function DraggablePaletteItem({ item }: { item: PaletteItem }) {
 
 export default function BlockPalette({ isOpen }: BlockPaletteProps) {
   const [search, setSearch] = useState('')
+  const documentType = useEditorStore((s) => s.documentType)
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return CATEGORIES
+    const categories = [
+      { name: 'HAZIR BLOKLAR', items: documentType === 'Despatch' ? DESPATCH_READY_BLOCKS : INVOICE_READY_BLOCKS },
+      ...COMMON_CATEGORIES,
+    ]
+    if (!search.trim()) return categories
     const q = search.toLowerCase()
-    return CATEGORIES.map((cat) => ({
+    return categories.map((cat) => ({
       ...cat,
       items: cat.items.filter((i) => i.label.toLowerCase().includes(q) || i.type.toLowerCase().includes(q)),
     })).filter((cat) => cat.items.length > 0)
-  }, [search])
+  }, [search, documentType])
 
   if (!isOpen) return null
 

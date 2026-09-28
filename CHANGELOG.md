@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-28
+
+### Added
+- **e-İrsaliye şablon tasarımı**: Yeni şablon artık yalnız fatura için değil, UBL-TR `DespatchAdvice` için de oluşturulabiliyor. Üretilen stylesheet referans irsaliye tasarımıyla aynı düzeni izliyor: gönderici, "SAYIN" alıcı bloğu, GİB logosu (`e-İRSALİYE`), karekod, irsaliye başlık tablosu, ETTN, satır tablosu, toplam tutar, notlar ve taşıyıcı bilgileri.
+  - **Belge türü ağaçta taşınıyor**: BlockTree V2 JSON'una `documentType` (`Invoice` | `Despatch`) eklendi; `PreviewRequest.DocumentType` ile önizleme/`xslt` uçlarına da iletiliyor. Alan yoksa `Invoice` varsayılır — mevcut şablonlar birebir aynı üretilir.
+  - **Üretici** (`XsltGeneratorService.Despatch.cs`, yeni partial): irsaliyede `n1` önekini `DespatchAdvice-2` namespace'ine bağlar. İrsaliye başlığı (Özelleştirme No, Senaryo, İrsaliye Tipi/No/Tarihi, Sevk Tarihi, Sipariş No/Tarihi), GİB irsaliye karekod JSON'u (`sevktarihi`, `sevkzamani`, `tasiyicivkn`, `plaka`…) ve GİB logosu belge türüne göre ayrışıyor. Satır tablosunda para birimi satırın kendi `@currencyID`'sinden alınıyor, faturaya özgü vergi-istisna notları ve İADE bölümü irsaliyede atlanıyor.
+  - **Yeni `ShipmentInfo` bloğu ("Taşıyıcı Bilgileri")**: taşıyıcı firma + VKN, araç plakası, dorse plakası (`schemeID='DORSEPLAKA'`), şoför (ad soyad, TCKN) ve teslim eden; özel satır eklenebilir.
+  - **Editör**: blok paleti belge türüne göre değişiyor (Gönderici/Alıcı Bilgileri, İrsaliye Başlığı, İrsaliye Satırları, Toplam Tutar, Taşıyıcı Bilgileri); bloklar irsaliye XPath'leri ve başlıklarıyla geliyor. Başlıkta belge türü rozeti. Canlı önizleme varsayılan irsaliye XML'iyle açılıyor (`assets/default-despatch.xml` — kişisel/kurumsal veriler anonimleştirildi, imza ve gömülü XSLT eki çıkarıldı).
+  - **Giriş noktaları**: "Yeni Şablon" Sidebar'da alt menüye ayrıldı (**e-Fatura / e-Arşiv** · **e-İrsaliye**); Dashboard ve Taslaklarım'da ayrı düğmeler. İrsaliye rotası `/editor/new?type=despatch`; `/editor/new` fatura olarak aynen çalışıyor.
+  - Kaydedilen şablonun belge türü `createTemplate`'e iletiliyor; Taslaklarım önizlemesi irsaliye şablonlarında irsaliye örnek XML'ini kullanıyor.
+- **Testler** (`DespatchGeneratorTests`, 4 test): namespace bağlama, `documentType` yokken fatura davranışının korunması, uçtan uca dönüşüm (başlık, satırlar, toplam, taşıyıcı, notlar, logo) ve karekod içeriği.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.9.4 → 1.10.0`.
+
 ## [1.9.4] - 2026-09-28
 
 ### Fixed

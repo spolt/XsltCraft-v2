@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   DndContext,
   DragOverlay,
@@ -27,21 +27,35 @@ import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
 import { exportsRemaining, parseGateError } from '../services/entitlementService'
 import { toast } from '../store/toastStore'
-import type { BlockTree, BlockTreeV1 } from '../types/template'
+import type { BlockTree, BlockTreeV1, BlockTreeV2, DocumentType } from '../types/template'
 import type { BlockType } from '../types/blocks'
 import { migrateV1toV2 } from '../utils/treeMigration'
 import { snapToGrid, clampToPage, pxToMm } from '../utils/gridSnap'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
+import defaultDespatchXml from '../assets/default-despatch.xml?raw'
 
 const AUTOSAVE_DELAY_MS = 30_000
 
+/** Belge türüne göre editörde varsayılan olarak yüklenecek örnek XML. */
+function loadDefaultXml(documentType: DocumentType) {
+  useXmlStore.setState({ xmlFiles: [], activeXmlId: null })
+  if (documentType === 'Despatch') {
+    useXmlStore.getState().addXmlFile('varsayilan-irsaliye.xml', defaultDespatchXml)
+  } else {
+    useXmlStore.getState().addXmlFile('varsayilan-fatura.xml', defaultInvoiceXml)
+  }
+}
+
 export default function EditorPage() {
   const { templateId: routeTemplateId } = useParams<{ templateId?: string }>()
+  const [searchParams] = useSearchParams()
+  const newDocumentType: DocumentType = searchParams.get('type') === 'despatch' ? 'Despatch' : 'Invoice'
   const navigate = useNavigate()
 
   const templateId      = useEditorStore((s) => s.templateId)
   const templateName    = useEditorStore((s) => s.templateName)
   const blocks          = useEditorStore((s) => s.blocks)
+  const documentType    = useEditorStore((s) => s.documentType)
   const addBlock        = useEditorStore((s) => s.addBlock)
   const isDirty         = useEditorStore((s) => s.isDirty)
   const past            = useEditorStore((s) => s.past)
@@ -170,17 +184,14 @@ export default function EditorPage() {
   // ── Template yükleme ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!routeTemplateId) {
-      resetTree()
-      useXmlStore.setState({ xmlFiles: [], activeXmlId: null })
-      addXmlFile('varsayilan-fatura.xml', defaultInvoiceXml)
+      resetTree(newDocumentType)
+      setNameInput(useEditorStore.getState().templateName)
+      loadDefaultXml(newDocumentType)
       return
     }
 
     resetTree()
     setIsLoading(true)
-    // XML store'u temizle + varsayılan XML'i ekle (mevcut şablon yüklenirken de)
-    useXmlStore.setState({ xmlFiles: [], activeXmlId: null })
-    addXmlFile('varsayilan-fatura.xml', defaultInvoiceXml)
     getTemplate(routeTemplateId)
       .then((tpl) => {
         setTemplateId(tpl.id)
@@ -188,33 +199,29 @@ export default function EditorPage() {
         setNameInput(tpl.name)
         setHasStoredXslt(tpl.hasStoredXslt)
 
+        // Ağaçta belge türü yoksa (eski kayıtlar) şablonun kendi türüne düş.
+        const withType = (tree: BlockTreeV2): BlockTreeV2 => ({ ...tree, documentType: tree.documentType ?? tpl.documentType })
+        let tree: BlockTreeV2 = { version: 2, blocks: {} }
         if (tpl.blockTree) {
           try {
             const raw: BlockTree = JSON.parse(tpl.blockTree)
-
             // V1 mi V2 mi?
-            if (!('version' in raw) || (raw as { version?: number }).version !== 2) {
-              // V1 → migrate
-              const v2 = migrateV1toV2(raw as BlockTreeV1)
-              loadTree(v2)
-            } else {
-              loadTree(raw as import('../types/template').BlockTreeV2)
-            }
-          } catch {
-            loadTree({ version: 2, blocks: {} })
-          }
-        } else {
-          loadTree({ version: 2, blocks: {} })
+            tree = !('version' in raw) || (raw as { version?: number }).version !== 2
+              ? migrateV1toV2(raw as BlockTreeV1)
+              : raw as BlockTreeV2
+          } catch { /* bozuk ağaç → boş şablon */ }
         }
+        loadTree(withType(tree))
+        loadDefaultXml(useEditorStore.getState().documentType)
       })
-      .catch(() => setSaveError('Template yüklenemedi.'))
+      .catch(() => { setSaveError('Template yüklenemedi.'); loadDefaultXml('Invoice') })
       .finally(() => setIsLoading(false))
-  }, [routeTemplateId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [routeTemplateId, newDocumentType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Kaydetme ─────────────────────────────────────────────────────────────────
   const serializeTree = useCallback((): string => {
-    return JSON.stringify({ version: 2, blocks })
-  }, [blocks])
+    return JSON.stringify({ version: 2, documentType, blocks })
+  }, [blocks, documentType])
 
   const save = useCallback(async (forceName?: string) => {
     if (isSaving) return
@@ -230,7 +237,7 @@ export default function EditorPage() {
       if (!templateId) {
         const created = await createTemplate({
           name: nameToUse,
-          documentType: 'Invoice',
+          documentType,
           blockTree: blockTreeJson,
         })
         setTemplateId(created.id)
@@ -249,7 +256,7 @@ export default function EditorPage() {
     } finally {
       setIsSaving(false)
     }
-  }, [isSaving, templateId, templateName, serializeTree, navigate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isSaving, templateId, templateName, documentType, serializeTree, navigate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Otomatik kaydetme — sadece mevcut (kayıtlı) şablonlar için ───────────────
   useEffect(() => {
@@ -289,7 +296,7 @@ export default function EditorPage() {
       if (templateId) {
         await downloadTemplate(templateId, nameToUse)
       } else {
-        const xslt = await generateXslt(blocks)
+        const xslt = await generateXslt(blocks, documentType)
         const blob = new Blob([xslt], { type: 'application/xslt+xml' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -322,7 +329,7 @@ export default function EditorPage() {
     } finally {
       setIsDownloading(false)
     }
-  }, [isDownloading, templateId, blocks, templateName])
+  }, [isDownloading, templateId, blocks, templateName, documentType])
 
   // ── Template adı düzenleme ────────────────────────────────────────────────────
   function commitName() {
@@ -411,6 +418,17 @@ export default function EditorPage() {
               {templateName}
             </button>
           )}
+          <span
+            style={{
+              flexShrink: 0, fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+              ...(documentType === 'Despatch'
+                ? { background: '#FEF3E2', color: '#B45309', border: '1px solid #F5D9A8' }
+                : { background: '#EBF3FC', color: '#185FA5', border: '1px solid #B5D4F4' }),
+            }}
+            title="Belge türü"
+          >
+            {documentType === 'Despatch' ? 'e-İrsaliye' : 'e-Fatura / e-Arşiv'}
+          </span>
           {isDirty && !isSaving && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, fontSize: 11, color: '#888780' }}>
               <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#E53E3E', flexShrink: 0 }} />
@@ -540,7 +558,7 @@ export default function EditorPage() {
       {/* İsim verme modalı — yeni şablon */}
       {namePrompt && (
         <NamePromptModal
-          initial={templateName === 'Yeni Şablon' ? '' : templateName}
+          initial={templateName === 'Yeni Şablon' || templateName === 'Yeni İrsaliye Şablonu' ? '' : templateName}
           action={namePrompt}
           onConfirm={handleNamePromptConfirm}
           onClose={() => setNamePrompt(null)}

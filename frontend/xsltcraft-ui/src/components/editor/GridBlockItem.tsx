@@ -26,6 +26,14 @@ const BLOCK_LABEL_TR: Record<string, string> = {
   InvoiceHeader:    'Fatura Başlığı',
   InvoiceTotals:    'Fatura Dip Toplamları',
   GibLogo:          'GİB Logo',
+  ShipmentInfo:     'Taşıyıcı Bilgileri',
+}
+
+// e-İrsaliye şablonlarında aynı blok tiplerinin görünen adları
+const DESPATCH_LABEL_TR: Record<string, string> = {
+  InvoiceLineTable: 'İrsaliye Satırları',
+  InvoiceHeader:    'İrsaliye Başlığı',
+  InvoiceTotals:    'Toplam Tutar',
 }
 
 // Her blok tipi icin kisa ozet metni
@@ -56,6 +64,7 @@ function blockSummary(block: GridBlock): string {
     case 'Image': return c.assetType as string ?? 'logo'
     case 'InvoiceHeader': return (c.title as string) ?? 'Fatura Başlığı'
     case 'InvoiceTotals': return 'Dip Toplamlar'
+    case 'ShipmentInfo': return (c.title as string) || 'Taşıyıcı / Araç / Şoför'
     case 'TaxSummary': return 'KDV Özeti'
     case 'DocumentInfo': {
       const rows = c.rows as unknown[]
@@ -75,7 +84,7 @@ function blockSummary(block: GridBlock): string {
 // Blok tipi icin renk
 function blockColor(type: string): string {
   const colors: Record<string, string> = {
-    PartyInfo: '#1565C0', InvoiceHeader: '#185FA5', InvoiceLineTable: '#2E7D32',
+    PartyInfo: '#1565C0', InvoiceHeader: '#185FA5', InvoiceLineTable: '#2E7D32', ShipmentInfo: '#00695C',
     InvoiceTotals: '#185FA5', TaxSummary: '#E65100', Notes: '#5D4037',
     BankInfo: '#37474F', Table: '#2E7D32', Image: '#6A1B9A',
     ETTN: '#7B1FA2', GibKarekod: '#7B1FA2', GibLogo: '#E8A838',
@@ -96,6 +105,7 @@ export default function GridBlockItem({ block, scale }: GridBlockItemProps) {
   const moveBlock       = useEditorStore((s) => s.moveBlock)
   const updateBlockGridLayout = useEditorStore((s) => s.updateBlockGridLayout)
   const setDragGuide    = useEditorStore((s) => s.setDragGuide)
+  const documentType    = useEditorStore((s) => s.documentType)
 
   const isSelected = selectedBlockId === block.id
   const gl = block.gridLayout
@@ -207,7 +217,7 @@ export default function GridBlockItem({ block, scale }: GridBlockItemProps) {
       {/* Icerik */}
       <div style={{ overflow: 'hidden', minWidth: 0 }}>
         <div style={{ fontSize: 10, fontWeight: 600, color: '#2C2C2A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {BLOCK_LABEL_TR[block.type] ?? block.type}
+          {(documentType === 'Despatch' ? DESPATCH_LABEL_TR[block.type] : undefined) ?? BLOCK_LABEL_TR[block.type] ?? block.type}
         </div>
         {summary && (
           <div style={{ fontSize: 9, color: '#5F5E5A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>

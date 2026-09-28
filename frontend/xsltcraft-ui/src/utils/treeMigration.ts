@@ -38,6 +38,7 @@ const HEIGHT_ESTIMATE: Partial<Record<BlockType, number>> = {
   InvoiceHeader:    50,
   InvoiceTotals:    50,
   GibLogo:          30,
+  ShipmentInfo:     35,
 }
 
 /** Blosun spacer icin config'den yukseklik al */

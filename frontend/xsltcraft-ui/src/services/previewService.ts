@@ -1,5 +1,6 @@
 import api from './apiService'
 import type { GridBlock } from '../types/blocks'
+import type { DocumentType } from '../types/template'
 
 export interface PreviewTimings {
   parseMs: number
@@ -17,9 +18,11 @@ export interface PreviewResponse {
 export async function previewFromBlockTree(
   blocks: Record<string, GridBlock>,
   xmlContent: string,
+  documentType: DocumentType = 'Invoice',
 ): Promise<PreviewResponse> {
   const { data } = await api.post<PreviewResponse>('/api/preview', {
     version: 2,
+    documentType,
     blocks,
     xmlContent,
   })
@@ -28,10 +31,11 @@ export async function previewFromBlockTree(
 
 export async function generateXslt(
   blocks: Record<string, GridBlock>,
+  documentType: DocumentType = 'Invoice',
 ): Promise<string> {
   const { data } = await api.post<string>(
     '/api/preview/xslt',
-    { version: 2, blocks, xmlContent: '' },
+    { version: 2, documentType, blocks, xmlContent: '' },
     { responseType: 'text' },
   )
   return data

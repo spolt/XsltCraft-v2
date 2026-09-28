@@ -67,7 +67,7 @@ public class PreviewController : ControllerBase
 
             if (request.Version == 2)
             {
-                var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks };
+                var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks, DocumentType = request.DocumentType };
                 (xslt, genError) = _generator.GenerateV2(treeV2, assetBase64);
             }
             else
@@ -325,7 +325,7 @@ public class PreviewController : ControllerBase
 
         if (request.Version == 2)
         {
-            var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks };
+            var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks, DocumentType = request.DocumentType };
             (xslt, error) = _generator.GenerateV2(treeV2, assetBase64);
         }
         else

@@ -24,6 +24,7 @@ const BLOCK_LABELS: Record<string, string> = {
   InvoiceHeader: 'Fatura Başlığı',
   InvoiceTotals: 'Fatura Dip Toplamları',
   GibLogo: 'GİB LOGO',
+  ShipmentInfo: 'Taşıyıcı Bilgileri',
 }
 
 const BLOCK_ICONS: Record<string, string> = {
@@ -47,6 +48,7 @@ const BLOCK_ICONS: Record<string, string> = {
   InvoiceHeader: '☰',
   InvoiceTotals: '₸',
   GibLogo: '⊕',
+  ShipmentInfo: '⛟',
 }
 
 interface BlockCardProps {

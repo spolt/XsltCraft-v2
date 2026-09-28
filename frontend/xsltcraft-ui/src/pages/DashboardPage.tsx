@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { FilePlus, BookOpen, FolderOpen, Code2, FileCode2 } from 'lucide-react'
+import { FilePlus, Truck, BookOpen, FolderOpen, Code2, FileCode2 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 
 export default function DashboardPage() {
@@ -12,13 +12,21 @@ export default function DashboardPage() {
       </h1>
       <p className="text-gray-500 mb-8 text-sm">XsltCraft ile e-belge şablonlarını kolayca oluştur.</p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <Link
           to="/editor/new"
           className="flex flex-col items-center gap-3 p-6 bg-white rounded-xl border border-gray-200 hover:border-blue-400 hover:shadow-sm transition-all group"
         >
           <FilePlus size={32} className="text-blue-500 group-hover:scale-110 transition-transform" />
-          <span className="text-sm font-medium text-gray-700">Yeni Şablon Oluştur</span>
+          <span className="text-sm font-medium text-gray-700 text-center">Yeni e-Fatura / e-Arşiv Şablonu</span>
+        </Link>
+
+        <Link
+          to="/editor/new?type=despatch"
+          className="flex flex-col items-center gap-3 p-6 bg-white rounded-xl border border-gray-200 hover:border-amber-400 hover:shadow-sm transition-all group"
+        >
+          <Truck size={32} className="text-amber-500 group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-medium text-gray-700 text-center">Yeni e-İrsaliye Şablonu</span>
         </Link>
 
         <Link
