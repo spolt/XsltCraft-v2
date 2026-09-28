@@ -5,6 +5,7 @@ import { createFolder, type Folder } from '../../services/folderService'
 import { bulkUploadUserXslt, type BulkUploadItem } from '../../services/userXsltService'
 import { FOLDER_COLORS, folderDot } from './folderColors'
 import { toast } from '../../store/toastStore'
+import { validateUploadContent } from '../../utils/uploadValidation'
 
 const MAX_FILES = 100
 const MAX_BYTES = 2 * 1024 * 1024
@@ -91,7 +92,10 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
         }
         try {
           const content = await readFileText(file)
-          picked.push({ name: baseName(file.name), content, valid: true })
+          const contentError = validateUploadContent(content, 'xslt')
+          picked.push(contentError
+            ? { name: baseName(file.name), content: '', valid: false, error: 'XSLT şablonu değil' }
+            : { name: baseName(file.name), content, valid: true })
         } catch {
           picked.push({ name: baseName(file.name), content: '', valid: false, error: 'Okunamadı' })
         }

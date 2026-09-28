@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-09-28
+
+### Security
+- **XSLT derlemesinde yerel dosya okuma / SSRF kapatıldı** (yeni `Application/Xslt/SecureXslt`): Kullanıcı ve admin XSLT'si `transform.Load(reader, settings, new XmlUrlResolver())` ile derleniyordu. `enableDocumentFunction:false` yalnız `document()`'ı kapatır; **`xsl:include`/`xsl:import` resolver üzerinden yine çözülüyordu.** Bir kullanıcı XSLT Editör'e (`/api/preview/raw`, `/api/preview/validate-xslt`) `<xsl:include href="file:///..."/>` yazarak sunucudan dosya okutabiliyor, `http://169.254.169.254/...` gibi iç adreslere istek attırabiliyor (SSRF) ya da `\\sunucu\pay` UNC yoluyla Windows NTLM kimliğini sızdırtabiliyordu. Stylesheet string'den (base URI'siz) yüklendiği için **göreli href bile sunucunun çalışma dizinine göre** çözülüyordu. Açık testle kanıtlandı (`SecureXsltTests.XmlUrlResolver_WouldReadLocalFile`).
+  - Tüm `XslCompiledTransform` derlemeleri tek noktadan geçiyor: `SecureXslt.Compile` = DTD yasak + `document()`/script kapalı + **stylesheet resolver `null`**. Bağlanan 6 nokta: `PreviewController` (`validate-xslt` + ham/tema/kullanıcı önizleme ortak yolu), `XsltTemplateRenderer.RenderPreviewAsync`, `XsltCompiler`, `XsltGeneratorService.Validate` ve `TemplateCache` (son ikisi parametresiz `Load(reader)` kullanıyordu).
+  - Canlı API'ye karşı doğrulandı: zararlı include `validate-xslt`'de `valid:false`, ham önizlemede `400` ("Resolving of external URIs was prohibited") dönüyor, içerik sızmıyor; normal XSLT'ler etkilenmedi.
+- **`XsltSafety` taraması sıkılaştırıldı**: Yalnız `href="scheme://..."` yakalanıyordu; scheme'siz mutlak yol (`/etc/..`, `C:/..`), UNC ve göreli yol (`../../appsettings.json`) geçiyordu. Artık **her** `xsl:import`/`xsl:include` reddediliyor ("şablon tek, bağımsız bir dosya olmalı"). Base URI olmadığı için meşru bir göreli include zaten hiç çalışmıyordu — mevcut DB/MinIO şablonlarının hiçbiri include/import kullanmıyor (tarandı).
+- **Güvenlik rehberi düzeltildi**: Açığın kökü, projenin kendi guard pattern'inin `new XmlUrlResolver()`'ı "güvenli kalıp" olarak önermesiydi (`docs/ecc/context/constraints.md`, `HANDOFF.md`, `xss-xxe-checklist` skill). Üçü ve `CLAUDE.md` `SecureXslt.Compile`'a yönlendirecek şekilde güncellendi; checklist artık `new XmlUrlResolver` / parametresiz `Load(reader)` kullanımını bulgu sayıyor.
+
+### Tests
+- `SecureXsltTests` (7): açığın kanıtı (XmlUrlResolver ile yerel dosya sızar), mutlak `file:///` include, göreli include, `http://` import, DTD, `document()` ve bağımsız stylesheet'in çalışması.
+- `XsltSafetyTests`: scheme'siz mutlak yol, `C:/`, UNC, göreli ve çok satırlı include vakaları; "göreli include güvenli" varsayımı kaldırıldı.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.10.1 → 1.10.2`.
+
+## [1.10.1] - 2026-09-28
+
+### Security
+- **Oturumlar artık sonsuza kadar açık kalmıyor** (`AuthController`, yeni `IRefreshTokenService`/`RefreshTokenService`, `SessionPolicy`): Refresh token 30 günlüktü ve **her yenilemede yeniden 30 gün** alıyordu; mutlak bir oturum ömrü yoktu — ayda bir giren kullanıcı fiilen hiç çıkış yapmıyordu. Artık oturum **2 saat hareketsizlikte** ya da girişten **12 saat sonra** (hangisi önce gelirse) sona eriyor. Mutlak bitiş (`SessionExpiresAt`) login'de belirlenip her rotation'da aynen taşınıyor; hareketsizlik penceresi (`ExpiresAt`) kayıyor ama mutlak sınırı aşamıyor. Süreler `appsettings` → `Session` (`IdleTimeoutMinutes`, `AbsoluteLifetimeHours`, `RotationGraceSeconds`) ile ayarlanabilir.
+- **Refresh token DB'de düz metin tutulmuyor**: Yalnız SHA-256 özeti (`TokenHash`, varchar(64), unique) saklanıyor; veritabanı sızsa bile oturumlar ele geçirilemez. Token 256-bit rastgele, base64url.
+- **Rotation reuse tespiti düzeltildi**: Döndürülmüş (`ReplacedByTokenId` dolu) bir token 30 sn'lik grace süresinden sonra tekrar gelirse kullanıcının tüm oturumları iptal ediliyor. Grace içinde gelirse (iki sekme aynı anda yeniledi) `409` dönüyor ve istemci güncel çerezle bir kez tekrar deniyor — önceden bu yarış kullanıcıyı tamamen çıkışa atıyordu. Döndürme `ExecuteUpdate` ile atomik (`WHERE RevokedAt IS NULL`): aynı token'dan iki geçerli halef üretilemez. Logout/şifre değişikliğiyle iptal edilmiş token'ın tekrar gelmesi artık diğer cihazları düşürmüyor (hırsızlık sinyali değil).
+- **Access token yalnız bellekte** (`authStore`, yeni `services/authSession.ts`): Önceden `localStorage`'a yazılıyordu — XSS ile okunabiliyor ve tarayıcı kapansa da kalıyordu. Artık yalnız kullanıcı bilgisi saklanıyor (persist `version: 1`, eski kayıttaki token migrate ile atılıyor). Sayfa yenilenince oturum HttpOnly çerezle sessizce geri yükleniyor (`ensureSession`, uygulama açılışında + `PrivateRoute`'ta tek uçuş); yükleme sırasında "Oturum doğrulanıyor…" gösteriliyor.
+- **Refresh çerezi yalnız auth uçlarına gidiyor**: `Path=/api/auth`; eski `Path=/` çerezi yazma/silmede temizleniyor.
+- **JWT `ClockSkew` 5 dk → 30 sn**: 15 dakikalık access token fiilen 20 dakika geçerliydi.
+- **Refresh kendi rate-limit politikasında** (`auth-refresh`, IP başına 30/dk): Login ile ortak global 10/dk limiti paylaşıyordu; yoğun anda sessiz yenilemeler 429 alıp kullanıcıyı oturumdan düşürebilirdi.
+- **XML/XSLT yükleme doğrulaması** (yeni `utils/uploadValidation.ts`): XSLT Editör'de "XML yükle" XSLT dosyası da kabul ediyordu. `accept=".xml,text/xml,application/xml"` Windows'ta `.xsl/.xslt`'yi de `text/xml` MIME'ıyla geçiriyordu ve okuyucu hiçbir denetim yapmıyordu; XSLT alanı da tersine XML kabul ediyordu. Artık: `accept` yalnız uzantı; yüklemede uzantı + boyut (XML 1 MB, XSLT 5 MB) + **içerik** denetimi — kök eleman XSL namespace'indeyse XML alanına, değilse XSLT alanına yüklenemez (uzantısı değiştirilmiş dosyalar da yakalanır). Ayrıştırılamayan içerik reddedilmez; editör hatayı satır/sütunla göstermeye devam eder. XSLT Editör (yükleme ekranı, toolbar, bırakma alanı), Geliştirici modu, Tema kullan ve grid editörüne bağlandı; toplu yüklemede XSLT olmayan dosyalar "XSLT şablonu değil" olarak işaretleniyor. Hatalar `alert` yerine toast.
+
+### Fixed
+- **AI sohbeti 15 dk sonra 401 vermiyor** (`aiAssistantService`): `fetch` axios interceptor'ından geçmediği için süresi dolan access token yenilenmiyordu; artık 401'de token yenilenip istek bir kez tekrarlanıyor.
+
+### Changed
+- **Migration `HashRefreshTokensAndSessionLifetime`**: `Token` → `TokenHash`; `SessionExpiresAt`, `ReplacedByTokenId` eklendi. Düz metin token'lar özete çevrilemeyeceği için **mevcut refresh token'lar silinir — tüm kullanıcılar bir kez yeniden giriş yapar.**
+- `IJwtService.GenerateRefreshToken` kaldırıldı (üretim `RefreshTokenHasher`'da).
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.10.0 → 1.10.1`.
+
+### Tests
+- `SessionPolicyTests` (9) + `RefreshTokenHasherTests` (2): kayan pencere, mutlak sınır, grace/reuse ayrımı, logout sonrası token.
+- E2E: access token'ın `localStorage`'a yazılmadığı ve yenilemede oturumun geri yüklendiği; XML/XSLT yükleme doğrulaması (4 senaryo).
+
+## [1.10.0] - 2026-09-28
+
+### Added
+- **e-İrsaliye şablon tasarımı**: Yeni şablon artık yalnız fatura için değil, UBL-TR `DespatchAdvice` için de oluşturulabiliyor. Üretilen stylesheet referans irsaliye tasarımıyla aynı düzeni izliyor: gönderici, "SAYIN" alıcı bloğu, GİB logosu (`e-İRSALİYE`), karekod, irsaliye başlık tablosu, ETTN, satır tablosu, toplam tutar, notlar ve taşıyıcı bilgileri.
+  - **Belge türü ağaçta taşınıyor**: BlockTree V2 JSON'una `documentType` (`Invoice` | `Despatch`) eklendi; `PreviewRequest.DocumentType` ile önizleme/`xslt` uçlarına da iletiliyor. Alan yoksa `Invoice` varsayılır — mevcut şablonlar birebir aynı üretilir.
+  - **Üretici** (`XsltGeneratorService.Despatch.cs`, yeni partial): irsaliyede `n1` önekini `DespatchAdvice-2` namespace'ine bağlar. İrsaliye başlığı (Özelleştirme No, Senaryo, İrsaliye Tipi/No/Tarihi, Sevk Tarihi, Sipariş No/Tarihi), GİB irsaliye karekod JSON'u (`sevktarihi`, `sevkzamani`, `tasiyicivkn`, `plaka`…) ve GİB logosu belge türüne göre ayrışıyor. Satır tablosunda para birimi satırın kendi `@currencyID`'sinden alınıyor, faturaya özgü vergi-istisna notları ve İADE bölümü irsaliyede atlanıyor.
+  - **Yeni `ShipmentInfo` bloğu ("Taşıyıcı Bilgileri")**: taşıyıcı firma + VKN, araç plakası, dorse plakası (`schemeID='DORSEPLAKA'`), şoför (ad soyad, TCKN) ve teslim eden; özel satır eklenebilir.
+  - **Editör**: blok paleti belge türüne göre değişiyor (Gönderici/Alıcı Bilgileri, İrsaliye Başlığı, İrsaliye Satırları, Toplam Tutar, Taşıyıcı Bilgileri); bloklar irsaliye XPath'leri ve başlıklarıyla geliyor. Başlıkta belge türü rozeti. Canlı önizleme varsayılan irsaliye XML'iyle açılıyor (`assets/default-despatch.xml` — kişisel/kurumsal veriler anonimleştirildi, imza ve gömülü XSLT eki çıkarıldı).
+  - **Giriş noktaları**: "Yeni Şablon" Sidebar'da alt menüye ayrıldı (**e-Fatura / e-Arşiv** · **e-İrsaliye**); Dashboard ve Taslaklarım'da ayrı düğmeler. İrsaliye rotası `/editor/new?type=despatch`; `/editor/new` fatura olarak aynen çalışıyor.
+  - Kaydedilen şablonun belge türü `createTemplate`'e iletiliyor; Taslaklarım önizlemesi irsaliye şablonlarında irsaliye örnek XML'ini kullanıyor.
+- **Testler** (`DespatchGeneratorTests`, 4 test): namespace bağlama, `documentType` yokken fatura davranışının korunması, uçtan uca dönüşüm (başlık, satırlar, toplam, taşıyıcı, notlar, logo) ve karekod içeriği.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.9.4 → 1.10.0`.
+
+## [1.9.4] - 2026-09-28
+
+### Fixed
+- **İndirme sayıları artık kaydediliyor** (`UserManagementService`, `UsageReportService`): Kullanıcı ve kullanım raporlarındaki indirme sayısı pratikte hep `0` görünüyordu. `Download` aktivitesi yalnızca `TemplateController`'ın sunucudan dosya döndüren uçlarında yazılıyordu; oysa kullanıcıların indirmelerinin çoğu **tarayıcıda** üretiliyor (Tema kullan, Geliştirici modu, XSLT Editör — blob + `<a download>`) ya da `POST /api/preview/xslt` üzerinden geliyor ve hiçbiri aktivite kaydı bırakmıyordu.
+  - `PreviewController.GenerateXslt` (kaydedilmemiş grid şablonun indirilmesi) artık kotayla birlikte `Download` aktivitesi de yazıyor.
+  - Yeni `POST /api/activity/download` ucu (`ActivityController`, `[Authorize]`): tarayıcıda üretilen indirmeler için sayaç kaydı. `entityKind` yalnız `Template`/`Xslt` kabul edilir; kimlik JWT'den alınır, gövdeden değil. Kötüye kullanıma karşı kullanıcı başına 60 istek/dk `activity` rate-limit politikası.
+  - Frontend `activityService.reportDownload` üç tarayıcı-içi indirme noktasına bağlandı (`ThemeUsePage`, `DevModePage`, `XsltEditorPage`). Ateşle-unut: bildirim başarısız olsa da indirme etkilenmez; oturum yoksa istek atılmaz.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.9.3 → 1.9.4`.
+
 ## [1.9.3] - 2026-07-21
 
 ### Fixed

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Check, Copy, Eye, FilePlus, FolderInput, LayoutGrid, Pencil, Star, Trash2, X } from 'lucide-react'
+import { Check, Copy, Eye, FilePlus, FolderInput, LayoutGrid, Pencil, Star, Trash2, Truck, X } from 'lucide-react'
 import {
   cloneTemplate,
   deleteTemplate,
@@ -25,6 +25,7 @@ import MoveToFolderMenu from '../components/storage/MoveToFolderMenu'
 import { useTemplateLibrary, type SortKey } from '../components/storage/useTemplateLibrary'
 import { toast } from '../store/toastStore'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
+import defaultDespatchXml from '../assets/default-despatch.xml?raw'
 
 const DOC_TYPE_LABEL: Record<string, string> = {
   Invoice: 'e-Fatura / e-Arşiv',
@@ -57,7 +58,7 @@ export default function DraftsPage() {
     let cancelled = false
     setPreviewHtml('')
     setPreviewLoading(true)
-    previewFromUserTemplate(previewTemplate.id, defaultInvoiceXml)
+    previewFromUserTemplate(previewTemplate.id, previewTemplate.documentType === 'Despatch' ? defaultDespatchXml : defaultInvoiceXml)
       .then((res) => { if (!cancelled) setPreviewHtml(res.html) })
       .catch(() => { if (!cancelled) setPreviewHtml('<html><body style="display:flex;align-items:center;justify-content:center;height:100%;color:#ef4444;font-family:sans-serif;font-size:13px">Önizleme alınamadı.</body></html>') })
       .finally(() => { if (!cancelled) setPreviewLoading(false) })
@@ -245,13 +246,22 @@ export default function DraftsPage() {
           <h1 className="text-xl font-semibold text-gray-800">Şablonlarım</h1>
           <p className="text-sm text-gray-400 mt-0.5">{templates.length} şablon</p>
         </div>
-        <Link
-          to="/editor/new"
-          className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors"
-        >
-          <FilePlus size={15} />
-          Yeni Şablon
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/editor/new"
+            className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors"
+          >
+            <FilePlus size={15} />
+            Yeni e-Fatura / e-Arşiv
+          </Link>
+          <Link
+            to="/editor/new?type=despatch"
+            className="flex items-center gap-1.5 text-sm font-medium text-blue-700 border border-blue-200 bg-white hover:bg-blue-50 rounded-lg px-4 py-2 transition-colors"
+          >
+            <Truck size={15} />
+            Yeni e-İrsaliye
+          </Link>
+        </div>
       </div>
 
       {templates.length === 0 ? (
@@ -357,7 +367,8 @@ function EmptyState() {
       <p className="text-gray-600 font-medium">Henüz bir şablonunuz yok.</p>
       <p className="text-sm text-gray-400 mt-1">Yeni şablon oluşturun veya hazır temalardan birini kullanın.</p>
       <div className="flex gap-3 mt-5">
-        <Link to="/editor/new" className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors">Yeni Şablon Oluştur</Link>
+        <Link to="/editor/new" className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors">Yeni e-Fatura / e-Arşiv</Link>
+        <Link to="/editor/new?type=despatch" className="text-sm font-medium text-blue-700 border border-blue-200 hover:bg-blue-50 rounded-lg px-4 py-2 transition-colors">Yeni e-İrsaliye</Link>
         <Link to="/templates" className="text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg px-4 py-2 transition-colors">Tema Kütüphanesi</Link>
       </div>
     </div>

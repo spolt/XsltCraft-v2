@@ -8,8 +8,10 @@ using Microsoft.EntityFrameworkCore;
 using XsltCraft.Application.DTO;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
+using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
+using XsltCraft.Application.Xslt;
 
 namespace XsltCraft.Api.Controllers;
 
@@ -26,6 +28,7 @@ public class PreviewController : ControllerBase
     private readonly IWebHostEnvironment _env;
     private readonly IUsageQuotaService _quota;
     private readonly IEntitlementService _entitlements;
+    private readonly IUserActivityRecorder _activity;
     private readonly ILogger<PreviewController> _logger;
 
     public PreviewController(
@@ -35,6 +38,7 @@ public class PreviewController : ControllerBase
         IWebHostEnvironment env,
         IUsageQuotaService quota,
         IEntitlementService entitlements,
+        IUserActivityRecorder activity,
         ILogger<PreviewController> logger)
     {
         _generator = generator;
@@ -43,6 +47,7 @@ public class PreviewController : ControllerBase
         _env = env;
         _quota = quota;
         _entitlements = entitlements;
+        _activity = activity;
         _logger = logger;
     }
 
@@ -63,7 +68,7 @@ public class PreviewController : ControllerBase
 
             if (request.Version == 2)
             {
-                var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks };
+                var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks, DocumentType = request.DocumentType };
                 (xslt, genError) = _generator.GenerateV2(treeV2, assetBase64);
             }
             else
@@ -321,7 +326,7 @@ public class PreviewController : ControllerBase
 
         if (request.Version == 2)
         {
-            var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks };
+            var treeV2 = new BlockTreeV2Dto { Blocks = request.Blocks, DocumentType = request.DocumentType };
             (xslt, error) = _generator.GenerateV2(treeV2, assetBase64);
         }
         else
@@ -334,6 +339,7 @@ public class PreviewController : ControllerBase
             return BadRequest(new { error });
 
         await _quota.IncrementTemplateExportAsync(userId);
+        await _activity.RecordAsync(userId, UserActivityType.Download, null, "Template");
         return Content(xslt, "application/xslt+xml");
     }
 
@@ -371,11 +377,7 @@ public class PreviewController : ControllerBase
     {
         try
         {
-            var transform = new XslCompiledTransform();
-            var xsltReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-            using var reader = XmlReader.Create(new StringReader(request.Xslt), xsltReaderSettings);
-            var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
-            transform.Load(reader, xsltSettings, new XmlUrlResolver());
+            SecureXslt.Compile(request.Xslt);
             return Ok(new { valid = true });
         }
         catch (XsltException ex)
@@ -450,11 +452,7 @@ public class PreviewController : ControllerBase
         string xslt, string xmlContent, string? logoUrl, string? signatureUrl)
     {
         var sw = Stopwatch.StartNew();
-        var transform = new XslCompiledTransform();
-        var xsltReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-        using var xsltReader = XmlReader.Create(new StringReader(xslt), xsltReaderSettings);
-        var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
-        transform.Load(xsltReader, xsltSettings, new XmlUrlResolver());
+        var transform = SecureXslt.Compile(xslt);
         var compileMs = sw.ElapsedMilliseconds;
 
         sw.Restart();

@@ -1,8 +1,11 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
-import { DEFAULT_BLOCK_SIZE, DEFAULT_PARTY_FIELDS, DEFAULT_INVOICE_LINE_COLUMNS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../types/blocks'
+import {
+  DEFAULT_BLOCK_SIZE, DEFAULT_PARTY_FIELDS, DEFAULT_INVOICE_LINE_COLUMNS, DEFAULT_INVOICE_TOTALS_FIELDS,
+  DEFAULT_DESPATCH_LINE_COLUMNS, DEFAULT_DESPATCH_TOTALS_FIELDS, DESPATCH_CURRENCY_XPATH,
+} from '../types/blocks'
 import type { BlockType, BlockConfig, GridBlock } from '../types/blocks'
-import type { GridBlockLayout, BlockTreeV2 } from '../types/template'
+import type { GridBlockLayout, BlockTreeV2, DocumentType } from '../types/template'
 import { clampToPage } from '../utils/gridSnap'
 
 const MAX_HISTORY = 20
@@ -101,13 +104,56 @@ function defaultConfig(type: BlockType): BlockConfig['config'] {
       }
     case 'GibLogo':
       return { width: '80px', height: '80px', alignment: 'center', fontSize: '11px' }
+    case 'ShipmentInfo':
+      return {
+        fields: [],
+        title: 'TAŞIYICI BİLGİLERİ',
+        showTitle: true,
+        bordered: true,
+        borderStyle: 'solid',
+        labelStyle: 'table',
+        fontSize: '10.4px',
+      }
   }
+}
+
+/** e-İrsaliye: aynı blok tipleri, DespatchAdvice UBL yollarıyla. */
+function despatchOverrides(type: BlockType): Record<string, unknown> {
+  switch (type) {
+    case 'Notes':
+      return { iterateOver: '/n1:DespatchAdvice/cbc:Note' }
+    case 'PartyInfo':
+      return { partyType: 'DespatchSupplierParty', title: 'GÖNDERİCİ' }
+    case 'InvoiceLineTable':
+      return {
+        iterateOver: '//cac:DespatchLine',
+        columns: DEFAULT_DESPATCH_LINE_COLUMNS.map((c) => ({ ...c })),
+        title: 'İRSALİYE SATIRLARI',
+      }
+    case 'InvoiceHeader':
+      return { title: 'İRSALİYE BİLGİLERİ' }
+    case 'InvoiceTotals':
+      return {
+        fields: DEFAULT_DESPATCH_TOTALS_FIELDS.map((f) => ({ ...f })),
+        currencyXpath: DESPATCH_CURRENCY_XPATH,
+      }
+    default:
+      return {}
+  }
+}
+
+function defaultConfigFor(type: BlockType, documentType: DocumentType): BlockConfig['config'] {
+  const base = defaultConfig(type)
+  return documentType === 'Despatch'
+    ? ({ ...base, ...despatchOverrides(type) } as BlockConfig['config'])
+    : base
 }
 
 interface EditorState {
   templateId: string | null
   templateName: string
   hasStoredXslt: boolean
+  documentType: DocumentType
   blocks: Record<string, GridBlock>
   selectedBlockId: string | null
   isDirty: boolean
@@ -137,7 +183,7 @@ interface EditorState {
   sendBackward: (blockId: string) => void
 
   loadTree: (tree: BlockTreeV2) => void
-  resetTree: () => void
+  resetTree: (documentType?: DocumentType) => void
 
   undo: () => void
   redo: () => void
@@ -154,6 +200,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   templateId: null,
   templateName: 'Yeni Şablon',
   hasStoredXslt: false,
+  documentType: 'Invoice',
   blocks: {},
   selectedBlockId: null,
   isDirty: false,
@@ -178,8 +225,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       id,
       type,
       config: configOverride
-        ? { ...defaultConfig(type), ...configOverride }
-        : defaultConfig(type),
+        ? { ...defaultConfigFor(type, state.documentType), ...configOverride }
+        : defaultConfigFor(type, state.documentType),
       gridLayout: {
         x: clamped.x,
         y: clamped.y,
@@ -374,6 +421,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   loadTree(tree) {
     set({
+      documentType: tree.documentType ?? 'Invoice',
       blocks: tree.blocks,
       selectedBlockId: null,
       isDirty: false,
@@ -382,11 +430,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     })
   },
 
-  resetTree() {
+  resetTree(documentType = 'Invoice') {
     set({
       templateId: null,
-      templateName: 'Yeni Şablon',
+      templateName: documentType === 'Despatch' ? 'Yeni İrsaliye Şablonu' : 'Yeni Şablon',
       hasStoredXslt: false,
+      documentType,
       blocks: {},
       selectedBlockId: null,
       isDirty: false,

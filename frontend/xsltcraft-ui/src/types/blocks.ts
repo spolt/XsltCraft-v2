@@ -21,6 +21,7 @@ export type BlockType =
   | 'InvoiceHeader'
   | 'InvoiceTotals'
   | 'GibLogo'
+  | 'ShipmentInfo'
 
 export interface Binding {
   xpath: string
@@ -359,6 +360,27 @@ export const DEFAULT_INVOICE_HEADER_FIELDS: InvoiceHeaderField[] = [
   { key: 'currency',        label: 'Para Birimi',       xpath: '//cbc:DocumentCurrencyCode',                        visible: false, order: 11 },
 ]
 
+// ── e-İrsaliye varsayılanları (aynı blok tipleri, DespatchAdvice UBL yolları) ──
+
+export const DEFAULT_DESPATCH_LINE_COLUMNS: InvoiceLineColumn[] = [
+  { key: 'lineId',            header: 'Sıra No',                   relativeXpath: 'cbc:ID',                                                            width: '6%',  format: 'text',             visible: false, order: 0 },
+  { key: 'productCode',       header: 'Ürün Kodu',                 relativeXpath: 'cac:Item/cac:SellersItemIdentification/cbc:ID',                     width: '12%', format: 'text',             visible: true,  order: 1 },
+  { key: 'description',       header: 'Mal',                       relativeXpath: 'cac:Item/cbc:Name',                                                 width: '30%', format: 'text',             visible: true,  order: 2 },
+  { key: 'quantity',          header: 'Miktar',                    relativeXpath: 'cbc:DeliveredQuantity',                                             width: '10%', format: 'quantityWithUnit', visible: true,  order: 3 },
+  { key: 'unitPrice',         header: 'Birim Fiyat',               relativeXpath: 'cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount', width: '12%', format: 'currency',      visible: true,  order: 4 },
+  { key: 'outstandingQty',    header: 'Sonra Gönderilecek Miktar', relativeXpath: 'cbc:OutstandingQuantity',                                           width: '12%', format: 'quantityWithUnit', visible: false, order: 5 },
+  { key: 'lineExtension',     header: 'Tutar',                     relativeXpath: 'cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount', width: '14%', format: 'currency',       visible: true,  order: 6 },
+  { key: 'note',              header: 'Açıklama',                  relativeXpath: 'cbc:Note',                                                          width: '14%', format: 'text',             visible: false, order: 7 },
+  { key: 'buyerItemId',       header: 'Alıcı Ürün Kodu',           relativeXpath: 'cac:Item/cac:BuyersItemIdentification/cbc:ID',                      width: '12%', format: 'text',             visible: false, order: 8 },
+]
+
+export const DEFAULT_DESPATCH_TOTALS_FIELDS: InvoiceTotalsField[] = [
+  { key: 'valueAmount', label: 'Toplam Tutar', xpath: '//cac:Shipment/cac:GoodsItem/cbc:ValueAmount', visible: true, highlight: true, bold: true, order: 0 },
+]
+
+/** İrsaliye tutarlarında belge para birimi yoktur; tutarın kendi currencyID'si kullanılır. */
+export const DESPATCH_CURRENCY_XPATH = '//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID'
+
 // BLOCK-23: GibLogo (GİB — sabit gömülü logo; kullanıcı yalnızca boyut/hizalama seçer)
 export interface GibLogoBlockConfig {
   width?: string
@@ -423,6 +445,8 @@ export type BlockConfig =
   | { type: 'InvoiceHeader'; config: InvoiceHeaderBlockConfig }
   | { type: 'InvoiceTotals'; config: InvoiceTotalsBlockConfig }
   | { type: 'GibLogo'; config: GibLogoBlockConfig }
+  // BLOCK-24: ShipmentInfo (e-İrsaliye taşıyıcı/araç/şoför — sabit UBL yolları + özel alanlar)
+  | { type: 'ShipmentInfo'; config: InvoiceHeaderBlockConfig }
 
 // ── Blok düzeni (hizalama + genişlik) — V1 (section-based) ───────────────────
 
@@ -478,4 +502,5 @@ export const DEFAULT_BLOCK_SIZE: Record<BlockType, { width: number; height: numb
   InvoiceHeader:    { width: 90,  height: 50,  autoHeight: true },
   InvoiceTotals:    { width: 90,  height: 50,  autoHeight: true },
   GibLogo:          { width: 30,  height: 30,  autoHeight: false },
+  ShipmentInfo:     { width: 90,  height: 35,  autoHeight: true },
 }

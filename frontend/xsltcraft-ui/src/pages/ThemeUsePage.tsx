@@ -17,6 +17,7 @@ import {
   BookmarkCheck,
 } from 'lucide-react'
 import { getTemplate } from '../services/templateService'
+import { reportDownload } from '../services/activityService'
 import { previewFromStoredXslt, fetchThemeXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
 import { createUserXsltTemplate } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
@@ -24,6 +25,7 @@ import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
 import { parseGateError } from '../services/entitlementService'
 import { toast } from '../store/toastStore'
+import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 const DEBOUNCE_MS = 1200
@@ -365,6 +367,7 @@ export default function ThemeUsePage() {
       a.download = `${templateName.replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
       a.click()
       URL.revokeObjectURL(a.href)
+      reportDownload('Template', templateId)
     } finally {
       setIsDownloading(false)
     }
@@ -401,18 +404,15 @@ export default function ThemeUsePage() {
     } finally { setIsSaving(false) }
   }
 
-  function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 1 * 1024 * 1024) {
-      alert('XML dosyası 1 MB\'dan büyük olamaz.')
-      e.target.value = ''
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = (ev) => setXmlContent(ev.target?.result as string)
-    reader.readAsText(file, 'utf-8')
     e.target.value = ''
+    if (!file) return
+    try {
+      setXmlContent(await readUploadFile(file, 'xml'))
+    } catch (err) {
+      toast.error((err as Error).message, { title: 'XML yüklenemedi' })
+    }
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -460,7 +460,7 @@ export default function ThemeUsePage() {
           {!previewLoading && lastMs !== null && <span className="text-sm text-gray-400">{lastMs} ms</span>}
           <label className="cursor-pointer text-sm text-gray-500 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50">
             XML Değiştir
-            <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={handleXmlFile} />
+            <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
           </label>
           <button onClick={() => iframeRef.current?.contentWindow?.print()} disabled={!html}
             className="text-gray-500 border border-gray-200 rounded p-1.5 hover:bg-gray-50 disabled:opacity-30" title="Yazdır">

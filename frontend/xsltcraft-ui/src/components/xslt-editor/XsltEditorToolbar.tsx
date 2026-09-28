@@ -13,6 +13,7 @@ import {
   Keyboard,
 } from 'lucide-react'
 import type { PreviewTimings } from '../../services/previewService'
+import { UPLOAD_ACCEPT } from '../../utils/uploadValidation'
 
 interface Props {
   templateName: string
@@ -152,14 +153,14 @@ export default function XsltEditorToolbar({
         <FileCode2 size={15} />
         <span className="hidden sm:inline">XSLT</span>
         <Upload size={13} />
-        <input type="file" accept=".xsl,.xslt" className="hidden" onChange={onUploadXslt} />
+        <input type="file" accept={UPLOAD_ACCEPT.xslt} className="hidden" onChange={onUploadXslt} />
       </label>
 
       <label className={`${btnBase} text-gray-400 cursor-pointer`} title="XML dosyası yükle">
         <FileText size={15} />
         <span className="hidden sm:inline">XML</span>
         <Upload size={13} />
-        <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={onUploadXml} />
+        <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={onUploadXml} />
       </label>
 
       {/* Download */}

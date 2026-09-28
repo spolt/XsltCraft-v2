@@ -4,6 +4,7 @@ using System.Xml.Xsl;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Xslt;
+using XsltCraft.Application.Xslt;
 
 public class TemplateCache : ITemplateCache
 {
@@ -47,11 +48,7 @@ public class TemplateCache : ITemplateCache
 
         var metadata = _analyzer.Analyze(xslt);
 
-        var transform = new XslCompiledTransform();
-
-        using var reader = XmlReader.Create(new StringReader(xslt));
-
-        transform.Load(reader);
+        var transform = SecureXslt.Compile(xslt);
 
         return new CompiledTemplate
         {

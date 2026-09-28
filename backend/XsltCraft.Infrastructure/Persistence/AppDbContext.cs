@@ -55,7 +55,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<RefreshToken>(entity =>
         {
             entity.HasKey(rt => rt.Id);
-            entity.HasIndex(rt => rt.Token).IsUnique();
+            entity.Property(rt => rt.TokenHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(rt => rt.TokenHash).IsUnique();
             entity.Property(rt => rt.CreatedAt).HasDefaultValueSql("NOW()");
             entity.HasOne(rt => rt.User)
                   .WithMany(u => u.RefreshTokens)

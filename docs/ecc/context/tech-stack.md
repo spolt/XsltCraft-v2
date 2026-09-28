@@ -28,7 +28,7 @@ React 19 · TypeScript 5.9 · Vite 8 · Zustand · TailwindCSS 4 · @dnd-kit · 
 PostgreSQL 16 · EF Core · Npgsql. Storage: `IStorageService` — dev `LocalStorageService`, prod `S3StorageService`/MinIO (S3 uyumlu). `.xslt` ve görseller storage'a yazılır; DB yalnız `storagePath` tutar (istisna: `UserXsltTemplate` içeriği DB'de).
 
 ## Auth
-JWT (15 dk access) + HttpOnly refresh-token rotation (30 gün) + Google OAuth 2.0. Inactive kullanıcı login/refresh'te bloklanır.
+JWT (15 dk access, yalnız bellekte) + HttpOnly refresh-token rotation (DB'de SHA-256 özeti, `Path=/api/auth`; 2 sa hareketsizlik / 12 sa mutlak oturum, rotation reuse tespiti) + Google OAuth 2.0. Inactive kullanıcı login/refresh'te bloklanır.
 
 ## CI/CD & Test
 GitHub Actions: `ci.yml` (frontend lint/build/test + backend format/build/test + non-blocking `eval` job), `backend.yml`/`frontend.yml` (path-gated), `release.yml` (tag). **Dev `docker-compose.yml` = Postgres + MinIO + minio-init** (uygulama varsayılan storage'ı Local; MinIO S3 testleri için hazır). Prod stack: `docker-compose.prod.yml` + Nginx + MinIO.

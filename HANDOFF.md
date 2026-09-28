@@ -303,9 +303,8 @@ Tüm XML/XSLT parsing noktaları XXE ve injection korumasıyla güncellendi. Yen
 var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
 using var reader = XmlReader.Create(new StringReader(content), settings);
 
-// XSLT yükleme
-var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
-transform.Load(reader, xsltSettings, new XmlUrlResolver());
+// XSLT yükleme — 1.10.2'den itibaren tek yol (resolver null; XmlUrlResolver SSRF/dosya okuma açıyordu)
+var transform = SecureXslt.Compile(xslt);
 ```
 
 ---

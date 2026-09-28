@@ -31,8 +31,10 @@ export default function Sidebar({ collapsed }: SidebarProps) {
   const location = useLocation()
   const [libraryOpen, setLibraryOpen] = useState(true)
   const [adminOpen, setAdminOpen] = useState(true)
+  const [newTemplateOpen, setNewTemplateOpen] = useState(true)
 
   const isActive = (path: string) => location.pathname + location.search === path || location.pathname === path
+  const isNewDespatch = location.pathname === '/editor/new' && new URLSearchParams(location.search).get('type') === 'despatch'
 
   const itemBase =
     'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer w-full text-left'
@@ -97,15 +99,45 @@ export default function Sidebar({ collapsed }: SidebarProps) {
           </div>
         )}
 
-        {/* Yeni Şablon */}
-        <Link
-          to="/editor/new"
-          className={`${itemBase} ${isActive('/editor/new') ? itemActive : itemInactive}`}
-          title="Yeni Şablon Oluştur"
-        >
-          <FilePlus size={18} className="flex-shrink-0" />
-          {!collapsed && <span>Yeni Şablon</span>}
-        </Link>
+        {/* Yeni Şablon — daraltılmışken doğrudan e-Fatura editörüne gider */}
+        {collapsed ? (
+          <Link
+            to="/editor/new"
+            className={`${itemBase} ${location.pathname === '/editor/new' ? itemActive : itemInactive}`}
+            title="Yeni Şablon Oluştur"
+          >
+            <FilePlus size={18} className="flex-shrink-0" />
+          </Link>
+        ) : (
+          <button
+            className={`${itemBase} ${location.pathname === '/editor/new' ? itemActive : itemInactive}`}
+            onClick={() => setNewTemplateOpen((o) => !o)}
+            title="Yeni Şablon Oluştur"
+          >
+            <FilePlus size={18} className="flex-shrink-0" />
+            <span className="flex-1">Yeni Şablon</span>
+            {newTemplateOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+        )}
+
+        {!collapsed && newTemplateOpen && (
+          <div className="ml-4 flex flex-col gap-0.5">
+            <Link
+              to="/editor/new"
+              className={`${itemBase} ${isNewDespatch || location.pathname !== '/editor/new' ? itemInactive : itemActive}`}
+            >
+              <FileText size={16} className="flex-shrink-0" />
+              <span>e-Fatura / e-Arşiv</span>
+            </Link>
+            <Link
+              to="/editor/new?type=despatch"
+              className={`${itemBase} ${isNewDespatch ? itemActive : itemInactive}`}
+            >
+              <Truck size={16} className="flex-shrink-0" />
+              <span>e-İrsaliye</span>
+            </Link>
+          </div>
+        )}
 
         {/* Taslaklarım */}
         <Link

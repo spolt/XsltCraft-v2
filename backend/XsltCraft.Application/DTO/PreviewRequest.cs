@@ -7,6 +7,9 @@ public class PreviewRequest
     /// <summary>Block tree formatı: null/1 = V1 (section-based), 2 = V2 (grid-based).</summary>
     public int? Version { get; set; }
 
+    /// <summary>V2 için belge türü: "Invoice" (varsayılan) | "Despatch".</summary>
+    public string? DocumentType { get; set; }
+
     // V1 fields
     public List<SectionDto> Sections { get; set; } = [];
 

@@ -25,10 +25,17 @@ Yeni eklenen her parse noktasında **bu pattern kullanılır** (mevcut hardening
 var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
 using var reader = XmlReader.Create(new StringReader(content), settings);
 
-// XSLT yükleme
-var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
-transform.Load(reader, xsltSettings, new XmlUrlResolver());
+// XSLT yükleme — XslCompiledTransform'u ASLA doğrudan Load etme; tek giriş noktası:
+var transform = SecureXslt.Compile(xslt); // XsltCraft.Application.Xslt
 ```
+
+`SecureXslt.Compile` = DTD yasak + `document()`/script kapalı + **stylesheet resolver `null`**.
+`transform.Load(..., new XmlUrlResolver())` KULLANMA: `xsl:include/import href` ile yerel dosya
+okuma (`file:///`, `C:/`, `/etc/`), SSRF (`http://169.254.169.254/`), UNC ile NTLM sızıntısı
+(`\\sunucu\pay`) açar; stylesheet string'den yüklendiği için göreli href bile sunucunun çalışma
+dizinine göre çözülür. Parametresiz `Load(reader)` da kullanılmaz. Saxon yolunda
+`XmlResolver.ThrowingResolver` kullanılır (bkz. `XsltTemplateRenderer.RenderAsync`).
+İçerik taraması: `XsltSafety.FindThreat` (tüm `xsl:import/include` + tehlikeli XPath fonksiyonları).
 
 İlgili saldırı yüzeyleri: **XXE**, **XSLT/script injection**, **XPath injection** (kullanıcı XPath'i), **prompt injection** (AI asistanı), **SSRF**, **path traversal** (asset/storage), **file-upload** (extension+MIME+boyut), **IDOR** (asset/template sahipliği), JWT/refresh-token akışı.
 - Üretilen XSLT çıktısı `msxsl:script` / harici `document()` **içermemeli**.

@@ -37,6 +37,7 @@ import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog
 import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
 import { listSnippets, type UserSnippet } from '../services/snippetService'
 import { previewFromRawXslt, type PreviewTimings } from '../services/previewService'
+import { reportDownload } from '../services/activityService'
 import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import {
   getUserXsltTemplate,
@@ -47,6 +48,7 @@ import {
 } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
 import { toast } from '../store/toastStore'
+import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
 import api from '../services/apiService'
@@ -437,37 +439,33 @@ export default function XsltEditorPage() {
   }, [templateId])
 
   // ─── File upload handlers ───────────────────────────────────────────────────
-  function handleXsltFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleXsltFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      setXsltContent(ev.target?.result as string)
+    try {
+      const content = await readUploadFile(file, 'xslt')
+      setXsltContent(content)
       setIsDirty(true)
       if (!templateName) setTemplateName(file.name.replace(/\.(xsl|xslt)$/i, ''))
+    } catch (err) {
+      toast.error((err as Error).message, { title: 'XSLT yüklenemedi' })
     }
-    reader.readAsText(file, 'utf-8')
-    e.target.value = ''
   }
 
-  function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    if (file.size > 1 * 1024 * 1024) {
-      alert('XML dosyası 1 MB\'dan büyük olamaz.')
-      e.target.value = ''
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const content = ev.target?.result as string
+    try {
+      const content = await readUploadFile(file, 'xml')
       const errs = extractXmlParseErrors(content)
       setXmlErrors(errs)
       setXmlValid(errs.length === 0)
       setXmlContent(content)
+    } catch (err) {
+      toast.error((err as Error).message, { title: 'XML yüklenemedi' })
     }
-    reader.readAsText(file, 'utf-8')
-    e.target.value = ''
   }
 
   // ─── Debounced preview ──────────────────────────────────────────────────────
@@ -565,6 +563,7 @@ export default function XsltEditorPage() {
     a.download = `${(templateName || 'template').replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
     a.click()
     URL.revokeObjectURL(a.href)
+    reportDownload('Xslt', templateId)
   }
 
   // ─── Save ───────────────────────────────────────────────────────────────────
@@ -764,7 +763,7 @@ export default function XsltEditorPage() {
               </div>
               <span className="text-sm font-medium text-blue-600">XSLT Dosyası Yükle</span>
               <span className="text-xs text-gray-400">.xsl, .xslt</span>
-              <input type="file" accept=".xsl,.xslt" className="hidden" onChange={handleXsltFile} />
+              <input type="file" accept={UPLOAD_ACCEPT.xslt} className="hidden" onChange={handleXsltFile} />
             </label>
 
             {/* XML Upload */}
@@ -774,7 +773,7 @@ export default function XsltEditorPage() {
               </div>
               <span className="text-sm font-medium text-green-600">XML Dosyası Yükle</span>
               <span className="text-xs text-gray-400">.xml — fatura veya irsaliye</span>
-              <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={handleXmlFile} />
+              <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
             </label>
           </div>
 
@@ -823,7 +822,7 @@ export default function XsltEditorPage() {
             </span>
             <input
               type="file"
-              accept={xsltContent ? '.xml,text/xml,application/xml' : '.xsl,.xslt'}
+              accept={xsltContent ? UPLOAD_ACCEPT.xml : UPLOAD_ACCEPT.xslt}
               className="hidden"
               onChange={xsltContent ? handleXmlFile : handleXsltFile}
             />

@@ -12,7 +12,7 @@ cd backend && dotnet ef migrations add <Ad> --project XsltCraft.Infrastructure -
 | Entity | Rol |
 |--------|-----|
 | `User` | Hesap (username + email, hash, rol Admin/Editor/User, `IsActive`, GoogleId) |
-| `RefreshToken` | HttpOnly refresh-token rotation (30 gün) |
+| `RefreshToken` | HttpOnly refresh-token rotation — `TokenHash` (SHA-256), `ExpiresAt` (2 sa kayan), `SessionExpiresAt` (12 sa mutlak), `ReplacedByTokenId` (reuse tespiti) |
 | `Template` | Tasarımcı şablonu — `OwnerId?` (→User), `IsFreeTheme`, `BlockTree` (JSON), `XsltStoragePath`, `DocumentType` |
 | `Asset` | Yüklenen görsel (logo/imza) — `filePath`, `Template` ilişkisi |
 | `UserXsltTemplate` | Ham XSLT şablonu — **içerik DB'de** (`text` kolon), storage'a yazılmaz |
