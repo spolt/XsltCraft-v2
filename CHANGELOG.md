@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-09-28
+
+### Security
+- **XSLT derlemesinde yerel dosya okuma / SSRF kapatıldı** (yeni `Application/Xslt/SecureXslt`): Kullanıcı ve admin XSLT'si `transform.Load(reader, settings, new XmlUrlResolver())` ile derleniyordu. `enableDocumentFunction:false` yalnız `document()`'ı kapatır; **`xsl:include`/`xsl:import` resolver üzerinden yine çözülüyordu.** Bir kullanıcı XSLT Editör'e (`/api/preview/raw`, `/api/preview/validate-xslt`) `<xsl:include href="file:///..."/>` yazarak sunucudan dosya okutabiliyor, `http://169.254.169.254/...` gibi iç adreslere istek attırabiliyor (SSRF) ya da `\\sunucu\pay` UNC yoluyla Windows NTLM kimliğini sızdırtabiliyordu. Stylesheet string'den (base URI'siz) yüklendiği için **göreli href bile sunucunun çalışma dizinine göre** çözülüyordu. Açık testle kanıtlandı (`SecureXsltTests.XmlUrlResolver_WouldReadLocalFile`).
+  - Tüm `XslCompiledTransform` derlemeleri tek noktadan geçiyor: `SecureXslt.Compile` = DTD yasak + `document()`/script kapalı + **stylesheet resolver `null`**. Bağlanan 6 nokta: `PreviewController` (`validate-xslt` + ham/tema/kullanıcı önizleme ortak yolu), `XsltTemplateRenderer.RenderPreviewAsync`, `XsltCompiler`, `XsltGeneratorService.Validate` ve `TemplateCache` (son ikisi parametresiz `Load(reader)` kullanıyordu).
+  - Canlı API'ye karşı doğrulandı: zararlı include `validate-xslt`'de `valid:false`, ham önizlemede `400` ("Resolving of external URIs was prohibited") dönüyor, içerik sızmıyor; normal XSLT'ler etkilenmedi.
+- **`XsltSafety` taraması sıkılaştırıldı**: Yalnız `href="scheme://..."` yakalanıyordu; scheme'siz mutlak yol (`/etc/..`, `C:/..`), UNC ve göreli yol (`../../appsettings.json`) geçiyordu. Artık **her** `xsl:import`/`xsl:include` reddediliyor ("şablon tek, bağımsız bir dosya olmalı"). Base URI olmadığı için meşru bir göreli include zaten hiç çalışmıyordu — mevcut DB/MinIO şablonlarının hiçbiri include/import kullanmıyor (tarandı).
+- **Güvenlik rehberi düzeltildi**: Açığın kökü, projenin kendi guard pattern'inin `new XmlUrlResolver()`'ı "güvenli kalıp" olarak önermesiydi (`docs/ecc/context/constraints.md`, `HANDOFF.md`, `xss-xxe-checklist` skill). Üçü ve `CLAUDE.md` `SecureXslt.Compile`'a yönlendirecek şekilde güncellendi; checklist artık `new XmlUrlResolver` / parametresiz `Load(reader)` kullanımını bulgu sayıyor.
+
+### Tests
+- `SecureXsltTests` (7): açığın kanıtı (XmlUrlResolver ile yerel dosya sızar), mutlak `file:///` include, göreli include, `http://` import, DTD, `document()` ve bağımsız stylesheet'in çalışması.
+- `XsltSafetyTests`: scheme'siz mutlak yol, `C:/`, UNC, göreli ve çok satırlı include vakaları; "göreli include güvenli" varsayımı kaldırıldı.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.10.1 → 1.10.2`.
+
 ## [1.10.1] - 2026-09-28
 
 ### Security

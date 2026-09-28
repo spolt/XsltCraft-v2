@@ -13,10 +13,12 @@ description: XsltCraft güvenlik inceleme checklist'i — XXE, XSLT/script injec
 // XML okuma
 var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
 using var reader = XmlReader.Create(new StringReader(content), settings);
-// XSLT yükleme (.NET)
-var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
-transform.Load(reader, xsltSettings, new XmlUrlResolver());
+// XSLT yükleme (.NET) — tek giriş noktası; XslCompiledTransform'u doğrudan Load etme
+var transform = SecureXslt.Compile(xslt); // DTD yasak + document()/script kapalı + resolver null
 ```
+> **Bulgu say:** `transform.Load(..., new XmlUrlResolver())` veya parametresiz `Load(reader)` →
+> `xsl:include/import href` ile yerel dosya okuma / SSRF / UNC-NTLM sızıntısı (göreli href bile
+> çalışma dizinine göre çözülür). `rg "new XmlUrlResolver|\.Load\(reader\)" backend` → 0 olmalı.
 > .NET 10'da `XmlReader`/`XDocument` varsayılanı zaten güvenli (`DtdProcessing.Prohibit`) ama **açık yaz** — konvansiyon + framework değişimine karşı.
 
 ## 1. XXE

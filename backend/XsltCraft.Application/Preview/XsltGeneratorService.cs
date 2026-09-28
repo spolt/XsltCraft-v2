@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Globalization;
 using System.Xml.Xsl;
+using XsltCraft.Application.Xslt;
 
 namespace XsltCraft.Application.Preview;
 
@@ -1079,9 +1080,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
         try
         {
-            var transform = new XslCompiledTransform();
-            using var reader = XmlReader.Create(new StringReader(xslt));
-            transform.Load(reader);
+            SecureXslt.Compile(xslt);
             return null;
         }
         catch (XsltException ex)

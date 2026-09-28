@@ -25,9 +25,13 @@ public static class XsltSafety
         "\\b(?:select|test|match|use|use-when)\\s*=\\s*\"([^\"]*)\"",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    // <xsl:import|include href="scheme://..."> — derleme anında harici stylesheet çekme.
+    // <xsl:import|include> — href biçimi ne olursa olsun. Stylesheet'ler base URI'siz (string'den)
+    // yüklendiği için meşru bir göreli include hiç çalışmaz; buna karşılık scheme'siz mutlak yol
+    // (/etc/.., C:/..), UNC (\\sunucu\pay — NTLM sızıntısı) ve göreli yol (çalışma dizinine göre
+    // çözülür, ../ ile gezinilir) dosya okumaya açılır. Motor tarafı SecureXslt ile zaten
+    // çözümlemez; bu tarama erken ve açıklayıcı ret içindir.
     private static readonly Regex ExternalInclude = new(
-        "<xsl:(?:import|include)\\b[^>]*\\bhref\\s*=\\s*\"[a-zA-Z][a-zA-Z0-9+.\\-]*://",
+        "<xsl:(?:import|include)\\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>
@@ -48,7 +52,7 @@ public static class XsltSafety
         }
 
         if (ExternalInclude.IsMatch(xslt))
-            return "Harici xsl:import/xsl:include (scheme://) referansına izin verilmiyor.";
+            return "xsl:import / xsl:include desteklenmiyor — şablon tek, bağımsız bir dosya olmalı.";
 
         return null;
     }

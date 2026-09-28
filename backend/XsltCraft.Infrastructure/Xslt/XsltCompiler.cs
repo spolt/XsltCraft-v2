@@ -2,6 +2,7 @@
 using System.Text;
 using System.Xml;
 using System.Xml.Xsl;
+using XsltCraft.Application.Xslt;
 
 namespace XsltCraft.Infrastructure.Xslt
 {
@@ -11,17 +12,7 @@ namespace XsltCraft.Infrastructure.Xslt
 
         public XslCompiledTransform GetOrCompile(string id, string xslt)
         {
-            return _cache.GetOrAdd(id, _ =>
-            {
-                var transform = new XslCompiledTransform();
-
-                var readerSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-                using var reader = XmlReader.Create(new StringReader(xslt), readerSettings);
-                var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
-                transform.Load(reader, xsltSettings, new XmlUrlResolver());
-
-                return transform;
-            });
+            return _cache.GetOrAdd(id, _ => SecureXslt.Compile(xslt));
         }
     }
 }

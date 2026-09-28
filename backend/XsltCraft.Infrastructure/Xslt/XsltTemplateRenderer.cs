@@ -3,6 +3,7 @@ using System.Xml;
 using System.Xml.Xsl;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Infrastructure.Storage;
+using XsltCraft.Application.Xslt;
 
 namespace XsltCraft.Infrastructure.Xslt;
 
@@ -19,12 +20,7 @@ public class XsltTemplateRenderer : IXsltTemplateRenderer
 
     public async Task<string> RenderPreviewAsync(string xslt, XmlDocument xml)
     {
-        var transform = new XslCompiledTransform();
-
-        var xsltReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-        using var xsltReader = XmlReader.Create(new StringReader(xslt), xsltReaderSettings);
-        var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
-        transform.Load(xsltReader, xsltSettings, new XmlUrlResolver());
+        var transform = SecureXslt.Compile(xslt);
 
         using var sw = new StringWriter();
         transform.Transform(xml, null, sw);

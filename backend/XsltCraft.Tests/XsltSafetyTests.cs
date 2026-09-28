@@ -23,6 +23,12 @@ public class XsltSafetyTests
     [Theory]
     [InlineData("<xsl:import href=\"http://attacker/x.xsl\"/>")]
     [InlineData("<xsl:include href=\"file:///etc/x.xsl\"/>")]
+    [InlineData("<xsl:include href=\"/etc/passwd\"/>")]                 // scheme'siz mutlak yol
+    [InlineData("<xsl:include href=\"C:/Windows/win.ini\"/>")]
+    [InlineData("<xsl:import href=\"\\\\attacker\\share\\x.xsl\"/>")]    // UNC → NTLM sızıntısı
+    [InlineData("<xsl:include href=\"../../appsettings.json\"/>")]      // göreli: çalışma dizinine göre çözülür
+    [InlineData("<xsl:include href=\"common.xsl\"/>")]
+    [InlineData("<xsl:include\n  href='common.xsl'/>")]
     public void FindThreat_ExternalImport_Detected(string xslt)
     {
         Assert.NotNull(XsltSafety.FindThreat(xslt));
@@ -32,7 +38,6 @@ public class XsltSafetyTests
     [InlineData("<xsl:value-of select=\"//cbc:Note\"/>")]
     [InlineData("<xsl:value-of select=\"format-number(//cbc:PayableAmount, '#,##0.00')\"/>")]
     [InlineData("<xsl:for-each select=\"//cac:InvoiceLine\"><xsl:value-of select=\"cbc:ID\"/></xsl:for-each>")]
-    [InlineData("<xsl:include href=\"common.xsl\"/>")]      // göreli import güvenli
     [InlineData("<!-- doc(test) section heading -->")]      // yorumdaki token yanlış-pozitif olmamalı
     [InlineData("<p>Belge dokümanı document hazır</p>")]    // metin yanlış-pozitif olmamalı
     public void FindThreat_BenignContent_Null(string xslt)

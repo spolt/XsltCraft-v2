@@ -11,6 +11,7 @@ using XsltCraft.Application.Preview;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
+using XsltCraft.Application.Xslt;
 
 namespace XsltCraft.Api.Controllers;
 
@@ -376,11 +377,7 @@ public class PreviewController : ControllerBase
     {
         try
         {
-            var transform = new XslCompiledTransform();
-            var xsltReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-            using var reader = XmlReader.Create(new StringReader(request.Xslt), xsltReaderSettings);
-            var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
-            transform.Load(reader, xsltSettings, new XmlUrlResolver());
+            SecureXslt.Compile(request.Xslt);
             return Ok(new { valid = true });
         }
         catch (XsltException ex)
@@ -455,11 +452,7 @@ public class PreviewController : ControllerBase
         string xslt, string xmlContent, string? logoUrl, string? signatureUrl)
     {
         var sw = Stopwatch.StartNew();
-        var transform = new XslCompiledTransform();
-        var xsltReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-        using var xsltReader = XmlReader.Create(new StringReader(xslt), xsltReaderSettings);
-        var xsltSettings = new XsltSettings(enableDocumentFunction: false, enableScript: false);
-        transform.Load(xsltReader, xsltSettings, new XmlUrlResolver());
+        var transform = SecureXslt.Compile(xslt);
         var compileMs = sw.ElapsedMilliseconds;
 
         sw.Restart();

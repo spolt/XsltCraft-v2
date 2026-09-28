@@ -17,7 +17,7 @@ Türk e-Fatura / e-İrsaliye (UBL-TR 2.1) için **low-code XSLT şablon tasarım
 ## Kritik kısıtlar
 - UBL-TR 2.1 namespace'lerini **asla bozma** (`n1`/`cbc`/`cac`/`ext`, `urn:oasis:names:specification:...`). Üretilen stylesheet `version="2.0"`.
 - GİB: çıktı UTF-8, makul boyut (~250KB hedef), QR/ETTN bütünlüğü.
-- **XXE/XSLT-injection guard zorunlu** her XML/XSLT okuma noktasında (`DtdProcessing.Prohibit`, `XmlResolver=null`, `XsltSettings(enableDocumentFunction:false, enableScript:false)`). Detay: `docs/ecc/context/constraints.md`.
+- **XXE/XSLT-injection guard zorunlu** her XML/XSLT okuma noktasında (`DtdProcessing.Prohibit`, `XmlResolver=null`, `XsltSettings(enableDocumentFunction:false, enableScript:false)`). XSLT derlemenin tek yolu `SecureXslt.Compile` (stylesheet resolver `null`) — `new XmlUrlResolver()` ile `Load` etmek yerel dosya okuma/SSRF açar. Detay: `docs/ecc/context/constraints.md`.
 
 ## Standartlar (özet)
 Application katmanı Infrastructure'a **bağımlı olmaz**; interface tercih et; static service'ten kaçın; feature-based klasör; dosyaları küçük tut. Tamamı: `docs/ecc/standards.md`.
