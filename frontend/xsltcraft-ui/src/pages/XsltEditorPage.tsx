@@ -37,6 +37,7 @@ import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog
 import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
 import { listSnippets, type UserSnippet } from '../services/snippetService'
 import { previewFromRawXslt, type PreviewTimings } from '../services/previewService'
+import { reportDownload } from '../services/activityService'
 import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import {
   getUserXsltTemplate,
@@ -565,6 +566,7 @@ export default function XsltEditorPage() {
     a.download = `${(templateName || 'template').replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
     a.click()
     URL.revokeObjectURL(a.href)
+    reportDownload('Xslt', templateId)
   }
 
   // ─── Save ───────────────────────────────────────────────────────────────────

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.4] - 2026-09-28
+
+### Fixed
+- **İndirme sayıları artık kaydediliyor** (`UserManagementService`, `UsageReportService`): Kullanıcı ve kullanım raporlarındaki indirme sayısı pratikte hep `0` görünüyordu. `Download` aktivitesi yalnızca `TemplateController`'ın sunucudan dosya döndüren uçlarında yazılıyordu; oysa kullanıcıların indirmelerinin çoğu **tarayıcıda** üretiliyor (Tema kullan, Geliştirici modu, XSLT Editör — blob + `<a download>`) ya da `POST /api/preview/xslt` üzerinden geliyor ve hiçbiri aktivite kaydı bırakmıyordu.
+  - `PreviewController.GenerateXslt` (kaydedilmemiş grid şablonun indirilmesi) artık kotayla birlikte `Download` aktivitesi de yazıyor.
+  - Yeni `POST /api/activity/download` ucu (`ActivityController`, `[Authorize]`): tarayıcıda üretilen indirmeler için sayaç kaydı. `entityKind` yalnız `Template`/`Xslt` kabul edilir; kimlik JWT'den alınır, gövdeden değil. Kötüye kullanıma karşı kullanıcı başına 60 istek/dk `activity` rate-limit politikası.
+  - Frontend `activityService.reportDownload` üç tarayıcı-içi indirme noktasına bağlandı (`ThemeUsePage`, `DevModePage`, `XsltEditorPage`). Ateşle-unut: bildirim başarısız olsa da indirme etkilenmez; oturum yoksa istek atılmaz.
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.9.3 → 1.9.4`.
+
 ## [1.9.3] - 2026-07-21
 
 ### Fixed

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using XsltCraft.Application.DTO;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
+using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
 
@@ -26,6 +27,7 @@ public class PreviewController : ControllerBase
     private readonly IWebHostEnvironment _env;
     private readonly IUsageQuotaService _quota;
     private readonly IEntitlementService _entitlements;
+    private readonly IUserActivityRecorder _activity;
     private readonly ILogger<PreviewController> _logger;
 
     public PreviewController(
@@ -35,6 +37,7 @@ public class PreviewController : ControllerBase
         IWebHostEnvironment env,
         IUsageQuotaService quota,
         IEntitlementService entitlements,
+        IUserActivityRecorder activity,
         ILogger<PreviewController> logger)
     {
         _generator = generator;
@@ -43,6 +46,7 @@ public class PreviewController : ControllerBase
         _env = env;
         _quota = quota;
         _entitlements = entitlements;
+        _activity = activity;
         _logger = logger;
     }
 
@@ -334,6 +338,7 @@ public class PreviewController : ControllerBase
             return BadRequest(new { error });
 
         await _quota.IncrementTemplateExportAsync(userId);
+        await _activity.RecordAsync(userId, UserActivityType.Download, null, "Template");
         return Content(xslt, "application/xslt+xml");
     }
 

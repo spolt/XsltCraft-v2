@@ -52,6 +52,20 @@ builder.Services.AddRateLimiter(opts =>
                 QueueLimit = 0,
             }));
 
+    // İstemci tarafı indirme bildirimleri: 60 req/dk/user
+    opts.AddPolicy("activity", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                          ?? "anon",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
 });
 
 // JWT Authentication

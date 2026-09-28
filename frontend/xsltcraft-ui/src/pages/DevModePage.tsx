@@ -33,6 +33,7 @@ import {
   Keyboard,
 } from 'lucide-react'
 import { getTemplate } from '../services/templateService'
+import { reportDownload } from '../services/activityService'
 import { fetchThemeXslt, previewFromRawXslt, type BankInfoItem, type Alignment } from '../services/previewService'
 import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import { listSnippets, type UserSnippet } from '../services/snippetService'
@@ -615,6 +616,7 @@ export default function DevModePage() {
               a.download = `${templateName.replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
               a.click()
               URL.revokeObjectURL(a.href)
+              reportDownload('Template', templateId)
             }}
             disabled={!xslt}
             className="flex items-center gap-1 text-xs text-gray-400 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 disabled:opacity-30 flex-shrink-0"

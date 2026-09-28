@@ -17,6 +17,7 @@ import {
   BookmarkCheck,
 } from 'lucide-react'
 import { getTemplate } from '../services/templateService'
+import { reportDownload } from '../services/activityService'
 import { previewFromStoredXslt, fetchThemeXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
 import { createUserXsltTemplate } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
@@ -365,6 +366,7 @@ export default function ThemeUsePage() {
       a.download = `${templateName.replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
       a.click()
       URL.revokeObjectURL(a.href)
+      reportDownload('Template', templateId)
     } finally {
       setIsDownloading(false)
     }
