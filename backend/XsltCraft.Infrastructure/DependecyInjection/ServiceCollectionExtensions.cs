@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
+using XsltCraft.Application.Auth;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Membership;
 using XsltCraft.Application.Preview;
@@ -51,6 +53,9 @@ public static class ServiceCollectionExtensions
         // -------------------------------------------------
 
         services.AddScoped<IJwtService, JwtService>();
+        services.Configure<SessionOptions>(configuration.GetSection(SessionOptions.SectionName));
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
         // -------------------------------------------------
         // Template Discovery

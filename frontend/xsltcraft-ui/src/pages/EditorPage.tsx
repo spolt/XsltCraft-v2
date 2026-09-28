@@ -27,6 +27,7 @@ import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
 import { exportsRemaining, parseGateError } from '../services/entitlementService'
 import { toast } from '../store/toastStore'
+import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import type { BlockTree, BlockTreeV1, BlockTreeV2, DocumentType } from '../types/template'
 import type { BlockType } from '../types/blocks'
 import { migrateV1toV2 } from '../utils/treeMigration'
@@ -157,28 +158,28 @@ export default function EditorPage() {
     : null
 
   // ── XML yükleme ──────────────────────────────────────────────────────────────
-  function handleXmlUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleXmlUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    if (file.size > 1 * 1024 * 1024) {
-      alert("XML dosyası 1 MB'dan büyük olamaz.")
-      e.target.value = ''
+    const showError = (msg: string) => {
+      setXmlError(msg)
+      setTimeout(() => setXmlError(null), 4000)
+    }
+    let content: string
+    try {
+      content = await readUploadFile(file, 'xml')
+    } catch (err) {
+      showError((err as Error).message)
       return
     }
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const content = ev.target?.result as string
-      const doc = new DOMParser().parseFromString(content, 'application/xml')
-      if (doc.getElementsByTagName('parsererror').length > 0) {
-        setXmlError(`"${file.name}" geçerli bir XML dosyası değil.`)
-        setTimeout(() => setXmlError(null), 4000)
-        return
-      }
-      setXmlError(null)
-      addXmlFile(file.name, content)
+    const doc = new DOMParser().parseFromString(content, 'application/xml')
+    if (doc.getElementsByTagName('parsererror').length > 0) {
+      showError(`"${file.name}" geçerli bir XML dosyası değil.`)
+      return
     }
-    reader.readAsText(file)
-    e.target.value = ''
+    setXmlError(null)
+    addXmlFile(file.name, content)
   }
 
   // ── Template yükleme ─────────────────────────────────────────────────────────
@@ -375,7 +376,7 @@ export default function EditorPage() {
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#F1F0EC' }}>
       {/* Gizli XML dosya input'u */}
-      <input ref={xmlInputRef} type="file" accept=".xml" className="hidden" onChange={handleXmlUpload} />
+      <input ref={xmlInputRef} type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlUpload} />
 
       {/* Topbar */}
       <header style={{ height: 48, background: '#fff', borderBottom: '1px solid #E0DDD8', display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0 }}>

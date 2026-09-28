@@ -47,6 +47,17 @@ test('korumalı sayfalar auth ile yüklenir (login\'e atılmaz)', async ({ page 
   await expect(page).toHaveURL(/\/xslt-editor/)
 })
 
+test('access token localStorage\'a yazılmaz; yenilemede oturum çerezle geri yüklenir', async ({ page }) => {
+  await login(page)
+
+  const stored = await page.evaluate(() => localStorage.getItem('xsltcraft-auth') ?? '')
+  expect(stored).not.toContain('accessToken')
+
+  await page.reload()
+  await expect(page).toHaveURL(/\/dashboard/)
+  await expect(page.getByText('Oturum doğrulanıyor')).toHaveCount(0)
+})
+
 test('auth olmadan korumalı sayfa login\'e yönlendirir', async ({ page }) => {
   // Temiz context (login yok) → PrivateRoute /auth/login'e atmalı.
   await page.goto('/editor/new')

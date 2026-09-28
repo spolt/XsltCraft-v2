@@ -1,10 +1,14 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
+import { refreshAccessToken } from './authSession'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:5000',
   withCredentials: true,
 })
+
+// Kimlik doğrulama uçlarında 401 "oturum yok/yanlış şifre" demektir; yenileme denenmez.
+const NO_REFRESH_PATHS = ['/api/auth/login', '/api/auth/google', '/api/auth/refresh', '/api/auth/logout']
 
 // Attach Bearer token to every request
 api.interceptors.request.use((config) => {
@@ -16,47 +20,27 @@ api.interceptors.request.use((config) => {
 })
 
 // On 401, try to refresh once then retry
-let isRefreshing = false
-let queue: Array<(token: string) => void> = []
-
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config
 
-    if (error.response?.status !== 401 || original._retry) {
+    if (
+      error.response?.status !== 401 ||
+      !original ||
+      original._retry ||
+      NO_REFRESH_PATHS.some((p) => original.url?.includes(p))
+    ) {
       return Promise.reject(error)
-    }
-
-    if (isRefreshing) {
-      return new Promise((resolve) => {
-        queue.push((token) => {
-          original.headers.Authorization = `Bearer ${token}`
-          resolve(api(original))
-        })
-      })
     }
 
     original._retry = true
-    isRefreshing = true
-
     try {
-      const { data } = await axios.post(
-        `${import.meta.env.VITE_API_URL ?? 'http://localhost:5000'}/api/auth/refresh`,
-        {},
-        { withCredentials: true }
-      )
-      const newToken: string = data.accessToken
-      useAuthStore.getState().setAccessToken(newToken)
-      queue.forEach((cb) => cb(newToken))
-      queue = []
-      original.headers.Authorization = `Bearer ${newToken}`
+      const token = await refreshAccessToken()
+      original.headers.Authorization = `Bearer ${token}`
       return api(original)
     } catch {
-      useAuthStore.getState().logout()
       return Promise.reject(error)
-    } finally {
-      isRefreshing = false
     }
   }
 )

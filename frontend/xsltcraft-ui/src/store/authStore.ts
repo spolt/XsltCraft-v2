@@ -10,6 +10,7 @@ interface User {
 
 interface AuthState {
   user: User | null
+  /** Yalnız bellekte: localStorage'a yazılmaz (XSS ile okunamasın, tarayıcı kapanınca kalmasın). */
   accessToken: string | null
   login: (token: string, user: User) => void
   logout: () => void
@@ -34,7 +35,10 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'xsltcraft-auth',
-      partialize: (state) => ({ accessToken: state.accessToken, user: state.user }),
+      version: 1,
+      partialize: (state) => ({ user: state.user }),
+      // v0 access token'ı da saklıyordu; yükseltmede at.
+      migrate: (persisted) => ({ user: (persisted as { user?: User | null } | null)?.user ?? null }),
     }
   )
 )

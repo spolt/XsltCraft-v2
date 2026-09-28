@@ -52,6 +52,19 @@ builder.Services.AddRateLimiter(opts =>
                 QueueLimit = 0,
             }));
 
+    // Refresh: IP başına 30 istek/dk. Login ile ortak global limiti paylaşmaz — aksi halde
+    // yoğun anda kullanıcıların sessiz yenilemesi 429 alıp oturumdan düşerdi.
+    opts.AddPolicy("auth-refresh", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
     // İstemci tarafı indirme bildirimleri: 60 req/dk/user
     opts.AddPolicy("activity", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -82,7 +95,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtSection["Issuer"],
             ValidAudience = jwtSection["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtSection["SecretKey"]!))
+                Encoding.UTF8.GetBytes(jwtSection["SecretKey"]!)),
+            // Varsayılan 5 dk tolerans 15 dk'lık token'ı fiilen 20 dk yapıyordu.
+            ClockSkew = TimeSpan.FromSeconds(30),
         };
     });
 

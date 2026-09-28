@@ -33,6 +33,8 @@ import {
   Keyboard,
 } from 'lucide-react'
 import { getTemplate } from '../services/templateService'
+import { toast } from '../store/toastStore'
+import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import { reportDownload } from '../services/activityService'
 import { fetchThemeXslt, previewFromRawXslt, type BankInfoItem, type Alignment } from '../services/previewService'
 import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
@@ -421,18 +423,15 @@ export default function DevModePage() {
   }, [xmlContent])
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
-  function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 1 * 1024 * 1024) {
-      alert('XML dosyası 1 MB\'dan büyük olamaz.')
-      e.target.value = ''
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = (ev) => setXmlContent(ev.target?.result as string)
-    reader.readAsText(file, 'utf-8')
     e.target.value = ''
+    if (!file) return
+    try {
+      setXmlContent(await readUploadFile(file, 'xml'))
+    } catch (err) {
+      toast.error((err as Error).message, { title: 'XML yüklenemedi' })
+    }
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -556,7 +555,7 @@ export default function DevModePage() {
             </svg>
             <span className="text-sm font-medium text-blue-600">XML Dosyası Yükle</span>
             <span className="text-xs text-gray-400">.xml — fatura veya irsaliye</span>
-            <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={handleXmlFile} />
+            <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
           </label>
         </div>
       </div>
@@ -606,7 +605,7 @@ export default function DevModePage() {
 
           <label className="cursor-pointer text-xs text-gray-400 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 flex-shrink-0">
             XML Değiştir
-            <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={handleXmlFile} />
+            <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
           </label>
           <button
             onClick={() => {

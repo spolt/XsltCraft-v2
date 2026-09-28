@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-09-28
+
+### Security
+- **Oturumlar artık sonsuza kadar açık kalmıyor** (`AuthController`, yeni `IRefreshTokenService`/`RefreshTokenService`, `SessionPolicy`): Refresh token 30 günlüktü ve **her yenilemede yeniden 30 gün** alıyordu; mutlak bir oturum ömrü yoktu — ayda bir giren kullanıcı fiilen hiç çıkış yapmıyordu. Artık oturum **2 saat hareketsizlikte** ya da girişten **12 saat sonra** (hangisi önce gelirse) sona eriyor. Mutlak bitiş (`SessionExpiresAt`) login'de belirlenip her rotation'da aynen taşınıyor; hareketsizlik penceresi (`ExpiresAt`) kayıyor ama mutlak sınırı aşamıyor. Süreler `appsettings` → `Session` (`IdleTimeoutMinutes`, `AbsoluteLifetimeHours`, `RotationGraceSeconds`) ile ayarlanabilir.
+- **Refresh token DB'de düz metin tutulmuyor**: Yalnız SHA-256 özeti (`TokenHash`, varchar(64), unique) saklanıyor; veritabanı sızsa bile oturumlar ele geçirilemez. Token 256-bit rastgele, base64url.
+- **Rotation reuse tespiti düzeltildi**: Döndürülmüş (`ReplacedByTokenId` dolu) bir token 30 sn'lik grace süresinden sonra tekrar gelirse kullanıcının tüm oturumları iptal ediliyor. Grace içinde gelirse (iki sekme aynı anda yeniledi) `409` dönüyor ve istemci güncel çerezle bir kez tekrar deniyor — önceden bu yarış kullanıcıyı tamamen çıkışa atıyordu. Döndürme `ExecuteUpdate` ile atomik (`WHERE RevokedAt IS NULL`): aynı token'dan iki geçerli halef üretilemez. Logout/şifre değişikliğiyle iptal edilmiş token'ın tekrar gelmesi artık diğer cihazları düşürmüyor (hırsızlık sinyali değil).
+- **Access token yalnız bellekte** (`authStore`, yeni `services/authSession.ts`): Önceden `localStorage`'a yazılıyordu — XSS ile okunabiliyor ve tarayıcı kapansa da kalıyordu. Artık yalnız kullanıcı bilgisi saklanıyor (persist `version: 1`, eski kayıttaki token migrate ile atılıyor). Sayfa yenilenince oturum HttpOnly çerezle sessizce geri yükleniyor (`ensureSession`, uygulama açılışında + `PrivateRoute`'ta tek uçuş); yükleme sırasında "Oturum doğrulanıyor…" gösteriliyor.
+- **Refresh çerezi yalnız auth uçlarına gidiyor**: `Path=/api/auth`; eski `Path=/` çerezi yazma/silmede temizleniyor.
+- **JWT `ClockSkew` 5 dk → 30 sn**: 15 dakikalık access token fiilen 20 dakika geçerliydi.
+- **Refresh kendi rate-limit politikasında** (`auth-refresh`, IP başına 30/dk): Login ile ortak global 10/dk limiti paylaşıyordu; yoğun anda sessiz yenilemeler 429 alıp kullanıcıyı oturumdan düşürebilirdi.
+- **XML/XSLT yükleme doğrulaması** (yeni `utils/uploadValidation.ts`): XSLT Editör'de "XML yükle" XSLT dosyası da kabul ediyordu. `accept=".xml,text/xml,application/xml"` Windows'ta `.xsl/.xslt`'yi de `text/xml` MIME'ıyla geçiriyordu ve okuyucu hiçbir denetim yapmıyordu; XSLT alanı da tersine XML kabul ediyordu. Artık: `accept` yalnız uzantı; yüklemede uzantı + boyut (XML 1 MB, XSLT 5 MB) + **içerik** denetimi — kök eleman XSL namespace'indeyse XML alanına, değilse XSLT alanına yüklenemez (uzantısı değiştirilmiş dosyalar da yakalanır). Ayrıştırılamayan içerik reddedilmez; editör hatayı satır/sütunla göstermeye devam eder. XSLT Editör (yükleme ekranı, toolbar, bırakma alanı), Geliştirici modu, Tema kullan ve grid editörüne bağlandı; toplu yüklemede XSLT olmayan dosyalar "XSLT şablonu değil" olarak işaretleniyor. Hatalar `alert` yerine toast.
+
+### Fixed
+- **AI sohbeti 15 dk sonra 401 vermiyor** (`aiAssistantService`): `fetch` axios interceptor'ından geçmediği için süresi dolan access token yenilenmiyordu; artık 401'de token yenilenip istek bir kez tekrarlanıyor.
+
+### Changed
+- **Migration `HashRefreshTokensAndSessionLifetime`**: `Token` → `TokenHash`; `SessionExpiresAt`, `ReplacedByTokenId` eklendi. Düz metin token'lar özete çevrilemeyeceği için **mevcut refresh token'lar silinir — tüm kullanıcılar bir kez yeniden giriş yapar.**
+- `IJwtService.GenerateRefreshToken` kaldırıldı (üretim `RefreshTokenHasher`'da).
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.10.0 → 1.10.1`.
+
+### Tests
+- `SessionPolicyTests` (9) + `RefreshTokenHasherTests` (2): kayan pencere, mutlak sınır, grace/reuse ayrımı, logout sonrası token.
+- E2E: access token'ın `localStorage`'a yazılmadığı ve yenilemede oturumun geri yüklendiği; XML/XSLT yükleme doğrulaması (4 senaryo).
+
 ## [1.10.0] - 2026-09-28
 
 ### Added

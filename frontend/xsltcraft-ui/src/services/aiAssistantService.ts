@@ -1,5 +1,6 @@
 import api from './apiService'
 import { useAuthStore } from '../store/authStore'
+import { refreshAccessToken } from './authSession'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000'
 
@@ -54,8 +55,7 @@ export async function streamAi(
   onChunk: (chunk: AiChunk) => void,
   signal: AbortSignal,
 ): Promise<void> {
-  const token = useAuthStore.getState().accessToken
-  const res = await fetch(`${API_BASE}/api/ai/${task}`, {
+  const send = (token: string | null) => fetch(`${API_BASE}/api/ai/${task}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -65,6 +65,13 @@ export async function streamAi(
     signal,
     credentials: 'include',
   })
+
+  // fetch axios interceptor'ından geçmez: süresi dolan access token'ı burada yenile.
+  let res = await send(useAuthStore.getState().accessToken)
+  if (res.status === 401) {
+    const fresh = await refreshAccessToken().catch(() => null)
+    if (fresh) res = await send(fresh)
+  }
 
   if (!res.ok) {
     let message = `AI isteği başarısız (${res.status}).`

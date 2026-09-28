@@ -4,7 +4,7 @@
 
 **Low-code XSLT template designer for Turkish e-Invoice (e-Fatura) and e-Waybill (e-İrsaliye) — with AI assistance**
 
-![Version](https://img.shields.io/badge/version-1.10.0-blue?style=flat)
+![Version](https://img.shields.io/badge/version-1.10.1-blue?style=flat)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4?style=flat&logo=dotnet&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat&logo=typescript&logoColor=white)
@@ -57,7 +57,7 @@ XsltCraft is a web-based platform that lets you visually design XSLT print templ
 - **Asset management** — upload logos / signatures (PNG, JPG, SVG); embedded as base64 in generated XSLT.
 
 ### Auth & admin
-- **Authentication** — username + password (3–30 chars) or Google OAuth 2.0; JWT (15 min access) + HttpOnly refresh-token rotation (30 days). Inactive users blocked at login / refresh.
+- **Authentication** — username + password (3–30 chars) or Google OAuth 2.0; JWT (15 min access, in-memory only) + HttpOnly refresh-token rotation (hashed at rest; sessions end after 2 h idle or 12 h absolute, reuse detection). Inactive users blocked at login / refresh.
 - **Admin panel** — `/admin/users` (roles: Admin / Editor / User, activation, password reset, activity stats), `/admin/themes` (theme curation), `/admin/snippets` (public snippet library), `/admin/ai` (AI flags & usage).
 
 ---

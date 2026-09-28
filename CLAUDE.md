@@ -11,7 +11,7 @@ Türk e-Fatura / e-İrsaliye (UBL-TR 2.1) için **low-code XSLT şablon tasarım
 - **Backend:** .NET 10, ASP.NET Core Web API, **Clean Architecture** — `XsltCraft.Api` / `XsltCraft.Application` / `XsltCraft.Domain` / `XsltCraft.Infrastructure`. XSLT üretimi XSLT 2.0 hedefler; önizleme **Saxon HE 10.9** ile render edilir.
 - **AI:** Birincil **Ollama `qwen2.5-coder:3b`**; yedek **Gemini `gemini-2.5-flash`** (`Ai:Gemini:Enabled`). NDJSON streaming, embedded markdown prompt'lar. **Anthropic sağlayıcısı YOKTUR** — kodda yalnız `OllamaAssistantProvider` + `GeminiAssistantProvider` kayıtlı (`AiProviderOrchestrator`).
 - **DB:** PostgreSQL 16, EF Core, Npgsql. **Storage:** `IStorageService` soyutlaması — `LocalStorageService` (dev), `S3StorageService`/MinIO (prod).
-- **Auth:** JWT (15 dk) + HttpOnly refresh-token rotation (30 gün) + Google OAuth 2.0.
+- **Auth:** JWT (15 dk, yalnız bellekte) + HttpOnly refresh-token rotation (`Path=/api/auth`, DB'de SHA-256 özeti; 2 sa hareketsizlik / 12 sa mutlak oturum — `Session` ayarları) + Google OAuth 2.0.
 - **Test:** xUnit 2.9, Verify.Xunit golden snapshot. `XsltCraft.Tests` → generator testleri; `XsltCraft.Application.Tests` → AI pipeline + golden.
 
 ## Kritik kısıtlar

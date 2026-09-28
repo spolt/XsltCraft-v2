@@ -18,10 +18,15 @@ namespace XsltCraft.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(AppDbContext db, IJwtService jwtService, IConfiguration configuration) : ControllerBase
+public class AuthController(
+    AppDbContext db,
+    IJwtService jwtService,
+    IRefreshTokenService refreshTokens,
+    IConfiguration configuration) : ControllerBase
 {
     private const string RefreshTokenCookie = "refreshToken";
-    private static readonly TimeSpan RefreshTokenExpiry = TimeSpan.FromDays(30);
+    // Çerez yalnız auth uçlarına gider; diğer API isteklerinde taşınmaz.
+    private const string RefreshTokenCookiePath = "/api/auth";
 
     private static readonly Regex UsernameRegex = new(@"^[a-zA-Z0-9_][a-zA-Z0-9_.]{1,28}[a-zA-Z0-9_]$", RegexOptions.Compiled);
     private static readonly Regex PasswordRegex = new(@"^(?=.*[A-Z])(?=.*\d).{8,}$", RegexOptions.Compiled);
@@ -75,44 +80,39 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
         user.LastLoginAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Role.ToString());
-        await SetNewRefreshToken(user.Id);
-
-        return Ok(new AuthResponse(accessToken));
+        return await StartSession(user);
     }
 
     // POST /api/auth/refresh
     [HttpPost("refresh")]
-    [EnableRateLimiting("auth-sensitive")]
+    [EnableRateLimiting("auth-refresh")]
     public async Task<IActionResult> Refresh()
     {
         var rawToken = Request.Cookies[RefreshTokenCookie];
         if (string.IsNullOrEmpty(rawToken))
-            return Unauthorized(new { message = "Refresh token bulunamadı." });
+            return Unauthorized(new { message = "Oturum bulunamadı. Lütfen giriş yapın." });
 
-        var existing = await db.RefreshTokens
-            .Include(rt => rt.User)
-            .FirstOrDefaultAsync(rt => rt.Token == rawToken);
-
-        if (existing is null || existing.RevokedAt is not null || existing.ExpiresAt < DateTime.UtcNow)
+        var result = await refreshTokens.RotateAsync(rawToken, HttpContext.RequestAborted);
+        switch (result.Status)
         {
-            // Compromise detection: if expired/revoked token used, revoke all tokens for safety
-            if (existing is not null)
-                await RevokeAllUserTokens(existing.UserId);
+            case RefreshStatus.Success:
+                WriteRefreshCookie(result.Token!);
+                var user = result.User!;
+                return Ok(new AuthResponse(jwtService.GenerateAccessToken(user.Id, user.Email, user.Role.ToString())));
 
-            return Unauthorized(new { message = "Geçersiz veya süresi dolmuş refresh token." });
+            case RefreshStatus.ConcurrentRotation:
+                // Başka bir sekme aynı token'ı az önce yeniledi; tarayıcıdaki çerez güncellendi,
+                // istemci tekrar denemeli. Çerez silinmez — yeni geçerli çerezi ezerdi.
+                return Conflict(new { message = "Oturum başka bir sekmede yenilendi, tekrar deneyin." });
+
+            case RefreshStatus.UserInactive:
+                ClearRefreshCookie();
+                return Unauthorized(new { message = "Hesabınız askıya alınmış." });
+
+            default:
+                ClearRefreshCookie();
+                return Unauthorized(new { message = "Oturumun süresi doldu. Lütfen tekrar giriş yapın." });
         }
-
-        if (!existing.User.IsActive)
-            return Unauthorized(new { message = "Hesabınız askıya alınmış." });
-
-        // Rotate: revoke old, issue new
-        existing.RevokedAt = DateTime.UtcNow;
-        var accessToken = jwtService.GenerateAccessToken(
-            existing.UserId, existing.User.Email, existing.User.Role.ToString());
-        await SetNewRefreshToken(existing.UserId);
-
-        return Ok(new AuthResponse(accessToken));
     }
 
     // POST /api/auth/logout
@@ -121,15 +121,9 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
     {
         var rawToken = Request.Cookies[RefreshTokenCookie];
         if (!string.IsNullOrEmpty(rawToken))
-        {
-            var token = await db.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == rawToken);
-            if (token is not null && token.RevokedAt is null)
-                token.RevokedAt = DateTime.UtcNow;
+            await refreshTokens.RevokeAsync(rawToken, HttpContext.RequestAborted);
 
-            await db.SaveChangesAsync();
-        }
-
-        Response.Cookies.Delete(RefreshTokenCookie);
+        ClearRefreshCookie();
         return NoContent();
     }
 
@@ -203,10 +197,7 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
         user.LastLoginAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Role.ToString());
-        await SetNewRefreshToken(user.Id);
-
-        return Ok(new AuthResponse(accessToken));
+        return await StartSession(user);
     }
 
     // PUT /api/auth/profile  — display name ve/veya e-posta güncelle
@@ -262,14 +253,11 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.UtcNow;
 
-        // Güvenlik: tüm mevcut oturumları sonlandır, bu oturum için yeni token ver
-        await RevokeAllUserTokens(userId);
         await db.SaveChangesAsync();
 
-        var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Role.ToString());
-        await SetNewRefreshToken(userId);
-
-        return Ok(new AuthResponse(accessToken));
+        // Güvenlik: tüm mevcut oturumları sonlandır, bu oturum için yeni token ver
+        await refreshTokens.RevokeAllAsync(userId);
+        return await StartSession(user);
     }
 
     // DELETE /api/auth/account  — hesabı sil
@@ -307,34 +295,45 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
 
         await db.SaveChangesAsync();
 
-        Response.Cookies.Delete("refreshToken");
+        ClearRefreshCookie();
         return NoContent();
     }
 
     // --- Helpers ---
 
-    private async Task SetNewRefreshToken(Guid userId)
+    private async Task<IActionResult> StartSession(User user)
     {
-        var token = new RefreshToken
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            Token = jwtService.GenerateRefreshToken(),
-            ExpiresAt = DateTime.UtcNow.Add(RefreshTokenExpiry),
-            CreatedAt = DateTime.UtcNow
-        };
+        var issued = await refreshTokens.IssueAsync(user.Id, HttpContext.RequestAborted);
+        WriteRefreshCookie(issued);
+        return Ok(new AuthResponse(jwtService.GenerateAccessToken(user.Id, user.Email, user.Role.ToString())));
+    }
 
-        db.RefreshTokens.Add(token);
-        await db.SaveChangesAsync();
+    private void WriteRefreshCookie(IssuedRefreshToken token)
+    {
+        DeleteLegacyRefreshCookie();
+        Response.Cookies.Append(RefreshTokenCookie, token.RawToken, RefreshCookieOptions(token.ExpiresAt));
+    }
 
+    private void ClearRefreshCookie()
+    {
+        DeleteLegacyRefreshCookie();
+        Response.Cookies.Delete(RefreshTokenCookie, RefreshCookieOptions(expires: null));
+    }
+
+    // 1.10.0 ve öncesi çerezi Path=/ ile yazıyordu; aynı adlı eski çerez kalmasın.
+    private void DeleteLegacyRefreshCookie() => Response.Cookies.Delete(RefreshTokenCookie);
+
+    private CookieOptions RefreshCookieOptions(DateTime? expires)
+    {
         var isHttps = Request.IsHttps;
-        Response.Cookies.Append(RefreshTokenCookie, token.Token, new CookieOptions
+        return new CookieOptions
         {
             HttpOnly = true,
             Secure = isHttps,
             SameSite = isHttps ? SameSiteMode.Strict : SameSiteMode.Lax,
-            Expires = token.ExpiresAt
-        });
+            Path = RefreshTokenCookiePath,
+            Expires = expires,
+        };
     }
 
     private async Task<string> GenerateUniqueUsernameAsync(string email)
@@ -355,17 +354,5 @@ public class AuthController(AppDbContext db, IJwtService jwtService, IConfigurat
         }
 
         return $"{cleaned}_{Guid.NewGuid().ToString("N")[..6]}";
-    }
-
-    private async Task RevokeAllUserTokens(Guid userId)
-    {
-        var tokens = await db.RefreshTokens
-            .Where(rt => rt.UserId == userId && rt.RevokedAt == null)
-            .ToListAsync();
-
-        foreach (var t in tokens)
-            t.RevokedAt = DateTime.UtcNow;
-
-        await db.SaveChangesAsync();
     }
 }
