@@ -19,6 +19,34 @@ public class AiOptions
     /// 0 = kapalı (her zaman Ollama önce). Gemini kayıtlı değilse etkisizdir.
     /// </summary>
     public int LargeXsltGeminiThresholdChars { get; set; } = 64_000;
+
+    public VisionOptions Vision { get; set; } = new();
+}
+
+/// <summary>
+/// Sohbete ekran görüntüsü (vision) desteği. Görseller geçicidir: DB/storage'a yazılmaz, loglanmaz.
+/// Plan bazlı mesaj başına limit Membership'te (MaxAiImagesPerMessage); buradaki değerler teknik tavandır.
+/// </summary>
+public class VisionOptions
+{
+    /// <summary>Varsayılan kapalı. DB FeatureFlag (ai.vision_enabled) öncelikli.</summary>
+    public bool Enabled { get; set; }
+    /// <summary>Tercih "ollama" iken yerel vision modeli yoksa/çökerse Gemini'ye izin verilsin mi. DB FeatureFlag (ai.vision_gemini_fallback) öncelikli.</summary>
+    public bool GeminiFallback { get; set; } = true;
+    /// <summary>Mesaj başına teknik tavan (plan limiti bunu aşamaz).</summary>
+    public int MaxImagesPerMessage { get; set; } = 3;
+    /// <summary>Decode edilmiş görsel başına üst sınır (bayt).</summary>
+    public int MaxImageBytes { get; set; } = 1_572_864;
+    /// <summary>Mesajdaki tüm görsellerin decode edilmiş toplamı (bayt).</summary>
+    public int MaxTotalBytes { get; set; } = 4_194_304;
+    /// <summary>Uzun kenar üst sınırı (piksel). İstemci 1536'ya küçültür; bu sunucu tavanı.</summary>
+    public int MaxLongEdgePx { get; set; } = 2048;
+    /// <summary>Toplam piksel üst sınırı (decompression bomb koruması).</summary>
+    public int MaxPixels { get; set; } = 4_200_000;
+    /// <summary>Kotaya görsel başına eklenen yaklaşık token (girdi maliyeti). Yalnız çıktı üretildiyse eklenir.</summary>
+    public int TokenCostPerImage { get; set; } = 1000;
+    /// <summary>Kullanıcı başına dakikada görselli istek sınırı.</summary>
+    public int PerUserPerMinute { get; set; } = 10;
 }
 
 public class OllamaOptions
@@ -52,6 +80,23 @@ public class OllamaOptions
     public int MaxXmlChars { get; set; } = 8_000;
 
     public AiContextBudget ContextBudget => new(RawXsltThresholdChars, MaxXsltChars, MaxXmlChars);
+
+    /// <summary>
+    /// Görselli mesajlar için ayrı vision modeli (ör. "qwen2.5vl:3b"). Boş = Ollama görsel desteklemez.
+    /// Metin sohbeti her zaman <see cref="Model"/>'de kalır.
+    /// </summary>
+    public string VisionModel { get; set; } = string.Empty;
+    /// <summary>Vision modelinin RAM'de tutulma süresi; metin modelinden kısa tutulur.</summary>
+    public string VisionKeepAlive { get; set; } = "10m";
+    /// <summary>Görsel kodlama (CPU) + prefill yavaş; ilk token için daha uzun süre.</summary>
+    public int VisionFirstTokenTimeoutSeconds { get; set; } = 120;
+    /// <summary>Vision context window. Sabit kalmalı — değişirse Ollama modeli yeniden yükler.</summary>
+    public int VisionNumCtx { get; set; } = 16_384;
+    public int VisionRawXsltThresholdChars { get; set; } = 6_000;
+    public int VisionMaxXsltChars { get; set; } = 12_000;
+    public int VisionMaxXmlChars { get; set; } = 6_000;
+
+    public AiContextBudget VisionContextBudget => new(VisionRawXsltThresholdChars, VisionMaxXsltChars, VisionMaxXmlChars);
 }
 
 public class GeminiOptions

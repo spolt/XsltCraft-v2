@@ -26,6 +26,21 @@ public class IntentClassifierTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("selam")]
+    [InlineData("XSLT nedir?")]
+    public void Classify_withImage_isAlwaysCode(string input)
+    {
+        var req = new AiRequest
+        {
+            Task = AiTaskKind.Assistant,
+            UserRequest = input,
+            Images = [new AiImageInput("image/png", "AAAA", 1536, 864, 3)],
+        };
+        Assert.Equal(AiIntent.Code, IntentClassifier.Classify(req));
+    }
+
+    [Theory]
     [InlineData("XSLT nedir?")]
     [InlineData("XPath nasıl çalışır")]
     [InlineData("UBL fatura ne işe yarar?")]

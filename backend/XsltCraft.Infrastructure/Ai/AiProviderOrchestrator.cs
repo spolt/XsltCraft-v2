@@ -4,18 +4,21 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using XsltCraft.Application.Ai;
+using XsltCraft.Application.Ai.Vision;
 
 namespace XsltCraft.Infrastructure.Ai;
 
 /// <summary>
 /// Deterministik fallback: varsayılan Ollama → Gemini, tercih "gemini" ise Gemini → Ollama.
 /// Mid-stream fallback yok — ilk chunk geldikten sonra hata olursa kullanıcıya hata chunk'ı gönderilir.
+/// Görselli istekte sıra <see cref="IAiVisionAvailability"/>'den gelir (yalnız görseli işleyebilen sağlayıcılar).
 /// </summary>
 public class AiProviderOrchestrator
 {
     private readonly OllamaAssistantProvider _ollama;
     private readonly IReadOnlyList<IAiAssistantProvider> _others; // Ollama dışı sağlayıcılar
     private readonly IAiFeatureFlagService _flagService;
+    private readonly IAiVisionAvailability _vision;
     private readonly AiOptions _options;
     private readonly ILogger<AiProviderOrchestrator> _logger;
 
@@ -23,12 +26,14 @@ public class AiProviderOrchestrator
         OllamaAssistantProvider ollama,
         IEnumerable<IAiAssistantProvider> allProviders,
         IAiFeatureFlagService flagService,
+        IAiVisionAvailability vision,
         IOptions<AiOptions> options,
         ILogger<AiProviderOrchestrator> logger)
     {
         _ollama = ollama;
         _others = allProviders.Where(p => p.Name != ollama.Name).ToList();
         _flagService = flagService;
+        _vision = vision;
         _options = options.Value;
         _logger = logger;
     }
@@ -39,20 +44,21 @@ public class AiProviderOrchestrator
     {
         var prompt = PromptTemplates.Build(req);
 
-        var preferred = await _flagService.GetStringAsync("ai.preferred_provider", ct)
-                        ?? _options.PreferredProvider;
+        var providers = req.HasImages
+            ? await ResolveVisionProvidersAsync(ct)
+            : await ResolveTextProvidersAsync(req, ct);
 
-        // "auto" modda büyük XSLT → Gemini öncelikli (tam dosyayı görür); açık tercih kazanır.
-        var effective = ProviderRouting.Resolve(
-            preferred, req.Task, req.UserXslt?.Length ?? 0, _options.LargeXsltGeminiThresholdChars);
-        if (effective == "gemini" && preferred != "gemini")
-            _logger.LogInformation(
-                "Büyük XSLT ({Len} kr) → Gemini öncelikli yönlendirme (auto).", req.UserXslt?.Length ?? 0);
-
-        // "gemini" öncelikli: Gemini varsa önce dene, Ollama yedek.
-        List<IAiAssistantProvider> providers = effective == "gemini" && _others.Count > 0
-            ? [.. _others, _ollama]
-            : [(IAiAssistantProvider)_ollama, .. _others];
+        if (providers.Count == 0)
+        {
+            // Gate bunu zaten 400 ile keser; burası yarış durumu (bayrak arada kapandı) için güvenlik ağı.
+            yield return new AiChunk
+            {
+                Type = "error",
+                Code = AiVisionGate.CodeUnavailable,
+                Message = "Ekran görüntüsü analizi için uygun AI sağlayıcısı yok.",
+            };
+            yield break;
+        }
 
         Exception? lastError = null;
         for (int i = 0; i < providers.Count; i++)
@@ -121,5 +127,33 @@ public class AiProviderOrchestrator
             Code = code,
             Message = baseMsg + hint,
         };
+    }
+
+    private async Task<List<IAiAssistantProvider>> ResolveTextProvidersAsync(AiRequest req, CancellationToken ct)
+    {
+        var preferred = await _flagService.GetStringAsync(AiFlagKeys.PreferredProvider, ct)
+                        ?? _options.PreferredProvider;
+
+        // "auto" modda büyük XSLT → Gemini öncelikli (tam dosyayı görür); açık tercih kazanır.
+        var effective = ProviderRouting.Resolve(
+            preferred, req.Task, req.UserXslt?.Length ?? 0, _options.LargeXsltGeminiThresholdChars);
+        if (effective == "gemini" && preferred != "gemini")
+            _logger.LogInformation(
+                "Büyük XSLT ({Len} kr) → Gemini öncelikli yönlendirme (auto).", req.UserXslt?.Length ?? 0);
+
+        // "gemini" öncelikli: Gemini varsa önce dene, Ollama yedek.
+        return effective == "gemini" && _others.Count > 0
+            ? [.. _others, _ollama]
+            : [(IAiAssistantProvider)_ollama, .. _others];
+    }
+
+    private async Task<List<IAiAssistantProvider>> ResolveVisionProvidersAsync(CancellationToken ct)
+    {
+        IAiAssistantProvider[] all = [_ollama, .. _others];
+        var names = await _vision.ResolveProvidersAsync(ct);
+        return names
+            .Select(name => all.FirstOrDefault(p => p.Name == name))
+            .OfType<IAiAssistantProvider>()
+            .ToList();
     }
 }

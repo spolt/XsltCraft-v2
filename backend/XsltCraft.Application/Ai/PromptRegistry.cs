@@ -13,11 +13,14 @@ public static class PromptRegistry
 
     private static string? _identity;
     private static string? _constraints;
+    private static string? _vision;
     private static IReadOnlyDictionary<string, PromptPattern>? _patterns;
     private static readonly object PatternsLock = new();
 
     public static string Identity => _identity ??= LoadCore("Identity.md");
     public static string Constraints => _constraints ??= LoadCore("Constraints.md");
+    /// <summary>Yalnız görselli assistant isteğinde system mesajına eklenir (prompt-injection kuralları dahil).</summary>
+    public static string Vision => _vision ??= LoadCore("Vision.md");
 
     public static IReadOnlyDictionary<string, PromptPattern> Patterns
     {

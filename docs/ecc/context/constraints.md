@@ -39,8 +39,9 @@ dizinine göre çözülür. Parametresiz `Load(reader)` da kullanılmaz. Saxon y
 
 İlgili saldırı yüzeyleri: **XXE**, **XSLT/script injection**, **XPath injection** (kullanıcı XPath'i), **prompt injection** (AI asistanı), **SSRF**, **path traversal** (asset/storage), **file-upload** (extension+MIME+boyut), **IDOR** (asset/template sahipliği), JWT/refresh-token akışı.
 - Üretilen XSLT çıktısı `msxsl:script` / harici `document()` **içermemeli**.
-- Request boyut limitleri: `PreviewRaw` ~1MB, `ValidateXslt` ~512KB.
+- Request boyut limitleri: `PreviewRaw` ~1MB, `ValidateXslt` ~512KB, `AiAssistant` 8MB (görseller dahil; reverse proxy `client_max_body_size` hizalanmalı).
+- **AI ekran görüntüsü:** yalnız PNG/JPEG — magic byte beyan MIME ile eşleşmeli, APNG/SVG/GIF/WebP red; boyut başlıktan okunur (decode yok), ≤2048 px uzun kenar, ≤4.2 MP, görsel ≤1.5 MB, toplam ≤4 MB, mesaj başına plan limiti (Free 1 / Pro 3). Görseller **kalıcı değildir ve loglanmaz**; kota kontrolünden önce doğrulanır (`AiVisionGate`). Görselli feedback global örnek yapılamaz.
 
 ## Mimari değişmezler
-- `.xslt` ve görsel dosyalar DB'ye yazılmaz (storage + `storagePath`). Preview tamamen in-memory.
+- `.xslt` ve görsel dosyalar DB'ye yazılmaz (storage + `storagePath`). Preview tamamen in-memory. AI sohbet görselleri hiçbir yere yazılmaz (yalnız istek ömrü).
 - AI asistanı kullanıcı onayı olmadan otomatik insert yapmaz; insert öncesi `/api/preview/validate-xslt` ile sözdizimi kontrolü.

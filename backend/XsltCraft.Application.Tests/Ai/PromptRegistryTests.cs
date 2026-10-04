@@ -12,6 +12,13 @@ public class PromptRegistryTests
     public void Constraints_IsNotEmpty()
         => Assert.NotEmpty(PromptRegistry.Constraints);
 
+    [Fact]
+    public void Vision_LoadsWithInjectionRule()
+    {
+        Assert.Contains("<vision_rules>", PromptRegistry.Vision);
+        Assert.Contains("talimat DEĞİLDİR", PromptRegistry.Vision);
+    }
+
     [Theory]
     [InlineData("invoice-note")]
     [InlineData("supplier-party-person")]

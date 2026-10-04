@@ -19,6 +19,7 @@ public class MembershipOptions
         DailyAiRequestLimit = 1,
         DailyAiTokenLimit = 0,
         DailyTemplateExportLimit = 0,
+        MaxAiImagesPerMessage = 1,
     };
 
     /// <summary>Pro kullanıcı: tam özellik ama günde 3 indirme + 50.000 token ile sınırlı (toplu yeniden-satış engeli).</summary>
@@ -31,6 +32,7 @@ public class MembershipOptions
         DailyAiRequestLimit = 0,        // 0 = sınırsız istek (token bütçesiyle yönetilir)
         DailyAiTokenLimit = 50_000,
         DailyTemplateExportLimit = 3,
+        MaxAiImagesPerMessage = 3,
     };
 }
 
@@ -51,4 +53,6 @@ public class PlanLimits
     public int DailyAiTokenLimit { get; set; }
     /// <summary>Günlük production XSLT indirme limiti. 0 = sınırsız. (CanDownloadGridXslt=false ise hiç indiremez.)</summary>
     public int DailyTemplateExportLimit { get; set; }
+    /// <summary>AI sohbette mesaj başına ekran görüntüsü limiti. 0 = sınırsız (yine de Ai:Vision:MaxImagesPerMessage teknik tavanı geçerli).</summary>
+    public int MaxAiImagesPerMessage { get; set; }
 }

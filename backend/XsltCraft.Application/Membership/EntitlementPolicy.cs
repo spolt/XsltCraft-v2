@@ -37,7 +37,8 @@ public static class EntitlementPolicy
                 CanUsePremiumThemes: true,
                 DailyAiRequestLimit: 0,
                 DailyAiTokenLimit: 0,
-                DailyTemplateExportLimit: 0);
+                DailyTemplateExportLimit: 0,
+                MaxAiImagesPerMessage: 0);
         }
 
         var effectivePlan = EffectivePlan(plan, planExpiresAt, utcNow);
@@ -53,6 +54,7 @@ public static class EntitlementPolicy
             CanUsePremiumThemes: limits.CanUsePremiumThemes,
             DailyAiRequestLimit: limits.DailyAiRequestLimit,
             DailyAiTokenLimit: limits.DailyAiTokenLimit,
-            DailyTemplateExportLimit: limits.DailyTemplateExportLimit);
+            DailyTemplateExportLimit: limits.DailyTemplateExportLimit,
+            MaxAiImagesPerMessage: limits.MaxAiImagesPerMessage);
     }
 }

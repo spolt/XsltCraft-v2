@@ -18,6 +18,7 @@ namespace XsltCraft.Infrastructure.Ai;
 public class GeminiAssistantProvider : IAiAssistantProvider
 {
     public string Name => "gemini";
+    public bool SupportsVision => !string.IsNullOrWhiteSpace(_options.Gemini.ApiKey);
 
     private const string BaseEndpoint = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -25,7 +26,7 @@ public class GeminiAssistantProvider : IAiAssistantProvider
     private readonly AiOptions _options;
     private readonly ILogger<GeminiAssistantProvider> _logger;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
@@ -50,47 +51,7 @@ public class GeminiAssistantProvider : IAiAssistantProvider
             throw new AiProviderUnavailableException("gemini_no_key", "Gemini API key tanımlı değil.");
 
         var client = _httpClientFactory.CreateClient("gemini");
-
-        GeminiRequest payload;
-        if (req.Task == AiTaskKind.Assistant)
-        {
-            // 1M token pencere → TAM .xslt dosyası ham gönderilir; model şablonun tamamını bilir.
-            var providerMessages = PromptTemplates.BuildAssistant(req, cfg.ContextBudget);
-            var systemMsg = providerMessages.FirstOrDefault(m => m.Role == "system");
-            var contents = providerMessages
-                .Where(m => m.Role != "system")
-                .Select(m => new GeminiContent
-                {
-                    Role = m.Role == "assistant" ? "model" : "user",
-                    Parts = [new GeminiPart { Text = m.Content }],
-                })
-                .ToList();
-
-            payload = new GeminiRequest
-            {
-                SystemInstruction = systemMsg is null ? null : new GeminiContent
-                {
-                    Parts = [new GeminiPart { Text = systemMsg.Content }],
-                },
-                Contents = contents,
-                GenerationConfig = new GeminiGenerationConfig { MaxOutputTokens = cfg.MaxTokens },
-            };
-        }
-        else
-        {
-            payload = new GeminiRequest
-            {
-                Contents =
-                [
-                    new GeminiContent
-                    {
-                        Role = "user",
-                        Parts = [new GeminiPart { Text = prompt }],
-                    },
-                ],
-                GenerationConfig = new GeminiGenerationConfig { MaxOutputTokens = cfg.MaxTokens },
-            };
-        }
+        var payload = BuildPayload(req, prompt, cfg);
 
         var url = $"{BaseEndpoint}/{Uri.EscapeDataString(cfg.Model)}:streamGenerateContent?alt=sse&key={Uri.EscapeDataString(cfg.ApiKey)}";
 
@@ -196,25 +157,81 @@ public class GeminiAssistantProvider : IAiAssistantProvider
         response.Dispose();
     }
 
-    private sealed class GeminiRequest
+    /// <summary>İstek gövdesini kurar (saf; ağ yok) — payload testleri için ayrı.</summary>
+    internal static GeminiRequest BuildPayload(AiRequest req, string prompt, GeminiOptions cfg)
+    {
+        if (req.Task != AiTaskKind.Assistant)
+        {
+            return new GeminiRequest
+            {
+                Contents = [new GeminiContent { Role = "user", Parts = [new GeminiPart { Text = prompt }] }],
+                GenerationConfig = new GeminiGenerationConfig { MaxOutputTokens = cfg.MaxTokens },
+            };
+        }
+
+        // 1M token pencere → TAM .xslt dosyası ham gönderilir; model şablonun tamamını bilir.
+        var providerMessages = PromptTemplates.BuildAssistant(req, cfg.ContextBudget);
+        var systemMsg = providerMessages.FirstOrDefault(m => m.Role == "system");
+        var contents = providerMessages
+            .Where(m => m.Role != "system")
+            .Select(m => new GeminiContent
+            {
+                Role = m.Role == "assistant" ? "model" : "user",
+                Parts = BuildParts(m),
+            })
+            .ToList();
+
+        return new GeminiRequest
+        {
+            SystemInstruction = systemMsg is null ? null : new GeminiContent
+            {
+                Parts = [new GeminiPart { Text = systemMsg.Content }],
+            },
+            Contents = contents,
+            GenerationConfig = new GeminiGenerationConfig { MaxOutputTokens = cfg.MaxTokens },
+        };
+    }
+
+    /// <summary>Görseller metinden ÖNCE gelir (Gemini önerisi); görsel part'ında "text" alanı olmaz.</summary>
+    private static List<GeminiPart> BuildParts(ProviderMessage m)
+    {
+        var parts = new List<GeminiPart>();
+        if (m.Images is { Count: > 0 })
+            parts.AddRange(m.Images.Select(img => new GeminiPart
+            {
+                InlineData = new GeminiInlineData { MimeType = img.MimeType, Data = img.Base64 },
+            }));
+        parts.Add(new GeminiPart { Text = m.Content });
+        return parts;
+    }
+
+    internal sealed class GeminiRequest
     {
         [JsonPropertyName("system_instruction")] public GeminiContent? SystemInstruction { get; set; }
         [JsonPropertyName("contents")] public List<GeminiContent> Contents { get; set; } = new();
         [JsonPropertyName("generationConfig")] public GeminiGenerationConfig? GenerationConfig { get; set; }
     }
 
-    private sealed class GeminiContent
+    internal sealed class GeminiContent
     {
         [JsonPropertyName("role")] public string? Role { get; set; }
         [JsonPropertyName("parts")] public List<GeminiPart> Parts { get; set; } = new();
     }
 
-    private sealed class GeminiPart
+    internal sealed class GeminiPart
     {
-        [JsonPropertyName("text")] public string Text { get; set; } = string.Empty;
+        // Null olabilir: görsel part'ında "text" gönderilirse Gemini 400 döner (WhenWritingNull ile atlanır).
+        [JsonPropertyName("text")] public string? Text { get; set; }
+        [JsonPropertyName("inline_data")] public GeminiInlineData? InlineData { get; set; }
     }
 
-    private sealed class GeminiGenerationConfig
+    internal sealed class GeminiInlineData
+    {
+        [JsonPropertyName("mime_type")] public string MimeType { get; set; } = string.Empty;
+        [JsonPropertyName("data")] public string Data { get; set; } = string.Empty;
+    }
+
+    internal sealed class GeminiGenerationConfig
     {
         [JsonPropertyName("maxOutputTokens")] public int MaxOutputTokens { get; set; }
     }

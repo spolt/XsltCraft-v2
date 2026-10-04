@@ -7,4 +7,5 @@
   </Folder>
   <Project Path="XsltCraft.Tests/XsltCraft.Tests.csproj" />
   <Project Path="XsltCraft.Application.Tests/XsltCraft.Application.Tests.csproj" />
+  <Project Path="XsltCraft.Infrastructure.Tests/XsltCraft.Infrastructure.Tests.csproj" />
 </Solution>

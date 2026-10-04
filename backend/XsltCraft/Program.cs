@@ -12,6 +12,8 @@ using XsltCraft.Infrastructure.Persistence;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+// Docker HEALTHCHECK (`curl /health`) için liveness — süreç ayakta ve istek işliyor mu.
+builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddXsltCraft(builder.Configuration);
@@ -168,5 +170,6 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();

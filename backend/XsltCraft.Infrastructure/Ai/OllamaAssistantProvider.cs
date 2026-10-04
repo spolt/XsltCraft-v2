@@ -14,6 +14,7 @@ namespace XsltCraft.Infrastructure.Ai;
 public class OllamaAssistantProvider : IAiAssistantProvider
 {
     public string Name => "ollama";
+    public bool SupportsVision => !string.IsNullOrWhiteSpace(_options.Ollama.VisionModel);
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly AiOptions _options;
@@ -37,38 +38,9 @@ public class OllamaAssistantProvider : IAiAssistantProvider
         var ollama = _options.Ollama;
         var client = _httpClientFactory.CreateClient("ollama");
 
-        List<OllamaMessage> messages;
-        if (req.Task == AiTaskKind.Assistant)
-        {
-            // Küçük pencere (NumCtx) → özetlenmiş XSLT bütçesi.
-            var providerMessages = PromptTemplates.BuildAssistant(req, ollama.ContextBudget);
-            messages = providerMessages
-                .Where(m => m.Role != "system")
-                .Select(m => new OllamaMessage { Role = m.Role, Content = m.Content })
-                .ToList();
-            // Ollama'da system mesajı ayrı bir role olarak desteklenir
-            var systemMsg = providerMessages.FirstOrDefault(m => m.Role == "system");
-            if (systemMsg != null)
-                messages.Insert(0, new OllamaMessage { Role = "system", Content = systemMsg.Content });
-        }
-        else
-        {
-            messages = [new OllamaMessage { Role = "user", Content = prompt }];
-        }
-
-        var payload = new OllamaChatRequest
-        {
-            Model = ollama.Model,
-            Stream = true,
-            Messages = messages,
-            KeepAlive = ollama.KeepAlive,
-            Options = new OllamaChatOptions
-            {
-                NumPredict = ollama.MaxTokens,
-                NumCtx = ollama.NumCtx,
-                NumKeep = ollama.NumKeep,
-            },
-        };
+        var payload = BuildPayload(req, prompt, ollama);
+        var model = payload.Model; // metin ya da vision modeli — hata/done mesajlarında doğru adı raporla
+        var firstTokenTimeout = IsVisionRequest(req) ? ollama.VisionFirstTokenTimeoutSeconds : ollama.FirstTokenTimeoutSeconds;
 
         using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         connectCts.CancelAfter(TimeSpan.FromSeconds(ollama.ConnectTimeoutSeconds));
@@ -96,7 +68,7 @@ public class OllamaAssistantProvider : IAiAssistantProvider
             var body = await SafeReadAsync(response, ct);
             response.Dispose();
             if ((int)response.StatusCode == 404 || body.Contains("not found", StringComparison.OrdinalIgnoreCase))
-                throw new AiProviderUnavailableException("ollama_model_not_found", $"Ollama model '{ollama.Model}' bulunamadı.");
+                throw new AiProviderUnavailableException("ollama_model_not_found", $"Ollama model '{model}' bulunamadı.");
             throw new AiProviderUnavailableException("ollama_http_error", $"Ollama HTTP {(int)response.StatusCode}: {body}");
         }
 
@@ -104,7 +76,7 @@ public class OllamaAssistantProvider : IAiAssistantProvider
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
         using var firstTokenCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        firstTokenCts.CancelAfter(TimeSpan.FromSeconds(ollama.FirstTokenTimeoutSeconds));
+        firstTokenCts.CancelAfter(TimeSpan.FromSeconds(firstTokenTimeout));
 
         bool firstTokenReceived = false;
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -121,7 +93,7 @@ public class OllamaAssistantProvider : IAiAssistantProvider
             {
                 response.Dispose();
                 throw new AiProviderTimeoutException("ollama_first_token_timeout",
-                    $"Ollama ilk token {ollama.FirstTokenTimeoutSeconds} sn içinde gelmedi.");
+                    $"Ollama ilk token {firstTokenTimeout} sn içinde gelmedi.");
             }
 
             if (line is null) break;
@@ -151,7 +123,7 @@ public class OllamaAssistantProvider : IAiAssistantProvider
                 {
                     Type = "done",
                     Provider = Name,
-                    Model = ollama.Model,
+                    Model = model,
                     Ms = sw.ElapsedMilliseconds,
                 };
                 yield break;
@@ -161,19 +133,68 @@ public class OllamaAssistantProvider : IAiAssistantProvider
         response.Dispose();
     }
 
+    private static bool IsVisionRequest(AiRequest req) => req.Task == AiTaskKind.Assistant && req.HasImages;
+
+    /// <summary>
+    /// İstek gövdesini kurar (saf; ağ yok) — payload testleri için ayrı. Görselli istek ayrı vision
+    /// modeline, kendi bağlam bütçesi/num_ctx/keep_alive değerleriyle gider; metin sohbeti etkilenmez.
+    /// </summary>
+    internal static OllamaChatRequest BuildPayload(AiRequest req, string prompt, OllamaOptions ollama)
+    {
+        var vision = IsVisionRequest(req);
+
+        List<OllamaMessage> messages;
+        if (req.Task == AiTaskKind.Assistant)
+        {
+            // Küçük pencere (NumCtx) → özetlenmiş XSLT bütçesi; vision'da görsel token'ları için daha da küçük.
+            var providerMessages = PromptTemplates.BuildAssistant(req, vision ? ollama.VisionContextBudget : ollama.ContextBudget);
+            messages = providerMessages
+                .Where(m => m.Role != "system")
+                .Select(m => new OllamaMessage
+                {
+                    Role = m.Role,
+                    Content = m.Content,
+                    Images = m.Images is { Count: > 0 } ? m.Images.Select(i => i.Base64).ToList() : null,
+                })
+                .ToList();
+            // Ollama'da system mesajı ayrı bir role olarak desteklenir
+            var systemMsg = providerMessages.FirstOrDefault(m => m.Role == "system");
+            if (systemMsg != null)
+                messages.Insert(0, new OllamaMessage { Role = "system", Content = systemMsg.Content });
+        }
+        else
+        {
+            messages = [new OllamaMessage { Role = "user", Content = prompt }];
+        }
+
+        return new OllamaChatRequest
+        {
+            Model = vision ? ollama.VisionModel : ollama.Model,
+            Stream = true,
+            Messages = messages,
+            KeepAlive = vision ? ollama.VisionKeepAlive : ollama.KeepAlive,
+            Options = new OllamaChatOptions
+            {
+                NumPredict = ollama.MaxTokens,
+                NumCtx = vision ? ollama.VisionNumCtx : ollama.NumCtx,
+                NumKeep = ollama.NumKeep,
+            },
+        };
+    }
+
     private static async Task<string> SafeReadAsync(HttpResponseMessage r, CancellationToken ct)
     {
         try { return await r.Content.ReadAsStringAsync(ct); }
         catch { return string.Empty; }
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private sealed class OllamaChatRequest
+    internal sealed class OllamaChatRequest
     {
         public string Model { get; set; } = "";
         public bool Stream { get; set; }
@@ -185,13 +206,15 @@ public class OllamaAssistantProvider : IAiAssistantProvider
         public string? KeepAlive { get; set; }
     }
 
-    private sealed class OllamaMessage
+    internal sealed class OllamaMessage
     {
         public string Role { get; set; } = "";
         public string Content { get; set; } = "";
+        /// <summary>Base64 görseller (data: öneki yok). Yalnız vision modeline giden son user mesajında dolu.</summary>
+        public List<string>? Images { get; set; }
     }
 
-    private sealed class OllamaChatOptions
+    internal sealed class OllamaChatOptions
     {
         [JsonPropertyName("num_predict")]
         public int NumPredict { get; set; }

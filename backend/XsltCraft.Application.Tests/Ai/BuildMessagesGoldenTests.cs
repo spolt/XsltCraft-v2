@@ -100,4 +100,57 @@ public class BuildMessagesGoldenTests
         var messages = PromptTemplates.BuildMessages(req, AiMode.Assistant);
         return Verifier.Verify(messages).UseDirectory("__snapshots__");
     }
+
+    // ── Vision (ekran görüntüsü) ─────────────────────────────────────────────
+    // Base64 kısa sahte değer: BuildMessages doğrulama yapmaz; snapshot'ta blob tutulmaz.
+
+    private static readonly AiImageInput Screenshot = new("image/png", "iVBORw0KGgo=", 1536, 864, 8);
+
+    [Fact]
+    public Task Assistant_WithImage_FirstTurn()
+    {
+        var req = new AiRequest
+        {
+            Task = AiTaskKind.Assistant,
+            UserRequest = "toplamlar tablosu bu görüntüdeki gibi sağa hizalı olsun",
+            UserXslt = SimpleXslt,
+            History = [],
+            Images = [Screenshot],
+        };
+        var messages = PromptTemplates.BuildMessages(req, AiMode.Assistant);
+        return Verifier.Verify(messages).UseDirectory("__snapshots__");
+    }
+
+    [Fact]
+    public Task Assistant_ImageOnly_EmptyText()
+    {
+        var req = new AiRequest
+        {
+            Task = AiTaskKind.Assistant,
+            UserRequest = "",
+            UserXslt = SimpleXslt,
+            History = [],
+            Images = [Screenshot, Screenshot with { MimeType = "image/jpeg", Width = 1280, Height = 720 }],
+        };
+        var messages = PromptTemplates.BuildMessages(req, AiMode.Assistant);
+        return Verifier.Verify(messages).UseDirectory("__snapshots__");
+    }
+
+    [Fact]
+    public Task Assistant_History_ImagePlaceholder()
+    {
+        var req = new AiRequest
+        {
+            Task = AiTaskKind.Assistant,
+            UserRequest = "şimdi alıcı bloğunu da aynı hizaya getir",
+            UserXslt = SimpleXslt,
+            History =
+            [
+                new AssistantMessage("user",      "", ImageCount: 1),
+                new AssistantMessage("assistant", "Görüntüde toplamlar sağa hizalı; LegalMonetaryTotal tablosuna text-align:right ekleyin."),
+            ],
+        };
+        var messages = PromptTemplates.BuildMessages(req, AiMode.Assistant);
+        return Verifier.Verify(messages).UseDirectory("__snapshots__");
+    }
 }

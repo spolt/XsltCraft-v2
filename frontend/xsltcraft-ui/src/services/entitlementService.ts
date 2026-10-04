@@ -18,6 +18,8 @@ export interface Entitlements {
   dailyAiRequestLimit: number
   dailyAiTokenLimit: number
   dailyTemplateExportLimit: number
+  /** AI sohbette mesaj başına ekran görüntüsü. 0 = yalnız teknik tavan. */
+  maxAiImagesPerMessage?: number
   usage: DailyUsage
 }
 
@@ -68,6 +70,13 @@ export async function parseGateError(err: unknown): Promise<GateError> {
 export function exportsRemaining(e: Entitlements | null): number | null {
   if (!e || e.isPrivileged || e.dailyTemplateExportLimit === 0) return null
   return Math.max(0, e.dailyTemplateExportLimit - e.usage.templateExportCount)
+}
+
+/** Mesaj başına ekran görüntüsü limiti (plan ∩ teknik tavan). Yüklenmemişse en kısıtlı (1) varsayılır; sunucu otoritatif. */
+export function aiImagesPerMessage(e: Entitlements | null, technicalCap: number): number {
+  const plan = e?.maxAiImagesPerMessage
+  if (plan === undefined) return 1
+  return plan > 0 ? Math.min(plan, technicalCap) : technicalCap
 }
 
 /** Free'nin günlük AI soru hakkından kalan; sınırsızsa null. */

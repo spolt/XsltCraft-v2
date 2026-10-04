@@ -34,6 +34,7 @@ public class MeController(IEntitlementService entitlements, IUsageQuotaService q
             ent.DailyAiRequestLimit,
             ent.DailyAiTokenLimit,
             ent.DailyTemplateExportLimit,
+            ent.MaxAiImagesPerMessage,
             new DailyUsageResponse(usage.AiRequestCount, usage.AiTokensUsed, usage.TemplateExportCount)));
     }
 }
@@ -50,6 +51,7 @@ public record EntitlementsResponse(
     int DailyAiRequestLimit,
     int DailyAiTokenLimit,
     int DailyTemplateExportLimit,
+    int MaxAiImagesPerMessage,
     DailyUsageResponse Usage);
 
 public record DailyUsageResponse(int AiRequestCount, int AiTokensUsed, int TemplateExportCount);

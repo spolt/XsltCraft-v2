@@ -10,6 +10,10 @@ import {
 
 type RatingFilter = 'positive' | 'negative' | 'all'
 
+/** Görselli soru işareti (backend AiFeedbackMarkers.ImageAttached) — bu kayıtlar global yapılamaz. */
+const IMAGE_MARKER = '[ekran görüntüsü ekli]'
+const hasImage = (item: AdminAiFeedbackItem) => item.userMessage.includes(IMAGE_MARKER)
+
 export default function AdminAiFeedbackPage() {
   const [items, setItems] = useState<AdminAiFeedbackItem[]>([])
   const [total, setTotal] = useState(0)
@@ -183,7 +187,10 @@ export default function AdminAiFeedbackPage() {
                         {item.rating === 'Positive' && (
                           <button
                             onClick={() => toggleGlobal(item)}
-                            disabled={busyId === item.id}
+                            disabled={busyId === item.id || (!item.isGlobal && hasImage(item))}
+                            title={!item.isGlobal && hasImage(item)
+                              ? 'Ekran görüntülü sorular global yapılamaz: cevap görseldeki kullanıcıya özel verileri içerebilir.'
+                              : undefined}
                             className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition disabled:opacity-40 ${
                               item.isGlobal
                                 ? 'text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
