@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-10-04
+
+### Security
+- **Asset yüklemede stored XSS kapatıldı**: `POST /api/assets/upload` SVG kabul ediyor ve `GET /api/assets/{id}/serve` dosyayı **istemcinin yükleme sırasında beyan ettiği `Content-Type`** ile, **anonim** ve API ile **aynı origin**'den servis ediyordu. Script içeren bir SVG — ya da SVG olmasa bile `text/html` beyanlı bir ".png" — doğrudan URL'de açıldığında API origin'inde çalışabiliyordu; bu origin refresh-token cookie'sini (`Path=/api/auth`) taşıdığı için oturum ele geçirilebilirdi.
+  - Yeni ortak `Application/Imaging/ImageUpload`: yalnız **PNG/JPG/JPEG**; içerik (magic byte) uzantıyla eşleşmeli; boyut başlıktan okunur (uzun kenar ≤ 8000 px). **MIME ve dosya uzantısı istemci beyanından değil içerikten** türetilir ve saklanır.
+  - `Serve`: MIME DB'deki (eski kayıtlarda istemci beyanı) değerden değil, sunucunun yazdığı dosya uzantısından (`ImageUpload.ServeMimeType`); `X-Content-Type-Options: nosniff` + `Content-Security-Policy: …; sandbox` her yanıtta. Tanınmayan uzantı `application/octet-stream` + indirme olarak döner. **Daha önce yüklenmiş SVG asset'ler** silinmedi; görsel olarak çalışmaya devam eder ama doğrudan açıldığında sandbox'ta script çalıştıramaz.
+  - Önizlemede asset'lerin base64 gömülmesi (`PreviewController`) de aynı sunucu-türevli MIME'ı kullanıyor.
+- **Tema thumbnail yüklemesi** (`AdminController`) aynı kurala bağlandı: GIF ve SVG kaldırıldı, yalnız PNG/JPG/JPEG + içerik doğrulaması (önceden yalnız uzantı + istemci MIME'ı).
+
+### Changed
+- Editör görsel bloğunda dosya seçici yalnız PNG/JPG/JPEG gösteriyor; yükleme hatasında sunucunun nedeni ("içerik uzantıyla uyuşmuyor" vb.) görünüyor.
+- Tarayıcı-içi gömülen logolar (Tema kullan, Dev Mode, Logo diyaloğu — sunucuya yüklenmez, `<img>` data URI olarak XSLT'ye girer) değişmedi; SVG logo orada desteklenmeye devam ediyor.
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.11.1 → 1.11.2`.
+
+### Tests
+- `ImageUploadTests` (21): PNG/JPEG kabulü ve kanonik MIME/uzantı, SVG/GIF/WebP/HTML/uzantısız red, **SVG ve HTML içeriğin ".png"/".jpg" adıyla reddi**, JPEG-içerik/PNG-uzantı uyuşmazlığı, boyut bombası, boş dosya, saklanan uzantıdan servis MIME'ı. `Faz5Tests` asset uzantı listesi kopya sabit yerine gerçek politikaya bağlandı (`.svg` → reddedilir).
+
 ## [1.11.1] - 2026-10-04
 
 ### Fixed

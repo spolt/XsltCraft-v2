@@ -19,14 +19,14 @@ public class Faz5Tests
     // GG1 — Asset upload: validasyon sabitleri
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private static readonly string[] AllowedAssetExtensions = [".png", ".jpg", ".jpeg", ".svg"];
+    private static readonly IReadOnlyList<string> AllowedAssetExtensions = XsltCraft.Application.Imaging.ImageUpload.AllowedExtensions;
     private const long MaxAssetBytes = 5 * 1024 * 1024; // 5 MB
 
     [Theory]
     [InlineData(".png", true)]
     [InlineData(".jpg", true)]
     [InlineData(".jpeg", true)]
-    [InlineData(".svg", true)]
+    [InlineData(".svg", false)] // 1.11.2: SVG kapatıldı (aynı origin'den servis → stored XSS)
     [InlineData(".PNG", false)] // case-sensitive (controller ToLower uygular)
     [InlineData(".gif", false)]
     [InlineData(".exe", false)]

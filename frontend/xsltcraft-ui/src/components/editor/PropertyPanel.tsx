@@ -558,8 +558,10 @@ function ImagePanel({ config, update }: { config: Config<'Image'>; update: Updat
     try {
       const result = await uploadAsset(file, config.assetType)
       update({ assetId: result.id })
-    } catch {
-      setUploadError('Yükleme başarısız.')
+    } catch (err) {
+      // Sunucu nedeni (ör. "Yalnızca PNG, JPG ve JPEG…", "içerik uzantıyla uyuşmuyor") gösterilsin.
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setUploadError(message ?? 'Yükleme başarısız.')
     } finally {
       setUploading(false)
       e.target.value = ''
@@ -586,7 +588,7 @@ function ImagePanel({ config, update }: { config: Config<'Image'>; update: Updat
 
       {/* Asset yükleme */}
       <Field label="Görsel">
-        <input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,.svg" className="hidden" onChange={handleFileChange} />
+        <input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" className="hidden" onChange={handleFileChange} />
         {config.assetId ? (
           <div className="flex flex-col gap-1">
             <img

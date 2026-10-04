@@ -39,6 +39,7 @@ dizinine göre çözülür. Parametresiz `Load(reader)` da kullanılmaz. Saxon y
 
 İlgili saldırı yüzeyleri: **XXE**, **XSLT/script injection**, **XPath injection** (kullanıcı XPath'i), **prompt injection** (AI asistanı), **SSRF**, **path traversal** (asset/storage), **file-upload** (extension+MIME+boyut), **IDOR** (asset/template sahipliği), JWT/refresh-token akışı.
 - Üretilen XSLT çıktısı `msxsl:script` / harici `document()` **içermemeli**.
+- **Sunucuda saklanan görseller** (asset, tema thumbnail'i): yalnız PNG/JPG/JPEG, `ImageUpload.Validate` (magic byte = uzantı, boyut başlıktan); MIME/uzantı içerikten türetilir — istemci `Content-Type`'ı saklanmaz/servis edilmez. `assets/{id}/serve` MIME'ı uzantıdan alır + `nosniff` + sandbox CSP. SVG yalnız tarayıcı-içi data URI logolarda (sunucuya yüklenmez).
 - Request boyut limitleri: `PreviewRaw` ~1MB, `ValidateXslt` ~512KB, `AiAssistant` 8MB (görseller dahil; reverse proxy `client_max_body_size` hizalanmalı).
 - **AI ekran görüntüsü:** yalnız PNG/JPEG — magic byte beyan MIME ile eşleşmeli, APNG/SVG/GIF/WebP red; boyut başlıktan okunur (decode yok), ≤2048 px uzun kenar, ≤4.2 MP, görsel ≤1.5 MB, toplam ≤4 MB, mesaj başına plan limiti (Free 1 / Pro 3). Görseller **kalıcı değildir ve loglanmaz**; kota kontrolünden önce doğrulanır (`AiVisionGate`). Görselli feedback global örnek yapılamaz.
 

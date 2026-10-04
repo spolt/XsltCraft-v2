@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Application.DTO;
+using XsltCraft.Application.Imaging;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
@@ -20,8 +21,6 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
     private const long MaxFileSizeBytes = 2 * 1024 * 1024; // 2 MB
     private const long MaxThumbnailSizeBytes = 1 * 1024 * 1024; // 1 MB
 
-    private static readonly string[] AllowedThumbnailExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg"];
-    private static readonly string[] AllowedThumbnailMimeTypes = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
 
     // POST /api/admin/themes
     [HttpPost("themes")]
@@ -48,14 +47,13 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         string? thumbnailUrl = null;
         if (thumbnailFile is not null)
         {
-            var thumbError = ValidateThumbnailFile(thumbnailFile);
+            var (thumbBytes, thumb, thumbError) = await ReadThumbnailAsync(thumbnailFile);
             if (thumbError is not null)
                 return BadRequest(new { message = thumbError });
 
-            var thumbExt = Path.GetExtension(thumbnailFile.FileName).ToLowerInvariant();
-            var thumbPath = $"themes/thumbnails/{themeId}{thumbExt}";
-            await using var thumbStream = thumbnailFile.OpenReadStream();
-            await storage.WriteAsync(thumbStream, thumbPath, thumbnailFile.ContentType);
+            var thumbPath = $"themes/thumbnails/{themeId}{thumb!.Extension}";
+            await using var thumbStream = new MemoryStream(thumbBytes!, writable: false);
+            await storage.WriteAsync(thumbStream, thumbPath, thumb.MimeType);
             thumbnailUrl = thumbPath;
         }
 
@@ -278,22 +276,21 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
 
     // -------------------------------------------------------
 
-    private static string? ValidateThumbnailFile(IFormFile file)
+    /// <summary>Thumbnail: yalnız PNG/JPG/JPEG, içerik uzantıyla eşleşmeli (ortak <see cref="ImageUpload"/> kuralı).</summary>
+    private static async Task<(byte[]? Bytes, ImageUploadResult? Image, string? Error)> ReadThumbnailAsync(IFormFile file)
     {
         if (file.Length == 0)
-            return "Thumbnail dosyası boş olamaz.";
-
+            return (null, null, "Thumbnail dosyası boş olamaz.");
         if (file.Length > MaxThumbnailSizeBytes)
-            return "Thumbnail boyutu 1 MB sınırını aşıyor.";
+            return (null, null, "Thumbnail boyutu 1 MB sınırını aşıyor.");
 
-        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!AllowedThumbnailExtensions.Contains(ext))
-            return "Thumbnail için yalnızca PNG, JPG, GIF ve SVG dosyaları kabul edilir.";
+        await using var input = file.OpenReadStream();
+        using var ms = new MemoryStream((int)file.Length);
+        await input.CopyToAsync(ms);
+        var bytes = ms.ToArray();
 
-        if (!AllowedThumbnailMimeTypes.Contains(file.ContentType.ToLowerInvariant()))
-            return "Geçersiz thumbnail MIME türü.";
-
-        return null;
+        var image = ImageUpload.Validate(bytes, file.FileName);
+        return image.IsValid ? (bytes, image, null) : (null, null, $"Thumbnail: {image.Error}");
     }
 
     private static readonly string[] AllowedXsltMimeTypes =
