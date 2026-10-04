@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 using XsltCraft.Application.Auth;
 using XsltCraft.Application.Interfaces;
@@ -13,6 +14,7 @@ using XsltCraft.Application.XPath;
 using XsltCraft.Application.Xslt;
 
 using XsltCraft.Application.Ai;
+using XsltCraft.Application.Ai.Vision;
 
 using XsltCraft.Infrastructure.Ai;
 using XsltCraft.Infrastructure.Auth;
@@ -148,6 +150,18 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAiProviderHealthService, AiProviderHealthService>();
         services.AddScoped<IAiFeedbackService, AiFeedbackService>();
         services.AddScoped<IAiExemplarService, AiExemplarService>();
+
+        // Vision (ekran görüntüsü): Application servisleri IOptions almaz → POCO factory ile.
+        services.AddSingleton<IAiImageValidator>(sp =>
+            new AiImageValidator(sp.GetRequiredService<IOptions<AiOptions>>().Value.Vision));
+        services.AddSingleton<IAiVisionThrottle, AiVisionThrottle>();
+        services.AddScoped<IAiVisionAvailability, AiVisionRouter>();
+        services.AddScoped<IAiVisionGate>(sp => new AiVisionGate(
+            sp.GetRequiredService<IAiVisionAvailability>(),
+            sp.GetRequiredService<IEntitlementService>(),
+            sp.GetRequiredService<IAiVisionThrottle>(),
+            sp.GetRequiredService<IAiImageValidator>(),
+            sp.GetRequiredService<IOptions<AiOptions>>().Value.Vision));
 
         return services;
     }

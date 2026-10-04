@@ -7,6 +7,7 @@ import {
   getAiUsage, type AiUsageEntry,
 } from '../../services/aiAssistantService'
 import { useAiStore } from '../../store/aiStore'
+import AiVisionCard from './AiVisionCard'
 
 export default function AdminAiPage() {
   const [enabled, setEnabled] = useState<boolean | null>(null)
@@ -203,6 +204,9 @@ export default function AdminAiPage() {
           Otomatik: Ollama → Gemini sırasıyla denenir. Gemini seçildiğinde cloud önce denenir, Ollama yedek kalır. DB'ye yazıldığından restart gerekmez.
         </div>
       </div>
+
+      {/* Ekran görüntüsü (vision) — sıra sağlayıcı tercihine bağlı olduğu için tercihle yenilenir */}
+      <AiVisionCard providerPreference={provider} />
 
       {/* Provider health */}
       <div className="border border-gray-200 rounded-xl bg-white p-5 space-y-3">

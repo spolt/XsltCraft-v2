@@ -6,7 +6,14 @@ public enum AiTaskKind
     Assistant,
 }
 
-public record AssistantMessage(string Role, string Content);
+/// <param name="ImageCount">Bu geçmiş mesaja eklenmiş görsel sayısı. Görseller yeniden gönderilmez; prompt'ta yer tutucu olarak geçer.</param>
+public record AssistantMessage(string Role, string Content, int ImageCount = 0);
+
+/// <summary>
+/// Doğrulanmış (magic-byte + boyut) ve kanonik base64'e çevrilmiş görsel. Sağlayıcılar base64 istediği
+/// için byte yerine base64 taşınır (ikinci kodlama yok). Geçicidir: DB/storage/log'a yazılmaz.
+/// </summary>
+public record AiImageInput(string MimeType, string Base64, int Width, int Height, int ByteLength);
 
 public class AiRequest
 {
@@ -21,6 +28,9 @@ public class AiRequest
     public List<AssistantMessage>? History { get; set; }
     /// <summary>Geçmiş başarılı örnekler (few-shot). Prompt'ta system'a değil ilk user bağlamına enjekte edilir.</summary>
     public List<AiExemplar>? Exemplars { get; set; }
+    /// <summary>Yalnız mevcut turun görselleri (doğrulanmış). Null/boş = metin-only istek.</summary>
+    public List<AiImageInput>? Images { get; set; }
+    public bool HasImages => Images is { Count: > 0 };
     public int MaxTokens { get; set; } = 2048;
 }
 
@@ -57,5 +67,7 @@ public class AiChunk
 public interface IAiAssistantProvider
 {
     string Name { get; }
+    /// <summary>Görsel girdiyi işleyebilir mi (Gemini: evet; Ollama: yalnız VisionModel tanımlıysa).</summary>
+    bool SupportsVision { get; }
     IAsyncEnumerable<AiChunk> StreamAsync(AiRequest req, string prompt, CancellationToken ct);
 }

@@ -1,18 +1,19 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY XsltCraft.slnx ./
-COPY XsltCraft/XsltCraft.csproj XsltCraft/
+# Yalnız API ve bağımlı projeler restore edilir (test projeleri imaja girmez; slnx'i restore etmek
+# kopyalanmayan test csproj'ları yüzünden kırılıyordu). Katman önbelleği: önce csproj, sonra kaynak.
+COPY XsltCraft/XsltCraft.Api.csproj XsltCraft/
 COPY XsltCraft.Application/XsltCraft.Application.csproj XsltCraft.Application/
 COPY XsltCraft.Domain/XsltCraft.Domain.csproj XsltCraft.Domain/
 COPY XsltCraft.Infrastructure/XsltCraft.Infrastructure.csproj XsltCraft.Infrastructure/
-COPY XsltCraft.Tests/XsltCraft.Tests.csproj XsltCraft.Tests/
 
-RUN dotnet restore XsltCraft.slnx
+RUN dotnet restore XsltCraft/XsltCraft.Api.csproj
 
+# bin/obj, test projeleri ve appsettings.Development.json (.dockerignore) kopyalanmaz.
 COPY . .
 
-RUN dotnet publish XsltCraft/XsltCraft.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish XsltCraft/XsltCraft.Api.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app

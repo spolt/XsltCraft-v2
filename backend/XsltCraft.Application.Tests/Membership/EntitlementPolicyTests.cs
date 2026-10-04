@@ -29,6 +29,7 @@ public class EntitlementPolicyTests
         Assert.Equal(1, e.DailyAiRequestLimit);     // günde 1 soru
         Assert.Equal(0, e.DailyAiTokenLimit);        // 0 = sınırsız (tek soru zaten sınırlı)
         Assert.Equal(0, e.DailyTemplateExportLimit); // indirme yok (CanDownloadGridXslt=false)
+        Assert.Equal(1, e.MaxAiImagesPerMessage);    // mesaj başına 1 ekran görüntüsü
     }
 
     [Fact]
@@ -45,6 +46,7 @@ public class EntitlementPolicyTests
         Assert.Equal(0, e.DailyAiRequestLimit);       // sınırsız istek (token bütçesiyle yönetilir)
         Assert.Equal(50_000, e.DailyAiTokenLimit);    // 50k token/gün
         Assert.Equal(3, e.DailyTemplateExportLimit);  // 3 indirme/gün
+        Assert.Equal(3, e.MaxAiImagesPerMessage);     // mesaj başına 3 ekran görüntüsü
     }
 
     [Fact]
@@ -94,6 +96,7 @@ public class EntitlementPolicyTests
         Assert.Equal(0, e.DailyAiRequestLimit);       // 0 = sınırsız
         Assert.Equal(0, e.DailyAiTokenLimit);
         Assert.Equal(0, e.DailyTemplateExportLimit);
+        Assert.Equal(0, e.MaxAiImagesPerMessage);     // 0 = yalnız teknik tavan
     }
 
     [Theory]

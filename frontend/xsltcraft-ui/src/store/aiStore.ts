@@ -3,6 +3,8 @@ import { getAiStatus } from '../services/aiAssistantService'
 
 interface AiState {
   enabled: boolean | null  // null => henüz sorgulanmadı
+  /** Sohbete ekran görüntüsü eklenebilir mi (admin vision açık + uygun sağlayıcı var). */
+  vision: boolean
   loading: boolean
   refresh: () => Promise<void>
   setEnabled: (v: boolean) => void
@@ -10,15 +12,16 @@ interface AiState {
 
 export const useAiStore = create<AiState>((set, get) => ({
   enabled: null,
+  vision: false,
   loading: false,
   refresh: async () => {
     if (get().loading) return
     set({ loading: true })
     try {
-      const { enabled } = await getAiStatus()
-      set({ enabled, loading: false })
+      const { enabled, vision } = await getAiStatus()
+      set({ enabled, vision: !!vision, loading: false })
     } catch {
-      set({ enabled: false, loading: false })
+      set({ enabled: false, vision: false, loading: false })
     }
   },
   setEnabled: (v) => set({ enabled: v }),

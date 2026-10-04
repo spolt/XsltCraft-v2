@@ -16,10 +16,14 @@ export interface AiChunk {
   ms?: number
   code?: string
   message?: string
+  /** HTTP hata yanıtındaki sunucu hata kodu (ör. image_count, vision_unavailable). */
+  reason?: string
 }
 
 export interface AiStatus {
   enabled: boolean
+  /** Ekran görüntüsü gönderilebilir mi (vision açık + uygun sağlayıcı var). */
+  vision?: boolean
 }
 
 export async function getAiStatus(): Promise<AiStatus> {
@@ -29,7 +33,15 @@ export async function getAiStatus(): Promise<AiStatus> {
 
 export interface RefactorSelectionBody { xslt?: string; selection: string; goal?: string }
 
-export interface AssistantMessage { role: 'user' | 'assistant'; content: string }
+export interface AssistantMessage {
+  role: 'user' | 'assistant'
+  content: string
+  /** Bu geçmiş mesaja eklenmiş görsel sayısı — görseller yeniden gönderilmez, yalnız varlığı bildirilir. */
+  imageCount?: number
+}
+
+/** Ekran görüntüsü: base64 (data: öneki yok). Yalnız mevcut turda gönderilir. */
+export interface AssistantImage { mimeType: 'image/png' | 'image/jpeg'; data: string }
 
 export interface AssistantBody {
   xslt: string
@@ -41,6 +53,7 @@ export interface AssistantBody {
   xsltCursorLine?: number
   history: AssistantMessage[]
   message: string
+  images?: AssistantImage[]
 }
 
 type Body = RefactorSelectionBody | AssistantBody
@@ -75,11 +88,13 @@ export async function streamAi(
 
   if (!res.ok) {
     let message = `AI isteği başarısız (${res.status}).`
+    let reason: string | undefined
     try {
       const data = await res.json()
       message = data?.message ?? data?.error ?? message
+      reason = data?.error
     } catch { /* ignore */ }
-    onChunk({ type: 'error', code: `http_${res.status}`, message })
+    onChunk({ type: 'error', code: `http_${res.status}`, message, reason })
     return
   }
 
@@ -202,6 +217,27 @@ export async function getAiProvider(): Promise<{ provider: string }> {
 
 export async function setAiProvider(provider: string): Promise<void> {
   await api.put('/api/admin/feature-flags/ai/provider', { provider })
+}
+
+// Admin — ekran görüntüsü (vision)
+export interface AiVisionStatus {
+  enabled: boolean
+  /** Tercih "ollama" iken yerel vision modeli yoksa/hata verirse Gemini'ye izin. */
+  geminiFallback: boolean
+  /** appsettings Ai:Ollama:VisionModel; null = tanımlı değil. */
+  ollamaVisionModel: string | null
+  /** Görselli isteğin etkin sağlayıcı sırası; boş = kullanılamıyor. */
+  providers: string[]
+}
+
+export async function getAiVision(): Promise<AiVisionStatus> {
+  const { data } = await api.get<AiVisionStatus>('/api/admin/feature-flags/ai/vision')
+  return data
+}
+
+export async function setAiVision(patch: { enabled?: boolean; geminiFallback?: boolean }): Promise<AiVisionStatus> {
+  const { data } = await api.put<AiVisionStatus>('/api/admin/feature-flags/ai/vision', patch)
+  return data
 }
 
 // Admin — daily token usage

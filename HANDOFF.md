@@ -346,6 +346,23 @@ Geliştirme makinesinde Ollama çalışmıyorsa AI istekleri `provider_unavailab
 
 `Gemini:Enabled: true` olduğunda DI'a kaydedilir; orchestrator Ollama'ya ulaşamadığında veya ilk token gelmediğinde **otomatik** Gemini'ye düşer. Gemini kapalıyken Ollama erişilemezse kullanıcıya net hata chunk'ı gönderilir. (Kayıtlı sağlayıcılar: `OllamaAssistantProvider` + `GeminiAssistantProvider` — Anthropic sağlayıcısı kodda yoktur.)
 
+### Ekran görüntüsü (vision, 1.11.0)
+
+Sohbete PNG/JPG ekran görüntüsü eklenebilir (📎, Ctrl+V, sürükle-bırak). Metin sohbeti `Model`'de kalır; görselli mesajlar ayrı vision modeline gider:
+
+```bash
+ollama pull qwen2.5vl:3b
+```
+
+```jsonc
+"Ai": {
+  "Vision": { "Enabled": false, "GeminiFallback": true },   // admin UI DB'ye yazar
+  "Ollama": { "VisionModel": "qwen2.5vl:3b" }               // boş = Ollama görsel desteklemez
+}
+```
+
+Ollama sunucusunda iki model birlikte kalsın (18 GB RAM): `OLLAMA_MAX_LOADED_MODELS=2`, `OLLAMA_NUM_PARALLEL=1` (Windows: `setx` + Ollama'yı yeniden başlat; Linux: `systemctl edit ollama` → `Environment=`). Admin → AI Asistan → **Ekran Görüntüsü (Vision)** kartından açılır; tercih "Ollama" iken Gemini istisnası aynı karttan yönetilir. Görseller saklanmaz/loglanmaz; Gemini'ye giderse o istek için Google'a iletilir.
+
 ### Açma/kapatma (admin)
 
 Backend ayağa kalktıktan sonra:

@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-10-04
+
+### Security
+- **Asset yüklemede stored XSS kapatıldı**: `POST /api/assets/upload` SVG kabul ediyor ve `GET /api/assets/{id}/serve` dosyayı **istemcinin yükleme sırasında beyan ettiği `Content-Type`** ile, **anonim** ve API ile **aynı origin**'den servis ediyordu. Script içeren bir SVG — ya da SVG olmasa bile `text/html` beyanlı bir ".png" — doğrudan URL'de açıldığında API origin'inde çalışabiliyordu; bu origin refresh-token cookie'sini (`Path=/api/auth`) taşıdığı için oturum ele geçirilebilirdi.
+  - Yeni ortak `Application/Imaging/ImageUpload`: yalnız **PNG/JPG/JPEG**; içerik (magic byte) uzantıyla eşleşmeli; boyut başlıktan okunur (uzun kenar ≤ 8000 px). **MIME ve dosya uzantısı istemci beyanından değil içerikten** türetilir ve saklanır.
+  - `Serve`: MIME DB'deki (eski kayıtlarda istemci beyanı) değerden değil, sunucunun yazdığı dosya uzantısından (`ImageUpload.ServeMimeType`); `X-Content-Type-Options: nosniff` + `Content-Security-Policy: …; sandbox` her yanıtta. Tanınmayan uzantı `application/octet-stream` + indirme olarak döner. **Daha önce yüklenmiş SVG asset'ler** silinmedi; görsel olarak çalışmaya devam eder ama doğrudan açıldığında sandbox'ta script çalıştıramaz.
+  - Önizlemede asset'lerin base64 gömülmesi (`PreviewController`) de aynı sunucu-türevli MIME'ı kullanıyor.
+- **Tema thumbnail yüklemesi** (`AdminController`) aynı kurala bağlandı: GIF ve SVG kaldırıldı, yalnız PNG/JPG/JPEG + içerik doğrulaması (önceden yalnız uzantı + istemci MIME'ı).
+
+### Changed
+- Editör görsel bloğunda dosya seçici yalnız PNG/JPG/JPEG gösteriyor; yükleme hatasında sunucunun nedeni ("içerik uzantıyla uyuşmuyor" vb.) görünüyor.
+- Tarayıcı-içi gömülen logolar (Tema kullan, Dev Mode, Logo diyaloğu — sunucuya yüklenmez, `<img>` data URI olarak XSLT'ye girer) değişmedi; SVG logo orada desteklenmeye devam ediyor.
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.11.1 → 1.11.2`.
+
+### Tests
+- `ImageUploadTests` (21): PNG/JPEG kabulü ve kanonik MIME/uzantı, SVG/GIF/WebP/HTML/uzantısız red, **SVG ve HTML içeriğin ".png"/".jpg" adıyla reddi**, JPEG-içerik/PNG-uzantı uyuşmazlığı, boyut bombası, boş dosya, saklanan uzantıdan servis MIME'ı. `Faz5Tests` asset uzantı listesi kopya sabit yerine gerçek politikaya bağlandı (`.svg` → reddedilir).
+
+## [1.11.1] - 2026-10-04
+
+### Fixed
+- **AI asistanına XSLT sürümü yanlış bildiriliyordu**: `PromptTemplates.DetectXsltVersion` dosyadaki *ilk* `version="..."` değerini alıyordu; şablonlar `<?xml version="1.0"?>` bildirimiyle başladığı için `version="2.0"` stylesheet'ler modele `<project_context>` içinde "XSLT Versiyonu: 1.0" olarak tanıtılıyordu (Identity prompt'u ise "XSLT 2.0" diyordu — çelişkili bağlam; model gereksiz yere 1.0 tarzı çözümlere kayabiliyordu). Regex artık yalnız kök `xsl:stylesheet`/`xsl:transform` elemanının `version` özniteliğini okuyor (önek serbest, çok satırlı öznitelik, boşluklu `=`); bulunamazsa `2.0`. Kullanıcıya görünür bir hata üretmiyordu.
+- **Backend Dockerfile derlenmiyordu**: API projesi baştan beri `XsltCraft.Api.csproj` iken Dockerfile var olmayan `XsltCraft/XsltCraft.csproj`'u kopyalıyor/publish ediyor ve `XsltCraft.slnx`'i, csproj'ları kopyalanmamış test projeleriyle restore etmeye çalışıyordu. Artık yalnız API ve bağımlı 3 proje restore + publish ediliyor.
+- **`/health` ucu yoktu**: Dockerfile `HEALTHCHECK` `curl /health` çağırıyordu ama uç tanımlı değildi (container sürekli "unhealthy" olurdu). `AddHealthChecks()` + `MapHealthChecks("/health")` (liveness) eklendi.
+
+### Security
+- **Yerel sırlar imaja kopyalanıyordu**: `backend/.dockerignore` yoktu; `COPY . .` gitignore'daki `appsettings.Development.json`'ı (geliştirici API anahtarları) build bağlamına alıyor ve publish çıktısına — yani imaja — taşıyabiliyordu; host'un `bin/obj` klasörleri de (Windows yollu `project.assets.json`) `--no-restore` publish'i bozuyordu. Yeni `.dockerignore`: `bin/`, `obj/`, `appsettings.Development.json`, `.env`, `*.user`, test projeleri.
+
+### Tests
+- `DetectXsltVersionTests` (11): XML bildirimi regresyonu, 1.0/2.0/3.0, `xsl:transform`, çok satırlı öznitelik, farklı önek, `xsl:output version` karışmaması, yarım yazılmış/boş girdi → `2.0`. 8 golden snapshot'ta yalnız `XSLT Versiyonu: 1.0 → 2.0` satırı değişti (bilinçli kabul).
+
+### Changed
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.11.0 → 1.11.1`.
+
+## [1.11.0] - 2026-10-04
+
+### Added
+- **AI sohbete ekran görüntüsü (vision)**: Sohbette 📎 butonu, Ctrl+V ve sürükle-bırak ile PNG/JPG ekran görüntüsü eklenebiliyor; asistan görseli (önizleme render'ı, hedef tasarım, hata ekranı) UBL-TR alanlarıyla eşleyip XSLT değişikliği öneriyor. Görsel tarayıcıda canvas ile küçültülüp (≤1536 px, PNG/JPEG'den küçüğü, ≤1.5 MB) yeniden kodlanıyor — EXIF/GPS siliniyor. Balonda büyütme ve "Tekrar ekle".
+- **Hibrit model yönlendirmesi**: Metin sohbeti `qwen2.5-coder`'da kalır; yalnız görselli mesaj `Ai:Ollama:VisionModel`'e (`qwen2.5vl:3b`) kendi bağlam bütçesi/num_ctx/keep_alive değerleriyle gider. `IAiAssistantProvider.SupportsVision` + `ProviderRouting.ResolveVision`: Otomatik/Gemini tercihinde Gemini önce, Ollama tercihinde yerel önce; Gemini istisnası parametrik.
+- **Admin → AI Asistan → Ekran Görüntüsü (Vision)** kartı: aç/kapat, "Görsellerde Gemini'ye izin ver", tanımlı vision modeli ve etkin sağlayıcı sırası (`GET/PUT /api/admin/feature-flags/ai/vision`, DB bayrakları `ai.vision_enabled` / `ai.vision_gemini_fallback`). `GET /api/ai/status` artık `vision` alanı döner.
+- **Plan limiti**: `Membership:*:MaxAiImagesPerMessage` — Free mesaj başına 1, Pro 3 (teknik tavan `Ai:Vision:MaxImagesPerMessage`); Free fazlası 402 + Pro yönlendirmesi. `/api/me/entitlements` alanı döner.
+
+### Security
+- Görseller sağlayıcıya gitmeden ve **kota tüketilmeden önce** `AiVisionGate` ile doğrulanıyor: yalnız PNG/JPEG (magic byte = beyan MIME; SVG/GIF/WebP/APNG red), boyut başlıktan okunur (decompression bomb'a karşı decode yok; ≤2048 px, ≤4.2 MP), ≤1.5 MB / toplam 4 MB, `data:` öneki ve geçersiz base64 red, kullanıcı başına 10 görselli istek/dk. `POST /api/ai/assistant` için 8 MB gövde limiti.
+- Görseller DB/storage/log'a yazılmıyor; yalnız eklendiği turda modele gidiyor (geçmişte metin yer tutucusu).
+- `Vision.md`: görseldeki metin talimat sayılmaz (prompt injection), görülen değerler koda literal yazılmaz, kişisel veri cevapta tekrarlanmaz.
+- Görselli soruların geri bildirimi işaretleniyor ve **global örnek havuzuna terfi edilemiyor** (cevap başka kullanıcıların prompt'una görseldeki kullanıcıya özel veriyi taşıyabilirdi).
+- Görselli istekte sağlayıcı çıktı üretmezse günlük hak yanmıyor; istemci iptali ise sayılıyor (ilk token'dan önce bağlantı keserek kota atlatma kapalı).
+
+### Changed
+- `AssistantRequest.Message` ve geçmiş mesaj `Content` alanları nullable (yalnız görselli tur); metin ve görsel ikisi de boşsa 400 `empty_message`.
+- Infrastructure'a açık `FrameworkReference Microsoft.AspNetCore.App` (RateLimiting önceden yalnız Swashbuckle üzerinden transitif geliyordu).
+- **Versiyon hizalama**: `package.json`, 4 `.csproj` ve README rozeti `1.10.2 → 1.11.0`.
+
+### Tests
+- Yeni `XsltCraft.Infrastructure.Tests` projesi: Gemini/Ollama payload (görsel yalnız son user turunda, `text` alanı yok, vision modeli/bütçesi), `AiVisionRouter` bayrak matrisi, `AiVisionThrottle`.
+- `Application.Tests`: `ImageHeaderReader` (PNG/JPEG/APNG, kesik başlık), `AiImageValidator` (bomb, MIME sahteciliği, SVG-as-PNG, boyut, base64), `AiVisionGate` (sıra, plan limitleri, throttle'ın gereksiz tüketilmemesi), `ProviderRouting` (+ mevcut `Resolve`), `AiUsageAccounting`, intent/prompt; 3 yeni golden snapshot (mevcut 5 değişmedi).
+
 ## [1.10.2] - 2026-09-28
 
 ### Security

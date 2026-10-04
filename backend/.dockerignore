@@ -1,0 +1,18 @@
+# Host derleme çıktıları (Windows yollu project.assets.json `--no-restore` publish'i bozar)
+**/bin/
+**/obj/
+
+# Yerel sırlar — gitignore'da; imaja ve publish çıktısına GİRMEMELİ
+**/appsettings.Development.json
+**/appsettings.*.local.json
+**/*.user
+**/.env
+
+# Test projeleri ve araçlar (yalnız API publish edilir)
+XsltCraft.Tests/
+XsltCraft.Application.Tests/
+XsltCraft.Infrastructure.Tests/
+**/TestResults/
+**/.vs/
+**/.vscode/
+**/.idea/

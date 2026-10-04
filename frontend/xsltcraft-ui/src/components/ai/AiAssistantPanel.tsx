@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import {
   Sparkles, X, StopCircle, Loader2, ChevronDown,
-  RotateCcw, AlertTriangle, ThumbsUp, ThumbsDown, Wand2, RefreshCcw, PencilLine,
+  RotateCcw, AlertTriangle, ThumbsUp, ThumbsDown, Wand2, RefreshCcw, PencilLine, ImagePlus,
 } from 'lucide-react'
 import {
   streamAi, submitAiFeedback, updateAiFeedback,
@@ -9,10 +9,16 @@ import {
 } from '../../services/aiAssistantService'
 import { toast } from '../../store/toastStore'
 import { useEntitlementStore } from '../../store/entitlementStore'
+import { useAiStore } from '../../store/aiStore'
 import { openUpgradeModal } from '../../store/upgradeModalStore'
+import { aiImagesPerMessage } from '../../services/entitlementService'
+import { useImageAttachments } from '../../hooks/useImageAttachments'
+import { MAX_IMAGES_TECHNICAL, filesFrom, type PreparedImage } from '../../utils/imageAttachment'
 import { extractApplicableBlock, computeApplyTarget, type ApplyTarget } from '../../utils/xsltApply'
 import AiApplyDialog from './AiApplyDialog'
 import MarkdownMessage from './MarkdownMessage'
+import ChatComposer from './ChatComposer'
+import ChatImageGrid from './ChatImageGrid'
 
 /** Dışarıdan tetiklenen soru (ör. Problems panelinden "AI'ya sor"). */
 export interface AiPrompt {
@@ -56,7 +62,15 @@ interface ChatMessage {
   feedback?: 'up' | 'down'
   feedbackId?: string
   applied?: boolean
+  /** Kullanıcı mesajına eklenen ekran görüntüleri (yalnız o turda modele gider). */
+  images?: PreparedImage[]
 }
+
+/**
+ * Görselli sorunun geri bildirim kaydına eklenen işaret (backend AiFeedbackMarkers.ImageAttached ile AYNI).
+ * Boş metinli soruda yer tutucu görevi görür; sunucu bu kayıtların global örneğe terfisini engeller.
+ */
+const IMAGE_MARKER = '[ekran görüntüsü ekli]'
 
 /**
  * Modele yalnız TAMAMLANMIŞ ve dolu turlar gider. Hata/iptal/boş balonlar ve cevabı
@@ -70,12 +84,18 @@ function toHistory(msgs: ChatMessage[]): AssistantMessage[] {
     if (q.role !== 'user') continue
     const a = msgs[i + 1]
     if (a?.role === 'assistant' && a.status === 'done' && a.content.trim()) {
-      out.push({ role: 'user', content: q.content })
+      out.push({ role: 'user', content: q.content, imageCount: q.images?.length || undefined })
       out.push({ role: 'assistant', content: a.content })
       i++
     }
   }
   return out
+}
+
+/** Mesajlara devredilmiş görsel URL'lerini serbest bırakır ("Tekrar ekle" kopyaları aynı URL'i paylaşır). */
+function revokeMessageImages(msgs: ChatMessage[]) {
+  const urls = new Set(msgs.flatMap(m => m.images?.map(i => i.previewUrl) ?? []))
+  urls.forEach(url => URL.revokeObjectURL(url))
 }
 
 // ─── XML bağlam kırpma ────────────────────────────────────────────────────────
@@ -125,6 +145,12 @@ export default function AiAssistantPanel({
   // Açık "Uygula" diyaloğu (hangi mesaj + hesaplanmış hedef).
   const [applyState, setApplyState] = useState<{ messageId: number; target: ApplyTarget } | null>(null)
   const [showJump, setShowJump] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  const visionEnabled = useAiStore(s => s.vision)
+  const entitlements = useEntitlementStore(s => s.entitlements)
+  const maxImages = aiImagesPerMessage(entitlements, MAX_IMAGES_TECHNICAL)
+  const attach = useImageAttachments(maxImages)
 
   const abortRef = useRef<AbortController | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -142,14 +168,27 @@ export default function AiAssistantPanel({
   const contentRef = useRef<HTMLDivElement>(null)
   const stickRef = useRef(true)
   const prevLenRef = useRef(0)
+  const dragDepthRef = useRef(0)
+  // Mesajlara devredilen görsel URL'leri — yeni sohbette/unmount'ta revoke edilir.
+  const messagesRef = useRef<ChatMessage[]>([])
+  messagesRef.current = messages
+
+  useEffect(() => () => revokeMessageImages(messagesRef.current), [])
 
   // Bir asistan mesajının hemen öncesindeki kullanıcı sorusunu bulur (feedback bağlamı).
-  function precedingUserMessage(assistantId: number): string {
+  function precedingUser(assistantId: number): ChatMessage | null {
     const idx = messages.findIndex(m => m.id === assistantId)
     for (let i = idx - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') return messages[i].content
+      if (messages[i].role === 'user') return messages[i]
     }
-    return ''
+    return null
+  }
+
+  function precedingUserMessage(assistantId: number): string {
+    const q = precedingUser(assistantId)
+    if (!q) return ''
+    if (!q.images?.length) return q.content
+    return q.content.trim() ? `${q.content.trim()} ${IMAGE_MARKER}` : IMAGE_MARKER
   }
 
   function patchMessage(id: number, patch: Partial<ChatMessage>) {
@@ -208,10 +247,12 @@ export default function AiAssistantPanel({
   }
 
   // "İşe yaramadı" → farklı yaklaşım iste (başarısız cevap zaten history'de).
+  // Soru görselliyse görseller de yeniden gönderilir (geçmişte yalnız yer tutucu kalır).
   function retryDifferent(assistantId: number) {
-    const question = precedingUserMessage(assistantId)
-    if (!question) return
-    runChat(`Önceki yanıt işe yaramadı, aynı çözümü tekrarlama. Farklı bir yaklaşım dene: ${question}`)
+    const q = precedingUser(assistantId)
+    if (!q || (!q.content.trim() && !q.images?.length)) return
+    const base = 'Önceki yanıt işe yaramadı, aynı çözümü tekrarlama. Farklı bir yaklaşım dene'
+    runChat(q.content.trim() ? `${base}: ${q.content}` : `${base}.`, { images: q.images })
   }
 
   // "İşe yaramadı" → detay ver: input'a ön-metin koy ve odaklan.
@@ -286,8 +327,9 @@ export default function AiAssistantPanel({
     abortRef.current.abort()
   }
 
-  async function runChat(message: string, opts?: { interrupt?: boolean }) {
-    if (!message.trim()) return
+  async function runChat(message: string, opts?: { interrupt?: boolean; images?: PreparedImage[] }) {
+    const images = opts?.images?.length ? opts.images : undefined
+    if (!message.trim() && !images) return
     if (streamingRef.current) {
       // Manuel gönderim yolunda input/düğme zaten disabled; bu guard savunma amaçlı.
       if (!opts?.interrupt) return
@@ -297,7 +339,7 @@ export default function AiAssistantPanel({
     }
     streamingRef.current = true
 
-    const userMsg: ChatMessage = { id: ++msgIdCounter, role: 'user', content: message, status: 'done' }
+    const userMsg: ChatMessage = { id: ++msgIdCounter, role: 'user', content: message, status: 'done', images }
     const assistantId = ++msgIdCounter
 
     setMessages(prev => [...prev, userMsg])
@@ -329,6 +371,7 @@ export default function AiAssistantPanel({
           xsltCursorLine,
           history: historyForRequest,
           message,
+          images: images?.map(i => ({ mimeType: i.mimeType, data: i.base64 })),
         },
         (chunk: AiChunk) => {
           if (chunk.type === 'delta' && chunk.text) {
@@ -348,11 +391,20 @@ export default function AiAssistantPanel({
             setMessages(prev => prev.map(m =>
               m.id === assistantId ? { ...m, status: 'error', errorMessage: msg } : m
             ))
-            if (chunk.code === 'http_402') {
+            if (chunk.code === 'http_402' && chunk.reason === 'image_count') {
+              // Free: mesaj başına 1 ekran görüntüsü → Pro'ya yönlendir.
+              openUpgradeModal({ title: 'Ekran görüntüsü limiti', message: msg })
+            } else if (chunk.code === 'http_402') {
               // Free kullanıcı günlük 1 soru hakkını doldurdu → Pro'ya yönlendir.
               openUpgradeModal({ title: 'AI soru hakkınız doldu', message: msg })
+            } else if (chunk.code === 'http_429' && chunk.reason === 'vision_rate_limited') {
+              toast.warning(msg, { title: 'Ekran görüntüsü' })
             } else if (chunk.code === 'http_429') {
               toast.warning(msg, { title: 'Günlük AI limiti' })
+            } else if (chunk.reason?.startsWith('image_') || chunk.reason === 'vision_unavailable') {
+              toast.error(msg, { title: 'Ekran görüntüsü gönderilemedi' })
+              // Admin kapattıysa ataç butonu da kapansın.
+              if (chunk.reason === 'vision_unavailable') useAiStore.getState().refresh()
             } else if (
               chunk.code === 'provider_unavailable' ||
               chunk.code?.startsWith('ollama_') ||
@@ -402,6 +454,7 @@ export default function AiAssistantPanel({
 
   function handleNewChat() {
     cancel()
+    revokeMessageImages(messages)
     setMessages([])
     setInput('')
     setLastMeta(null)
@@ -410,11 +463,49 @@ export default function AiAssistantPanel({
   }
 
   function handleSend() {
-    runChat(input)
+    if (streamingRef.current) return
+    runChat(input, { images: attach.take() })
+  }
+
+  // ── Sürükle-bırak (yalnız dosya sürüklenirken overlay) ─────────────────────
+  const isFileDrag = (e: DragEvent) => e.dataTransfer.types.includes('Files')
+
+  function handleDragEnter(e: DragEvent) {
+    if (!visionEnabled || !isFileDrag(e)) return
+    e.preventDefault()
+    dragDepthRef.current++
+    setDragOver(true)
+  }
+
+  function handleDragLeave(e: DragEvent) {
+    if (!visionEnabled || !isFileDrag(e)) return
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) setDragOver(false)
+  }
+
+  function handleDrop(e: DragEvent) {
+    if (!visionEnabled || !isFileDrag(e)) return
+    e.preventDefault()
+    dragDepthRef.current = 0
+    setDragOver(false)
+    if (!streaming) void attach.add(filesFrom(e.dataTransfer.files))
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 text-gray-100">
+    <div
+      className="relative h-full flex flex-col bg-gray-900 text-gray-100"
+      onDragEnter={handleDragEnter}
+      onDragOver={e => { if (visionEnabled && isFileDrag(e)) e.preventDefault() }}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dragOver && (
+        <div className="pointer-events-none absolute inset-2 z-20 rounded-lg border-2 border-dashed border-violet-400 bg-violet-950/70 flex flex-col items-center justify-center gap-2 text-violet-200">
+          <ImagePlus size={28} />
+          <span className="text-sm font-medium">Ekran görüntüsünü buraya bırakın</span>
+          <span className="text-[11px] text-violet-300/80">PNG, JPG · en fazla {maxImages} görsel</span>
+        </div>
+      )}
       {/* Header */}
       <div className="h-9 px-3 flex items-center gap-2 border-b border-gray-700 bg-gray-800 flex-shrink-0">
         <Sparkles size={14} className="text-violet-400" />
@@ -483,6 +574,11 @@ export default function AiAssistantPanel({
           <div className="text-sm text-gray-500 italic text-center mt-8">
             XSLT şablonunu doğal dille düzenlemek için mesaj yaz.<br />
             <span className="text-gray-600 text-xs">Örn: "PartyName altındaki cbc:Note alanını kaldır"</span>
+            {visionEnabled && (
+              <span className="block mt-2 text-gray-600 text-xs not-italic">
+                Önizlemenin ya da hedef tasarımın ekran görüntüsünü de ekleyebilirsin (📎, Ctrl+V ya da sürükle-bırak).
+              </span>
+            )}
           </div>
         )}
 
@@ -496,7 +592,15 @@ export default function AiAssistantPanel({
               }`}
             >
               {msg.role === 'user' ? (
-                <span className="whitespace-pre-wrap break-words">{msg.content}</span>
+                <>
+                  {msg.images?.length ? (
+                    <ChatImageGrid
+                      images={msg.images}
+                      onReattach={visionEnabled && !streaming ? () => attach.addPrepared(msg.images!) : undefined}
+                    />
+                  ) : null}
+                  {msg.content && <span className="whitespace-pre-wrap break-words">{msg.content}</span>}
+                </>
               ) : msg.content ? (
                 <>
                   <MarkdownMessage text={msg.content} />
@@ -617,37 +721,19 @@ export default function AiAssistantPanel({
       </div>
 
       {/* Input alanı */}
-      <div className="px-3 py-2 border-t border-gray-700 flex-shrink-0">
-        <div className="flex gap-2">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => {
-              // Enter → gönder · Shift+Enter → yeni satır (IME kompozisyonu sürerken gönderme)
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                handleSend()
-              }
-            }}
-            rows={2}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-violet-500 resize-none font-mono"
-            placeholder="Buraya yaz… (Enter ile gönder)"
-            disabled={streaming}
-          />
-          <button
-            onClick={handleSend}
-            disabled={streaming || !input.trim()}
-            className="self-stretch px-3 rounded bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm text-white font-medium"
-          >
-            Gönder
-          </button>
-        </div>
-        <div className="mt-1 text-[10px] text-gray-500 select-none">
-          <kbd className="font-mono text-gray-400">Enter</kbd> ile gönder ·{' '}
-          <kbd className="font-mono text-gray-400">Shift+Enter</kbd> ile yeni satır
-        </div>
-      </div>
+      <ChatComposer
+        value={input}
+        onChange={setInput}
+        onSend={handleSend}
+        streaming={streaming}
+        inputRef={inputRef}
+        visionEnabled={visionEnabled}
+        maxImages={maxImages}
+        attachments={attach.attachments}
+        processing={attach.processing}
+        onAddFiles={files => void attach.add(files)}
+        onRemoveAttachment={attach.remove}
+      />
 
       {applyState && (
         <AiApplyDialog

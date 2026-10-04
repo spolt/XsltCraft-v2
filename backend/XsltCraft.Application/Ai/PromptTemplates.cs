@@ -4,7 +4,8 @@ using System.Text.RegularExpressions;
 
 namespace XsltCraft.Application.Ai;
 
-public record ProviderMessage(string Role, string Content);
+/// <param name="Images">Yalnız son user mesajında dolu olabilir; geçmiş mesajlar görsel taşımaz.</param>
+public record ProviderMessage(string Role, string Content, IReadOnlyList<AiImageInput>? Images = null);
 
 public static class PromptTemplates
 {
@@ -12,9 +13,15 @@ public static class PromptTemplates
     private const int ContextSoftLimitChars = 24_000; // refactor (tek-turn) yolu için
     private const int MaxHistoryPairs = 10;
 
+    /// <summary>Yalnız görsel gönderilip metin yazılmadığında kullanılan istek.</summary>
+    internal const string DefaultImageRequest = "Ekli ekran görüntüsünü incele ve mevcut XSLT şablonuyla ilişkilendir.";
+
+    // Yalnız kök stylesheet/transform elemanının version'ı. Düz "ilk version=" araması
+    // <?xml version="1.0"?> bildirimini yakalıyor ve 2.0 şablonu modele "1.0" diye tanıtıyordu.
+    // Önek serbest (xsl:, xs:, öneksiz); öznitelikler çok satıra yayılabilir ([^>] satır sonunu da kapsar).
     private static readonly Regex VersionRe = new(
-        @"\bversion=[""']([^""']+)[""']",
-        RegexOptions.Compiled | RegexOptions.Multiline);
+        @"<(?:[\w.-]+:)?(?:stylesheet|transform)\b[^>]*?\bversion\s*=\s*[""']([^""']+)[""']",
+        RegexOptions.Compiled);
 
     private static readonly Regex NsRe = new(
         @"xmlns:(\w+)=[""']([^""']+)[""']",
@@ -39,14 +46,19 @@ public static class PromptTemplates
         // daha sık tutsun:
         //   1) Identity (gömülü, hiç değişmez)
         //   2) Constraints (gömülü, hiç değişmez)  ← önceden patterns'tan sonraydı
+        //   2b) Vision (gömülü; yalnız görselli assistant isteğinde — metin-only prefix'i bozmaz)
         //   3) patterns (soruya göre değişir)
         //   4) project_context (XSLT'ye göre değişir)
+        var withImages = mode == AiMode.Assistant && req.HasImages;
         var systemSb = new StringBuilder();
         systemSb.Append(PromptRegistry.Identity);
 
         if (intent != AiIntent.Smalltalk)
         {
             systemSb.Append("\n\n").Append(PromptRegistry.Constraints);
+
+            if (withImages)
+                systemSb.Append("\n\n").Append(PromptRegistry.Vision);
 
             foreach (var p in patterns)
                 systemSb.Append("\n\n").Append(p.Content);
@@ -142,10 +154,14 @@ public static class PromptTemplates
             if (ctxSb.Length > 0 && history.Count > 0)
                 messages.Add(new("assistant", "Anladım, XSLT ve XML bağlamını aldım."));
 
+            // Geçmiş görseller yeniden gönderilmez (token maliyeti sabit kalır); model yalnız varlığını bilir.
             foreach (var h in history)
-                messages.Add(new(h.Role, h.Content));
+                messages.Add(new(h.Role, WithImagePlaceholder(h)));
 
-            messages.Add(new("user", req.UserRequest ?? string.Empty));
+            if (withImages)
+                messages.Add(new("user", BuildImageTurn(req), req.Images));
+            else
+                messages.Add(new("user", req.UserRequest ?? string.Empty));
         }
 
         return messages;
@@ -175,7 +191,28 @@ public static class PromptTemplates
 
     // ── Yardımcı metodlar ─────────────────────────────────────────────────────
 
-    private static string DetectXsltVersion(string? xslt)
+    private static string WithImagePlaceholder(AssistantMessage h)
+    {
+        if (h.ImageCount <= 0 || h.Role != "user") return h.Content;
+        var note = $"[Bu mesaja {h.ImageCount} ekran görüntüsü eklenmişti; görsel artık bağlamda değil.]";
+        return string.IsNullOrWhiteSpace(h.Content) ? note : h.Content + "\n" + note;
+    }
+
+    private static string BuildImageTurn(AiRequest req)
+    {
+        var sb = new StringBuilder("<user_images>\n");
+        var n = 1;
+        foreach (var img in req.Images!)
+            sb.Append("Görsel ").Append(n++).Append(": ")
+              .Append(img.Width).Append('×').Append(img.Height).Append(' ')
+              .Append(img.MimeType == "image/png" ? "png" : "jpeg").Append('\n');
+        sb.Append("</user_images>\n\n");
+
+        var text = string.IsNullOrWhiteSpace(req.UserRequest) ? DefaultImageRequest : req.UserRequest;
+        return sb.Append(text).ToString();
+    }
+
+    internal static string DetectXsltVersion(string? xslt)
     {
         if (string.IsNullOrEmpty(xslt)) return "2.0";
         var m = VersionRe.Match(xslt);

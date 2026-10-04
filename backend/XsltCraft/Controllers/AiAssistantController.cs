@@ -5,8 +5,10 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 
 using XsltCraft.Application.Ai;
+using XsltCraft.Application.Ai.Vision;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Ai;
@@ -23,7 +25,13 @@ public class AiAssistantController : ControllerBase
     private readonly IUsageQuotaService _quota;
     private readonly IAiExemplarService _exemplars;
     private readonly IAiFeedbackService _feedback;
+    private readonly IAiVisionGate _visionGate;
+    private readonly IAiVisionAvailability _visionAvailability;
+    private readonly VisionOptions _vision;
     private readonly ILogger<AiAssistantController> _logger;
+
+    /// <summary>XSLT+XML+geçmiş ile en fazla 3 görsel (~5,6 MB base64) aynı gövdeyi paylaşır.</summary>
+    private const long AssistantMaxBodyBytes = 8 * 1024 * 1024;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -37,6 +45,9 @@ public class AiAssistantController : ControllerBase
         IUsageQuotaService quota,
         IAiExemplarService exemplars,
         IAiFeedbackService feedback,
+        IAiVisionGate visionGate,
+        IAiVisionAvailability visionAvailability,
+        IOptions<AiOptions> aiOptions,
         ILogger<AiAssistantController> logger)
     {
         _orchestrator = orchestrator;
@@ -44,22 +55,36 @@ public class AiAssistantController : ControllerBase
         _quota = quota;
         _exemplars = exemplars;
         _feedback = feedback;
+        _visionGate = visionGate;
+        _visionAvailability = visionAvailability;
+        _vision = aiOptions.Value.Vision;
         _logger = logger;
     }
 
-    /// <summary>AI etkin mi? UI bu çağrıyla AI butonlarını gizler/gösterir.</summary>
+    /// <summary>AI etkin mi, ekran görüntüsü gönderilebilir mi? UI bu çağrıyla AI butonlarını gizler/gösterir.</summary>
     [HttpGet("status")]
     [AllowAnonymous]
     public async Task<IActionResult> GetStatus(CancellationToken ct)
     {
         var enabled = await _flag.IsEnabledAsync(ct);
-        return Ok(new { enabled });
+        var vision = enabled && (await _visionAvailability.ResolveProvidersAsync(ct)).Count > 0;
+        return Ok(new { enabled, vision });
     }
 
     [HttpPost("assistant")]
     [EnableRateLimiting("ai-assistant")]
-    public Task Assistant([FromBody] AssistantRequest req, CancellationToken ct)
-        => StreamAsync(new AiRequest
+    [RequestSizeLimit(AssistantMaxBodyBytes)]
+    public async Task Assistant([FromBody] AssistantRequest req, CancellationToken ct)
+    {
+        var images = req.Images?.Select(i => new AiImagePayload(i.MimeType, i.Data)).ToList() ?? [];
+        if (string.IsNullOrWhiteSpace(req.Message) && images.Count == 0)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await WriteJsonAsync(new { error = "empty_message", message = "Mesaj ya da ekran görüntüsü gerekli." }, ct);
+            return;
+        }
+
+        await StreamAsync(new AiRequest
         {
             Task = AiTaskKind.Assistant,
             UserXslt = req.Xslt,
@@ -67,9 +92,13 @@ public class AiAssistantController : ControllerBase
             XmlSelection = req.XmlSelection,
             Selection = req.XsltSelection,
             XsltCursorLine = req.XsltCursorLine,
-            History = req.History?.Select(h => new AssistantMessage(h.Role, h.Content)).ToList(),
+            History = req.History?.Select(h => new AssistantMessage(
+                h.Role,
+                h.Content ?? string.Empty,
+                Math.Clamp(h.ImageCount, 0, _vision.MaxImagesPerMessage))).ToList(),
             UserRequest = req.Message,
-        }, ct);
+        }, ct, images);
+    }
 
     [HttpPost("refactor-selection")]
     [EnableRateLimiting("ai-assistant")]
@@ -130,7 +159,7 @@ public class AiAssistantController : ControllerBase
         return false;
     }
 
-    private async Task StreamAsync(AiRequest req, CancellationToken ct)
+    private async Task StreamAsync(AiRequest req, CancellationToken ct, IReadOnlyList<AiImagePayload>? images = null)
     {
         if (!await _flag.IsEnabledAsync(ct))
         {
@@ -140,6 +169,31 @@ public class AiAssistantController : ControllerBase
         }
 
         var userId = GetUserId();
+
+        // Görsel kapısı kotadan ÖNCE: reddedilen görsel (geçersiz/limit/throttle) günlük hakkı tüketmez.
+        if (images is { Count: > 0 })
+        {
+            if (!userId.HasValue)
+            {
+                Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
+            }
+
+            var gate = await _visionGate.EvaluateAsync(userId.Value, images, ct);
+            if (!gate.Allowed)
+            {
+                Response.StatusCode = gate.Reason switch
+                {
+                    VisionDenyReason.RateLimited => StatusCodes.Status429TooManyRequests,
+                    VisionDenyReason.CountExceeded when gate.Upgrade => StatusCodes.Status402PaymentRequired,
+                    _ => StatusCodes.Status400BadRequest,
+                };
+                await WriteJsonAsync(new { error = gate.ErrorCode, upgrade = gate.Upgrade ? true : (bool?)null, message = gate.Message }, ct);
+                return;
+            }
+            req.Images = [.. gate.Images];
+        }
+
         if (userId.HasValue)
         {
             var check = await _quota.CheckAiAllowedAsync(userId.Value, ct);
@@ -205,8 +259,11 @@ public class AiAssistantController : ControllerBase
         {
             await writer.CompleteAsync();
             // Gate'i geçen her istek soru sayacını tüketir (Free 1/gün); token de yaklaşık olarak eklenir.
-            if (userId.HasValue)
-                await _quota.IncrementAiAsync(userId.Value, totalOutputChars > 0 ? totalOutputChars / 4 + 1 : 0, CancellationToken.None);
+            // Tek istisna: görselli istekte hiçbir sağlayıcı çıktı üretmediyse — istemci iptali hariç.
+            var (countRequest, tokens) = AiUsageAccounting.Compute(
+                req.Images?.Count ?? 0, totalOutputChars, ct.IsCancellationRequested, _vision.TokenCostPerImage);
+            if (userId.HasValue && countRequest)
+                await _quota.IncrementAiAsync(userId.Value, tokens, CancellationToken.None);
         }
     }
 
@@ -233,17 +290,26 @@ public class AiAssistantController : ControllerBase
     }
 }
 
+/// <remarks>
+/// <c>Message</c> nullable: yalnız ekran görüntüsü gönderilen turda boş olabilir ([ApiController] non-nullable
+/// string'e örtük [Required] uygular). "Metin ve görsel ikisi de boş" kuralı elle kontrol edilir.
+/// </remarks>
 public record AssistantRequest(
     string? Xslt,
     string? Xml,
     string? XmlSelection,
     List<AssistantMessageDto>? History,
-    string Message,
+    string? Message,
     string? XsltSelection = null,
-    int? XsltCursorLine = null
+    int? XsltCursorLine = null,
+    List<AssistantImageDto>? Images = null
 );
 
-public record AssistantMessageDto(string Role, string Content);
+/// <param name="ImageCount">Geçmiş mesaja eklenmiş görsel sayısı (görseller yeniden gönderilmez).</param>
+public record AssistantMessageDto(string Role, string? Content, int ImageCount = 0);
+
+/// <param name="Data">Base64, <c>data:</c> öneki olmadan.</param>
+public record AssistantImageDto(string? MimeType, string? Data);
 public record RefactorSelectionRequest(string? Xslt, string Selection, string? Goal);
 
 public record AiFeedbackRequest(

@@ -17,4 +17,5 @@ public record UserEntitlements(
     bool CanUsePremiumThemes,
     int DailyAiRequestLimit,
     int DailyAiTokenLimit,
-    int DailyTemplateExportLimit);
+    int DailyTemplateExportLimit,
+    int MaxAiImagesPerMessage);

@@ -147,7 +147,7 @@ Kurallar:
 
 
 <project_context>
-XSLT Versiyonu: 1.0
+XSLT Versiyonu: 2.0
 UBL Versiyonu: 2.1
 Namespace bildirimleri: xmlns:xsl="http://www.w3.org/1999/XSL/Transform", xmlns:n1="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2", xmlns:cbc="urn:oasis:names:tc:ubl:schema:xsd:CommonBasicComponents-2", xmlns:cac="urn:oasis:names:tc:ubl:schema:xsd:CommonAggregateComponents-2"
 </project_context>

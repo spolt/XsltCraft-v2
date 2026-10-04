@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using XsltCraft.Application.Ai;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 
@@ -77,6 +78,10 @@ public class AdminAiFeedbackController(AppDbContext db) : ControllerBase
         if (feedback is null) return NotFound();
         if (feedback.Rating != AiFeedbackRating.Positive)
             return BadRequest(new { error = "only_positive_promotable" });
+        // Ekran görüntülü sorunun cevabı görseldeki (kullanıcıya özel) verileri yansıtabilir;
+        // global havuz başka kullanıcıların prompt'una girer → terfi yok.
+        if (req.IsGlobal && feedback.UserMessage.Contains(AiFeedbackMarkers.ImageAttached, StringComparison.Ordinal))
+            return BadRequest(new { error = "image_feedback_not_promotable", message = "Ekran görüntülü sorular global örnek yapılamaz." });
 
         feedback.IsGlobal = req.IsGlobal;
         feedback.PromotedAt = req.IsGlobal ? DateTime.UtcNow : null;

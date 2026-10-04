@@ -14,6 +14,9 @@ public interface IAiFeatureFlagService
     Task SetEnabledAsync(bool enabled, CancellationToken ct = default);
     Task<string?> GetStringAsync(string key, CancellationToken ct = default);
     Task SetStringAsync(string key, string? value, CancellationToken ct = default);
+    /// <summary>Value kolonunda "true"/"false" saklanan bayrak; satır yoksa ya da değer geçersizse null.</summary>
+    Task<bool?> GetBoolAsync(string key, CancellationToken ct = default);
+    Task SetBoolAsync(string key, bool value, CancellationToken ct = default);
 }
 
 public class AiFeatureFlagService : IAiFeatureFlagService
@@ -91,6 +94,12 @@ public class AiFeatureFlagService : IAiFeatureFlagService
         await _db.SaveChangesAsync(ct);
         _cache.Remove(StringCacheKey(key));
     }
+
+    public async Task<bool?> GetBoolAsync(string key, CancellationToken ct = default)
+        => bool.TryParse(await GetStringAsync(key, ct), out var value) ? value : null;
+
+    public Task SetBoolAsync(string key, bool value, CancellationToken ct = default)
+        => SetStringAsync(key, value ? "true" : "false", ct);
 
     private static string StringCacheKey(string key) => $"ai:feature-flag:value:{key}";
 }

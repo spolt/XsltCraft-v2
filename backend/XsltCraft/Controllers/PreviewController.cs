@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using XsltCraft.Application.DTO;
+using XsltCraft.Application.Imaging;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
 using XsltCraft.Domain.Entities;
@@ -432,7 +433,7 @@ public class PreviewController : ControllerBase
                 using var ms = new MemoryStream();
                 await stream.CopyToAsync(ms);
                 var b64 = Convert.ToBase64String(ms.ToArray());
-                result[id!] = $"data:{asset.MimeType};base64,{b64}";
+                result[id!] = $"data:{ImageUpload.ServeMimeType(asset.FilePath)};base64,{b64}";
             }
             catch { /* skip — GenerateImage will fall back to URL */ }
         }

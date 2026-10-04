@@ -23,6 +23,9 @@ public static class IntentClassifier
         // Refactor her zaman kod bağlamı gerektirir.
         if (req.Task == AiTaskKind.RefactorSelection) return AiIntent.Code;
 
+        // Ekran görüntüsü neredeyse her zaman şablonla ilgilidir; metin boş olsa bile bağlam gönderilir.
+        if (req.HasImages) return AiIntent.Code;
+
         // Kullanıcı XML/XSLT seçimi yaptıysa açıkça koda referans veriyor.
         if (!string.IsNullOrWhiteSpace(req.Selection) ||
             !string.IsNullOrWhiteSpace(req.XmlSelection))
