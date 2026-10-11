@@ -11,6 +11,9 @@ import {
   FileText,
   Timer,
   Keyboard,
+  Maximize2,
+  Minimize2,
+  PictureInPicture2,
 } from 'lucide-react'
 import type { PreviewTimings } from '../../services/previewService'
 import { UPLOAD_ACCEPT } from '../../utils/uploadValidation'
@@ -32,6 +35,11 @@ interface Props {
   onSave: () => void
   onPrint: () => void
   onShowShortcuts: () => void
+  /** Tam ekran editör modu; verilmezse büyütme butonu gösterilmez. */
+  maximized?: boolean
+  miniOpen?: boolean
+  onToggleMaximize?: () => void
+  onToggleMini?: () => void
 }
 
 function TimingPopover({ timings, onClose }: { timings: PreviewTimings; onClose: () => void }) {
@@ -94,6 +102,10 @@ export default function XsltEditorToolbar({
   onSave,
   onPrint,
   onShowShortcuts,
+  maximized = false,
+  miniOpen = false,
+  onToggleMaximize,
+  onToggleMini,
 }: Props) {
   const btnBase = 'flex items-center gap-1.5 text-sm border border-gray-600 rounded px-3 py-1.5 hover:bg-gray-800 transition-colors'
   const [showTimingPopover, setShowTimingPopover] = useState(false)
@@ -184,6 +196,33 @@ export default function XsltEditorToolbar({
       <button onClick={onShowShortcuts} className={`${btnBase} text-gray-400`} title="Klavye Kısayolları (F1)">
         <Keyboard size={15} />
       </button>
+
+      {/* Mini önizleme (yalnız tam ekranda) */}
+      {maximized && onToggleMini && (
+        <button
+          onClick={onToggleMini}
+          aria-pressed={miniOpen}
+          className={`${btnBase} ${miniOpen ? 'bg-gray-700 text-white' : 'text-gray-400'}`}
+          title={miniOpen ? 'Mini önizlemeyi gizle' : 'Mini önizlemeyi göster'}
+          aria-label={miniOpen ? 'Mini önizlemeyi gizle' : 'Mini önizlemeyi göster'}
+        >
+          <PictureInPicture2 size={15} />
+        </button>
+      )}
+
+      {/* Tam ekran editör */}
+      {onToggleMaximize && (
+        <button
+          onClick={onToggleMaximize}
+          className={maximized
+            ? 'flex items-center gap-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded px-3 py-1.5 transition-colors'
+            : `${btnBase} text-gray-400`}
+          title={maximized ? 'Tam ekrandan çık (Ctrl+Shift+F)' : 'Tam ekran editör (Ctrl+Shift+F)'}
+          aria-label={maximized ? 'Tam ekrandan çık' : 'Tam ekran editör'}
+        >
+          {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+        </button>
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import Editor from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
 import XsltEditorPreview from '../components/xslt-editor/XsltEditorPreview'
+import { printActivePreview } from '../components/xslt-editor/previewFrame'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
 import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
 import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
@@ -517,8 +518,7 @@ export default function DevModePage() {
   }
 
   function handlePrint() {
-    const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="Canlı Önizleme"]')
-    iframe?.contentWindow?.print()
+    printActivePreview()
   }
 
   const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **XSLT Editör — tam ekran modu + yüzen mini önizleme**: araç çubuğunun sağ ucundaki büyüt butonu (ya da `Ctrl+Shift+F`) editörü tüm çalışma alanına yayar; kenar çubuğu gizlenir, sağ panel örtülür. Tasarımın canlı önizlemesi kodun üzerinde yüzen küçük bir pencerede (varsayılan 360×480, sağ üst) görünmeye devam eder: tutamaktan sürüklenir, sol-alt köşeden boyutlandırılır, çift tıkla varsayılana döner; önizleme pencere genişliğine sığdırılır ve tıkla→satıra git çalışır. Sağ paneldeki **Önizleme** sekmesine bitişik buton tek tıkla "tam ekran + mini pencere" açar. Açık/kapalı durumu, konum ve boyut `localStorage`'da kalıcıdır.
+  - Moda girip çıkmak Monaco'yu remount etmez (geri-al geçmişi, imleç, kaydırma korunur); sağ panelin durumu (AI sohbeti, seçili sekme) korunur — ana önizleme hariç: çıkışta yeniden yüklenir, zoom/kaydırma sıfırlanır. Kısayol yalnız editör ekrandayken ve üzerinde diyalog yokken etkindir. "AI'ya sor" ve "XML satırına git" akışları moddan otomatik çıkar.
+  - **Kod incelemesi sonrası düzeltmeler** (özellik yayımlanmadan önce; yayımlanmış bir sürümü etkilemedi):
+    - `Ctrl+Shift+F` Kaydet / Kısayollar / Snippet / AI refactor diyaloğu açıkken de modu değiştiriyor ve odağı arkadaki Monaco'ya çekiyordu (sonraki tuşlar diyaloğun arkasında XSLT'yi düzenleyebiliyordu); yükleme ekranında da görünür etki olmadan modu çeviriyor ve olayı yutuyordu. Dinleyici artık yalnız editör ekrandayken ve üzerinde diyalog yokken kuruluyor (`useEditorMaximize({ shortcutEnabled })`).
+    - Kısayollar diyaloğu (`ShortcutsDialog`) Dev Mode ile ortak olduğundan orada çalışmayan "Tam ekran editör" satırını gösteriyordu; satır artık yalnız XSLT Editör'de listeleniyor (`showMaximize`).
+    - Varsayılan konumda Monaco bul kutusu (`Ctrl+F`, sağ üst) mini pencerenin tutamağını ve kapat/geri al butonlarını örtüyordu; varsayılan üst boşluk 8 → 44 px.
+    - Sürükleme/boyutlandırma sırasında pencere alana sığmaz olup DOM'dan düşerse bırakma olayı kaçıyor, pencere geri geldiğinde gövdesi tıklanamaz kalıyor ve imleçle zıplıyordu; bitiş artık `lostpointercapture` ile de yakalanıyor, tuş basılı değilken gelen hareket sürüklemeyi sonlandırıyor.
+    - Boş önizlemede (ör. derleme hatalı şablon) mini pencere ~1700 px'lik koyu bir kaydırma alanı gösteriyordu; artık "Henüz önizleme yok" yer tutucusu var ve 0 ölçülen içerik en küçük yüksekliğe düşüyor.
+    - Mini pencere tercihi sayfa her açıldığında `localStorage`'a yeniden yazılıyor, başka sekmenin kaydını ezebiliyordu; artık yalnız kullanıcı değiştirdiğinde yazılıyor.
+    - Erişilebilirlik: pencere kapatılınca / sağ panele geri alınınca odak `body`'ye düşmek yerine editöre dönüyor; yükleniyor ve hata göstergelerine `role="status"` + `aria-label` eklendi.
+
+### Changed
+- Önizleme iframe'i tek bileşene (`ScaledPreviewFrame`) ve sandbox/başlık sabitleri tek dosyaya (`previewFrame.ts`) indirildi. Tıklama mesajı dinleyicisi artık `origin`'e ek olarak mesajın **kaynak çerçevesini** de doğruluyor.
+- XSLT Editör — Yazdır: açık önizleme yokken (XML/AI sekmesi ya da mini pencere kapalı) sessizce hiçbir şey yapmak yerine uyarı gösteriyor.
+
+### Tests
+- `e2e/editor-maximize.spec.ts`: remount yok, tek-iframe değişmezi, sürükleme + kalıcılık, kısayol, sekme çubuğu butonu. İnceleme sonrası sabit piksel beklentileri ölçülen değerlerden türetilir hale getirildi; panel grubu kütüphanenin iç `data-group` özniteliği yerine kendi kimliğiyle (`xslt-editor-panels`) seçiliyor.
+
 ## [1.11.2] - 2026-10-04
 
 ### Security

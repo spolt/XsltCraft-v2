@@ -63,6 +63,9 @@ const GROUPS: ShortcutGroup[] = [
   },
 ]
 
+// Yalnız tam ekran modunu destekleyen sayfada (XSLT Editör) listelenir.
+const MAXIMIZE_ROW: ShortcutRow = { keys: [`${ctrl}+${shift}+F`], description: 'Tam ekran editör aç / kapat' }
+
 function Key({ label }: { label: string }) {
   return (
     <kbd className="inline-flex items-center justify-center min-w-[28px] h-6 px-1.5 rounded border border-gray-600 bg-gray-700 text-gray-200 text-[11px] font-mono shadow-sm">
@@ -73,9 +76,10 @@ function Key({ label }: { label: string }) {
 
 interface Props {
   onClose: () => void
+  showMaximize?: boolean
 }
 
-export default function ShortcutsDialog({ onClose }: Props) {
+export default function ShortcutsDialog({ onClose, showMaximize = false }: Props) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -113,7 +117,7 @@ export default function ShortcutsDialog({ onClose }: Props) {
                 {group.title}
               </h3>
               <div className="space-y-1">
-                {group.rows.map((row) => (
+                {(showMaximize && group.title === 'Genel' ? [...group.rows, MAXIMIZE_ROW] : group.rows).map((row) => (
                   <div key={row.description} className="flex items-center justify-between gap-4 py-1">
                     <span className="text-sm text-gray-300">{row.description}</span>
                     <div className="flex items-center gap-1 flex-shrink-0">

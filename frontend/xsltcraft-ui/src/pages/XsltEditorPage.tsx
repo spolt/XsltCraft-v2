@@ -19,6 +19,7 @@ import {
   Library,
   Sparkles,
   Rows2,
+  PictureInPicture2,
 } from 'lucide-react'
 import { useAiStore } from '../store/aiStore'
 import AiAssistantPanel, { type AiPrompt } from '../components/ai/AiAssistantPanel'
@@ -30,6 +31,9 @@ import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
 import XsltEditorToolbar from '../components/xslt-editor/XsltEditorToolbar'
 import XsltEditorPreview from '../components/xslt-editor/XsltEditorPreview'
+import FloatingPreviewWindow from '../components/xslt-editor/FloatingPreviewWindow'
+import { printActivePreview } from '../components/xslt-editor/previewFrame'
+import { useEditorMaximize } from '../hooks/useEditorMaximize'
 import SaveTemplateDialog from '../components/xslt-editor/SaveTemplateDialog'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
 import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
@@ -248,6 +252,21 @@ export default function XsltEditorPage() {
     range: { startLine: number; endLine: number }
   } | null>(null)
 
+  // Tam ekran editör: editör bölmesi panel grubunu kaplar, önizleme kodun üzerinde
+  // yüzen mini pencereye taşınır. Sağ panelin durumu korunur (AI sohbeti mount kalır).
+  // Kısayol yalnız editör ekrandayken ve üzerinde diyalog yokken etkindir.
+  const max = useEditorMaximize({
+    shortcutEnabled: !!xsltContent && !!xmlContent
+      && !showSaveDialog && !showShortcuts && !showSnippetManager && !refactorState,
+  })
+  const editorHostRef = useRef<HTMLDivElement>(null)
+  const focusEditorRef = useRef<(() => void) | null>(null)
+
+  // Moda girince odağı editöre al (örtülen sağ panelde ya da tıklanan butonda kalmasın).
+  useEffect(() => {
+    if (max.maximized) focusEditorRef.current?.()
+  }, [max.maximized])
+
   useEffect(() => { refreshAi() }, [refreshAi])
 
   // AI bölme tutamacı sürükleme: üst önizleme yüksekliğini (%) fare Y'sine göre ayarla.
@@ -304,6 +323,7 @@ export default function XsltEditorPage() {
    * ikinci tetiklemeyi garantiler.
    */
   function askAi(text: string) {
+    max.exit() // sağ panel tam ekranda örtülü
     setAiPrompt({ nonce: ++aiNonceRef.current, text })
     setAiMounted(true)
     setRightTab('ai')
@@ -712,6 +732,7 @@ export default function XsltEditorPage() {
 
   // XML editor'da ilgili satıra git (sekmeyi XML'e çevir + reveal)
   function handleLocateXmlLine(line: number, column?: number | null) {
+    max.exit() // sağ panel tam ekranda örtülü
     setRightTab('xml')
     // Problem satır/kolon numaraları HAM xmlContent üzerinden hesaplanır. Biçimlendirilmiş
     // görünümde satırlar kaydığı için hedefi ıskalardık — ham görünüme dönerek konumun
@@ -728,8 +749,9 @@ export default function XsltEditorPage() {
 
   // ─── Print ──────────────────────────────────────────────────────────────────
   function handlePrint() {
-    const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="Canlı Önizleme"]')
-    iframe?.contentWindow?.print()
+    if (!printActivePreview()) {
+      toast.warning('Yazdırmak için önizleme açık olmalı (Önizleme sekmesi veya mini pencere).', { title: 'Önizleme kapalı' })
+    }
   }
 
   // ─── Loading state ─────────────────────────────────────────────────────────
@@ -835,7 +857,7 @@ export default function XsltEditorPage() {
   // ─── Phase 2: Editor + Preview ──────────────────────────────────────────────
   return (
     <div className="h-screen flex overflow-hidden bg-gray-900">
-      <EditorSidebar />
+      {!max.maximized && <EditorSidebar />}
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <XsltEditorToolbar
@@ -855,6 +877,10 @@ export default function XsltEditorPage() {
           onSave={requestSave}
           onPrint={handlePrint}
           onShowShortcuts={() => setShowShortcuts(true)}
+          maximized={max.maximized}
+          miniOpen={max.miniOpen}
+          onToggleMaximize={max.toggle}
+          onToggleMini={max.toggleMini}
         />
 
         {lockedByOther && (
@@ -874,9 +900,12 @@ export default function XsltEditorPage() {
           </div>
         )}
 
-        <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
+        <PanelGroup id="xslt-editor-panels" orientation="horizontal" className="flex-1 overflow-hidden relative">
           <Panel defaultSize={50} minSize={20}>
-            <div className="h-full flex flex-col">
+            {/* Tam ekranda bu bölme panel grubunu kaplayan katmana dönüşür (grup `relative`).
+                Yalnız sınıf değişir: düğüm koşullu sarmalanır ya da farklı bir ağaca
+                çevrilirse Monaco remount olur (geri-al geçmişi, imleç, kaydırma kaybolur). */}
+            <div className={max.maximized ? 'absolute inset-0 z-20 flex flex-col bg-gray-900' : 'h-full flex flex-col'}>
               <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between gap-2">
                 <span className="text-xs text-gray-400 font-mono uppercase tracking-wide whitespace-nowrap">XSLT Editörü</span>
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -963,7 +992,7 @@ export default function XsltEditorPage() {
                   </button>
                 </div>
               </div>
-              <div className="flex-1 overflow-hidden relative">
+              <div ref={editorHostRef} className="flex-1 overflow-hidden relative">
                 <XsltEditor
                   value={xsltContent}
                   onChange={(v) => { setXsltContent(v); setIsDirty(true) }}
@@ -971,12 +1000,13 @@ export default function XsltEditorPage() {
                   xmlContent={xmlContent}
                   userSnippets={userSnippets}
                   onEvaluateXPath={handleEvaluateXPath}
-                  onEditorReady={({ goTo, revealLine, insertTextAtLine, toggleComment, formatDocument }) => {
+                  onEditorReady={({ goTo, revealLine, insertTextAtLine, toggleComment, formatDocument, focus }) => {
                     goToRef.current = goTo
                     revealLineRef.current = revealLine
                     insertTextAtLineRef.current = insertTextAtLine
                     toggleCommentRef.current = toggleComment
                     formatDocumentRef.current = formatDocument
+                    focusEditorRef.current = focus
                   }}
                   onRequestImageInsert={handleRequestImageInsert}
                   errors={xsltErrors}
@@ -985,24 +1015,52 @@ export default function XsltEditorPage() {
                   onCursorLineChange={setXsltCursorLine}
                   onSelectionChange={setXsltSelection}
                 />
+                {max.showMini && (
+                  <FloatingPreviewWindow
+                    containerRef={editorHostRef}
+                    html={previewHtml}
+                    status={previewError ? 'error' : previewLoading ? 'loading' : 'idle'}
+                    initialRect={max.miniRect}
+                    onRectCommit={max.commitMiniRect}
+                    onElementClick={handlePreviewClick}
+                    onDock={() => { max.exit(); setRightTab('preview'); focusEditorRef.current?.() }}
+                    onClose={() => { max.setMiniOpen(false); focusEditorRef.current?.() }}
+                  />
+                )}
               </div>
             </div>
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors cursor-col-resize flex-shrink-0" />
+          <PanelResizeHandle
+            disabled={max.maximized}
+            className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors cursor-col-resize flex-shrink-0"
+          />
 
           <Panel defaultSize={50} minSize={20}>
-            <div className="h-full flex flex-col">
+            {/* Tam ekranda editör katmanının altında kalır: görünmez ve odaklanamaz, ama mount. */}
+            <div className={`h-full flex flex-col ${max.maximized ? 'invisible' : ''}`}>
               {/* Sağ panel sekme başlıkları */}
               <div className="h-9 flex items-center border-b border-gray-700 bg-gray-800 px-2 gap-0.5 flex-shrink-0">
-                <button
-                  onClick={() => setRightTab('preview')}
-                  className={`px-3 py-1 rounded text-xs transition-colors ${
-                    rightTab === 'preview' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
-                  }`}
-                >
-                  Önizleme
-                </button>
+                <div className="flex items-center">
+                  <button
+                    onClick={() => setRightTab('preview')}
+                    className={`pl-3 pr-2 py-1 rounded-l text-xs transition-colors ${
+                      rightTab === 'preview' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
+                    }`}
+                  >
+                    Önizleme
+                  </button>
+                  <button
+                    onClick={() => max.enter({ withMini: true })}
+                    className={`px-1.5 py-1 rounded-r border-l border-gray-600/60 transition-colors hover:text-white ${
+                      rightTab === 'preview' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'text-gray-400 hover:bg-gray-700'
+                    }`}
+                    title="Tam ekran editör + mini önizleme penceresi (Ctrl+Shift+F)"
+                    aria-label="Önizlemeyi mini pencerede göster"
+                  >
+                    <PictureInPicture2 size={14} />
+                  </button>
+                </div>
                 <button
                   onClick={() => setRightTab('xml')}
                   disabled={!xmlContent}
@@ -1060,10 +1118,12 @@ export default function XsltEditorPage() {
               {/* Sağ panel içerik */}
               <div className="flex-1 overflow-hidden">
                 {rightTab !== 'ai' && (rightTab === 'preview' ? (
-                  <XsltEditorPreview
-                    html={previewHtml}
-                    onElementClick={handlePreviewClick}
-                  />
+                  !max.maximized && (
+                    <XsltEditorPreview
+                      html={previewHtml}
+                      onElementClick={handlePreviewClick}
+                    />
+                  )
                 ) : (
                   <div className="h-full flex flex-col">
                     {xmlDisplayReformatted && (
@@ -1106,14 +1166,15 @@ export default function XsltEditorPage() {
                     ve aradaki tutamaç ile dikey olarak yeniden boyutlandırılabilir.
                     Panellere sabit `key`/`id` verilir; böylece "Böl" açılıp kapanınca
                     sohbet paneli (key="ai-chat") remount olmaz ve konuşma korunur.
-                    Bölünmüş önizleme yalnızca AI sekmesi aktifken mount edilir; aksi
-                    halde ana önizleme ile iki ayrı tıklama dinleyicisi çakışırdı. */}
+                    Sayfada aynı anda en fazla bir önizleme iframe'i bulunur (yazdırma onu
+                    hedefler): ana ve bölünmüş önizleme yalnız tam ekran dışında, mini
+                    pencere yalnız tam ekranda mount edilir. */}
                 {aiEnabled && aiMounted && (
                   <div
                     ref={aiSplitContainerRef}
                     className={rightTab === 'ai' ? 'h-full flex flex-col min-h-0' : 'hidden'}
                   >
-                    {aiSplit && rightTab === 'ai' && (
+                    {aiSplit && rightTab === 'ai' && !max.maximized && (
                       <div
                         key="ai-preview"
                         className={`min-h-0 flex-shrink-0 ${aiDragging ? 'pointer-events-none' : ''}`}
@@ -1125,7 +1186,7 @@ export default function XsltEditorPage() {
                         />
                       </div>
                     )}
-                    {aiSplit && rightTab === 'ai' && (
+                    {aiSplit && rightTab === 'ai' && !max.maximized && (
                       <div
                         key="ai-divider"
                         onPointerDown={handleAiSplitDrag}
@@ -1232,7 +1293,7 @@ export default function XsltEditorPage() {
       )}
 
       {showShortcuts && (
-        <ShortcutsDialog onClose={() => setShowShortcuts(false)} />
+        <ShortcutsDialog onClose={() => setShowShortcuts(false)} showMaximize />
       )}
 
       {refactorState && (

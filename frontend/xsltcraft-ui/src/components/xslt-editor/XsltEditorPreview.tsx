@@ -1,75 +1,18 @@
-import { useRef, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+import ScaledPreviewFrame from './ScaledPreviewFrame'
 
 interface Props {
   html: string
   onElementClick?: (text: string, opts?: { exact?: boolean }) => void
 }
 
-const CLICK_SCRIPT = `
-<script>
-document.addEventListener('click', function(e) {
-  e.preventDefault();
-  var el = e.target;
-  // Görsel tıklaması: base64 src'den ayırt edici bir parça çıkar
-  var img = el;
-  while (img && img !== document.body) {
-    if (img.tagName === 'IMG') {
-      var src = img.getAttribute('src') || '';
-      var idx = src.indexOf('base64,');
-      if (idx !== -1) {
-        var b64 = src.substring(idx + 7).replace(/\\s/g, '');
-        // İlk ~48 karakter çoğu formatta ortak başlık olduğundan atla,
-        // sonraki ~80 karakteri ayırt edici imza olarak kullan
-        var start = b64.length > 128 ? 48 : 0;
-        var fragment = b64.substr(start, 80);
-        if (fragment) {
-          window.parent.postMessage({ type: 'xslt-preview-click', text: fragment, exact: true }, '*');
-          return;
-        }
-      }
-    }
-    img = img.parentElement;
-  }
-  // Metin tıklaması
-  while (el && el !== document.body) {
-    var text = el.textContent ? el.textContent.trim().substring(0, 120) : '';
-    if (text) {
-      window.parent.postMessage({ type: 'xslt-preview-click', text: text }, '*');
-      return;
-    }
-    el = el.parentElement;
-  }
-});
-</script>
-`
-
 const ZOOM_LEVELS = [0.5, 0.6, 0.75, 1.0, 1.25, 1.5, 2.0]
 const DEFAULT_ZOOM_IDX = 3 // 1.0
-const IFRAME_BASE_WIDTH = 860
-// Generous buffer covering ~100 A4 pages at 96dpi
-const IFRAME_BASE_HEIGHT = 4000
 
 export default function XsltEditorPreview({ html, onElementClick }: Props) {
-  const iframeRef = useRef<HTMLIFrameElement>(null)
   const [zoomIdx, setZoomIdx] = useState(DEFAULT_ZOOM_IDX)
   const zoom = ZOOM_LEVELS[zoomIdx]
-
-  const injectedHtml = html
-    ? html.replace('</body>', CLICK_SCRIPT + '</body>')
-    : '<html><body style="background:#1f2937;margin:0"></body></html>'
-
-  useEffect(() => {
-    if (!onElementClick) return
-    function handler(e: MessageEvent) {
-      if (e.origin !== window.location.origin) return
-      if (e.data?.type === 'xslt-preview-click' && e.data.text) {
-        onElementClick!(e.data.text, { exact: !!e.data.exact })
-      }
-    }
-    window.addEventListener('message', handler)
-    return () => window.removeEventListener('message', handler)
-  }, [onElementClick])
 
   const canZoomIn  = zoomIdx < ZOOM_LEVELS.length - 1
   const canZoomOut = zoomIdx > 0
@@ -129,41 +72,8 @@ export default function XsltEditorPreview({ html, onElementClick }: Props) {
         className="flex-1 overflow-auto bg-gray-300 flex py-2"
         style={{ justifyContent: 'safe center' }}
       >
-        {/*
-          Wrapper reports scaled dimensions to layout engine.
-          iframe inside is full-size, scaled via transform.
-          overflow:hidden clips any rendering outside the scaled bounds.
-        */}
-        <div
-          style={{
-            width: Math.round(IFRAME_BASE_WIDTH * zoom),
-            height: Math.round(IFRAME_BASE_HEIGHT * zoom),
-            overflow: 'hidden',
-            flexShrink: 0,
-          }}
-        >
-          <iframe
-            ref={iframeRef}
-            srcDoc={injectedHtml}
-            sandbox="allow-same-origin allow-scripts allow-modals"
-            style={{
-              width: IFRAME_BASE_WIDTH,
-              height: IFRAME_BASE_HEIGHT,
-              transform: `scale(${zoom})`,
-              transformOrigin: 'top left',
-              border: 'none',
-              display: 'block',
-              background: 'white',
-            }}
-            title="Canlı Önizleme"
-          />
-        </div>
+        <ScaledPreviewFrame html={html} scale={zoom} onElementClick={onElementClick} />
       </div>
     </div>
   )
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function printPreview(iframeEl: HTMLIFrameElement | null) {
-  iframeEl?.contentWindow?.print()
 }

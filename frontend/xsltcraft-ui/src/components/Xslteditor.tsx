@@ -17,6 +17,7 @@ type EditorFns = {
   insertTextAtLine: (lineNumber: number, text: string) => void
   toggleComment: () => void
   formatDocument: () => void
+  focus: () => void
 }
 
 type Props = {
@@ -724,6 +725,7 @@ export default function XsltEditor({
         formatDocument: () => {
           editor.getAction('xslt-format-document')?.run()
         },
+        focus: () => editor.focus(),
       })
     }
   }
