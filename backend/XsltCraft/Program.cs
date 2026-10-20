@@ -56,6 +56,20 @@ builder.Services.AddRateLimiter(opts =>
 
     // Refresh: IP başına 30 istek/dk. Login ile ortak global limiti paylaşmaz — aksi halde
     // yoğun anda kullanıcıların sessiz yenilemesi 429 alıp oturumdan düşerdi.
+    // Tema logo/imza birleştirme (önizleme + indirme): sürükle-bırak art arda istek üretir.
+    opts.AddPolicy("theme-compose", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                          ?? "anon",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
     opts.AddPolicy("auth-refresh", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon",

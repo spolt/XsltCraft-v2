@@ -1,3 +1,5 @@
+using XsltCraft.Application.ThemeSlots.Catalog;
+
 namespace XsltCraft.Application.DTO;
 
 public class FreeThemeResponse
@@ -10,4 +12,10 @@ public class FreeThemeResponse
     public string? ThumbnailUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>Admin tema yanıtı: yükleme sonrası logo/imza konum analizi raporu (eski temalarda null).</summary>
+public class AdminThemeResponse : FreeThemeResponse
+{
+    public ThemeSlotReportDto? SlotAnalysis { get; set; }
 }

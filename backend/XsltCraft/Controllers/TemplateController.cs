@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using XsltCraft.Application.DTO;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
+using XsltCraft.Application.ThemeSlots.Catalog;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
@@ -15,7 +16,7 @@ namespace XsltCraft.Api.Controllers;
 
 [ApiController]
 [Route("api/templates")]
-public class TemplateController(AppDbContext db, IStorageService storage, IXsltGeneratorService generator, IUserActivityRecorder activity, IUsageQuotaService quota, IEntitlementService entitlements) : ControllerBase
+public class TemplateController(AppDbContext db, IStorageService storage, IXsltGeneratorService generator, IUserActivityRecorder activity, IUsageQuotaService quota, IEntitlementService entitlements, IThemeSlotProjector slotProjector) : ControllerBase
 {
     // GET /api/templates  — tüm free theme'leri listele (public, auth gerektirmez)
     [HttpGet]
@@ -181,7 +182,8 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
             FolderId = template.FolderId,
             IsFavorite = template.IsFavorite,
             CreatedAt = template.CreatedAt,
-            UpdatedAt = template.UpdatedAt
+            UpdatedAt = template.UpdatedAt,
+            Slots = template.IsFreeTheme ? slotProjector.ForUser(template.SlotCatalog, template.DocumentType) : [],
         });
     }
 

@@ -1,5 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
 import {
   LayoutDashboard,
   BookOpen,
@@ -9,16 +20,15 @@ import {
   Settings2,
   X,
   Printer,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   Code2,
   Download,
   BookmarkCheck,
+  TriangleAlert,
 } from 'lucide-react'
-import { getTemplate } from '../services/templateService'
+import { getTemplate, type ThemeSlotOption } from '../services/templateService'
 import { reportDownload } from '../services/activityService'
-import { previewFromStoredXslt, fetchThemeXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
+import type { BankInfoItem } from '../services/previewService'
+import type { AssetKind } from '../services/themeComposeService'
 import { createUserXsltTemplate } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
 import { useEntitlementStore } from '../store/entitlementStore'
@@ -26,105 +36,26 @@ import { openUpgradeModal } from '../store/upgradeModalStore'
 import { parseGateError } from '../services/entitlementService'
 import { toast } from '../store/toastStore'
 import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
+import { printActivePreview } from '../components/xslt-editor/previewFrame'
+import { useThemeCompose } from '../hooks/useThemeCompose'
+import ImagePanel from '../components/theme-assets/ImagePanel'
+import BankInfoPanel from '../components/theme-assets/BankInfoPanel'
+import ThemeSlotPreview from '../components/theme-assets/ThemeSlotPreview'
+import DraggableAssetChip, { AssetDragPreview } from '../components/theme-assets/DraggableAssetChip'
+import { announcements, kindFromDragId, screenReaderInstructions, slotFromDropId } from '../components/theme-assets/slotDnd'
+import {
+  defaultImg,
+  effectiveSlot,
+  filledBankRows,
+  readAsDataUrl,
+  toComposeAssets,
+  hiddenThemeImages,
+  themeImageRemovable,
+  validateImageFile,
+  type ImgState,
+} from '../components/theme-assets/imageState'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
-
-const DEBOUNCE_MS = 1200
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target!.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-// ─── XSLT injection helpers (DevModePage ile aynı mantık) ────────────────────
-const OVERRIDE_START = '<!-- DEV-MODE-OVERRIDES:START -->'
-const OVERRIDE_END   = '<!-- DEV-MODE-OVERRIDES:END -->'
-
-function escapeXml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function buildInjection(logo: ImgState, signature: ImgState, bankInfo: BankInfoItem[]): string {
-  const parts: string[] = []
-  const hasLogo = !!logo.url
-  const hasSig  = !!signature.url
-
-  if (hasLogo || hasSig) {
-    const parseNum = (s: string) => { const n = parseInt(s); return isNaN(n) ? null : n }
-    const lines = [
-      `<script>(function(){`,
-      `  function jc(a){return a==='center'?'center':a==='right'?'flex-end':'flex-start';}`,
-      `  function setImg(ids,url,w,h,align){`,
-      `    ids.forEach(function(id){`,
-      `      var el=document.getElementById(id);if(!el)return;`,
-      `      el.style.cssText='display:flex;justify-content:'+jc(align)+';align-items:center;';`,
-      `      var img=document.createElement('img');`,
-      `      img.src=url;`,
-      `      img.style.cssText=(w?'width:'+w+'px;':'width:auto;')+(h?'height:'+h+'px;':'height:auto;')+'max-width:100%;object-fit:contain;display:block;';`,
-      `      el.innerHTML='';el.appendChild(img);`,
-      `    });`,
-      `  }`,
-      `  window.addEventListener('load',function(){`,
-    ]
-    if (hasLogo) {
-      const w = parseNum(logo.width)
-      const h = parseNum(logo.height)
-      const safeUrl = logo.url.replace(/&/g, '&amp;').replace(/'/g, '%27')
-      lines.push(`    setImg(['company_logo','companyLogo'],'${safeUrl}',${w ?? 'null'},${h ?? 'null'},'${logo.alignment}');`)
-    }
-    if (hasSig) {
-      const w = parseNum(signature.width)
-      const h = parseNum(signature.height)
-      const safeUrl = signature.url.replace(/&/g, '&amp;').replace(/'/g, '%27')
-      lines.push(`    setImg(['imza','companyKase'],'${safeUrl}',${w ?? 'null'},${h ?? 'null'},'${signature.alignment}');`)
-    }
-    lines.push(`  });`, `})();</script>`)
-    parts.push(lines.join('\n'))
-  }
-
-  const validBanks = bankInfo.filter(b => b.bankName || b.iban)
-  if (validBanks.length > 0) {
-    const rows = validBanks
-      .map(b =>
-        `      <tr>` +
-        `<td style="padding:6px 10px;border:1px solid #ddd">${escapeXml(b.bankName)}</td>` +
-        `<td style="padding:6px 10px;border:1px solid #ddd;font-family:monospace">${escapeXml(b.iban)}</td>` +
-        `</tr>`,
-      )
-      .join('\n')
-    parts.push(
-      `<div style="font-family:Arial,sans-serif;font-size:12px;margin:16px 0;page-break-inside:avoid">\n` +
-      `  <table style="width:100%;border-collapse:collapse">\n` +
-      `    <thead><tr>\n` +
-      `      <th style="text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd">Banka Adı</th>\n` +
-      `      <th style="text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd">IBAN</th>\n` +
-      `    </tr></thead>\n` +
-      `    <tbody>\n${rows}\n    </tbody>\n` +
-      `  </table>\n</div>`,
-    )
-  }
-
-  if (parts.length === 0) return ''
-  return `${OVERRIDE_START}\n${parts.join('\n')}\n${OVERRIDE_END}`
-}
-
-function applyInjection(xslt: string, injection: string): string {
-  const si = xslt.indexOf(OVERRIDE_START)
-  const ei = xslt.indexOf(OVERRIDE_END)
-  if (si >= 0 && ei >= 0) {
-    if (!injection) return xslt.slice(0, si).trimEnd() + '\n' + xslt.slice(ei + OVERRIDE_END.length).trimStart()
-    return xslt.slice(0, si) + injection + xslt.slice(ei + OVERRIDE_END.length)
-  }
-  if (!injection) return xslt
-  const bodyClose = xslt.lastIndexOf('</body>')
-  if (bodyClose >= 0) return xslt.slice(0, bodyClose) + injection + '\n' + xslt.slice(bodyClose)
-  const tmpl = xslt.lastIndexOf('</xsl:template>')
-  if (tmpl >= 0) return xslt.slice(0, tmpl) + injection + '\n' + xslt.slice(tmpl)
-  return xslt + '\n' + injection
-}
+import defaultDespatchXml from '../assets/default-despatch.xml?raw'
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function EditorSidebar() {
@@ -147,220 +78,88 @@ function EditorSidebar() {
   )
 }
 
-// ─── Image settings state ─────────────────────────────────────────────────────
-interface ImgState {
-  url: string
-  width: string   // string so input is controllable; parsed to number on send
-  height: string
-  alignment: Alignment
-}
-
-const defaultImg = (): ImgState => ({ url: '', width: '250', height: '150', alignment: 'left' })
-
-// ─── Alignment picker ─────────────────────────────────────────────────────────
-function AlignPicker({ value, onChange }: { value: Alignment; onChange: (v: Alignment) => void }) {
-  const opts: { v: Alignment; Icon: typeof AlignLeft }[] = [
-    { v: 'left', Icon: AlignLeft },
-    { v: 'center', Icon: AlignCenter },
-    { v: 'right', Icon: AlignRight },
-  ]
-  return (
-    <div className="flex gap-1">
-      {opts.map(({ v, Icon }) => (
-        <button
-          key={v}
-          onClick={() => onChange(v)}
-          className={`flex items-center justify-center w-7 h-7 rounded border transition-colors ${
-            value === v
-              ? 'bg-blue-600 border-blue-600 text-white'
-              : 'border-gray-200 text-gray-400 hover:border-blue-300 hover:text-blue-500'
-          }`}
-          title={v === 'left' ? 'Sola yasla' : v === 'center' ? 'Ortala' : 'Sağa yasla'}
-        >
-          <Icon size={13} />
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// ─── Image upload + settings panel ───────────────────────────────────────────
-function ImagePanel({
-  label,
-  state,
-  uploading,
-  onUpload,
-  onChange,
-}: {
-  label: string
-  state: ImgState
-  uploading: boolean
-  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onChange: (patch: Partial<ImgState>) => void
-}) {
-  return (
-    <section>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{label}</h3>
-
-      {/* Upload area */}
-      {state.url ? (
-        <div className="flex flex-col gap-2 mb-3">
-          <img src={state.url} alt={label} className="max-h-16 object-contain border border-gray-100 rounded p-1 bg-gray-50" />
-          <label className="cursor-pointer text-xs text-blue-600 hover:underline">
-            Değiştir
-            <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={onUpload} />
-          </label>
-        </div>
-      ) : (
-        <label className="cursor-pointer flex items-center gap-2 border border-dashed border-gray-300 rounded-lg px-3 py-3 hover:border-blue-300 hover:bg-blue-50 transition-colors mb-3">
-          {uploading
-            ? <span className="text-xs text-gray-400">Yükleniyor…</span>
-            : <><span className="text-lg">🖼</span><span className="text-xs text-gray-500">Görsel yükle (PNG / JPG / SVG)</span></>
-          }
-          <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={onUpload} disabled={uploading} />
-        </label>
-      )}
-
-      {/* Size + alignment — always visible so user can set before upload too */}
-      <div className="flex flex-col gap-2">
-        {/* Width / Height */}
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="text-xs text-gray-400 mb-0.5 block">Genişlik (px)</label>
-            <input
-              type="number"
-              min={10}
-              max={1200}
-              placeholder="Otomatik"
-              value={state.width}
-              onChange={(e) => onChange({ width: e.target.value })}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-xs text-gray-400 mb-0.5 block">Yükseklik (px)</label>
-            <input
-              type="number"
-              min={10}
-              max={1200}
-              placeholder="Otomatik"
-              value={state.height}
-              onChange={(e) => onChange({ height: e.target.value })}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-        </div>
-
-        {/* Alignment */}
-        <div>
-          <label className="text-xs text-gray-400 mb-0.5 block">Hizalama</label>
-          <AlignPicker value={state.alignment} onChange={(v) => onChange({ alignment: v })} />
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── Convert ImgState → ImageSettings for the service ────────────────────────
-function toSettings(s: ImgState): ImageSettings | undefined {
-  if (!s.url) return undefined
-  return {
-    url: s.url,
-    width: s.width ? parseInt(s.width) : undefined,
-    height: s.height ? parseInt(s.height) : undefined,
-    alignment: s.alignment,
-  }
-}
-
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function ThemeUsePage() {
   const { templateId } = useParams<{ templateId: string }>()
   const navigate = useNavigate()
 
   const [templateName, setTemplateName] = useState('Hazır Tema')
-  const [xslt, setXslt] = useState('')
-  const xsltReadyRef = useRef(false)
+  const [slots, setSlots] = useState<ThemeSlotOption[]>([])
   const [xmlContent, setXmlContent] = useState<string>(defaultInvoiceXml)
   const [editMode, setEditMode] = useState(false)
 
   const [logo, setLogo] = useState<ImgState>(defaultImg())
   const [signature, setSignature] = useState<ImgState>(defaultImg())
   const [bankInfo, setBankInfo] = useState<BankInfoItem[]>([{ bankName: '', iban: '' }])
+  const [uploading, setUploading] = useState<AssetKind | null>(null)
 
-  const [logoUploading, setLogoUploading] = useState(false)
-  const [signatureUploading, setSignatureUploading] = useState(false)
-
-  const [html, setHtml] = useState('')
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewError, setPreviewError] = useState<string | null>(null)
-  const [lastMs, setLastMs] = useState<number | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [dragKind, setDragKind] = useState<AssetKind | null>(null)
 
-  // Tema adını ve XSLT içeriğini yükle
+  // Tema adı, belge türü ve konum kataloğu
   useEffect(() => {
     if (!templateId) return
-    getTemplate(templateId).then((t) => setTemplateName(t.name)).catch(() => {})
-    fetchThemeXslt(templateId)
-      .then((content) => {
-        setXslt(content)
-        xsltReadyRef.current = true
+    getTemplate(templateId)
+      .then((t) => {
+        setTemplateName(t.name)
+        setSlots(t.slots ?? [])
+        if (t.documentType === 'Despatch') setXmlContent(defaultDespatchXml)
       })
-      .catch(async (err) => {
-        // Ücretli tema doğrudan URL ile açıldıysa backend 402 döner → Pro'ya yönlendir.
-        const gate = await parseGateError(err)
-        if (gate.status === 402) {
-          openUpgradeModal({
-            title: 'Ücretli tema',
-            message: gate.message ?? 'Bu temayı kullanmak için XsltCraft Pro üyeliği gerekir.',
-          })
-          navigate('/templates')
-        }
+      .catch(() => {})
+  }, [templateId])
+
+  const assets = useMemo(() => toComposeAssets(logo, signature, slots), [logo, signature, slots])
+  const banks = useMemo(() => filledBankRows(bankInfo), [bankInfo])
+
+  const handleComposeError = useCallback(async (err: unknown) => {
+    // Ücretli tema doğrudan URL ile açıldıysa backend 402 döner → Pro'ya yönlendir.
+    const gate = await parseGateError(err)
+    if (gate.status === 402) {
+      openUpgradeModal({
+        title: 'Ücretli tema',
+        message: gate.message ?? 'Bu temayı kullanmak için XsltCraft Pro üyeliği gerekir.',
       })
-  }, [templateId, navigate])
+      navigate('/templates')
+    }
+  }, [navigate])
 
-  // Logo/imza/IBAN değişince enjeksiyonu XSLT'e göm
-  useEffect(() => {
-    if (!xsltReadyRef.current) return
-    const injection = buildInjection(logo, signature, bankInfo)
-    setXslt((prev) => applyInjection(prev, injection))
-  }, [logo, signature, bankInfo])
+  const hideThemeImages = useMemo(() => hiddenThemeImages(logo, signature, slots), [logo, signature, slots])
+  const compose = useThemeCompose({ themeId: templateId, xmlContent, assets, bankInfo: banks, hideThemeImages, onError: handleComposeError })
 
-  // Debounced preview
-  useEffect(() => {
-    if (!xmlContent || !templateId) return
-    const t = setTimeout(async () => {
-      setPreviewLoading(true)
-      setPreviewError(null)
-      try {
-        const result = await previewFromStoredXslt(
-          templateId,
-          xmlContent,
-          toSettings(logo),
-          toSettings(signature),
-          bankInfo.filter((b) => b.bankName || b.iban),
-        )
-        setHtml(result.html)
-        setLastMs(result.generationTimeMs)
-      } catch (e: unknown) {
-        const msg =
-          e && typeof e === 'object' && 'response' in e
-            ? (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Önizleme alınamadı.'
-            : 'Önizleme alınamadı.'
-        setPreviewError(msg)
-      } finally {
-        setPreviewLoading(false)
-      }
-    }, DEBOUNCE_MS)
-    return () => clearTimeout(t)
-  }, [xmlContent, logo, signature, bankInfo, templateId])
+  const placements = useMemo(() => ({
+    logo: logo.dataUrl ? effectiveSlot('logo', logo, slots) : null,
+    signature: signature.dataUrl ? effectiveSlot('signature', signature, slots) : null,
+  }), [logo, signature, slots])
 
-  function handleDownload() {
-    if (!xslt || isDownloading) return
+  const setterFor = (kind: AssetKind) => (kind === 'logo' ? setLogo : setSignature)
+
+  // ── Sürükle-bırak ───────────────────────────────────────────────────────────
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  )
+
+  function handleDragStart(e: DragStartEvent) {
+    setDragKind(kindFromDragId(e.active.id))
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    setDragKind(null)
+    const kind = kindFromDragId(e.active.id)
+    const slot = slotFromDropId(e.over?.id)
+    if (!kind || !slot) return
+    setterFor(kind)((p) => ({ ...p, slot }))
+    compose.composeNow()
+  }
+
+  // ── İndir / Kaydet: önizlemeyle aynı birleştirme ─────────────────────────────
+  async function handleDownload() {
+    if (isDownloading) return
     setIsDownloading(true)
     try {
+      const xslt = await compose.exportXslt()
       const blob = new Blob([xslt], { type: 'application/xslt+xml' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
@@ -368,13 +167,16 @@ export default function ThemeUsePage() {
       a.click()
       URL.revokeObjectURL(a.href)
       reportDownload('Template', templateId)
+    } catch (err) {
+      await handleComposeError(err)
+      toast.error('İndirme başarısız.')
     } finally {
       setIsDownloading(false)
     }
   }
 
   async function handleSave() {
-    if (!xslt || isSaving) return
+    if (isSaving) return
 
     // Proaktif gate: ham XSLT'yi "Şablonlarım"a saklamak Pro üyelik gerektirir.
     const ent = useEntitlementStore.getState().entitlements
@@ -388,6 +190,7 @@ export default function ThemeUsePage() {
 
     setIsSaving(true)
     try {
+      const xslt = await compose.exportXslt()
       await createUserXsltTemplate({ name: templateName, xsltContent: xslt, xmlContent })
       setSaveSuccess(true)
       setTimeout(() => { navigate('/my-xslt-templates') }, 800)
@@ -415,33 +218,27 @@ export default function ThemeUsePage() {
     }
   }
 
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageUpload(kind: AssetKind, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    setLogoUploading(true)
+    const invalid = validateImageFile(file)
+    if (invalid) {
+      toast.error(invalid, { title: kind === 'logo' ? 'Logo yüklenemedi' : 'İmza yüklenemedi' })
+      return
+    }
+    setUploading(kind)
     try {
       const dataUrl = await readAsDataUrl(file)
-      setLogo((prev) => ({ ...prev, url: dataUrl }))
-    } catch { alert('Logo yüklenemedi.') }
-    finally { setLogoUploading(false); e.target.value = '' }
+      setterFor(kind)((prev) => ({ ...prev, dataUrl }))
+    } catch {
+      toast.error('Görsel okunamadı.')
+    } finally {
+      setUploading(null)
+    }
   }
 
-  async function handleSignatureUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setSignatureUploading(true)
-    try {
-      const dataUrl = await readAsDataUrl(file)
-      setSignature((prev) => ({ ...prev, url: dataUrl }))
-    } catch { alert('İmza yüklenemedi.') }
-    finally { setSignatureUploading(false); e.target.value = '' }
-  }
-
-  function addBankRow() { setBankInfo((p) => [...p, { bankName: '', iban: '' }]) }
-  function removeBankRow(idx: number) { setBankInfo((p) => p.filter((_, i) => i !== idx)) }
-  function updateBankRow(idx: number, field: keyof BankInfoItem, value: string) {
-    setBankInfo((p) => p.map((r, i) => (i === idx ? { ...r, [field]: value } : r)))
-  }
+  const dragged = dragKind === 'logo' ? logo : dragKind === 'signature' ? signature : null
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-50">
@@ -451,18 +248,18 @@ export default function ThemeUsePage() {
         {/* Toolbar */}
         <div className="h-12 border-b border-gray-200 bg-white flex items-center gap-2 px-4 flex-shrink-0">
           <span className="text-base font-medium text-gray-700 flex-1 truncate">{templateName}</span>
-          {previewLoading && (
+          {compose.loading && (
             <span className="text-sm text-blue-500 flex items-center gap-1">
               <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
               Yükleniyor
             </span>
           )}
-          {!previewLoading && lastMs !== null && <span className="text-sm text-gray-400">{lastMs} ms</span>}
+          {!compose.loading && compose.lastMs !== null && <span className="text-sm text-gray-400">{compose.lastMs} ms</span>}
           <label className="cursor-pointer text-sm text-gray-500 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50">
             XML Değiştir
             <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
           </label>
-          <button onClick={() => iframeRef.current?.contentWindow?.print()} disabled={!html}
+          <button onClick={() => printActivePreview()} disabled={!compose.html}
             className="text-gray-500 border border-gray-200 rounded p-1.5 hover:bg-gray-50 disabled:opacity-30" title="Yazdır">
             <Printer size={16} />
           </button>
@@ -475,7 +272,7 @@ export default function ThemeUsePage() {
           </button>
           <button
             onClick={handleDownload}
-            disabled={isDownloading || !xslt}
+            disabled={isDownloading || !compose.html}
             className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40"
             title="XSLT dosyasını indir"
           >
@@ -483,7 +280,7 @@ export default function ThemeUsePage() {
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving || saveSuccess || !xslt}
+            disabled={isSaving || saveSuccess || !compose.html}
             className={`flex items-center gap-1.5 text-sm border rounded px-3 py-1.5 transition-colors disabled:opacity-40 ${
               saveSuccess
                 ? 'text-green-700 border-green-300 bg-green-50'
@@ -503,79 +300,87 @@ export default function ThemeUsePage() {
           }
         </div>
 
-        {previewError && (
-          <div className="px-4 py-2 text-xs text-red-600 bg-red-50 border-b border-red-100 flex-shrink-0">{previewError}</div>
+        {compose.error && (
+          <div className="px-4 py-2 text-xs text-red-600 bg-red-50 border-b border-red-100 flex-shrink-0">{compose.error}</div>
+        )}
+        {compose.warnings.length > 0 && (
+          <div className="px-4 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-100 flex-shrink-0 flex flex-col gap-0.5">
+            {compose.warnings.map((w) => (
+              <span key={w.code + (w.kind ?? '')} className="flex items-center gap-1.5">
+                <TriangleAlert size={12} className="flex-shrink-0" />{w.message}
+              </span>
+            ))}
+          </div>
         )}
 
-        <div className="flex-1 flex overflow-hidden">
-          {/* Preview */}
-          <div className="flex-1 overflow-auto bg-gray-300 flex justify-center">
-            <iframe
-              ref={iframeRef}
-              srcDoc={html || '<html><body style="background:#d1d5db;margin:0"></body></html>'}
-              sandbox="allow-same-origin allow-scripts allow-modals"
-              className="border-none bg-white shadow-lg"
-              style={{ width: 860, minHeight: '100%', height: 'max(100%, 1200px)' }}
-              title="Canlı Önizleme"
-            />
+        <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setDragKind(null)}
+          accessibility={{ announcements, screenReaderInstructions }}
+        >
+          <div className="flex-1 flex overflow-hidden">
+            {/* Preview */}
+            <div className="flex-1 overflow-auto bg-gray-300 flex justify-center py-4" style={{ justifyContent: 'safe center' }}>
+              <ThemeSlotPreview
+                html={compose.html}
+                slots={slots}
+                showSlots={editMode && slots.length > 0}
+                dragging={dragKind !== null}
+                placements={placements}
+              />
+            </div>
+
+            {/* Right panel */}
+            {editMode && (
+              <div className="flex-shrink-0 border-l border-gray-200 bg-white flex flex-col overflow-y-auto" style={{ width: 300 }}>
+                <div className="p-4 flex flex-col gap-6">
+                  {slots.length > 0 ? (
+                    <p className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                      Görseli önizlemedeki mavi kesikli alanlardan birine sürükleyin ya da “Konum” listesinden seçin.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                      Bu tema için konum seçimi yok; görseller temanın logo/imza alanına yerleşir.
+                    </p>
+                  )}
+
+                  {(['logo', 'signature'] as const).map((kind, i) => {
+                    const state = kind === 'logo' ? logo : signature
+                    return (
+                      <div key={kind} className="flex flex-col gap-6">
+                        {i > 0 && <div className="border-t border-gray-100" />}
+                        <ImagePanel
+                          label={kind === 'logo' ? 'Logo' : 'İmza / Kaşe'}
+                          state={state}
+                          uploading={uploading === kind}
+                          slots={slots}
+                          slotValue={effectiveSlot(kind, state, slots)}
+                          onUpload={(e) => handleImageUpload(kind, e)}
+                          onChange={(patch) => setterFor(kind)((p) => ({ ...p, ...patch }))}
+                          onRemove={() => setterFor(kind)((p) => ({ ...p, dataUrl: '' }))}
+                          themeImageRemovable={themeImageRemovable(kind, slots)}
+                          dragHandle={slots.length > 0 && state.dataUrl
+                            ? <DraggableAssetChip kind={kind} dataUrl={state.dataUrl} />
+                            : undefined}
+                        />
+                      </div>
+                    )
+                  })}
+
+                  <div className="border-t border-gray-100" />
+                  <BankInfoPanel rows={bankInfo} onChange={setBankInfo} />
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Right panel */}
-          {editMode && (
-            <div className="w-76 flex-shrink-0 border-l border-gray-200 bg-white flex flex-col overflow-y-auto" style={{ width: 300 }}>
-              <div className="p-4 flex flex-col gap-6">
-
-                <ImagePanel
-                  label="Logo"
-                  state={logo}
-                  uploading={logoUploading}
-                  onUpload={handleLogoUpload}
-                  onChange={(patch) => setLogo((p) => ({ ...p, ...patch }))}
-                />
-
-                <div className="border-t border-gray-100" />
-
-                <ImagePanel
-                  label="İmza / Kaşe"
-                  state={signature}
-                  uploading={signatureUploading}
-                  onUpload={handleSignatureUpload}
-                  onChange={(patch) => setSignature((p) => ({ ...p, ...patch }))}
-                />
-
-                <div className="border-t border-gray-100" />
-
-                {/* IBAN */}
-                <section>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Banka / IBAN</h3>
-                  <div className="flex flex-col gap-3">
-                    {bankInfo.map((row, idx) => (
-                      <div key={idx} className="relative bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        {bankInfo.length > 1 && (
-                          <button onClick={() => removeBankRow(idx)} className="absolute top-2 right-2 text-gray-300 hover:text-red-400" title="Kaldır">
-                            <X size={12} />
-                          </button>
-                        )}
-                        <div className="flex flex-col gap-1.5">
-                          <input type="text" placeholder="Banka adı" value={row.bankName}
-                            onChange={(e) => updateBankRow(idx, 'bankName', e.target.value)}
-                            className="text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full" />
-                          <input type="text" placeholder="TR00 0000 0000 0000 0000 0000 00" value={row.iban}
-                            onChange={(e) => updateBankRow(idx, 'iban', e.target.value)}
-                            className="text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full font-mono tracking-wide" />
-                        </div>
-                      </div>
-                    ))}
-                    <button onClick={addBankRow} className="text-xs text-blue-600 hover:text-blue-700 text-left flex items-center gap-1">
-                      + Banka hesabı ekle
-                    </button>
-                  </div>
-                </section>
-
-              </div>
-            </div>
-          )}
-        </div>
+          <DragOverlay dropAnimation={null}>
+            {dragKind && dragged?.dataUrl ? <AssetDragPreview kind={dragKind} dataUrl={dragged.dataUrl} /> : null}
+          </DragOverlay>
+        </DndContext>
       </div>
     </div>
   )

@@ -2,34 +2,46 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   getAdminThemes,
+  getAdminTheme,
   createTheme,
   updateTheme,
   deleteTheme,
+  UploadDecisionRequiredError,
+  type AdminTheme,
+  type UploadDecision,
+  type UploadDecisionRequest,
 } from '../../services/adminService'
 import type { FreeTheme } from '../../services/templateService'
+import ThemeUploadDecisionDialog from '../../components/admin/ThemeUploadDecisionDialog'
+import ThemeSlotReport from '../../components/admin/ThemeSlotReport'
 
 const DOC_TYPE_LABEL: Record<string, string> = {
   Invoice: 'e-Fatura',
   Despatch: 'İrsaliye',
 }
 
+function errorMessage(err: unknown, fallback: string): string {
+  return (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? fallback
+}
+
 // ---- Yeni tema yükleme formu ----
-function UploadForm({ onCreated }: { onCreated: (t: FreeTheme) => void }) {
+function UploadForm({ onCreated }: { onCreated: (t: AdminTheme) => void }) {
   const [name, setName] = useState('')
   const [docType, setDocType] = useState('Invoice')
   const [file, setFile] = useState<File | null>(null)
   const [isPremium, setIsPremium] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState<UploadDecisionRequest | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const upload = async (decision?: UploadDecision) => {
     if (!file) return
     setLoading(true)
     setError(null)
     try {
-      const created = await createTheme({ name, documentType: docType, file, isPremium })
+      const created = await createTheme({ name, documentType: docType, file, isPremium, decision })
+      setPending(null)
       onCreated(created)
       setName('')
       setDocType('Invoice')
@@ -37,13 +49,20 @@ function UploadForm({ onCreated }: { onCreated: (t: FreeTheme) => void }) {
       setIsPremium(false)
       if (fileRef.current) fileRef.current.value = ''
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? 'Yükleme başarısız.'
-      setError(msg)
+      if (err instanceof UploadDecisionRequiredError) {
+        setPending(err.request)
+      } else {
+        setPending(null)
+        setError(errorMessage(err, 'Yükleme başarısız.'))
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    void upload()
   }
 
   return (
@@ -113,6 +132,15 @@ function UploadForm({ onCreated }: { onCreated: (t: FreeTheme) => void }) {
       >
         {loading ? 'Yükleniyor…' : 'Yükle'}
       </button>
+
+      {pending && (
+        <ThemeUploadDecisionDialog
+          request={pending}
+          busy={loading}
+          onDecide={(d) => void upload(d)}
+          onCancel={() => setPending(null)}
+        />
+      )}
     </form>
   )
 }
@@ -123,7 +151,7 @@ function UpdateRow({
   onUpdated,
 }: {
   theme: FreeTheme
-  onUpdated: (t: FreeTheme) => void
+  onUpdated: (t: AdminTheme) => void
 }) {
   const [name, setName] = useState(theme.name)
   const [docType, setDocType] = useState<string>(theme.documentType)
@@ -131,10 +159,10 @@ function UpdateRow({
   const [isPremium, setIsPremium] = useState(theme.isPremium)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState<UploadDecisionRequest | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const save = async (decision?: UploadDecision) => {
     setLoading(true)
     setError(null)
     try {
@@ -143,18 +171,27 @@ function UpdateRow({
         documentType: docType,
         file: file ?? undefined,
         isPremium,
+        decision,
       })
+      setPending(null)
       onUpdated(updated)
       setFile(null)
       if (fileRef.current) fileRef.current.value = ''
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? 'Güncelleme başarısız.'
-      setError(msg)
+      if (err instanceof UploadDecisionRequiredError) {
+        setPending(err.request)
+      } else {
+        setPending(null)
+        setError(errorMessage(err, 'Güncelleme başarısız.'))
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    void save()
   }
 
   return (
@@ -198,6 +235,15 @@ function UpdateRow({
           {loading ? '…' : 'Kaydet'}
         </button>
       </div>
+
+      {pending && (
+        <ThemeUploadDecisionDialog
+          request={pending}
+          busy={loading}
+          onDecide={(d) => void save(d)}
+          onCancel={() => setPending(null)}
+        />
+      )}
     </form>
   )
 }
@@ -247,6 +293,7 @@ export default function AdminThemesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingTheme, setDeletingTheme] = useState<FreeTheme | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [report, setReport] = useState<AdminTheme | null>(null)
 
   useEffect(() => {
     getAdminThemes()
@@ -255,10 +302,24 @@ export default function AdminThemesPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleCreated = (t: FreeTheme) => setThemes((prev) => [t, ...prev])
+  // Yükleme/güncelleme sonrası konum analizi raporu gösterilir.
+  const handleCreated = (t: AdminTheme) => {
+    setThemes((prev) => [t, ...prev])
+    setReport(t)
+  }
 
-  const handleUpdated = (t: FreeTheme) =>
+  const handleUpdated = (t: AdminTheme) => {
     setThemes((prev) => prev.map((x) => (x.id === t.id ? t : x)))
+    if (t.slotAnalysis) setReport(t)
+  }
+
+  const openReport = async (id: string) => {
+    try {
+      setReport(await getAdminTheme(id))
+    } catch {
+      setError('Tema bilgisi alınamadı.')
+    }
+  }
 
   const handleDeleteConfirm = async () => {
     if (!deletingTheme) return
@@ -357,6 +418,13 @@ export default function AdminThemesPage() {
                     ) : (
                       <div className="flex gap-2 justify-end">
                         <button
+                          onClick={() => void openReport(theme.id)}
+                          className="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-lg transition"
+                          title="Logo / imza konum analizi"
+                        >
+                          Konumlar
+                        </button>
+                        <button
                           onClick={() => setEditingId(theme.id)}
                           className="px-3 py-1.5 text-xs font-medium text-blue-700 border border-blue-200 hover:bg-blue-50 rounded-lg transition"
                         >
@@ -377,6 +445,8 @@ export default function AdminThemesPage() {
           </table>
         </div>
       )}
+
+      {report && <ThemeSlotReport theme={report} onClose={() => setReport(null)} />}
 
       {/* Silme modal'ı */}
       {deletingTheme && (

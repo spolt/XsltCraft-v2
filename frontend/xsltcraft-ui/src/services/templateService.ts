@@ -22,6 +22,18 @@ export interface TemplateDetail {
   isFavorite: boolean
   createdAt: string
   updatedAt: string
+  /** Hazır tema için logo/imza konumları (analiz edilmemiş temada boş). */
+  slots: ThemeSlotOption[]
+}
+
+export interface ThemeSlotOption {
+  id: string
+  label: string
+  group: string
+  defaultFor: 'logo' | 'signature' | null
+  order: number
+  /** Temadaki görselin yeri ve admin kullanıcının onu (görsel eklemeden) kaldırmasına izin verdi. */
+  removable: boolean
 }
 
 export async function getFreeThemes(): Promise<FreeTheme[]> {

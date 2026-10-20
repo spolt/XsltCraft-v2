@@ -252,6 +252,9 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("OwnerId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SlotCatalog")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("ThumbnailUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");

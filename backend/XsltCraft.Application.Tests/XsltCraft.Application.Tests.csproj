@@ -23,4 +23,8 @@
     <ProjectReference Include="..\XsltCraft.Application\XsltCraft.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="ThemeSlots\Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

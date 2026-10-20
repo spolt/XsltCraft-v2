@@ -22,9 +22,6 @@ import {
   CheckCircle2,
   Settings2,
   X,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   Download,
   WandSparkles,
   ListChecks,
@@ -37,7 +34,22 @@ import { getTemplate } from '../services/templateService'
 import { toast } from '../store/toastStore'
 import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import { reportDownload } from '../services/activityService'
-import { fetchThemeXslt, previewFromRawXslt, type BankInfoItem, type Alignment } from '../services/previewService'
+import { fetchThemeXslt, previewFromRawXslt, type BankInfoItem } from '../services/previewService'
+import { composeTheme } from '../services/themeComposeService'
+import type { ThemeSlotOption } from '../services/templateService'
+import ImagePanel from '../components/theme-assets/ImagePanel'
+import BankInfoPanel from '../components/theme-assets/BankInfoPanel'
+import {
+  defaultImg,
+  effectiveSlot,
+  filledBankRows,
+  readAsDataUrl,
+  toComposeAssets,
+  hiddenThemeImages,
+  themeImageRemovable,
+  validateImageFile,
+  type ImgState,
+} from '../components/theme-assets/imageState'
 import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import { listSnippets, type UserSnippet } from '../services/snippetService'
 import { useAuthStore } from '../store/authStore'
@@ -46,118 +58,6 @@ import api from '../services/apiService'
 const DEBOUNCE_MS = 1000
 const XSLT_VALIDATION_DEBOUNCE_MS = 1500
 const XML_VALIDATION_DEBOUNCE_MS = 500
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target!.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-const OVERRIDE_START = '<!-- DEV-MODE-OVERRIDES:START -->'
-const OVERRIDE_END   = '<!-- DEV-MODE-OVERRIDES:END -->'
-
-// ─── XSLT injection helpers ───────────────────────────────────────────────────
-
-function escapeXml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-/** Builds the injection block from current edit-panel state. Returns '' if nothing to inject. */
-function buildInjection(logo: ImgState, signature: ImgState, bankInfo: BankInfoItem[]): string {
-  const parts: string[] = []
-
-  const hasLogo = !!logo.url
-  const hasSig  = !!signature.url
-
-  if (hasLogo || hasSig) {
-    const parseNum = (s: string) => { const n = parseInt(s); return isNaN(n) ? null : n }
-
-    const lines = [
-      `<script>(function(){`,
-      `  function jc(a){return a==='center'?'center':a==='right'?'flex-end':'flex-start';}`,
-      `  function setImg(ids,url,w,h,align){`,
-      `    ids.forEach(function(id){`,
-      `      var el=document.getElementById(id);if(!el)return;`,
-      `      el.style.cssText='display:flex;justify-content:'+jc(align)+';align-items:center;';`,
-      `      var img=document.createElement('img');`,
-      `      img.src=url;`,
-      `      img.style.cssText=(w?'width:'+w+'px;':'width:auto;')+(h?'height:'+h+'px;':'height:auto;')+'max-width:100%;object-fit:contain;display:block;';`,
-      `      el.innerHTML='';el.appendChild(img);`,
-      `    });`,
-      `  }`,
-      `  window.addEventListener('load',function(){`,
-    ]
-
-    if (hasLogo) {
-      const w = parseNum(logo.width)
-      const h = parseNum(logo.height)
-      const safeUrl = logo.url.replace(/&/g, '&amp;').replace(/'/g, '%27')
-      lines.push(`    setImg(['company_logo','companyLogo'],'${safeUrl}',${w ?? 'null'},${h ?? 'null'},'${logo.alignment}');`)
-    }
-    if (hasSig) {
-      const w = parseNum(signature.width)
-      const h = parseNum(signature.height)
-      const safeUrl = signature.url.replace(/&/g, '&amp;').replace(/'/g, '%27')
-      lines.push(`    setImg(['imza','companyKase'],'${safeUrl}',${w ?? 'null'},${h ?? 'null'},'${signature.alignment}');`)
-    }
-
-    lines.push(`  });`, `})();</script>`)
-    parts.push(lines.join('\n'))
-  }
-
-  const validBanks = bankInfo.filter(b => b.bankName || b.iban)
-  if (validBanks.length > 0) {
-    const rows = validBanks
-      .map(b =>
-        `      <tr>` +
-        `<td style="padding:6px 10px;border:1px solid #ddd">${escapeXml(b.bankName)}</td>` +
-        `<td style="padding:6px 10px;border:1px solid #ddd;font-family:monospace">${escapeXml(b.iban)}</td>` +
-        `</tr>`,
-      )
-      .join('\n')
-    parts.push(
-      `<div style="font-family:Arial,sans-serif;font-size:12px;margin:16px 0;page-break-inside:avoid">\n` +
-      `  <table style="width:100%;border-collapse:collapse">\n` +
-      `    <thead><tr>\n` +
-      `      <th style="text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd">Banka Adı</th>\n` +
-      `      <th style="text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd">IBAN</th>\n` +
-      `    </tr></thead>\n` +
-      `    <tbody>\n${rows}\n    </tbody>\n` +
-      `  </table>\n</div>`,
-    )
-  }
-
-  if (parts.length === 0) return ''
-  return `${OVERRIDE_START}\n${parts.join('\n')}\n${OVERRIDE_END}`
-}
-
-/** Inserts or replaces the injection block inside the XSLT string. */
-function applyInjection(xslt: string, injection: string): string {
-  const si = xslt.indexOf(OVERRIDE_START)
-  const ei = xslt.indexOf(OVERRIDE_END)
-
-  if (si >= 0 && ei >= 0) {
-    if (!injection) {
-      return xslt.slice(0, si).trimEnd() + '\n' + xslt.slice(ei + OVERRIDE_END.length).trimStart()
-    }
-    return xslt.slice(0, si) + injection + xslt.slice(ei + OVERRIDE_END.length)
-  }
-
-  if (!injection) return xslt
-
-  const bodyClose = xslt.lastIndexOf('</body>')
-  if (bodyClose >= 0)
-    return xslt.slice(0, bodyClose) + injection + '\n' + xslt.slice(bodyClose)
-
-  const tmpl = xslt.lastIndexOf('</xsl:template>')
-  if (tmpl >= 0)
-    return xslt.slice(0, tmpl) + injection + '\n' + xslt.slice(tmpl)
-
-  return xslt + '\n' + injection
-}
 
 /** DOMParser parsererror çıktısından satır/kolon çıkarır. */
 function extractXmlParseErrors(xml: string): { message: string; line: number | null; column: number | null }[] {
@@ -196,75 +96,6 @@ function EditorSidebar() {
   )
 }
 
-// ─── Image state / helpers ────────────────────────────────────────────────────
-interface ImgState { url: string; width: string; height: string; alignment: Alignment }
-const defaultImg = (): ImgState => ({ url: '', width: '250', height: '150', alignment: 'left' })
-
-// ─── Alignment picker ─────────────────────────────────────────────────────────
-function AlignPicker({ value, onChange }: { value: Alignment; onChange: (v: Alignment) => void }) {
-  const opts: { v: Alignment; Icon: typeof AlignLeft }[] = [
-    { v: 'left', Icon: AlignLeft }, { v: 'center', Icon: AlignCenter }, { v: 'right', Icon: AlignRight },
-  ]
-  return (
-    <div className="flex gap-1">
-      {opts.map(({ v, Icon }) => (
-        <button key={v} onClick={() => onChange(v)}
-          className={`flex items-center justify-center w-7 h-7 rounded border transition-colors ${value === v ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-200 text-gray-400 hover:border-blue-300 hover:text-blue-500'}`}
-          title={v === 'left' ? 'Sola yasla' : v === 'center' ? 'Ortala' : 'Sağa yasla'}>
-          <Icon size={13} />
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// ─── Image panel ─────────────────────────────────────────────────────────────
-function ImagePanel({ label, state, uploading, onUpload, onChange }: {
-  label: string; state: ImgState; uploading: boolean
-  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onChange: (patch: Partial<ImgState>) => void
-}) {
-  return (
-    <section>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{label}</h3>
-      {state.url ? (
-        <div className="flex flex-col gap-2 mb-3">
-          <img src={state.url} alt={label} className="max-h-16 object-contain border border-gray-100 rounded p-1 bg-gray-50" />
-          <label className="cursor-pointer text-xs text-blue-600 hover:underline">Değiştir
-            <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={onUpload} />
-          </label>
-        </div>
-      ) : (
-        <label className="cursor-pointer flex items-center gap-2 border border-dashed border-gray-300 rounded-lg px-3 py-3 hover:border-blue-300 hover:bg-blue-50 transition-colors mb-3">
-          {uploading ? <span className="text-xs text-gray-400">Yükleniyor…</span>
-            : <><span className="text-lg">🖼</span><span className="text-xs text-gray-500">Görsel yükle (PNG / JPG / SVG)</span></>}
-          <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={onUpload} disabled={uploading} />
-        </label>
-      )}
-      <div className="flex flex-col gap-2">
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="text-xs text-gray-400 mb-0.5 block">Genişlik (px)</label>
-            <input type="number" min={10} max={1200} value={state.width}
-              onChange={(e) => onChange({ width: e.target.value })}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-          </div>
-          <div className="flex-1">
-            <label className="text-xs text-gray-400 mb-0.5 block">Yükseklik (px)</label>
-            <input type="number" min={10} max={1200} value={state.height}
-              onChange={(e) => onChange({ height: e.target.value })}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-          </div>
-        </div>
-        <div>
-          <label className="text-xs text-gray-400 mb-0.5 block">Hizalama</label>
-          <AlignPicker value={state.alignment} onChange={(v) => onChange({ alignment: v })} />
-        </div>
-      </div>
-    </section>
-  )
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function DevModePage() {
   const { templateId } = useParams<{ templateId: string }>()
@@ -284,6 +115,9 @@ export default function DevModePage() {
 
   const [logoUploading, setLogoUploading] = useState(false)
   const [signatureUploading, setSignatureUploading] = useState(false)
+  const [slots, setSlots] = useState<ThemeSlotOption[]>([])
+  // Panel yalnız kullanıcı bir şey değiştirdiğinde editöre yazar (açılışta mevcut bloğa dokunulmaz).
+  const [assetsTouched, setAssetsTouched] = useState(false)
 
   const [html, setHtml] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -329,7 +163,12 @@ export default function DevModePage() {
   // ─── Load template name + XSLT ───────────────────────────────────────────────
   useEffect(() => {
     if (!templateId) return
-    getTemplate(templateId).then((t) => setTemplateName(t.name)).catch(() => {})
+    getTemplate(templateId)
+      .then((t) => {
+        setTemplateName(t.name)
+        setSlots(t.slots ?? [])
+      })
+      .catch(() => {})
     fetchThemeXslt(templateId)
       .then((content) => {
         setXslt(content)
@@ -359,12 +198,35 @@ export default function DevModePage() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // ─── Injection block → XSLT ─────────────────────────────────────────────────
+  // ─── Logo/imza/IBAN → XSLT (sunucuda birleştirilir; Tema Kullan ile aynı kod) ───────
+  const xsltRef = useRef(xslt)
+  useEffect(() => { xsltRef.current = xslt }, [xslt])
+
   useEffect(() => {
-    if (!xsltReadyRef.current) return
-    const injection = buildInjection(logo, signature, bankInfo)
-    setXslt((prev) => applyInjection(prev, injection))
-  }, [logo, signature, bankInfo])
+    if (!assetsTouched || !xsltReadyRef.current) return
+    const controller = new AbortController()
+    const timer = setTimeout(async () => {
+      const requested = xsltRef.current
+      try {
+        const result = await composeTheme({
+          xslt: requested,
+          assets: toComposeAssets(logo, signature, slots),
+          bankInfo: filledBankRows(bankInfo),
+          hideThemeImages: hiddenThemeImages(logo, signature, slots),
+          includeXslt: true,
+          includeHtml: false,
+        }, controller.signal)
+        // Bu arada editörde yazıldıysa sonucu atma — kullanıcının metni ezilmesin; sonraki değişiklikte yeniden denenir.
+        if (result.xslt && xsltRef.current === requested) setXslt(result.xslt)
+        result.warnings.forEach((w) => toast.warning(w.message))
+      } catch (err) {
+        if (controller.signal.aborted) return
+        const data = (err as { response?: { data?: { error?: string } } }).response?.data
+        toast.error(data?.error ?? 'Görseller şablona eklenemedi.')
+      }
+    }, 600)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [logo, signature, bankInfo, slots, assetsTouched])
 
   // ─── Debounced preview ───────────────────────────────────────────────────────
   const runPreview = useCallback(async (currentXslt: string, currentXml: string) => {
@@ -435,32 +297,28 @@ export default function DevModePage() {
     }
   }
 
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageUpload(
+    e: React.ChangeEvent<HTMLInputElement>,
+    setState: React.Dispatch<React.SetStateAction<ImgState>>,
+    setBusy: (busy: boolean) => void,
+  ) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    setLogoUploading(true)
+    const invalid = validateImageFile(file)
+    if (invalid) { toast.error(invalid); return }
+    setBusy(true)
     try {
       const dataUrl = await readAsDataUrl(file)
-      setLogo((prev) => ({ ...prev, url: dataUrl }))
-    } catch { alert('Logo yüklenemedi.') }
-    finally { setLogoUploading(false); e.target.value = '' }
+      setState((prev) => ({ ...prev, dataUrl }))
+      setAssetsTouched(true)
+    } catch { toast.error('Görsel okunamadı.') }
+    finally { setBusy(false) }
   }
 
-  async function handleSignatureUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setSignatureUploading(true)
-    try {
-      const dataUrl = await readAsDataUrl(file)
-      setSignature((prev) => ({ ...prev, url: dataUrl }))
-    } catch { alert('İmza yüklenemedi.') }
-    finally { setSignatureUploading(false); e.target.value = '' }
-  }
-
-  function addBankRow() { setBankInfo((p) => [...p, { bankName: '', iban: '' }]) }
-  function removeBankRow(idx: number) { setBankInfo((p) => p.filter((_, i) => i !== idx)) }
-  function updateBankRow(idx: number, field: keyof BankInfoItem, value: string) {
-    setBankInfo((p) => p.map((r, i) => (i === idx ? { ...r, [field]: value } : r)))
+  function patchImage(setState: React.Dispatch<React.SetStateAction<ImgState>>, patch: Partial<ImgState>) {
+    setState((p) => ({ ...p, ...patch }))
+    setAssetsTouched(true)
   }
 
   async function handleValidateUblTr() {
@@ -822,41 +680,29 @@ export default function DevModePage() {
           {editMode && (
             <div className="flex-shrink-0 border-l border-gray-700 bg-white flex flex-col overflow-y-auto" style={{ width: 300 }}>
               <div className="p-4 flex flex-col gap-6">
-                <ImagePanel label="Logo" state={logo} uploading={logoUploading} onUpload={handleLogoUpload}
-                  onChange={(patch) => setLogo((p) => ({ ...p, ...patch }))} />
+                <ImagePanel
+                  label="Logo" state={logo} uploading={logoUploading} slots={slots}
+                  slotValue={effectiveSlot('logo', logo, slots)}
+                  onUpload={(e) => handleImageUpload(e, setLogo, setLogoUploading)}
+                  onChange={(patch) => patchImage(setLogo, patch)}
+                  onRemove={() => patchImage(setLogo, { dataUrl: '' })}
+                  themeImageRemovable={themeImageRemovable('logo', slots)}
+                />
 
                 <div className="border-t border-gray-100" />
 
-                <ImagePanel label="İmza / Kaşe" state={signature} uploading={signatureUploading} onUpload={handleSignatureUpload}
-                  onChange={(patch) => setSignature((p) => ({ ...p, ...patch }))} />
+                <ImagePanel
+                  label="İmza / Kaşe" state={signature} uploading={signatureUploading} slots={slots}
+                  slotValue={effectiveSlot('signature', signature, slots)}
+                  onUpload={(e) => handleImageUpload(e, setSignature, setSignatureUploading)}
+                  onChange={(patch) => patchImage(setSignature, patch)}
+                  onRemove={() => patchImage(setSignature, { dataUrl: '' })}
+                  themeImageRemovable={themeImageRemovable('signature', slots)}
+                />
 
                 <div className="border-t border-gray-100" />
 
-                <section>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Banka / IBAN</h3>
-                  <div className="flex flex-col gap-3">
-                    {bankInfo.map((row, idx) => (
-                      <div key={idx} className="relative bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        {bankInfo.length > 1 && (
-                          <button onClick={() => removeBankRow(idx)} className="absolute top-2 right-2 text-gray-300 hover:text-red-400" title="Kaldır">
-                            <X size={12} />
-                          </button>
-                        )}
-                        <div className="flex flex-col gap-1.5">
-                          <input type="text" placeholder="Banka adı" value={row.bankName}
-                            onChange={(e) => updateBankRow(idx, 'bankName', e.target.value)}
-                            className="text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full" />
-                          <input type="text" placeholder="TR00 0000 0000 0000 0000 0000 00" value={row.iban}
-                            onChange={(e) => updateBankRow(idx, 'iban', e.target.value)}
-                            className="text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full font-mono tracking-wide" />
-                        </div>
-                      </div>
-                    ))}
-                    <button onClick={addBankRow} className="text-xs text-blue-600 hover:text-blue-700 text-left flex items-center gap-1">
-                      + Banka hesabı ekle
-                    </button>
-                  </div>
-                </section>
+                <BankInfoPanel rows={bankInfo} onChange={(rows) => { setBankInfo(rows); setAssetsTouched(true) }} />
 
                 <div className="border-t border-gray-100 pt-2">
                   <p className="text-xs text-gray-400 leading-relaxed">

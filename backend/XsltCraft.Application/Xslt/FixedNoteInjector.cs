@@ -16,13 +16,6 @@ public sealed class FixedNoteInjector : IFixedNoteInjector
     private const string MarkerStart = "<!-- xc:fixed-note:start -->";
     private const string MarkerEnd = "<!-- xc:fixed-note:end -->";
 
-    // Hedef: koşulsuz not gösterim döngüleri (e-Fatura + e-İrsaliye).
-    private static readonly HashSet<string> NotePaths = new(StringComparer.Ordinal)
-    {
-        "//n1:Invoice/cbc:Note",
-        "//n1:DespatchAdvice/cbc:Note",
-    };
-
     public FixedNoteResult Inject(string xslt, string noteText, FixedNoteMode mode)
     {
         if (string.IsNullOrEmpty(xslt))
@@ -46,7 +39,7 @@ public sealed class FixedNoteInjector : IFixedNoteInjector
             return new FixedNoteResult(FixedNoteStatus.Failed, xslt, $"XSLT ayrıştırılamadı: {ex.Message}");
         }
 
-        var loop = FindUnconditionalNoteLoop(doc);
+        var loop = XsltNoteLoops.FindUnconditionalNoteLoop(doc);
 
         // Görünür not bölümünde tutturacak koşulsuz döngü yok → kaynağı değiştirmeden bildir.
         if (loop is null)
@@ -73,19 +66,6 @@ public sealed class FixedNoteInjector : IFixedNoteInjector
 
         return new FixedNoteResult(FixedNoteStatus.Updated, updated);
     }
-
-    // Görünür not bölümü, atasında ne koşul (if/when/choose) ne de değer-üretimi
-    // (variable/param/with-param) bulunan bir for-each'tir. Bu yapıların içindeki not döngüleri
-    // SGK değer çıkarımı gibi yardımcı hesaplardır (çıktıya doğrudan render edilmez) → atlanır.
-    private static readonly string[] ExcludedAncestors =
-        ["if", "when", "choose", "variable", "param", "with-param"];
-
-    // --- Hedef döngüyü bul: select'i not yoluna eşit, dışlanan bir atası olmayan ilk for-each ---
-    private static XElement? FindUnconditionalNoteLoop(XDocument doc) =>
-        doc.Descendants(Xsl + "for-each")
-            .Where(fe => fe.Attribute("select") is { Value: var sel } && NotePaths.Contains(Collapse(sel)))
-            .FirstOrDefault(fe => !fe.Ancestors().Any(a =>
-                a.Name.Namespace == Xsl && ExcludedAncestors.Contains(a.Name.LocalName)));
 
     // --- Snippet'i döngünün kendi gövdesinden türet (şablonun not stilini korur) ---
     private static string BuildSnippet(XElement? loop, string noteText)

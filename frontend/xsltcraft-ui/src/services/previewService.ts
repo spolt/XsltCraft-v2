@@ -48,13 +48,6 @@ export interface BankInfoItem {
 
 export type Alignment = 'left' | 'center' | 'right'
 
-export interface ImageSettings {
-  url: string
-  width?: number
-  height?: number
-  alignment: Alignment
-}
-
 /** Geliştirici mod: theme'in ham XSLT içeriğini döndür */
 export async function fetchThemeXslt(templateId: string): Promise<string> {
   const { data } = await api.get<string>(
@@ -65,26 +58,8 @@ export async function fetchThemeXslt(templateId: string): Promise<string> {
 }
 
 /** Geliştirici mod: ham XSLT + XML ile anlık önizleme */
-export async function previewFromRawXslt(
-  xslt: string,
-  xmlContent: string,
-  logo?: ImageSettings,
-  signature?: ImageSettings,
-  bankInfo?: BankInfoItem[],
-): Promise<PreviewResponse> {
-  const { data } = await api.post<PreviewResponse>('/api/preview/raw', {
-    xslt,
-    xmlContent,
-    logoUrl: logo?.url,
-    logoWidth: logo?.width,
-    logoHeight: logo?.height,
-    logoAlignment: logo?.alignment,
-    signatureUrl: signature?.url,
-    signatureWidth: signature?.width,
-    signatureHeight: signature?.height,
-    signatureAlignment: signature?.alignment,
-    bankInfo: bankInfo ?? [],
-  })
+export async function previewFromRawXslt(xslt: string, xmlContent: string): Promise<PreviewResponse> {
+  const { data } = await api.post<PreviewResponse>('/api/preview/raw', { xslt, xmlContent })
   return data
 }
 
@@ -100,25 +75,11 @@ export async function previewFromUserTemplate(
   return data
 }
 
-/** Storage'daki XSLT dosyasıyla (free theme klonu vb.) önizleme */
-export async function previewFromStoredXslt(
-  templateId: string,
-  xmlContent: string,
-  logo?: ImageSettings,
-  signature?: ImageSettings,
-  bankInfo?: BankInfoItem[],
-): Promise<PreviewResponse> {
-  const { data } = await api.post<PreviewResponse>(`/api/preview/theme/${templateId}`, {
-    xmlContent,
-    logoUrl: logo?.url,
-    logoWidth: logo?.width,
-    logoHeight: logo?.height,
-    logoAlignment: logo?.alignment,
-    signatureUrl: signature?.url,
-    signatureWidth: signature?.width,
-    signatureHeight: signature?.height,
-    signatureAlignment: signature?.alignment,
-    bankInfo: bankInfo ?? [],
-  })
+/**
+ * Storage'daki XSLT dosyasıyla (free theme klonu vb.) önizleme. Kullanıcı logo/imza/IBAN eklenmiş önizleme
+ * için `themeComposeService.composeTheme`.
+ */
+export async function previewFromStoredXslt(templateId: string, xmlContent: string): Promise<PreviewResponse> {
+  const { data } = await api.post<PreviewResponse>(`/api/preview/theme/${templateId}`, { xmlContent })
   return data
 }

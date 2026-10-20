@@ -9,6 +9,7 @@ using XsltCraft.Application.DTO;
 using XsltCraft.Application.Imaging;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
+using XsltCraft.Application.Themes;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
@@ -28,8 +29,9 @@ public class PreviewController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IWebHostEnvironment _env;
     private readonly IUsageQuotaService _quota;
-    private readonly IEntitlementService _entitlements;
     private readonly IUserActivityRecorder _activity;
+    private readonly IXsltHtmlRenderer _renderer;
+    private readonly IThemeAccessGuard _themeAccess;
     private readonly ILogger<PreviewController> _logger;
 
     public PreviewController(
@@ -38,8 +40,9 @@ public class PreviewController : ControllerBase
         AppDbContext db,
         IWebHostEnvironment env,
         IUsageQuotaService quota,
-        IEntitlementService entitlements,
         IUserActivityRecorder activity,
+        IXsltHtmlRenderer renderer,
+        IThemeAccessGuard themeAccess,
         ILogger<PreviewController> logger)
     {
         _generator = generator;
@@ -47,8 +50,9 @@ public class PreviewController : ControllerBase
         _db = db;
         _env = env;
         _quota = quota;
-        _entitlements = entitlements;
         _activity = activity;
+        _renderer = renderer;
+        _themeAccess = themeAccess;
         _logger = logger;
     }
 
@@ -102,8 +106,9 @@ public class PreviewController : ControllerBase
     }
 
     /// <summary>
-    /// Free theme'i storage'dan okur, verilen XML'e uygular, HTML döndürür.
-    /// Request: { xmlContent, logoUrl?, signatureUrl?, bankInfo? }
+    /// Free theme'i storage'dan okur, verilen XML'e uygular, HTML döndürür (galeri önizlemesi).
+    /// Kullanıcı logo/imza/IBAN eklenmiş önizleme: POST /api/preview/compose.
+    /// Request: { xmlContent }
     /// Response: { html, generationTimeMs }
     /// </summary>
     [HttpPost("theme/{themeId:guid}")]
@@ -125,17 +130,7 @@ public class PreviewController : ControllerBase
             using var reader = new StreamReader(stream);
             var xslt = await reader.ReadToEndAsync();
 
-            var html = ApplyXsltWithParams(xslt, request.XmlContent, request.LogoUrl, request.SignatureUrl);
-
-            // Override logo/signature divs populated by the XSLT's JavaScript
-            if (!string.IsNullOrEmpty(request.LogoUrl) || !string.IsNullOrEmpty(request.SignatureUrl))
-                html = InjectAssetOverrides(html,
-                    request.LogoUrl, request.LogoWidth, request.LogoHeight, request.LogoAlignment,
-                    request.SignatureUrl, request.SignatureWidth, request.SignatureHeight, request.SignatureAlignment);
-
-            if (request.BankInfo?.Count > 0)
-                html = InjectBankInfo(html, request.BankInfo);
-
+            var html = ApplyXslt(xslt, request.XmlContent);
             sw.Stop();
             return Ok(new { html, generationTimeMs = sw.ElapsedMilliseconds });
         }
@@ -232,24 +227,22 @@ public class PreviewController : ControllerBase
         var template = await _db.Templates.FirstOrDefaultAsync(t => t.Id == themeId);
         if (template is null)
             return NotFound(new { error = "Şablon bulunamadı." });
-        if (string.IsNullOrEmpty(template.XsltStoragePath))
-            return BadRequest(new { error = "Bu tema için XSLT dosyası tanımlı değil." });
 
-        // Ücretli temanın ham XSLT'si (geliştirici modu) yalnız Pro/Editör/Admin'e açıktır.
-        if (template.IsPremium)
+        // Yalnız yayınlanmış hazır temalar (kullanıcı şablonlarının saklı XSLT'si bu yoldan okunamaz);
+        // ücretli temanın ham XSLT'si (geliştirici modu) yalnız Pro/Editör/Admin'e açıktır.
+        Guid? userId = User.Identity?.IsAuthenticated == true
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : null;
+        switch (await _themeAccess.CheckAsync(template, userId))
         {
-            if (User.Identity?.IsAuthenticated != true)
+            case ThemeAccessDecision.NotFound:
+                return NotFound(new { error = "Şablon bulunamadı." });
+            case ThemeAccessDecision.UpgradeRequired:
                 return StatusCode(StatusCodes.Status402PaymentRequired,
-                    new { error = "upgrade_required", upgrade = true, message = "Bu ücretli tema XsltCraft Pro üyeliği gerektirir." });
-
-            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var ent = await _entitlements.GetAsync(userId);
-            if (!ent.CanUsePremiumThemes)
-                return StatusCode(StatusCodes.Status402PaymentRequired,
-                    new { error = "upgrade_required", upgrade = true, message = "Bu ücretli tema XsltCraft Pro üyeliği gerektirir." });
+                    new { error = "upgrade_required", upgrade = true, message = ThemeAccessGuard.UpgradeMessage });
         }
 
-        await using var stream = await _storage.ReadAsync(template.XsltStoragePath);
+        await using var stream = await _storage.ReadAsync(template.XsltStoragePath!);
         using var reader = new StreamReader(stream);
         var xslt = await reader.ReadToEndAsync();
         return Content(xslt, "application/xslt+xml");
@@ -265,27 +258,18 @@ public class PreviewController : ControllerBase
     public IActionResult PreviewRaw([FromBody] RawPreviewRequest request)
     {
         if (System.Text.Encoding.UTF8.GetByteCount(request.Xslt) > MaxRawBodyBytes / 2)
-            return BadRequest(new { error = "XSLT içeriği çok büyük (maks. 512 KB)." });
+            return BadRequest(new { error = "XSLT içeriği çok büyük (maks. 5 MB)." });
         if (System.Text.Encoding.UTF8.GetByteCount(request.XmlContent) > MaxRawBodyBytes / 2)
-            return BadRequest(new { error = "XML içeriği çok büyük (maks. 512 KB)." });
+            return BadRequest(new { error = "XML içeriği çok büyük (maks. 5 MB)." });
 
         try
         {
-            var (html, timings) = ApplyXsltWithTimings(request.Xslt, request.XmlContent, request.LogoUrl, request.SignatureUrl);
-
-            if (!string.IsNullOrEmpty(request.LogoUrl) || !string.IsNullOrEmpty(request.SignatureUrl))
-                html = InjectAssetOverrides(html,
-                    request.LogoUrl, request.LogoWidth, request.LogoHeight, request.LogoAlignment,
-                    request.SignatureUrl, request.SignatureWidth, request.SignatureHeight, request.SignatureAlignment);
-
-            if (request.BankInfo?.Count > 0)
-                html = InjectBankInfo(html, request.BankInfo);
-
+            var result = _renderer.Render(request.Xslt, request.XmlContent);
             return Ok(new
             {
-                html,
-                generationTimeMs = timings.ParseMs + timings.CompileMs + timings.TransformMs + timings.SerializeMs,
-                timings = new { timings.ParseMs, timings.CompileMs, timings.TransformMs, timings.SerializeMs },
+                html = result.Html,
+                generationTimeMs = result.TotalMs,
+                timings = new { result.ParseMs, result.CompileMs, result.TransformMs, result.SerializeMs },
             });
         }
         catch (XsltException ex)
@@ -350,7 +334,7 @@ public class PreviewController : ControllerBase
     /// InnerException zincirinde saklıdır. Zincirdeki tüm anlamlı mesajları birleştirir ve
     /// dıştaki satır/kolon 0 ise inner XsltException'dan doldurur.
     /// </summary>
-    private static (string Message, int Line, int Column) DescribeXsltError(XsltException ex)
+    internal static (string Message, int Line, int Column) DescribeXsltError(XsltException ex)
     {
         int line = ex.LineNumber;
         int column = ex.LinePosition;
@@ -441,128 +425,7 @@ public class PreviewController : ControllerBase
         return result;
     }
 
-    private static string ApplyXslt(string xslt, string xmlContent)
-        => ApplyXsltWithParams(xslt, xmlContent, null, null);
-
-    private static string ApplyXsltWithParams(string xslt, string xmlContent, string? logoUrl, string? signatureUrl)
-        => ApplyXsltWithTimings(xslt, xmlContent, logoUrl, signatureUrl).Html;
-
-    private sealed record PreviewTimings(long ParseMs, long CompileMs, long TransformMs, long SerializeMs);
-
-    private static (string Html, PreviewTimings Timings) ApplyXsltWithTimings(
-        string xslt, string xmlContent, string? logoUrl, string? signatureUrl)
-    {
-        var sw = Stopwatch.StartNew();
-        var transform = SecureXslt.Compile(xslt);
-        var compileMs = sw.ElapsedMilliseconds;
-
-        sw.Restart();
-        var xmlReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-        var xmlDoc = new XmlDocument { XmlResolver = null };
-        using var xmlReader = XmlReader.Create(new StringReader(xmlContent), xmlReaderSettings);
-        xmlDoc.Load(xmlReader);
-        var parseMs = sw.ElapsedMilliseconds;
-
-        var args = new XsltArgumentList();
-        if (!string.IsNullOrEmpty(logoUrl))
-            args.AddParam("logo-url", "", logoUrl);
-        if (!string.IsNullOrEmpty(signatureUrl))
-            args.AddParam("signature-url", "", signatureUrl);
-
-        sw.Restart();
-        using var writer = new StringWriter();
-        transform.Transform(xmlDoc, args, writer);
-        var transformMs = sw.ElapsedMilliseconds;
-
-        sw.Restart();
-        var html = writer.ToString();
-        var serializeMs = sw.ElapsedMilliseconds;
-
-        return (html, new PreviewTimings(parseMs, compileMs, transformMs, serializeMs));
-    }
-
-    /// <summary>
-    /// Injects a script that overrides logo / signature elements after the XSLT's own JS has run.
-    /// Targets all known ID conventions:
-    ///   Logo  → company_logo, companyLogo
-    ///   İmza  → imza, companyKase
-    /// </summary>
-    private static string InjectAssetOverrides(
-        string html,
-        string? logoUrl, int? logoWidth, int? logoHeight, string? logoAlignment,
-        string? signatureUrl, int? sigWidth, int? sigHeight, string? sigAlignment)
-    {
-        // justify-content values for flex container
-        static string JustifyContent(string? align) => align switch
-        {
-            "center" => "center",
-            "right" => "flex-end",
-            _ => "flex-start",
-        };
-
-        // Img inline style: explicit px if provided, otherwise auto; always max-width:100%
-        static string ImgStyle(int? w, int? h) =>
-            $"{(w.HasValue ? $"width:{w}px;" : "width:auto;")}" +
-            $"{(h.HasValue ? $"height:{h}px;" : "height:auto;")}" +
-            "max-width:100%;object-fit:contain;display:block;";
-
-        static string BuildSetCall(string[] ids, string url, int? w, int? h, string? align)
-        {
-            var jc = JustifyContent(align);
-            var style = ImgStyle(w, h);
-            // Use flexbox on the container so alignment works regardless of img display type
-            var fn = $"function(el){{" +
-                     $"el.style.cssText='display:flex;justify-content:{jc};align-items:center;';" +
-                     $"el.innerHTML='<img src=\"{url}\" style=\"{style}\">';}}";
-            var idList = string.Join(",", ids.Select(id => $"'{id}'"));
-            return $"setEl([{idList}],{fn});";
-        }
-
-        var sb = new System.Text.StringBuilder();
-        sb.Append("<script>(function(){");
-        sb.Append("function setEl(ids,fn){ids.forEach(function(id){var el=document.getElementById(id);if(el)fn(el);});}");
-        sb.Append("function applyOverrides(){");
-
-        if (!string.IsNullOrEmpty(logoUrl))
-        {
-            var safe = logoUrl.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            sb.Append(BuildSetCall(["company_logo", "companyLogo"], safe, logoWidth, logoHeight, logoAlignment));
-        }
-
-        if (!string.IsNullOrEmpty(signatureUrl))
-        {
-            var safe = signatureUrl.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            sb.Append(BuildSetCall(["imza", "companyKase"], safe, sigWidth, sigHeight, sigAlignment));
-        }
-
-        sb.Append("}window.addEventListener('load',applyOverrides);})();</script>");
-
-        var insertIdx = html.IndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-        return insertIdx >= 0 ? html.Insert(insertIdx, sb.ToString()) : html + sb.ToString();
-    }
-
-    private static string InjectBankInfo(string html, List<BankInfoItem> bankInfo)
-    {
-        var sb = new System.Text.StringBuilder();
-        sb.Append("<div style=\"font-family:Arial,sans-serif;font-size:12px;margin:16px 0;page-break-inside:avoid\">");
-        sb.Append("<table style=\"width:100%;border-collapse:collapse\">");
-        sb.Append("<thead><tr>");
-        sb.Append("<th style=\"text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd\">Banka Adı</th>");
-        sb.Append("<th style=\"text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd\">IBAN</th>");
-        sb.Append("</tr></thead><tbody>");
-        foreach (var item in bankInfo)
-        {
-            sb.Append("<tr>");
-            sb.Append($"<td style=\"padding:6px 10px;border:1px solid #ddd\">{System.Net.WebUtility.HtmlEncode(item.BankName)}</td>");
-            sb.Append($"<td style=\"padding:6px 10px;border:1px solid #ddd;font-family:monospace\">{System.Net.WebUtility.HtmlEncode(item.Iban)}</td>");
-            sb.Append("</tr>");
-        }
-        sb.Append("</tbody></table></div>");
-
-        var bankHtml = sb.ToString();
-        var insertIdx = html.IndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-        return insertIdx >= 0 ? html.Insert(insertIdx, bankHtml) : html + bankHtml;
-    }
+    private string ApplyXslt(string xslt, string xmlContent) => _renderer.Render(xslt, xmlContent).Html;
 }
 
 public class ValidateXsltRequest

@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Prompts\**\*.md" />
+    <EmbeddedResource Include="ThemeSlots\Samples\*.xml" />
+    <EmbeddedResource Include="ThemeSlots\Compose\ThemeAssetRuntime.js" />
   </ItemGroup>
 
   <ItemGroup>

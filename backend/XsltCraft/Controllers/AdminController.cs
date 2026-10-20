@@ -7,6 +7,9 @@ using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Application.DTO;
 using XsltCraft.Application.Imaging;
+using XsltCraft.Application.ThemeSlots;
+using XsltCraft.Application.ThemeSlots.Catalog;
+using XsltCraft.Application.ThemeSlots.Overrides;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
@@ -16,7 +19,11 @@ namespace XsltCraft.Controllers;
 [ApiController]
 [Route("api/admin")]
 [Authorize(Roles = "Admin")]
-public class AdminController(AppDbContext db, IStorageService storage) : ControllerBase
+public class AdminController(
+    AppDbContext db,
+    IStorageService storage,
+    IThemeUploadProcessor themeUploads,
+    IThemeSlotProjector slotProjector) : ControllerBase
 {
     private const long MaxFileSizeBytes = 2 * 1024 * 1024; // 2 MB
     private const long MaxThumbnailSizeBytes = 1 * 1024 * 1024; // 1 MB
@@ -29,31 +36,46 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         [FromForm] string documentType,
         IFormFile file,
         [FromForm] bool isPremium = false,
-        IFormFile? thumbnailFile = null)
+        IFormFile? thumbnailFile = null,
+        [FromForm] string? existingOverrides = null,
+        [FromForm] string? existingImages = null)
     {
-        var validationError = await ValidateXsltFileAsync(file);
+        var (upload, validationError) = await ReadAndValidateXsltAsync(file);
         if (validationError is not null)
             return BadRequest(new { message = validationError });
 
         if (!Enum.TryParse<DocumentType>(documentType, ignoreCase: true, out var docType))
             return BadRequest(new { message = "Geçersiz documentType. Geçerli değerler: Invoice, Despatch" });
 
-        var themeId = Guid.NewGuid();
-        var relativePath = $"themes/{themeId}.xslt";
+        if (!TryParseDecision(existingOverrides, out var decision))
+            return BadRequest(new { message = "Geçersiz existingOverrides. Geçerli değerler: strip, keep" });
+        if (!TryParseImageRoles(existingImages, out var imageRoles))
+            return BadRequest(new { message = ImageRolesError });
 
-        await using (var stream = file.OpenReadStream())
-            await storage.WriteAsync(stream, relativePath, "application/xslt+xml");
-
-        string? thumbnailUrl = null;
+        (byte[]? Bytes, ImageUploadResult? Image, string? Error) thumbnail = default;
         if (thumbnailFile is not null)
         {
-            var (thumbBytes, thumb, thumbError) = await ReadThumbnailAsync(thumbnailFile);
-            if (thumbError is not null)
-                return BadRequest(new { message = thumbError });
+            thumbnail = await ReadThumbnailAsync(thumbnailFile);
+            if (thumbnail.Error is not null)
+                return BadRequest(new { message = thumbnail.Error });
+        }
 
-            var thumbPath = $"themes/thumbnails/{themeId}{thumb!.Extension}";
-            await using var thumbStream = new MemoryStream(thumbBytes!, writable: false);
-            await storage.WriteAsync(thumbStream, thumbPath, thumb.MimeType);
+        // Analiz + (varsa) önceden gömülü görsel bloğu kararı — hiçbir şey yazılmadan önce.
+        var outcome = themeUploads.Process(upload!.Text, docType, decision, imageRoles);
+        if (OutcomeError(outcome) is { } outcomeError)
+            return outcomeError;
+        var ready = (ThemeUploadOutcome.Ready)outcome;
+
+        var themeId = Guid.NewGuid();
+        var relativePath = $"themes/{themeId}.xslt";
+        await WriteThemeAsync(relativePath, ready, upload.Bytes);
+
+        string? thumbnailUrl = null;
+        if (thumbnail.Bytes is not null)
+        {
+            var thumbPath = $"themes/thumbnails/{themeId}{thumbnail.Image!.Extension}";
+            await using var thumbStream = new MemoryStream(thumbnail.Bytes, writable: false);
+            await storage.WriteAsync(thumbStream, thumbPath, thumbnail.Image.MimeType);
             thumbnailUrl = thumbPath;
         }
 
@@ -65,6 +87,7 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
             IsFreeTheme = true,
             IsPremium = isPremium,
             XsltStoragePath = relativePath,
+            SlotCatalog = ready.CatalogJson,
             ThumbnailUrl = thumbnailUrl,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -91,7 +114,9 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         [FromForm] string? name,
         [FromForm] string? documentType,
         [FromForm] bool? isPremium = null,
-        IFormFile? file = null)
+        IFormFile? file = null,
+        [FromForm] string? existingOverrides = null,
+        [FromForm] string? existingImages = null)
     {
         var template = await db.Templates.FindAsync(id);
         if (template is null)
@@ -100,28 +125,38 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         if (isPremium.HasValue)
             template.IsPremium = isPremium.Value;
 
+        if (!string.IsNullOrWhiteSpace(documentType) &&
+            Enum.TryParse<DocumentType>(documentType, ignoreCase: true, out var docType))
+            template.DocumentType = docType;
+
         if (file is not null)
         {
-            var validationError = await ValidateXsltFileAsync(file);
+            var (upload, validationError) = await ReadAndValidateXsltAsync(file);
             if (validationError is not null)
                 return BadRequest(new { message = validationError });
 
-            // Eskiyi sil, yeniyi yaz
+            if (!TryParseDecision(existingOverrides, out var decision))
+                return BadRequest(new { message = "Geçersiz existingOverrides. Geçerli değerler: strip, keep" });
+            if (!TryParseImageRoles(existingImages, out var imageRoles))
+                return BadRequest(new { message = ImageRolesError });
+
+            // Önce işle (409/422 dönebilir), eski dosya ancak sonra silinir.
+            var outcome = themeUploads.Process(upload!.Text, template.DocumentType, decision, imageRoles);
+            if (OutcomeError(outcome) is { } outcomeError)
+                return outcomeError;
+            var ready = (ThemeUploadOutcome.Ready)outcome;
+
             if (!string.IsNullOrEmpty(template.XsltStoragePath))
                 await storage.DeleteAsync(template.XsltStoragePath);
 
             var relativePath = $"themes/{id}.xslt";
-            await using var stream = file.OpenReadStream();
-            await storage.WriteAsync(stream, relativePath, "application/xslt+xml");
+            await WriteThemeAsync(relativePath, ready, upload.Bytes);
             template.XsltStoragePath = relativePath;
+            template.SlotCatalog = ready.CatalogJson;
         }
 
         if (!string.IsNullOrWhiteSpace(name))
             template.Name = name;
-
-        if (!string.IsNullOrWhiteSpace(documentType) &&
-            Enum.TryParse<DocumentType>(documentType, ignoreCase: true, out var docType))
-            template.DocumentType = docType;
 
         template.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
@@ -296,27 +331,44 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
     private static readonly string[] AllowedXsltMimeTypes =
         ["application/xslt+xml", "text/xml", "application/xml", "application/octet-stream"];
 
-    private static async Task<string?> ValidateXsltFileAsync(IFormFile file)
+    private sealed record XsltUpload(string Text, byte[] Bytes);
+
+    private static async Task<(XsltUpload? Upload, string? Error)> ReadAndValidateXsltAsync(IFormFile file)
     {
         if (file.Length == 0)
-            return "Dosya boş olamaz.";
+            return (null, "Dosya boş olamaz.");
 
         if (file.Length > MaxFileSizeBytes)
-            return "Dosya boyutu 2 MB sınırını aşıyor.";
+            return (null, "Dosya boyutu 2 MB sınırını aşıyor.");
 
         var ext = Path.GetExtension(file.FileName);
         if (!ext.Equals(".xslt", StringComparison.OrdinalIgnoreCase))
-            return "Yalnızca .xslt uzantılı dosyalar kabul edilir.";
+            return (null, "Yalnızca .xslt uzantılı dosyalar kabul edilir.");
 
         if (!AllowedXsltMimeTypes.Contains(file.ContentType.ToLowerInvariant()))
-            return "Geçersiz MIME türü.";
+            return (null, "Geçersiz MIME türü.");
 
+        byte[] bytes;
+        await using (var input = file.OpenReadStream())
+        using (var ms = new MemoryStream((int)file.Length))
+        {
+            await input.CopyToAsync(ms);
+            bytes = ms.ToArray();
+        }
+
+        string content;
+        using (var reader = new StreamReader(new MemoryStream(bytes, writable: false)))
+            content = await reader.ReadToEndAsync();
+
+        var error = ValidateXsltContent(content);
+        return error is null ? (new XsltUpload(content, bytes), null) : (null, error);
+    }
+
+    private static string? ValidateXsltContent(string content)
+    {
         // XML içerik doğrulaması — XXE korumalı
         try
         {
-            using var reader = new StreamReader(file.OpenReadStream());
-            var content = await reader.ReadToEndAsync();
-
             // Güvenlik: ham tema render edilirken Saxon document()/doc()/unparsed-text()'i
             // çalıştırır → SSRF/dosya okuma. Bu fonksiyonları ve harici import'ları reddet.
             var threat = XsltCraft.Application.Validation.XsltSafety.FindThreat(content);
@@ -350,7 +402,7 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         }
     }
 
-    private static FreeThemeResponse ToResponse(Template t) => new()
+    private AdminThemeResponse ToResponse(Template t) => new()
     {
         Id = t.Id,
         Name = t.Name,
@@ -358,6 +410,91 @@ public class AdminController(AppDbContext db, IStorageService storage) : Control
         IsPremium = t.IsPremium,
         ThumbnailUrl = t.ThumbnailUrl,
         CreatedAt = t.CreatedAt,
-        UpdatedAt = t.UpdatedAt
+        UpdatedAt = t.UpdatedAt,
+        SlotAnalysis = slotProjector.ForAdmin(t.SlotCatalog, t.DocumentType),
     };
+
+    private static bool TryParseDecision(string? value, out OverridesDecision? decision)
+    {
+        decision = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+        if (value.Equals("strip", StringComparison.OrdinalIgnoreCase)) { decision = OverridesDecision.Strip; return true; }
+        if (value.Equals("keep", StringComparison.OrdinalIgnoreCase)) { decision = OverridesDecision.Keep; return true; }
+        return false;
+    }
+
+    private const string ImageRolesError =
+        "Geçersiz existingImages. Virgülle ayrılmış değerler: logo, signature, design; ':removable' (logo/signature) ya da ':strip' eklenebilir";
+
+    // "logo:removable,signature:strip,design" → 409 yanıtındaki görsel sırasıyla kararlar. ':removable' → kullanıcı kendi
+    // görselini eklemeden temadaki görseli kaldırabilir; ':strip' → admin görseli temadan kaldırır (logo/imzanın yeri
+    // konum olarak kalır). Boş → karar verilmedi.
+    private static bool TryParseImageRoles(string? value, out IReadOnlyList<ThemeImageDecision>? decisions)
+    {
+        decisions = null;
+        if (value is null)
+            return true;
+        var parts = value.Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length > 100)
+            return false;
+        var list = new List<ThemeImageDecision>();
+        foreach (var part in parts.Where(p => p.Length > 0))
+        {
+            var (name, modifier) = part.IndexOf(':') is var i and >= 0 ? (part[..i], part[(i + 1)..]) : (part, null);
+            if (!ThemeSlotProjector.TryParseRole(name, out var role))
+                return false;
+            if (modifier is not (null or "removable" or "strip") || (modifier == "removable" && role == ThemeImageRole.Design))
+                return false;
+            list.Add(new ThemeImageDecision(role, Removable: modifier == "removable", Strip: modifier == "strip"));
+        }
+        decisions = list;
+        return true;
+    }
+
+    // 409: admin kararı gerekli (önceden gömülü görsel bloğu ve/veya temadaki statik görsellerin rolü);
+    // 422: karar uygulanamıyor (ör. "koru", analiz başarısızken görseli kaldırma) ya da işlenen tema son denetimden geçmedi.
+    private IActionResult? OutcomeError(ThemeUploadOutcome outcome) => outcome switch
+    {
+        ThemeUploadOutcome.DecisionRequired d => Conflict(new
+        {
+            message = d.Inspection is not null
+                ? "Temada önceden gömülü görseller var (logo/imza bloğu). Kaldırılsın mı, temanın parçası olarak korunsun mu?"
+                : "Temada görseller bulundu. Hangisi firma logosu, hangisi imza/kaşe, hangisi tasarımın parçası?",
+            code = "upload_decision_required",
+            images = d.Images.Select(i => new
+            {
+                i.Index,
+                Suggested = ThemeSlotProjector.RoleValue(i.Suggested),
+                i.Reason,
+                i.Line,
+                i.PreviewDataUrl,
+            }),
+            overrides = d.Inspection is not { } inspection ? null : new
+            {
+                inspection.Present,
+                inspection.BlockCount,
+                inspection.DanglingMarkers,
+                inspection.Version,
+                inspection.Keepable,
+                inspection.Reason,
+                Images = inspection.Images.Select(i => new
+                {
+                    Kind = i.Kind switch { ThemeAssetKind.Logo => "logo", ThemeAssetKind.Signature => "signature", _ => null },
+                    i.Targets, i.DataUrl, i.Width, i.Height, i.Alignment, i.Valid, i.Problem,
+                }),
+                inspection.BankRows,
+            },
+        }),
+        ThemeUploadOutcome.Rejected r => UnprocessableEntity(new { message = r.Message }),
+        _ => null,
+    };
+
+    // İşlenmiş tema UTF-8 (BOM'suz) yazılır; analiz atlandıysa (UTF-8 dışı bildirim) özgün baytlar.
+    private async Task WriteThemeAsync(string relativePath, ThemeUploadOutcome.Ready ready, byte[] originalBytes)
+    {
+        var bytes = ready.Original ? originalBytes : new System.Text.UTF8Encoding(false).GetBytes(ready.Xslt);
+        await using var stream = new MemoryStream(bytes, writable: false);
+        await storage.WriteAsync(stream, relativePath, "application/xslt+xml");
+    }
 }

@@ -13,6 +13,9 @@ public class Template
     public bool IsPremium { get; set; } = false;
     public string? BlockTree { get; set; }
     public string? XsltStoragePath { get; set; }
+    /// <summary>Hazır temanın logo/imza yuvası kataloğu (jsonb) — yüklemede analizle üretilir. null → eski tema
+    /// (analiz edilmemiş; görseller eski id'lere yerleşir).</summary>
+    public string? SlotCatalog { get; set; }
     public string? ThumbnailUrl { get; set; }
     /// <summary>Kullanıcının atadığı düz klasör (null → "Tümü"). Klasör silinince SetNull olur.</summary>
     public Guid? FolderId { get; set; }

@@ -71,6 +71,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(t => t.DocumentType).HasConversion<string>();
             entity.Property(t => t.IsPremium).HasDefaultValue(false);
             entity.Property(t => t.BlockTree).HasColumnType("jsonb");
+            entity.Property(t => t.SlotCatalog).HasColumnType("jsonb");
             entity.Property(t => t.XsltStoragePath).HasMaxLength(1000);
             entity.Property(t => t.ThumbnailUrl).HasMaxLength(500);
             entity.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");

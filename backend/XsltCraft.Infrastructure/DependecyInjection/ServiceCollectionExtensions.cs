@@ -9,6 +9,12 @@ using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Membership;
 using XsltCraft.Application.Preview;
 using XsltCraft.Application.Services;
+using XsltCraft.Application.ThemeSlots;
+using XsltCraft.Application.ThemeSlots.Analysis;
+using XsltCraft.Application.ThemeSlots.Catalog;
+using XsltCraft.Application.ThemeSlots.Compose;
+using XsltCraft.Application.ThemeSlots.Overrides;
+using XsltCraft.Application.Themes;
 using XsltCraft.Application.Validation;
 using XsltCraft.Application.XPath;
 using XsltCraft.Application.Xslt;
@@ -93,6 +99,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IUblTrBusinessRuleService, UblTrBusinessRuleService>();
         services.AddSingleton<IXPathEvaluator, XPathEvaluator>();
         services.AddSingleton<IFixedNoteInjector, FixedNoteInjector>();
+        services.AddSingleton<IXsltHtmlRenderer, XsltHtmlRenderer>();
+
+        // Hazır tema logo/imza yuvaları: yüklemede analiz + kullanıcı görsellerinin tek kaynaktan eklenmesi.
+        services.AddSingleton<IThemeSampleXmlProvider, ThemeSampleXmlProvider>();
+        services.AddSingleton<IThemeImageValidator, ThemeImageValidator>();
+        services.AddSingleton<IThemeOverridesProcessor, ThemeOverridesProcessor>();
+        services.AddSingleton<IThemeSlotAnalyzer, ThemeSlotAnalyzer>();
+        services.AddSingleton<IThemeUploadProcessor, ThemeUploadProcessor>();
+        services.AddSingleton<IThemeSlotProjector, ThemeSlotProjector>();
+        services.AddSingleton<IThemeAssetComposer, ThemeAssetComposer>();
+        services.AddScoped<IThemeAccessGuard, ThemeAccessGuard>();
 
         // -------------------------------------------------
         // Repositories
