@@ -10,7 +10,7 @@ namespace XsltCraft.Application.Tests.ThemeSlots;
 public class ThemeUploadProcessorTests
 {
     private static readonly IThemeUploadProcessor Processor =
-        new ThemeUploadProcessor(new ThemeOverridesProcessor(new ThemeImageValidator()), ThemeFixtures.Analyzer());
+        new ThemeUploadProcessor(new ThemeOverridesProcessor(new ThemeImageValidator()), ThemeFixtures.Analyzer(), ThemeFixtures.Renderer, ThemeFixtures.Samples);
 
     [Fact]
     public void Theme_with_embedded_block_requires_decision()
@@ -68,45 +68,45 @@ public class ThemeUploadProcessorTests
     }
 
     [Fact]
-    public void Failed_analysis_rejects_keep_but_allows_block_strip()
+    public void Unrenderable_theme_is_rejected_before_any_decision()
     {
-        // Koru, bloğu temaya gömüp tutucuları konum dışı bırakır — analiz başarısızken saklanmaz. Kaldır yalnız
-        // bloğu siler (yuvadan bağımsız); son kapıdan geçerse saklanır.
+        // Bozuk tema için blok kararı sormak anlamsız: 409'dan önce reddedilir, karar ne olursa olsun.
         var xslt = Unrenderable(ThemeFixtures.Load(ThemeFixtures.TestTheme));
 
-        var rejected = Assert.IsType<ThemeUploadOutcome.Rejected>(Processor.Process(xslt, DocumentType.Invoice, OverridesDecision.Keep));
-        Assert.Contains("Tema analiz edilemedi", rejected.Message);
-        Assert.Contains("'Kaldır'", rejected.Message);
-
-        var ready = Assert.IsType<ThemeUploadOutcome.Ready>(Processor.Process(xslt, DocumentType.Invoice, OverridesDecision.Strip));
-        Assert.Equal(ThemeSlotStatus.Failed, ready.Catalog.Status);
-        Assert.Equal("strip", ready.Catalog.Overrides!.Decision);
-        Assert.DoesNotContain(OverridesBlockText.Start, ready.Xslt);
-        SecureXslt.Compile(ready.Xslt);
+        foreach (var decision in new OverridesDecision?[] { null, OverridesDecision.Keep, OverridesDecision.Strip })
+        {
+            var rejected = Assert.IsType<ThemeUploadOutcome.Rejected>(Processor.Process(xslt, DocumentType.Invoice, decision));
+            Assert.Contains("Tema örnek fatura ile işlenemedi, yüklenmedi", rejected.Message);
+        }
     }
 
     [Fact]
-    public void Unrenderable_theme_without_decisions_is_stored_as_uploaded()
+    public void Theme_using_xslt2_functions_is_rejected_with_hint()
     {
-        // general.xslt XSLT 2.0 fonksiyonu kullanıyor: önizleme motoru render edemez ama tema yüklenebilir.
-        var xslt = ThemeFixtures.Load(ThemeFixtures.GibGeneral);
-        var ready = Assert.IsType<ThemeUploadOutcome.Ready>(Processor.Process(xslt, DocumentType.Invoice, null));
+        // general.xslt XSLT 2.0 fonksiyonu (exists()) kullanıyor: önizleme motoru render edemez → yüklenmez.
+        var rejected = Assert.IsType<ThemeUploadOutcome.Rejected>(
+            Processor.Process(ThemeFixtures.Load(ThemeFixtures.GibGeneral), DocumentType.Invoice, null));
 
-        Assert.Equal(ThemeSlotStatus.Failed, ready.Catalog.Status);
-        Assert.Equal(xslt, ready.Xslt);
+        Assert.Contains("exists()", rejected.Message);
+        Assert.Contains("XSLT 1.0", rejected.Message);
     }
 
     [Fact]
-    public void Server_transformed_text_must_compile_but_uploaded_text_is_taken_as_is()
+    public void Not_compiling_theme_is_rejected()
     {
-        // Konum adayı yok → analiz derlemez. Derlenmeyen tema olduğu gibi saklanır (bugünkü davranış); sunucu metni
-        // değiştirdiyse (blok kaldırıldı) son kapı derler ve reddeder.
-        var plain = NotCompiling(block: "");
-        Assert.Equal(plain, Assert.IsType<ThemeUploadOutcome.Ready>(Processor.Process(plain, DocumentType.Invoice, null)).Xslt);
+        var rejected = Assert.IsType<ThemeUploadOutcome.Rejected>(
+            Processor.Process(NotCompiling(block: ""), DocumentType.Invoice, null));
 
-        var withBlock = NotCompiling(block: $"{OverridesBlockText.Start}<div>eski</div>{OverridesBlockText.End}");
-        var rejected = Assert.IsType<ThemeUploadOutcome.Rejected>(Processor.Process(withBlock, DocumentType.Invoice, OverridesDecision.Strip));
-        Assert.Contains("derlenemedi", rejected.Message);
+        Assert.Contains("işlenemedi, yüklenmedi", rejected.Message);
+    }
+
+    [Fact]
+    public void Despatch_theme_is_checked_with_sample_despatch()
+    {
+        var xslt = Unrenderable(ThemeFixtures.Load(ThemeFixtures.GibEIrsaliye));
+        var rejected = Assert.IsType<ThemeUploadOutcome.Rejected>(Processor.Process(xslt, DocumentType.Despatch, null));
+
+        Assert.Contains("örnek irsaliye ile", rejected.Message);
     }
 
     [Fact]

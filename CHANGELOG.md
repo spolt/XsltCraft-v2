@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Admin: derlenemeyen ya da render edilemeyen tema yüklenebiliyordu.** Örneğin XSLT 2.0 fonksiyonu (`exists()`) kullanan bir tema "Başarısız" analizle kaydediliyor, kullanıcıya önizlenemeyen bir tema olarak sunuluyordu. Artık yüklenen tema (yeni ya da güncelleme) önce örnek fatura/irsaliye ile derlenip render ediliyor; başarısızsa yükleme 422 ile reddediliyor, mesajda hata ve — XSLT 2.0 fonksiyonu kullanıldıysa — önizleme motorunun XSLT 1.0 olduğu belirtiliyor. Kontrol, görsel/blok kararları sorulmadan önce yapılır. Daha önce bu şekilde kaydedilmiş temalar etkilenmez; admin silebilir.
+
 ### Added
 - **XSLT Editör — tam ekran modu + yüzen mini önizleme**: araç çubuğunun sağ ucundaki büyüt butonu (ya da `Ctrl+Shift+F`) editörü tüm çalışma alanına yayar; kenar çubuğu gizlenir, sağ panel örtülür. Tasarımın canlı önizlemesi kodun üzerinde yüzen küçük bir pencerede (varsayılan 360×480, sağ üst) görünmeye devam eder: tutamaktan sürüklenir, sol-alt köşeden boyutlandırılır, çift tıkla varsayılana döner; önizleme pencere genişliğine sığdırılır ve tıkla→satıra git çalışır. Sağ paneldeki **Önizleme** sekmesine bitişik buton tek tıkla "tam ekran + mini pencere" açar. Açık/kapalı durumu, konum ve boyut `localStorage`'da kalıcıdır.
   - Moda girip çıkmak Monaco'yu remount etmez (geri-al geçmişi, imleç, kaydırma korunur); sağ panelin durumu (AI sohbeti, seçili sekme) korunur — ana önizleme hariç: çıkışta yeniden yüklenir, zoom/kaydırma sıfırlanır. Kısayol yalnız editör ekrandayken ve üzerinde diyalog yokken etkindir. "AI'ya sor" ve "XML satırına git" akışları moddan otomatik çıkar.

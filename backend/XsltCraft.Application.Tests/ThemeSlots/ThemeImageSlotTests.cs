@@ -18,7 +18,7 @@ public class ThemeImageSlotTests
     private static ThemeImageDecision Design => new(ThemeImageRole.Design, false);
 
     private static readonly IThemeUploadProcessor Processor =
-        new ThemeUploadProcessor(new ThemeOverridesProcessor(new ThemeImageValidator()), Analyzer);
+        new ThemeUploadProcessor(new ThemeOverridesProcessor(new ThemeImageValidator()), Analyzer, ThemeFixtures.Renderer, ThemeFixtures.Samples);
 
     [Fact]
     public void Detects_company_logo_and_stamp_but_not_gib_logo_or_barcode()
@@ -280,31 +280,18 @@ public class ThemeImageSlotTests
         """<table><tr><td>Satıcı</td><td><img src="data:image/png;base64,AAAA" alt="logo"/></td></tr></table>""";
 
     [Fact]
-    public void Failed_analysis_with_image_strip_is_rejected()
+    public void Unrenderable_theme_with_images_is_rejected_before_image_decision()
     {
-        // Konum yokken logoyu temadan kaldırmak temayı logosuz bırakır; kullanıcı yerine bir şey koyamaz.
+        // Analiz render edemez (Failed); yükleme ise görsel kararı sorulmadan reddedilir — logosu silinmiş ya da
+        // konumsuz bir tema saklanmaz.
         var xslt = Unrenderable(HeaderImage);
         var analysis = Analyzer.Analyze(xslt, DocumentType.Invoice, [], [new(ThemeImageRole.Logo, false)]);
         Assert.Equal(ThemeSlotStatus.Failed, analysis.Catalog.Status);
         Assert.Contains(analysis.Catalog.Warnings, w => w.Code == "render-failed");
 
-        var outcome = Processor.Process(xslt, DocumentType.Invoice, null, [new(ThemeImageRole.Logo, false, Strip: true)]);
-
-        var rejected = Assert.IsType<ThemeUploadOutcome.Rejected>(outcome);
-        Assert.Contains("Tema analiz edilemedi (Tema örnek belgeyle render edilemedi", rejected.Message);
-        Assert.Contains("'Görünsün'", rejected.Message);
-    }
-
-    [Fact]
-    public void Failed_analysis_without_text_changing_decision_stores_uploaded_text()
-    {
-        var xslt = Unrenderable(HeaderImage);
-        var ready = Assert.IsType<ThemeUploadOutcome.Ready>(
-            Processor.Process(xslt, DocumentType.Invoice, null, [new(ThemeImageRole.Logo, true)]));
-
-        Assert.Equal(ThemeSlotStatus.Failed, ready.Catalog.Status);
-        Assert.Empty(ready.Catalog.Slots);
-        Assert.Equal(xslt, ready.Xslt);
+        Assert.IsType<ThemeUploadOutcome.Rejected>(Processor.Process(xslt, DocumentType.Invoice, null));
+        Assert.IsType<ThemeUploadOutcome.Rejected>(
+            Processor.Process(xslt, DocumentType.Invoice, null, [new(ThemeImageRole.Logo, false, Strip: true)]));
     }
 
     // Derlenir ama örnek belgeyle çalışırken durur → analiz "render-failed".

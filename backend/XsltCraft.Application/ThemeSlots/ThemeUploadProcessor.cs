@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 
+using XsltCraft.Application.ThemeSlots.Analysis;
 using XsltCraft.Application.ThemeSlots.Catalog;
 using XsltCraft.Application.ThemeSlots.Overrides;
 using XsltCraft.Application.Validation;
@@ -34,7 +35,9 @@ public interface IThemeUploadProcessor
         IReadOnlyList<ThemeImageDecision>? imageRoles = null);
 }
 
-public sealed partial class ThemeUploadProcessor(IThemeOverridesProcessor overrides, IThemeSlotAnalyzer analyzer) : IThemeUploadProcessor
+public sealed partial class ThemeUploadProcessor(
+    IThemeOverridesProcessor overrides, IThemeSlotAnalyzer analyzer, IXsltHtmlRenderer renderer, IThemeSampleXmlProvider samples)
+    : IThemeUploadProcessor
 {
     [GeneratedRegex(@"^\s*<\?xml[^>]*\bencoding\s*=\s*[""']([^""']+)[""']", RegexOptions.CultureInvariant)]
     private static partial Regex DeclaredEncoding();
@@ -45,6 +48,10 @@ public sealed partial class ThemeUploadProcessor(IThemeOverridesProcessor overri
         if (xslt.Length > 0 && xslt[0] == '﻿')
             xslt = xslt[1..];
         var uploaded = xslt;
+
+        // Önizlemede render edilemeyen tema yayımlanmaz — karar sorulmadan (409) ve analizden önce.
+        if (RenderProblem(xslt, type) is { } renderProblem)
+            return new ThemeUploadOutcome.Rejected(renderProblem);
 
         // Analiz metni UTF-8 olarak yeniden yazar; bildirimi farklı kodlama diyen dosyada bayt/bildirim uyuşmazlığı
         // doğmasın diye dokunulmaz.
@@ -136,6 +143,24 @@ public sealed partial class ThemeUploadProcessor(IThemeOverridesProcessor overri
         catch (Exception ex)
         {
             return $"İşlenen tema derlenemedi: {ex.Message}";
+        }
+    }
+
+    // Tema örnek belgeyle derlenip render edilebilmeli (önizleme ve analiz aynı motoru kullanır).
+    private string? RenderProblem(string xslt, DocumentType type)
+    {
+        try
+        {
+            renderer.Render(xslt, samples.Get(type));
+            return null;
+        }
+        catch (Exception ex)
+        {
+            var sample = type == DocumentType.Despatch ? "irsaliye" : "fatura";
+            var hint = ex.Message.Contains("unknown XSLT function", StringComparison.OrdinalIgnoreCase)
+                ? " Önizleme XSLT 1.0 motoruyla çalışır; XSLT 2.0'a özgü fonksiyonlar (ör. exists()) kullanılamaz."
+                : string.Empty;
+            return $"Tema örnek {sample} ile işlenemedi, yüklenmedi: {ex.Message}{hint}";
         }
     }
 }
