@@ -329,30 +329,13 @@ public class PreviewController : ControllerBase
     }
 
     /// <summary>
-    /// XslCompiledTransform.Load derleme hatalarında dıştaki XsltException'ın mesajı her zaman
-    /// jenerik "XSLT compile error."tır; asıl neden (geçersiz XPath, yanlış konumlanmış eleman vb.)
-    /// InnerException zincirinde saklıdır. Zincirdeki tüm anlamlı mesajları birleştirir ve
-    /// dıştaki satır/kolon 0 ise inner XsltException'dan doldurur.
+    /// XsltException zincirini tek mesaj + satır/kolona indirger — mantık
+    /// <see cref="XsltCraft.Application.Xslt.Engines.XsltDiagnostics.FromXsltException"/>'dadır.
     /// </summary>
     internal static (string Message, int Line, int Column) DescribeXsltError(XsltException ex)
     {
-        int line = ex.LineNumber;
-        int column = ex.LinePosition;
-
-        var messages = new List<string>();
-        for (Exception? cur = ex; cur != null; cur = cur.InnerException)
-        {
-            if (!string.IsNullOrWhiteSpace(cur.Message))
-                messages.Add(cur.Message.Trim());
-            if ((line == 0 || column == 0) && cur is XsltException xe && xe.LineNumber != 0)
-            {
-                line = xe.LineNumber;
-                column = xe.LinePosition;
-            }
-        }
-
-        var message = string.Join(" → ", messages.Distinct());
-        return (message, line, column);
+        var d = XsltCraft.Application.Xslt.Engines.XsltDiagnostics.FromXsltException(ex);
+        return (d.Message, d.Line, d.Column);
     }
 
     /// <summary>XSLT sözdizimini doğrular — geliştirici aracı.</summary>
