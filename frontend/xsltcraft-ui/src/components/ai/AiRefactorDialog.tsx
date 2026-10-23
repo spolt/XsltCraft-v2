@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { DiffEditor } from '@monaco-editor/react'
 import { Sparkles, X, StopCircle, Check, RefreshCcw, Loader2 } from 'lucide-react'
 import { streamAi, type AiChunk } from '../../services/aiAssistantService'
+import api from '../../services/apiService'
 
 interface Props {
   /** Refactor edilecek orijinal seçim. */
@@ -74,13 +75,10 @@ export default function AiRefactorDialog({
       // Önce sözdizimi kontrolü — orijinal stylesheet'in seçim yerine refactored konursa parse edilebiliyor mu?
       // Backend validate-xslt endpoint'i tek başına bir XSLT parçası beklediği için tam dosya gönderiyoruz.
       const replaced = fullXslt.replace(originalSelection, refactored)
-      const res = await fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:5000'}/api/preview/validate-xslt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ xslt: replaced }),
-        credentials: 'include',
-      })
-      const data = await res.json() as { valid: boolean; error?: string }
+      const { data } = await api.post<{ valid: boolean; error?: string }>(
+        '/api/preview/validate-xslt',
+        { xslt: replaced },
+      )
       if (!data.valid) {
         setValidateError(`Refactor edilen XSLT sözdizimi hatalı: ${data.error ?? 'bilinmeyen hata'}. Yine de uygulamak ister misin?`)
         setValidating(false)

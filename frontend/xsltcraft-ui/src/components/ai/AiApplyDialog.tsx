@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { DiffEditor, Editor } from '@monaco-editor/react'
 import { Sparkles, X, Check, Loader2, Copy, ClipboardCheck, AlertTriangle, MousePointerClick } from 'lucide-react'
 import type { ApplyTarget } from '../../utils/xsltApply'
+import api from '../../services/apiService'
 
 interface Props {
   target: ApplyTarget
@@ -9,8 +10,6 @@ interface Props {
   onAccept: (newDoc: string) => void
   onClose: () => void
 }
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000'
 
 const KIND_LABEL: Record<ApplyTarget['kind'], string> = {
   'whole-doc': 'Tüm belge değiştirilecek',
@@ -31,13 +30,10 @@ export default function AiApplyDialog({ target, onAccept, onClose }: Props) {
     setValidating(true)
     setValidateError(null)
     try {
-      const res = await fetch(`${API_BASE}/api/preview/validate-xslt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ xslt: target.newDoc }),
-        credentials: 'include',
-      })
-      const data = await res.json() as { valid: boolean; error?: string }
+      const { data } = await api.post<{ valid: boolean; error?: string }>(
+        '/api/preview/validate-xslt',
+        { xslt: target.newDoc },
+      )
       if (!data.valid) {
         setValidateError(`Uygulanan XSLT sözdizimi hatalı: ${data.error ?? 'bilinmeyen hata'}. Yine de uygulamak ister misin?`)
         setValidating(false)
