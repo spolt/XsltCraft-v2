@@ -1,9 +1,8 @@
-using Saxon.Api;
 using System.Xml;
-using System.Xml.Xsl;
 using XsltCraft.Application.Interfaces;
-using XsltCraft.Infrastructure.Storage;
+using XsltCraft.Application.Validation;
 using XsltCraft.Application.Xslt;
+using XsltCraft.Infrastructure.Storage;
 
 namespace XsltCraft.Infrastructure.Xslt;
 
@@ -11,11 +10,13 @@ public class XsltTemplateRenderer : IXsltTemplateRenderer
 {
     private readonly ITemplateRepository _repository;
     private readonly IStorageService _storage;
+    private readonly IXsltHtmlRenderer _htmlRenderer;
 
-    public XsltTemplateRenderer(ITemplateRepository repository, IStorageService storage)
+    public XsltTemplateRenderer(ITemplateRepository repository, IStorageService storage, IXsltHtmlRenderer htmlRenderer)
     {
         _repository = repository;
         _storage = storage;
+        _htmlRenderer = htmlRenderer;
     }
 
     public async Task<string> RenderPreviewAsync(string xslt, XmlDocument xml)
@@ -43,28 +44,12 @@ public class XsltTemplateRenderer : IXsltTemplateRenderer
         using var reader = new StreamReader(stream);
         var xslt = await reader.ReadToEndAsync();
 
-        var processor = new Processor();
-        // Güvenlik (defense-in-depth): Asıl koruma kaynak taramasıdır (XsltSafety,
-        // document()/doc()/unparsed-text()/collection() gömülmesini engeller). Ek olarak
-        // motorda harici çözümlemeyi (xsl:import/include + giriş belgesi) reddediyoruz.
-        var compiler = processor.NewXsltCompiler();
-        compiler.XmlResolver = System.Xml.XmlResolver.ThrowingResolver;
+        // Güvenlik: kayıtlı içerik de motora ulaşmadan fail-closed taranır
+        // (document()/doc()/unparsed-text()/collection(), xsl:import/include).
+        if (XsltSafety.FindThreat(xslt) is { } threat)
+            throw new InvalidOperationException($"Template '{templateId}' güvenli değil: {threat}");
 
-        using var xsltReader = new StringReader(xslt);
-        var executable = compiler.Compile(xsltReader);
-        var transformer = executable.Load();
-
-        var xmlReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-        using var xmlReader = XmlReader.Create(new StringReader(xml.OuterXml), xmlReaderSettings);
-        var documentBuilder = processor.NewDocumentBuilder();
-        documentBuilder.XmlResolver = System.Xml.XmlResolver.ThrowingResolver;
-        var inputNode = documentBuilder.Build(xmlReader);
-        transformer.InitialContextNode = inputNode;
-
-        using var sw = new StringWriter();
-        var serializer = processor.NewSerializer(sw);
-        transformer.Run(serializer);
-
-        return sw.ToString();
+        // Derleme SecureXslt üzerinden (script/document() kapalı, resolver null); XML XXE korumalı okunur.
+        return _htmlRenderer.Render(xslt, xml.OuterXml).Html;
     }
 }

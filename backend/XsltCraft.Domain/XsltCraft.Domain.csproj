@@ -13,8 +13,4 @@
     <Folder Include="ValueObjects\" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Saxon-HE" Version="10.9.0" />
-  </ItemGroup>
-
 </Project>
