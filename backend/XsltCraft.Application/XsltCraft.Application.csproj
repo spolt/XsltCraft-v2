@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="XsltCraft.Application.Tests" />
+    <InternalsVisibleTo Include="XsltCraft.Tests" />
   </ItemGroup>
 
 </Project>

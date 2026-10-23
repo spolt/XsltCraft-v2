@@ -1072,10 +1072,10 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     private static string? Validate(string xslt)
     {
-        // Güvenlik: kullanıcı XPath'i stylesheet'e gömülür; dış kaynak çağıran fonksiyonları
-        // (document/doc/unparsed-text/collection…) motora ulaşmadan fail-closed reddet.
-        var threat = Validation.XsltSafety.FindThreat(xslt);
-        if (threat is not null)
+        // Güvenlik: kullanıcı XPath'i stylesheet'e gömülür ve çıktı render motoruna gider.
+        // Execute modu: Security (SSRF/dosya okuma/DoS) + Unsupported (XSLT 2.0 üstü) fail-closed reddedilir.
+        var report = Validation.XsltSafety.Scan(xslt, Validation.Safety.XsltSafetyMode.Execute);
+        if (report.FirstMessage is { } threat)
             return threat;
 
         try
