@@ -1,0 +1,143 @@
+{
+  "version": 2,
+  "documentType": "Despatch",
+  "blocks": {
+    "d01-party-despatch-supplier": {
+      "id": "d01-party-despatch-supplier",
+      "type": "PartyInfo",
+      "config": {
+        "partyType": "DespatchSupplierParty",
+        "title": "GÖNDERİCİ",
+        "showTitle": true,
+        "bordered": true,
+        "borderStyle": "solid",
+        "labelStyle": "inline",
+        "fontSize": "11px",
+        "fields": [
+          { "key": "companyName", "label": "Ünvan", "relativeXpath": "cac:PartyName/cbc:Name", "visible": true, "order": 0 },
+          { "key": "vkn", "label": "VKN/TCKN", "relativeXpath": "cac:PartyIdentification/cbc:ID", "visible": true, "order": 1 },
+          { "key": "taxOffice", "label": "Vergi Dairesi", "relativeXpath": "cac:PartyTaxScheme/cac:TaxScheme/cbc:Name", "visible": true, "order": 2 },
+          { "key": "city", "label": "Şehir", "relativeXpath": "cac:PostalAddress/cbc:CityName", "visible": true, "order": 5 }
+        ]
+      },
+      "gridLayout": { "x": 14, "y": 8, "width": 70, "height": 40, "autoHeight": true }
+    },
+    "d02-giblogo": {
+      "id": "d02-giblogo",
+      "type": "GibLogo",
+      "config": { "width": "70px", "height": "70px", "alignment": "center", "fontSize": "11px" },
+      "gridLayout": { "x": 90, "y": 8, "width": 30, "height": 30, "autoHeight": false }
+    },
+    "d03-despatch-header": {
+      "id": "d03-despatch-header",
+      "type": "InvoiceHeader",
+      "config": {
+        "title": "İRSALİYE BİLGİLERİ",
+        "showTitle": true,
+        "bordered": true,
+        "borderStyle": "dotted",
+        "labelStyle": "table",
+        "fontSize": "10.4px",
+        "fields": [
+          { "key": "custom-invoice", "label": "Fatura No:", "xpath": "//cac:AdditionalDocumentReference/cbc:ID", "visible": true, "order": 20, "isCustom": true }
+        ]
+      },
+      "gridLayout": { "x": 126, "y": 8, "width": 70, "height": 40, "autoHeight": true }
+    },
+    "d04-party-delivery-customer": {
+      "id": "d04-party-delivery-customer",
+      "type": "PartyInfo",
+      "config": {
+        "partyType": "DeliveryCustomerParty",
+        "title": "TESLİM ALICI",
+        "showTitle": true,
+        "bordered": true,
+        "borderStyle": "dashed",
+        "labelStyle": "table",
+        "fontSize": "11px",
+        "fields": [
+          { "key": "companyName", "label": "Ünvan", "relativeXpath": "cac:PartyName/cbc:Name", "visible": true, "order": 0 },
+          { "key": "vkn", "label": "VKN/TCKN", "relativeXpath": "cac:PartyIdentification/cbc:ID", "visible": true, "order": 1 },
+          { "key": "street", "label": "Adres", "relativeXpath": "cac:PostalAddress/cbc:StreetName", "visible": true, "order": 3 }
+        ]
+      },
+      "gridLayout": { "x": 14, "y": 52, "width": 90, "height": 30, "autoHeight": true }
+    },
+    "d05-shipmentinfo": {
+      "id": "d05-shipmentinfo",
+      "type": "ShipmentInfo",
+      "config": {
+        "title": "TAŞIYICI BİLGİLERİ",
+        "showTitle": true,
+        "bordered": true,
+        "borderStyle": "solid",
+        "labelStyle": "table",
+        "fontSize": "10.4px",
+        "fields": [
+          { "key": "custom-city", "label": "Teslimat Şehri:", "xpath": "//cac:DeliveryAddress/cbc:CityName", "visible": true, "order": 20, "isCustom": true }
+        ]
+      },
+      "gridLayout": { "x": 106, "y": 52, "width": 90, "height": 30, "autoHeight": true }
+    },
+    "d06-despatch-lines": {
+      "id": "d06-despatch-lines",
+      "type": "InvoiceLineTable",
+      "config": {
+        "iterateOver": "//cac:DespatchLine",
+        "title": "İRSALİYE SATIRLARI",
+        "showTitle": false,
+        "showHeader": true,
+        "showRowNumber": true,
+        "showCurrency": true,
+        "bordered": true,
+        "borderStyle": "solid",
+        "headerBackgroundColor": "#E0E0E0",
+        "alternateRowColor": "#F9F9F9",
+        "fontSize": "11px",
+        "columns": [
+          { "key": "lineId", "header": "Sıra No", "relativeXpath": "cbc:ID", "width": "6%", "format": "text", "visible": false, "order": 0 },
+          { "key": "productCode", "header": "Ürün Kodu", "relativeXpath": "cac:Item/cac:SellersItemIdentification/cbc:ID", "width": "12%", "format": "text", "visible": true, "order": 1 },
+          { "key": "description", "header": "Mal", "relativeXpath": "cac:Item/cbc:Name", "width": "30%", "format": "text", "visible": true, "order": 2 },
+          { "key": "quantity", "header": "Miktar", "relativeXpath": "cbc:DeliveredQuantity", "width": "10%", "format": "quantityWithUnit", "visible": true, "order": 3 },
+          { "key": "unitPrice", "header": "Birim Fiyat", "relativeXpath": "cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount", "width": "12%", "format": "currency", "visible": true, "order": 4 },
+          { "key": "outstandingQty", "header": "Sonra Gönderilecek Miktar", "relativeXpath": "cbc:OutstandingQuantity", "width": "12%", "format": "quantityWithUnit", "visible": true, "order": 5 },
+          { "key": "lineExtension", "header": "Tutar", "relativeXpath": "cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount", "width": "14%", "format": "currency", "visible": true, "order": 6 },
+          { "key": "note", "header": "Açıklama", "relativeXpath": "cbc:Note", "width": "14%", "format": "text", "visible": true, "order": 7 }
+        ]
+      },
+      "gridLayout": { "x": 14, "y": 86, "width": 182, "height": 30, "autoHeight": true }
+    },
+    "d07-despatch-totals": {
+      "id": "d07-despatch-totals",
+      "type": "InvoiceTotals",
+      "config": {
+        "showCurrency": true,
+        "currencyXpath": "//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID",
+        "fontSize": "11px",
+        "fields": [
+          { "key": "valueAmount", "label": "Toplam Tutar", "xpath": "//cac:Shipment/cac:GoodsItem/cbc:ValueAmount", "visible": true, "highlight": true, "bold": true, "order": 0 }
+        ]
+      },
+      "gridLayout": { "x": 106, "y": 120, "width": 90, "height": 15, "autoHeight": true }
+    },
+    "d08-notes": {
+      "id": "d08-notes",
+      "type": "Notes",
+      "config": {
+        "iterateOver": "/n1:DespatchAdvice/cbc:Note",
+        "prefix": "Not: ",
+        "staticLines": ["Teslim alırken kontrol ediniz."],
+        "staticPosition": "after",
+        "bordered": false,
+        "fontSize": "11px"
+      },
+      "gridLayout": { "x": 14, "y": 120, "width": 90, "height": 20, "autoHeight": true }
+    },
+    "d09-gibkarekod": {
+      "id": "d09-gibkarekod",
+      "type": "GibKarekod",
+      "config": { "qrWidth": 150, "qrHeight": 150, "qrAlignment": "left" },
+      "gridLayout": { "x": 14, "y": 144, "width": 40, "height": 40, "autoHeight": false }
+    }
+  }
+}

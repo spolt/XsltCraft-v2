@@ -1,0 +1,240 @@
+<DespatchAdvice xmlns="urn:oasis:names:specification:ubl:schema:xsd:DespatchAdvice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>TR1.2.1</cbc:CustomizationID>
+  <cbc:ProfileID>TEMELIRSALIYE</cbc:ProfileID>
+  <cbc:ID>IRS2026000000001</cbc:ID>
+  <cbc:CopyIndicator>false</cbc:CopyIndicator>
+  <cbc:UUID>f5e58e8f-691e-4b15-88ce-8a5378066df8</cbc:UUID>
+  <cbc:IssueDate>2026-02-25</cbc:IssueDate>
+  <cbc:IssueTime>13:39:23.0000000+03:00</cbc:IssueTime>
+  <cbc:DespatchAdviceTypeCode>SEVK</cbc:DespatchAdviceTypeCode>
+  <cbc:Note>Sevk irsaliyesi yerine geçer.</cbc:Note>
+  <cbc:Note>Ödeme Şekli: Açık Hesap</cbc:Note>
+  <cbc:LineCountNumeric>3</cbc:LineCountNumeric>
+  <cac:OrderReference>
+    <cbc:ID>SIP2026000123</cbc:ID>
+    <cbc:IssueDate>2026-02-24</cbc:IssueDate>
+  </cac:OrderReference>
+  <cac:AdditionalDocumentReference>
+    <cbc:ID>FTR2026000003520</cbc:ID>
+    <cbc:IssueDate>2026-02-25</cbc:IssueDate>
+    <cbc:DocumentType>Fatura</cbc:DocumentType>
+    <cbc:DocumentDescription>Fatura Kodu</cbc:DocumentDescription>
+  </cac:AdditionalDocumentReference>
+  <cac:DespatchSupplierParty>
+    <cac:Party>
+      <cbc:WebsiteURI>www.ornekdagitim.com.tr</cbc:WebsiteURI>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="VKN">1234567890</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="MERSISNO">0123456789000015</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name>Örnek Dağıtım San. ve Tic. Ltd. Şti.</cbc:Name>
+      </cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>İstasyon Mah. Örnek Sok.</cbc:StreetName>
+        <cbc:BuildingNumber>1</cbc:BuildingNumber>
+        <cbc:CitySubdivisionName>TUZLA</cbc:CitySubdivisionName>
+        <cbc:CityName>İSTANBUL</cbc:CityName>
+        <cbc:PostalZone>34940</cbc:PostalZone>
+        <cac:Country>
+          <cbc:Name>Türkiye</cbc:Name>
+        </cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cac:TaxScheme>
+          <cbc:Name>TUZLA V.D.</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:Contact>
+        <cbc:Telephone>0216 000 00 00</cbc:Telephone>
+        <cbc:ElectronicMail>info@ornekdagitim.com.tr</cbc:ElectronicMail>
+      </cac:Contact>
+    </cac:Party>
+    <cac:DespatchContact>
+      <cbc:Name>Mehmet Örnek</cbc:Name>
+    </cac:DespatchContact>
+  </cac:DespatchSupplierParty>
+  <cac:DeliveryCustomerParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="VKN">9876543210</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="MUSTERINO">20240004067</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name>Örnek Market Gıda Ltd. Şti.</cbc:Name>
+      </cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>Çamlı Belde Yolu Cd.</cbc:StreetName>
+        <cbc:BuildingNumber>6</cbc:BuildingNumber>
+        <cbc:CitySubdivisionName>TUZLA</cbc:CitySubdivisionName>
+        <cbc:CityName>İSTANBUL</cbc:CityName>
+        <cbc:PostalZone>34950</cbc:PostalZone>
+        <cac:Country>
+          <cbc:Name>Türkiye</cbc:Name>
+        </cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cac:TaxScheme>
+          <cbc:Name>TUZLA V.D.</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:Contact>
+        <cbc:Telephone>0216 111 11 11</cbc:Telephone>
+        <cbc:ElectronicMail>siparis@ornekmarket.com.tr</cbc:ElectronicMail>
+      </cac:Contact>
+    </cac:Party>
+  </cac:DeliveryCustomerParty>
+  <cac:Shipment>
+    <cbc:ID>34 ABC 001</cbc:ID>
+    <cac:GoodsItem>
+      <cbc:ValueAmount currencyID="TRY">1229.16</cbc:ValueAmount>
+    </cac:GoodsItem>
+    <cac:ShipmentStage>
+      <cac:TransportMeans>
+        <cac:RoadTransport>
+          <cbc:LicensePlateID schemeID="PLAKA">34 ABC 001</cbc:LicensePlateID>
+        </cac:RoadTransport>
+      </cac:TransportMeans>
+      <cac:DriverPerson>
+        <cbc:FirstName>Ahmet</cbc:FirstName>
+        <cbc:FamilyName>Yılmaz</cbc:FamilyName>
+        <cbc:Title>Şoför</cbc:Title>
+        <cbc:NationalityID>11111111111</cbc:NationalityID>
+      </cac:DriverPerson>
+    </cac:ShipmentStage>
+    <cac:Delivery>
+      <cac:DeliveryAddress>
+        <cbc:StreetName>Çamlı Belde Yolu Cd.</cbc:StreetName>
+        <cbc:CitySubdivisionName>TUZLA</cbc:CitySubdivisionName>
+        <cbc:CityName>İSTANBUL</cbc:CityName>
+        <cbc:PostalZone>34950</cbc:PostalZone>
+        <cac:Country>
+          <cbc:Name>Türkiye</cbc:Name>
+        </cac:Country>
+      </cac:DeliveryAddress>
+      <cac:CarrierParty>
+        <cac:PartyIdentification>
+          <cbc:ID schemeID="VKN">1234567890</cbc:ID>
+        </cac:PartyIdentification>
+        <cac:PartyName>
+          <cbc:Name>Örnek Dağıtım San. ve Tic. Ltd. Şti.</cbc:Name>
+        </cac:PartyName>
+        <cac:PostalAddress>
+          <cbc:StreetName>İstasyon Mah. Örnek Sok.</cbc:StreetName>
+          <cbc:CitySubdivisionName>TUZLA</cbc:CitySubdivisionName>
+          <cbc:CityName>İSTANBUL</cbc:CityName>
+          <cac:Country>
+            <cbc:Name>Türkiye</cbc:Name>
+          </cac:Country>
+        </cac:PostalAddress>
+      </cac:CarrierParty>
+      <cac:Despatch>
+        <cbc:ActualDespatchDate>2026-02-26</cbc:ActualDespatchDate>
+        <cbc:ActualDespatchTime>14:06:25.0000000+03:00</cbc:ActualDespatchTime>
+      </cac:Despatch>
+    </cac:Delivery>
+  </cac:Shipment>
+  <cac:DespatchLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:Note>Koli içi 12 adet</cbc:Note>
+    <cbc:DeliveredQuantity unitCode="PA">1</cbc:DeliveredQuantity>
+    <cbc:OutstandingQuantity unitCode="PA">0</cbc:OutstandingQuantity>
+    <cac:OrderLineReference>
+      <cbc:LineID>1</cbc:LineID>
+    </cac:OrderLineReference>
+    <cac:Item>
+      <cbc:Name>FANTASTİK BAR KEK 12KT 12AD 40G</cbc:Name>
+      <cac:BuyersItemIdentification>
+        <cbc:ID>8690000000011</cbc:ID>
+      </cac:BuyersItemIdentification>
+      <cac:SellersItemIdentification>
+        <cbc:ID>MA.KEK.0001</cbc:ID>
+      </cac:SellersItemIdentification>
+    </cac:Item>
+    <cac:Shipment>
+      <cbc:ID/>
+      <cac:GoodsItem>
+        <cac:InvoiceLine>
+          <cbc:ID/>
+          <cbc:InvoicedQuantity>0</cbc:InvoicedQuantity>
+          <cbc:LineExtensionAmount currencyID="TRY">221.64</cbc:LineExtensionAmount>
+          <cac:Item>
+            <cbc:Name>FANTASTİK BAR KEK 12KT 12AD 40G</cbc:Name>
+          </cac:Item>
+          <cac:Price>
+            <cbc:PriceAmount currencyID="TRY">221.64</cbc:PriceAmount>
+          </cac:Price>
+        </cac:InvoiceLine>
+      </cac:GoodsItem>
+    </cac:Shipment>
+  </cac:DespatchLine>
+  <cac:DespatchLine>
+    <cbc:ID>2</cbc:ID>
+    <cbc:DeliveredQuantity unitCode="PA">1</cbc:DeliveredQuantity>
+    <cac:OrderLineReference>
+      <cbc:LineID>2</cbc:LineID>
+    </cac:OrderLineReference>
+    <cac:Item>
+      <cbc:Name>HAYVANLAR SERİSİ ÇİKOLATA 23G 24ADT 4KT</cbc:Name>
+      <cac:BuyersItemIdentification>
+        <cbc:ID>8690000000028</cbc:ID>
+      </cac:BuyersItemIdentification>
+      <cac:SellersItemIdentification>
+        <cbc:ID>MA.CIK.0002</cbc:ID>
+      </cac:SellersItemIdentification>
+    </cac:Item>
+    <cac:Shipment>
+      <cbc:ID/>
+      <cac:GoodsItem>
+        <cac:InvoiceLine>
+          <cbc:ID/>
+          <cbc:InvoicedQuantity>0</cbc:InvoicedQuantity>
+          <cbc:LineExtensionAmount currencyID="TRY">503.76</cbc:LineExtensionAmount>
+          <cac:Item>
+            <cbc:Name>HAYVANLAR SERİSİ ÇİKOLATA 23G 24ADT 4KT</cbc:Name>
+          </cac:Item>
+          <cac:Price>
+            <cbc:PriceAmount currencyID="TRY">503.76</cbc:PriceAmount>
+          </cac:Price>
+        </cac:InvoiceLine>
+      </cac:GoodsItem>
+    </cac:Shipment>
+  </cac:DespatchLine>
+  <cac:DespatchLine>
+    <cbc:ID>3</cbc:ID>
+    <cbc:DeliveredQuantity unitCode="PA">1</cbc:DeliveredQuantity>
+    <cac:OrderLineReference>
+      <cbc:LineID>3</cbc:LineID>
+    </cac:OrderLineReference>
+    <cac:Item>
+      <cbc:Name>POPSY ÇİKOLATA 24G 24ADT 6KT</cbc:Name>
+      <cac:BuyersItemIdentification>
+        <cbc:ID>8690000000035</cbc:ID>
+      </cac:BuyersItemIdentification>
+      <cac:SellersItemIdentification>
+        <cbc:ID>MA.CIK.0003</cbc:ID>
+      </cac:SellersItemIdentification>
+    </cac:Item>
+    <cac:Shipment>
+      <cbc:ID/>
+      <cac:GoodsItem>
+        <cac:InvoiceLine>
+          <cbc:ID/>
+          <cbc:InvoicedQuantity>0</cbc:InvoicedQuantity>
+          <cbc:LineExtensionAmount currencyID="TRY">503.76</cbc:LineExtensionAmount>
+          <cac:Item>
+            <cbc:Name>POPSY ÇİKOLATA 24G 24ADT 6KT</cbc:Name>
+          </cac:Item>
+          <cac:Price>
+            <cbc:PriceAmount currencyID="TRY">503.76</cbc:PriceAmount>
+          </cac:Price>
+        </cac:InvoiceLine>
+      </cac:GoodsItem>
+    </cac:Shipment>
+  </cac:DespatchLine>
+</DespatchAdvice>

@@ -1,0 +1,265 @@
+﻿<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>e-Belge</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>* { box-sizing: border-box; } html { margin: 0; padding: 0; background: #d1d5db; } body { background-color: #FFFFFF; font-family: 'Tahoma', "Times New Roman", Times, serif; font-size: 11px; color: #000000; margin: 0; padding: 0; } .page { background: #ffffff; width: 210mm; min-height: 297mm; margin: 16px auto; padding: 12mm 14mm 18mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.18); position: relative; overflow: hidden; } /* layout tables — multi-column rows, no visible borders */ table.lr { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; } table.lr > tbody > tr > td { border: none; padding: 0 4px; vertical-align: top; word-break: break-word; overflow-wrap: break-word; } /* data tables — Table block */ table.dt { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 6px; font-size: 9pt; } table.dt th { border: 1px solid #333; padding: 3px 6px; background: #d0d0d0; font-weight: bold; text-align: center; overflow: hidden; } table.dt td { border: 1px solid #555; padding: 3px 6px; word-break: break-word; overflow-wrap: break-word; overflow: hidden; } /* document info table — key-value */ table.di, table.di-dashed, table.di-dotted { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; } table.di td { border: 1px solid #555; padding: 2px 6px; } table.di-dashed td { border: 1px dashed #555; padding: 2px 6px; } table.di-dotted td { border: 1px dotted #555; padding: 2px 6px; } table.di td:first-child, table.di-dashed td:first-child, table.di-dotted td:first-child { font-weight: bold; white-space: nowrap; width: 40%; } table.di-plain { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; } table.di-plain td { border: none; padding: 2px 6px; } table.di-plain td:first-child { font-weight: bold; white-space: nowrap; width: 40%; } /* totals table */ table.tot { border-collapse: collapse; margin-left: auto; margin-bottom: 4px; font-size: 9.5pt; min-width: 280px; } table.tot td { border: 1px solid #aaa; padding: 2px 8px; } table.tot td.lbl { text-align: right; padding-right: 12px; white-space: nowrap; } table.tot td.val { text-align: right; white-space: nowrap; min-width: 120px; } table.tot tr.hl td { background: #ffffcc; } table.tot tr.bd td { font-weight: bold; } /* typography */ h1, h2 { padding-bottom: 3px; padding-top: 3px; margin-bottom: 5px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; } h1 { font-size: 1.4em; text-transform: none; } h2 { font-size: 1em; color: brown; } h3 { font-size: 1em; color: #000000; text-align: justify; margin: 0; padding: 0; } h4 { font-size: 1.1em; font-style: bold; font-family: Arial, Helvetica, sans-serif; color: #000000; margin: 0; padding: 0; } hr { height: 2px; color: #000000; background-color: #000000; border-bottom: 1px solid #000000; } p { margin: 0 0 4px 0; line-height: 1.4; } p, ul, ol { margin-top: 1.5em; } ul, ol { margin-left: 3em; } blockquote { margin-left: 3em; margin-right: 3em; font-style: italic; } a { text-decoration: none; color: #70A300; } a:hover { border: none; color: #70A300; } td { border-color: gray; } table { border-spacing: 0px; } #budgetContainerTable { border-width: 0px; border-spacing: 0px; border-style: inset; border-color: black; border-collapse: collapse; }</style>
+    <style>.page { position: relative !important; min-height: 297mm !important; height: auto !important; padding: 0 !important; overflow: hidden !important; }</style>
+  </head>
+  <body style="width:800px;">
+    <div class="page">
+      <div style="display:flex;align-items:flex-start;margin-top:8.0mm;">
+        <div style="margin-left:14.0mm;width:70.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:70.0mm;">
+            <div style="border:1px solid #555555;padding:4px 8px;">
+              <p style="font-weight:bold;margin:0 0 4px 0;font-size:11px">GÖNDERİCİ</p>
+              <p style="margin:0;font-size:11px">
+                <strong>Ünvan:</strong>
+                Örnek Dağıtım San. ve Tic. Ltd. Şti.
+              </p>
+              <p style="margin:0;font-size:11px">
+                <strong>VKN/TCKN:</strong>
+                1234567890
+              </p>
+              <p style="margin:0;font-size:11px">
+                <strong>Vergi Dairesi:</strong>
+                TUZLA V.D.
+              </p>
+              <p style="margin:0;font-size:11px">
+                <strong>Şehir:</strong>
+                İSTANBUL
+              </p>
+            </div>
+          </div>
+        </div>
+        <div style="margin-left:6.0mm;width:30.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:30.0mm;height:30.0mm;overflow:hidden;">
+            <div style="display:flex;justify-content:center;">
+              <div style="text-align:center;">
+                <img alt="GIB Logo" src="data:image/png;base64,[scrubbed len=28168 sha256=dbfbb4a9a223b964]" style="display:block;width:70px;height:70px;object-fit:contain;">
+                <div style="font-size:11px;font-weight:bold;margin:2px 0 0 0;">e-İRSALİYE</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-left:6.0mm;width:70.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:70.0mm;">
+            <div style="font-size:10.4px">
+              <style>.dhd03despa td { border:1px dotted #555555;padding:2px 6px; }</style>
+              <p style="font-weight:bold;margin:0 0 4px 0;">İRSALİYE BİLGİLERİ</p>
+              <table class="dhd03despa" style="width:100%;border-collapse:collapse;border:1px dotted #555555;">
+                <tbody>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">Özelleştirme No:</span>
+                    </td>
+                    <td style="width:50%;">TR1.2.1</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">Senaryo:</span>
+                    </td>
+                    <td style="width:50%;">TEMELIRSALIYE</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">İrsaliye Tipi:</span>
+                    </td>
+                    <td style="width:50%;">SEVK</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">İrsaliye No:</span>
+                    </td>
+                    <td style="width:50%;">IRS2026000000001</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">İrsaliye Tarihi:</span>
+                    </td>
+                    <td style="width:50%;">2026-02-25&nbsp;13:39</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">Sevk Tarihi:</span>
+                    </td>
+                    <td style="width:50%;">2026-02-26&nbsp;14:06</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">Sipariş No:</span>
+                    </td>
+                    <td style="width:50%;">SIP2026000123</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">Sipariş Tarihi:</span>
+                    </td>
+                    <td style="width:50%;">2026-02-24</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">Fatura No:</span>
+                    </td>
+                    <td style="width:50%;">FTR2026000003520</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">
+        <div style="margin-left:14.0mm;width:90.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">
+            <div style="border:1px dashed #555555;padding:4px 8px;">
+              <p style="font-weight:bold;margin:0 0 4px 0;font-size:11px">TESLİM ALICI</p>
+              <table style="width:100%;border-collapse:collapse;font-size:11px">
+                <tbody>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Ünvan</td>
+                    <td style="padding:1px 4px">Örnek Market Gıda Ltd. Şti.</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">VKN/TCKN</td>
+                    <td style="padding:1px 4px">9876543210</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Adres</td>
+                    <td style="padding:1px 4px">Çamlı Belde Yolu Cd.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div style="margin-left:2.0mm;width:90.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">
+            <div style="font-size:10.4px;border:1px solid #555555;padding:4px 8px;">
+              <p style="font-weight:bold;margin:0 0 4px 0;">TAŞIYICI BİLGİLERİ</p>
+              <table style="width:100%;border-collapse:collapse;">
+                <tbody>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Taşıyıcı Firma:</td>
+                    <td style="padding:1px 4px">Örnek Dağıtım San. ve Tic. Ltd. Şti. (VKN: 1234567890)</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Araç Plaka No:</td>
+                    <td style="padding:1px 4px">34 ABC 001</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Şoför:</td>
+                    <td style="padding:1px 4px">Ahmet Yılmaz, TCKN: 11111111111</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Teslim Eden:</td>
+                    <td style="padding:1px 4px">Mehmet Örnek</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width:50%;">
+                      <span style="font-weight:bold;">Teslimat Şehri:</span>
+                    </td>
+                    <td style="width:50%;">İSTANBUL</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">
+        <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead>
+                <tr style="background:#E0E0E0">
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center;width:4%">#</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="12%">Ürün Kodu</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="30%">Mal</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="10%">Miktar</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="12%">Birim Fiyat</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="12%">Sonra Gönderilecek Miktar</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="14%">Tutar</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="14%">Açıklama</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="background:#ffffff">
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:center">1</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">MA.KEK.0001</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">FANTASTİK BAR KEK 12KT 12AD 40G</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">1&nbsp;Paket</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">221,64 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">0&nbsp;Paket</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">221,64 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">Koli içi 12 adet</td>
+                </tr>
+                <tr style="background:#F9F9F9">
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:center">2</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">MA.CIK.0002</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">HAYVANLAR SERİSİ ÇİKOLATA 23G 24ADT 4KT</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">1&nbsp;Paket</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">503,76 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">&nbsp;</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">503,76 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;"></td>
+                </tr>
+                <tr style="background:#ffffff">
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:center">3</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">MA.CIK.0003</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">POPSY ÇİKOLATA 24G 24ADT 6KT</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">1&nbsp;Paket</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">503,76 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">&nbsp;</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">503,76 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">
+        <div style="margin-left:14.0mm;width:90.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">
+            <div>
+              <p style="margin:0;line-height:1.6;font-size:11px">
+                <strong>Not:</strong>
+                Sevk irsaliyesi yerine geçer.
+              </p>
+              <p style="margin:0;line-height:1.6;font-size:11px">
+                <strong>Not:</strong>
+                Ödeme Şekli: Açık Hesap
+              </p>
+              <p style="margin:0;line-height:1.6;font-size:11px">
+                <strong>Not:</strong>
+                Teslim alırken kontrol ediniz.
+              </p>
+            </div>
+          </div>
+          <div style="margin-top:4.0mm;margin-left:0.0mm;width:40.0mm;height:40.0mm;overflow:hidden;">
+            <div class="ettn" style="">
+              <div id="qrvalue" style="visibility: hidden; height: 20px;width: 20px; ; display:none">{"vkntckn":"1234567890","avkntckn":"9876543210","senaryo":"TEMELIRSALIYE","tip":"SEVK","tarih":"2026-02-25","no":"IRS2026000000001","ettn":"f5e58e8f-691e-4b15-88ce-8a5378066df8","sevktarihi":"2026-02-26","sevkzamani":"14:06:25.0000000+03:00","tasiyicivkn":"1234567890","plaka":"34 ABC 001"}</div>
+              <div style="display:flex; justify-content:flex-start;">
+                <div id="qrcd09gibkarekod" style="line-height:0; flex-shrink:0;"></div>
+              </div>
+              <script type="text/javascript">window.addEventListener('load', function() { var v = document.getElementById('qrvalue'); var c = document.getElementById('qrcd09gibkarekod'); if (!v || !c || typeof QRCode === 'undefined') return; var t = v.textContent ? v.textContent.trim() : ''; if (!t) return; new QRCode(c, { text: t, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M }); });</script>
+            </div>
+          </div>
+        </div>
+        <div style="margin-left:2.0mm;width:90.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">
+            <table class="tot" style="font-size:11px">
+              <tbody>
+                <tr class="hl bd">
+                  <td class="lbl">Toplam Tutar</td>
+                  <td class="val">1.229,16 TL</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

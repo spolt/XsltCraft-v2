@@ -1,0 +1,221 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="2.0"
+  xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+  xmlns:n1="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+  xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+  exclude-result-prefixes="n1 cbc cac ext">
+
+  <xsl:output method="html" encoding="UTF-8" indent="yes"/>
+  <xsl:decimal-format name="tr" decimal-separator="," grouping-separator="."/>
+
+  <xsl:template match="/">
+    <html>
+      <head>
+        <meta charset="UTF-8"/>
+        <title>e-Belge</title>        <style>
+          * { box-sizing: border-box; }
+          html { margin: 0; padding: 0; background: #d1d5db; }
+          body {
+            background-color: #FFFFFF;
+            font-family: 'Tahoma', "Times New Roman", Times, serif;
+            font-size: 11px;
+            color: #000000;
+            margin: 0; padding: 0;
+          }
+          .page {
+            background: #ffffff;
+            width: 210mm;
+            min-height: 297mm;
+            margin: 16px auto;
+            padding: 12mm 14mm 18mm 14mm;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+            position: relative;
+            overflow: hidden;
+          }
+          /* layout tables — multi-column rows, no visible borders */
+          table.lr { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; }
+          table.lr > tbody > tr > td {
+            border: none;
+            padding: 0 4px;
+            vertical-align: top;
+            word-break: break-word;
+            overflow-wrap: break-word;
+          }
+          /* data tables — Table block */
+          table.dt { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 6px; font-size: 9pt; }
+          table.dt th { border: 1px solid #333; padding: 3px 6px; background: #d0d0d0; font-weight: bold; text-align: center; overflow: hidden; }
+          table.dt td { border: 1px solid #555; padding: 3px 6px; word-break: break-word; overflow-wrap: break-word; overflow: hidden; }
+          /* document info table — key-value */
+          table.di, table.di-dashed, table.di-dotted { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
+          table.di td { border: 1px solid #555; padding: 2px 6px; }
+          table.di-dashed td { border: 1px dashed #555; padding: 2px 6px; }
+          table.di-dotted td { border: 1px dotted #555; padding: 2px 6px; }
+          table.di td:first-child, table.di-dashed td:first-child, table.di-dotted td:first-child { font-weight: bold; white-space: nowrap; width: 40%; }
+          table.di-plain { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
+          table.di-plain td { border: none; padding: 2px 6px; }
+          table.di-plain td:first-child { font-weight: bold; white-space: nowrap; width: 40%; }
+          /* totals table */
+          table.tot { border-collapse: collapse; margin-left: auto; margin-bottom: 4px; font-size: 9.5pt; min-width: 280px; }
+          table.tot td { border: 1px solid #aaa; padding: 2px 8px; }
+          table.tot td.lbl { text-align: right; padding-right: 12px; white-space: nowrap; }
+          table.tot td.val { text-align: right; white-space: nowrap; min-width: 120px; }
+          table.tot tr.hl td { background: #ffffcc; }
+          table.tot tr.bd td { font-weight: bold; }
+          /* typography */
+          h1, h2 { padding-bottom: 3px; padding-top: 3px; margin-bottom: 5px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; }
+          h1 { font-size: 1.4em; text-transform: none; }
+          h2 { font-size: 1em; color: brown; }
+          h3 { font-size: 1em; color: #000000; text-align: justify; margin: 0; padding: 0; }
+          h4 { font-size: 1.1em; font-style: bold; font-family: Arial, Helvetica, sans-serif; color: #000000; margin: 0; padding: 0; }
+          hr { height: 2px; color: #000000; background-color: #000000; border-bottom: 1px solid #000000; }
+          p  { margin: 0 0 4px 0; line-height: 1.4; }
+          p, ul, ol { margin-top: 1.5em; }
+          ul, ol { margin-left: 3em; }
+          blockquote { margin-left: 3em; margin-right: 3em; font-style: italic; }
+          a { text-decoration: none; color: #70A300; }
+          a:hover { border: none; color: #70A300; }
+          td { border-color: gray; }
+          table { border-spacing: 0px; }
+          #budgetContainerTable { border-width: 0px; border-spacing: 0px; border-style: inset; border-color: black; border-collapse: collapse; }
+        </style>
+                    <style>
+                      .page {
+                        position: relative !important;
+                        min-height: 297mm !important;
+                        height: auto !important;
+                        padding: 0 !important;
+                        overflow: hidden !important;
+                      }
+                    </style>
+      </head>
+      <body style="width:800px;">
+        <div class="page">
+    <div style="display:flex;align-items:flex-start;margin-top:10.0mm;">
+      <div style="margin-left:14.0mm;width:120.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:120.0mm;">    <h1 style="font-weight:bold;font-size:18px;color:#1F2937">FATURA</h1></div>
+        <div style="margin-top:2.0mm;margin-left:0.0mm;width:120.0mm;">    <h3 style="font-style:italic"><xsl:value-of select="//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name"/></h3></div>
+      </div>
+      <div style="margin-left:22.0mm;width:40.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:40.0mm;">    <div style="text-align:right;line-height:0;font-size:0;"><img src="data:image/png;base64,[scrubbed len=96 sha256=abbd4841ba31f4d7]" style="display:inline-block;vertical-align:top;object-fit:contain;width:40mm;height:20mm;opacity:0.80;" alt="Firma Logosu"/></div></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
+      <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">    <p style="font-size:11px">Ödeme &amp; Teslim &lt;Koşulları&gt;</p></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
+      <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">    <p style="font-weight:bold;color:#B91C1C"><xsl:choose><xsl:when test="//cbc:Note"><xsl:value-of select="//cbc:Note"/></xsl:when><xsl:otherwise>—</xsl:otherwise></xsl:choose></p></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
+      <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">    <p>Fatura No: <xsl:value-of select="/n1:Invoice/cbc:ID"/> / Tarih: <xsl:value-of select="//cbc:IssueDate"/></p></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
+      <div style="margin-left:14.0mm;width:90.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <table class="di-dashed">
+      <tbody>
+        <tr>
+          <td>Fatura No</td>
+          <td><xsl:value-of select="//cbc:ID"/></td>
+        </tr>
+        <tr>
+          <td>Fatura Tarihi</td>
+          <td><xsl:value-of select="//cbc:IssueDate"/></td>
+        </tr>
+        <tr>
+          <td>Para Birimi</td>
+          <td><xsl:value-of select="//cbc:DocumentCurrencyCode"/></td>
+        </tr>
+      </tbody>
+    </table></div>
+      </div>
+      <div style="margin-left:2.0mm;width:90.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <table class="tot">
+      <tbody>
+        <tr>
+          <td class="lbl" style="width:60%"><strong>Mal Hizmet Toplamı</strong></td>
+          <td class="val"><xsl:value-of select="//cac:LegalMonetaryTotal/cbc:LineExtensionAmount"/></td>
+        </tr>
+        <tr class="hl">
+          <td class="lbl" style="width:60%"><strong>Ödenecek Tutar</strong></td>
+          <td class="val"><xsl:value-of select="//cbc:PayableAmount"/></td>
+        </tr>
+      </tbody>
+    </table></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
+      <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">    <table class="dt">
+      <colgroup>
+        <col style="width:35%"/>
+        <col style="width:15%"/>
+        <col style="width:15%"/>
+        <col style="width:15%"/>
+        <col style="width:20%"/>
+      </colgroup>
+      <thead><tr style="background:#DBEAFE">
+        <th>Ürün</th>
+        <th>Miktar</th>
+        <th>Birim Fiyat</th>
+        <th>İskonto Oranı</th>
+        <th>Tutar</th>
+      </tr></thead>
+      <tbody>
+        <xsl:for-each select="//cac:InvoiceLine">
+          <xsl:variable name="pos" select="position()"/>
+          <tr><xsl:if test="$pos mod 2 = 0"><xsl:attribute name="style">background:#F3F4F6</xsl:attribute></xsl:if>
+            <td><xsl:value-of select="cac:Item/cbc:Name"/></td>
+            <td><xsl:choose><xsl:when test="number(cbc:InvoicedQuantity) = number(cbc:InvoicedQuantity)"><xsl:value-of select="format-number(cbc:InvoicedQuantity, '#,##0.##')"/></xsl:when><xsl:otherwise><xsl:value-of select="cbc:InvoicedQuantity"/></xsl:otherwise></xsl:choose></td>
+            <td><xsl:choose><xsl:when test="number(cac:Price/cbc:PriceAmount) = number(cac:Price/cbc:PriceAmount)"><xsl:value-of select="format-number(cac:Price/cbc:PriceAmount, '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="cac:Price/cbc:PriceAmount"/></xsl:otherwise></xsl:choose></td>
+            <td><xsl:choose><xsl:when test="number(cac:AllowanceCharge/cbc:MultiplierFactorNumeric) = number(cac:AllowanceCharge/cbc:MultiplierFactorNumeric)"><xsl:value-of select="format-number(cac:AllowanceCharge/cbc:MultiplierFactorNumeric, '#,##0.##')"/></xsl:when><xsl:otherwise><xsl:value-of select="cac:AllowanceCharge/cbc:MultiplierFactorNumeric"/></xsl:otherwise></xsl:choose></td>
+            <td><xsl:choose><xsl:when test="number(cbc:LineExtensionAmount) = number(cbc:LineExtensionAmount)"><xsl:value-of select="format-number(cbc:LineExtensionAmount, '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="cbc:LineExtensionAmount"/></xsl:otherwise></xsl:choose></td>
+          </tr>
+        </xsl:for-each>
+      </tbody>
+    </table></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
+      <div style="margin-left:14.0mm;width:150.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:150.0mm;height:6.0mm;overflow:hidden;">    <hr style="border-top-style:dashed;border-color:#9CA3AF;border-top-width:2px;margin-top:4px;margin-bottom:4px;"/></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
+      <div style="margin-left:14.0mm;width:90.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="number(//cac:LegalMonetaryTotal/cbc:PayableAmount) > 1000"><xsl:text>Yüksek tutarlı fatura</xsl:text></xsl:when><xsl:otherwise><xsl:text>Standart fatura</xsl:text></xsl:otherwise></xsl:choose></span></div>
+        <div style="margin-top:2.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="not(//cac:OrderReference)"><xsl:text>Siparişsiz fatura</xsl:text></xsl:when><xsl:otherwise><xsl:value-of select="//cac:OrderReference/cbc:ID"/></xsl:otherwise></xsl:choose></span></div>
+      </div>
+      <div style="margin-left:2.0mm;width:90.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="contains(//cbc:Note, 'Temsilci')"><xsl:value-of select="//cbc:Note"/></xsl:when><xsl:otherwise><xsl:text>Temsilci notu yok</xsl:text></xsl:otherwise></xsl:choose></span></div>
+        <div style="margin-top:2.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode = 'TRY'"><xsl:text>Yerel para birimi</xsl:text></xsl:when><xsl:otherwise><xsl:value-of select="//cbc:DocumentCurrencyCode"/></xsl:otherwise></xsl:choose></span></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
+      <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;height:5.0mm;overflow:hidden;">    <div style="height:12px">&#160;</div></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
+      <div style="margin-left:14.0mm;width:120.0mm;flex-shrink:0;">
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:120.0mm;">    <table style="width:100%;border-collapse:collapse;border:1px dotted #555555;">
+      <tr>
+        <td style="padding:4px 8px;font-weight:bold;">Örnek Bankası A.Ş.</td>
+        <td style="padding:4px 8px;text-align:right;">IBAN: TR00 0000 0000 0000 0000 0000 00</td>
+      </tr>
+    </table></div>
+      </div>
+    </div>
+
+        </div>
+      </body>
+    </html>
+  </xsl:template>
+
+</xsl:stylesheet>

@@ -1,0 +1,62 @@
+﻿<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>e-Belge</title>
+    <style>* { box-sizing: border-box; } html { margin: 0; padding: 0; background: #d1d5db; } body { background-color: #FFFFFF; font-family: 'Tahoma', "Times New Roman", Times, serif; font-size: 11px; color: #000000; margin: 0; padding: 0; } .page { background: #ffffff; width: 210mm; min-height: 297mm; margin: 16px auto; padding: 12mm 14mm 18mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.18); position: relative; overflow: hidden; } /* layout tables — multi-column rows, no visible borders */ table.lr { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; } table.lr > tbody > tr > td { border: none; padding: 0 4px; vertical-align: top; word-break: break-word; overflow-wrap: break-word; } /* data tables — Table block */ table.dt { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 6px; font-size: 9pt; } table.dt th { border: 1px solid #333; padding: 3px 6px; background: #d0d0d0; font-weight: bold; text-align: center; overflow: hidden; } table.dt td { border: 1px solid #555; padding: 3px 6px; word-break: break-word; overflow-wrap: break-word; overflow: hidden; } /* document info table — key-value */ table.di, table.di-dashed, table.di-dotted { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; } table.di td { border: 1px solid #555; padding: 2px 6px; } table.di-dashed td { border: 1px dashed #555; padding: 2px 6px; } table.di-dotted td { border: 1px dotted #555; padding: 2px 6px; } table.di td:first-child, table.di-dashed td:first-child, table.di-dotted td:first-child { font-weight: bold; white-space: nowrap; width: 40%; } table.di-plain { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; } table.di-plain td { border: none; padding: 2px 6px; } table.di-plain td:first-child { font-weight: bold; white-space: nowrap; width: 40%; } /* totals table */ table.tot { border-collapse: collapse; margin-left: auto; margin-bottom: 4px; font-size: 9.5pt; min-width: 280px; } table.tot td { border: 1px solid #aaa; padding: 2px 8px; } table.tot td.lbl { text-align: right; padding-right: 12px; white-space: nowrap; } table.tot td.val { text-align: right; white-space: nowrap; min-width: 120px; } table.tot tr.hl td { background: #ffffcc; } table.tot tr.bd td { font-weight: bold; } /* typography */ h1, h2 { padding-bottom: 3px; padding-top: 3px; margin-bottom: 5px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; } h1 { font-size: 1.4em; text-transform: none; } h2 { font-size: 1em; color: brown; } h3 { font-size: 1em; color: #000000; text-align: justify; margin: 0; padding: 0; } h4 { font-size: 1.1em; font-style: bold; font-family: Arial, Helvetica, sans-serif; color: #000000; margin: 0; padding: 0; } hr { height: 2px; color: #000000; background-color: #000000; border-bottom: 1px solid #000000; } p { margin: 0 0 4px 0; line-height: 1.4; } p, ul, ol { margin-top: 1.5em; } ul, ol { margin-left: 3em; } blockquote { margin-left: 3em; margin-right: 3em; font-style: italic; } a { text-decoration: none; color: #70A300; } a:hover { border: none; color: #70A300; } td { border-color: gray; } table { border-spacing: 0px; } #budgetContainerTable { border-width: 0px; border-spacing: 0px; border-style: inset; border-color: black; border-collapse: collapse; }</style>
+    <style>.page { position: relative !important; min-height: 297mm !important; height: auto !important; padding: 0 !important; overflow: hidden !important; }</style>
+  </head>
+  <body style="width:800px;">
+    <div class="page">
+      <div style="display:flex;align-items:flex-start;margin-top:10.0mm;">
+        <div style="margin-left:14.0mm;width:116.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:88.0mm;">
+            <p>Sol sütun — üst</p>
+          </div>
+          <div style="margin-top:4.0mm;margin-left:0.0mm;width:88.0mm;">
+            <p>Sol sütun — alt (aynı sütunda yığılır)</p>
+          </div>
+          <div style="margin-top:10.0mm;margin-left:16.0mm;width:100.0mm;height:4.0mm;overflow:hidden;">
+            <hr style="border-top-style:solid;border-color:#CCCCCC;border-top-width:1px;">
+          </div>
+        </div>
+        <div style="margin-left:0.0mm;width:88.0mm;flex-shrink:0;">
+          <div style="margin-top:2.0mm;margin-left:0.0mm;width:88.0mm;">
+            <p>TST2026000000001</p>
+          </div>
+          <div style="margin-top:8.0mm;margin-left:4.0mm;width:84.0mm;">
+            <p>2026-01-01</p>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">
+        <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;height:15.2mm;overflow:hidden;padding:2.0mm 0.0mm 0.0mm 3.5mm;box-sizing:border-box;">
+            <p>Sabit yükseklik (autoHeight=false) + kullanıcı kenar boşlukları</p>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:2.8mm;">
+        <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">
+            <p>autoHeight=true, zIndex=0 akışta kalır</p>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">
+        <div style="margin-left:14.0mm;width:60.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:60.0mm;">
+            <p>zIndex&lt;0 akışta kalır</p>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:150.0mm;top:5.0mm;width:40.0mm;z-index:2;">
+        <div style="text-align:left;line-height:0;font-size:0;">
+          <img alt="signature" src="/api/assets/bbbbbbbb-0000-4000-8000-000000000002/serve" style="display:inline-block;vertical-align:top;object-fit:contain;max-width:100%;">
+        </div>
+      </div>
+      <div style="position:absolute;left:60.0mm;top:100.0mm;width:90.0mm;height:20.0mm;overflow:hidden;z-index:5;">
+        <p style="font-weight:bold;font-size:28px;color:#EF4444">TASLAK</p>
+      </div>
+    </div>
+  </body>
+</html>

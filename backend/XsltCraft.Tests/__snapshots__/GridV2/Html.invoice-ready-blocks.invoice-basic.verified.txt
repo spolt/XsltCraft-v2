@@ -1,0 +1,329 @@
+﻿<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>e-Belge</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>* { box-sizing: border-box; } html { margin: 0; padding: 0; background: #d1d5db; } body { background-color: #FFFFFF; font-family: 'Tahoma', "Times New Roman", Times, serif; font-size: 11px; color: #000000; margin: 0; padding: 0; } .page { background: #ffffff; width: 210mm; min-height: 297mm; margin: 16px auto; padding: 12mm 14mm 18mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,0.18); position: relative; overflow: hidden; } /* layout tables — multi-column rows, no visible borders */ table.lr { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; } table.lr > tbody > tr > td { border: none; padding: 0 4px; vertical-align: top; word-break: break-word; overflow-wrap: break-word; } /* data tables — Table block */ table.dt { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 6px; font-size: 9pt; } table.dt th { border: 1px solid #333; padding: 3px 6px; background: #d0d0d0; font-weight: bold; text-align: center; overflow: hidden; } table.dt td { border: 1px solid #555; padding: 3px 6px; word-break: break-word; overflow-wrap: break-word; overflow: hidden; } /* document info table — key-value */ table.di, table.di-dashed, table.di-dotted { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; } table.di td { border: 1px solid #555; padding: 2px 6px; } table.di-dashed td { border: 1px dashed #555; padding: 2px 6px; } table.di-dotted td { border: 1px dotted #555; padding: 2px 6px; } table.di td:first-child, table.di-dashed td:first-child, table.di-dotted td:first-child { font-weight: bold; white-space: nowrap; width: 40%; } table.di-plain { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; } table.di-plain td { border: none; padding: 2px 6px; } table.di-plain td:first-child { font-weight: bold; white-space: nowrap; width: 40%; } /* totals table */ table.tot { border-collapse: collapse; margin-left: auto; margin-bottom: 4px; font-size: 9.5pt; min-width: 280px; } table.tot td { border: 1px solid #aaa; padding: 2px 8px; } table.tot td.lbl { text-align: right; padding-right: 12px; white-space: nowrap; } table.tot td.val { text-align: right; white-space: nowrap; min-width: 120px; } table.tot tr.hl td { background: #ffffcc; } table.tot tr.bd td { font-weight: bold; } /* typography */ h1, h2 { padding-bottom: 3px; padding-top: 3px; margin-bottom: 5px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; } h1 { font-size: 1.4em; text-transform: none; } h2 { font-size: 1em; color: brown; } h3 { font-size: 1em; color: #000000; text-align: justify; margin: 0; padding: 0; } h4 { font-size: 1.1em; font-style: bold; font-family: Arial, Helvetica, sans-serif; color: #000000; margin: 0; padding: 0; } hr { height: 2px; color: #000000; background-color: #000000; border-bottom: 1px solid #000000; } p { margin: 0 0 4px 0; line-height: 1.4; } p, ul, ol { margin-top: 1.5em; } ul, ol { margin-left: 3em; } blockquote { margin-left: 3em; margin-right: 3em; font-style: italic; } a { text-decoration: none; color: #70A300; } a:hover { border: none; color: #70A300; } td { border-color: gray; } table { border-spacing: 0px; } #budgetContainerTable { border-width: 0px; border-spacing: 0px; border-style: inset; border-color: black; border-collapse: collapse; }</style>
+    <style>.page { position: relative !important; min-height: 297mm !important; height: auto !important; padding: 0 !important; overflow: hidden !important; }</style>
+  </head>
+  <body style="width:800px;">
+    <div class="page">
+      <div style="display:flex;align-items:flex-start;margin-top:8.0mm;">
+        <div style="margin-left:14.0mm;width:70.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:70.0mm;">
+            <div style="border:1px solid #555555;padding:4px 8px;">
+              <p style="font-weight:bold;margin:0 0 4px 0;font-size:11px">SATICI</p>
+              <table style="width:100%;border-collapse:collapse;font-size:11px">
+                <tbody>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Ünvan</td>
+                    <td style="padding:1px 4px">XsltCraft San. ve Tic. Ltd. Şti.</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">VKN/TCKN</td>
+                    <td style="padding:1px 4px">1111111111</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Vergi Dairesi</td>
+                    <td style="padding:1px 4px">TEST V.D.</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Adres</td>
+                    <td style="padding:1px 4px">Test Mah. Tasarım Sokak</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">İlçe</td>
+                    <td style="padding:1px 4px">KARŞIYAKA</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Şehir</td>
+                    <td style="padding:1px 4px">İZMİR</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Telefon</td>
+                    <td style="padding:1px 4px">5555555555</td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">E-Posta</td>
+                    <td style="padding:1px 4px">info@xsltcraft.test</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div style="margin-left:6.0mm;width:30.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:30.0mm;height:30.0mm;overflow:hidden;">
+            <div style="display:flex;justify-content:center;opacity:0.90;">
+              <div style="text-align:center;">
+                <img alt="GIB Logo" src="data:image/png;base64,[scrubbed len=28168 sha256=dbfbb4a9a223b964]" style="display:block;width:80px;height:80px;object-fit:contain;">
+                <div style="font-size:11px;font-weight:bold;margin:2px 0 0 0;">e-FATURA</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-left:6.0mm;width:70.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:70.0mm;">
+            <div style="font-size:10.4px">
+              <style>.ihr03invoi td { border:1px solid #555555;padding:2px 6px; }</style>
+              <table class="ihr03invoi" style="width:100%;border-collapse:collapse;border:1px solid #555555;">
+                <tbody>
+                  <tr>
+                    <td style="width: 50%;">
+                      <span style="font-weight:bold;">Özelleştirme No:</span>
+                    </td>
+                    <td style="width: 50%;">TR1.2</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width: 50%;">
+                      <span style="font-weight:bold;">Senaryo:</span>
+                    </td>
+                    <td style="width: 50%;">TEMELFATURA</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width: 50%;">
+                      <span style="font-weight:bold;">Fatura Tipi:</span>
+                    </td>
+                    <td style="width: 50%;">SATIS</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width: 50%;">
+                      <span style="font-weight:bold;">Fatura No:</span>
+                    </td>
+                    <td style="width: 50%;">TST2026000000001</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width: 50%;">
+                      <span style="font-weight:bold;">Fatura Tarihi:</span>
+                    </td>
+                    <td style="width: 50%;">2026-01-01&nbsp;10:00</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width: 50%;">
+                      <span style="font-weight:bold;">İrsaliye No:</span>
+                    </td>
+                    <td style="width: 50%;">IRS2026000000001</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width: 50%;">
+                      <span style="font-weight:bold;">İrsaliye Tarihi:</span>
+                    </td>
+                    <td style="width: 50%;">2026-01-01</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width: 50%;">
+                      <span style="font-weight:bold;">Sipariş No:</span>
+                    </td>
+                    <td style="width: 50%;">SIP2026000123</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td style="width: 50%;">
+                      <span style="font-weight:bold;">Sipariş Tarihi:</span>
+                    </td>
+                    <td style="width: 50%;">2025-12-30</td>
+                  </tr>
+                  <tr style="height:13px;">
+                    <td>
+                      <span style="font-weight:bold;">Son Ödeme</span>
+                    </td>
+                    <td>2026-01-31</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">
+        <div style="margin-left:14.0mm;width:90.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">
+            <div>
+              <p style="font-weight:bold;margin:0 0 4px 0;font-size:11px">ALICI</p>
+              <p style="margin:0;font-size:11px">
+                <strong>Ünvan:</strong>
+                Müşteri Ünvan A.Ş.
+              </p>
+              <p style="margin:0;font-size:11px">
+                <strong>VKN/TCKN:</strong>
+                2222222222
+              </p>
+              <p style="margin:0;font-size:11px">
+                <strong>Şehir:</strong>
+                İZMİR
+              </p>
+              <p style="margin:0;font-size:11px"></p>
+            </div>
+          </div>
+        </div>
+        <div style="margin-left:22.0mm;width:70.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:70.0mm;">
+            <div class="ettn">
+              <p>
+                <strong>ETTN:</strong>
+                111d1111-0c11-01bb-123e-1f2f34b567f8
+              </p>
+              <div id="qrvr05ettn" style="display:none;">111d1111-0c11-01bb-123e-1f2f34b567f8</div>
+              <div style="display:flex; justify-content:center;">
+                <div id="qrcr05ettn" style="line-height:0; flex-shrink:0;"></div>
+              </div>
+              <script type="text/javascript">window.addEventListener('load', function() { var v = document.getElementById('qrvr05ettn'); var c = document.getElementById('qrcr05ettn'); if (!v || !c || typeof QRCode === 'undefined') return; var t = v.textContent ? v.textContent.trim() : ''; if (!t) return; new QRCode(c, { text: t, width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M }); });</script>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">
+        <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">
+            <p style="font-weight:bold;margin:0 0 4px 0;font-size:11px">MAL HİZMET TABLOSU</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead>
+                <tr style="background:#E0E0E0">
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center;width:4%">#</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="10%">Ürün Kodu</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="20%">Mal Hizmet</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="7%">Miktar</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="5%">Birim</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="10%">Birim Fiyat</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="8%">İskonto/Artırım Oranı</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="10%">İskonto/Artırım Tutarı</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="6%">KDV Oranı</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="10%">KDV Tutarı</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="10%">Mal Hizmet Tutarı</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="10%">Not</th>
+                  <th style="border:1px solid #555555;padding:2px 4px;text-align:center" width="8%">Ham Miktar</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="background:#ffffff">
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:center">1</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">URN-001</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">Test Ürün A</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">10&nbsp;Adet</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">C62</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">100,00 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">0%</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">0,00 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">20%</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">200,00 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">1.000,00 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;"></td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">10</td>
+                </tr>
+                <tr style="background:#F9F9F9">
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:center">2</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">URN-002</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">Test Ürün B</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">2,5&nbsp;kg</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;">KGM</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">200,00 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"></td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"></td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">20%</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">100,00 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">500,00 TL</td>
+                  <td style="border:1px solid #555555;padding:2px 4px;"></td>
+                  <td style="border:1px solid #555555;padding:2px 4px;text-align:right;">2,5</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">
+        <div style="margin-left:14.0mm;width:90.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">
+            <table class="dt">
+              <thead>
+                <tr style="background:#E0E0E0">
+                  <th>KDV Oranı</th>
+                  <th>Matrah</th>
+                  <th>KDV Tutarı</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>%</td>
+                  <td>1,500.00</td>
+                  <td>300.00</td>
+                </tr>
+                <tr>
+                  <td>%</td>
+                  <td>1,000.00</td>
+                  <td>200.00</td>
+                </tr>
+                <tr>
+                  <td>%</td>
+                  <td>500.00</td>
+                  <td>100.00</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div style="margin-left:2.0mm;width:90.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">
+            <table class="tot" style="font-size:11px">
+              <tbody>
+                <tr>
+                  <td class="lbl" style="width:55%">Mal Hizmet Tutarı</td>
+                  <td class="val">1.500,00 TL</td>
+                </tr>
+                <tr>
+                  <td class="lbl" style="width:55%">Toplam İskonto</td>
+                  <td class="val">0,00 TL</td>
+                </tr>
+                <tr>
+                  <td class="lbl" style="width:55%">KDV Matrahı (%20)</td>
+                  <td class="val">1.500,00 TL</td>
+                </tr>
+                <tr>
+                  <td class="lbl" style="width:55%">Hesaplanan KDV (toplam)</td>
+                  <td class="val">300,00 TL</td>
+                </tr>
+                <tr>
+                  <td class="lbl" style="width:55%">Hesaplanan KDV (%20)</td>
+                  <td class="val">300,00 TL</td>
+                </tr>
+                <tr class="hl bd">
+                  <td class="lbl" style="width:55%">Vergiler Dahil Toplam Tutar</td>
+                  <td class="val">1.800,00 TL</td>
+                </tr>
+                <tr class="hl bd">
+                  <td class="lbl" style="width:55%">Ödenecek Tutar</td>
+                  <td class="val">1.800,00 TL</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">
+        <div style="margin-left:14.0mm;width:136.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:136.0mm;">
+            <div style="border:1px solid #555555;padding:4px 8px;">
+              <p style="margin:0;line-height:1.6;font-size:11px">
+                <strong>Not:</strong>
+                Bu belge test amaçlıdır.
+              </p>
+              <p style="margin:0;line-height:1.6;font-size:11px">
+                <strong>Not:</strong>
+                Satış Temsilcisi: Semih Polat
+              </p>
+            </div>
+          </div>
+        </div>
+        <div style="margin-left:6.0mm;width:40.0mm;flex-shrink:0;">
+          <div style="margin-top:0.0mm;margin-left:0.0mm;width:40.0mm;height:40.0mm;overflow:hidden;">
+            <div class="ettn" style="opacity:0.75;">
+              <div id="qrvalue" style="visibility: hidden; height: 20px;width: 20px; ; display:none">{"vkntckn":"1111111111","avkntckn":"2222222222","senaryo":"TEMELFATURA","tip":"SATIS","tarih":"2026-01-01","no":"TST2026000000001","ettn":"111d1111-0c11-01bb-123e-1f2f34b567f8","parabirimi":"TRY","malhizmettoplam":"1500.00","kdvmatrah(20)":"1500.00","hesaplanankdv(20)":"300.00","vergidahil":"1800.00","odenecek":"1800.00"}</div>
+              <div style="display:flex; justify-content:flex-end;">
+                <div id="qrcr10gibkarekod" style="line-height:0; flex-shrink:0;"></div>
+              </div>
+              <script type="text/javascript">window.addEventListener('load', function() { var v = document.getElementById('qrvalue'); var c = document.getElementById('qrcr10gibkarekod'); if (!v || !c || typeof QRCode === 'undefined') return; var t = v.textContent ? v.textContent.trim() : ''; if (!t) return; new QRCode(c, { text: t, width: 120, height: 120, correctLevel: QRCode.CorrectLevel.M }); });</script>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

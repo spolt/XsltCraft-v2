@@ -1,0 +1,167 @@
+{
+  "version": 2,
+  "documentType": "Invoice",
+  "blocks": {
+    "r01-party-supplier": {
+      "id": "r01-party-supplier",
+      "type": "PartyInfo",
+      "config": {
+        "partyType": "SupplierParty",
+        "title": "SATICI",
+        "showTitle": true,
+        "bordered": true,
+        "borderStyle": "solid",
+        "labelStyle": "table",
+        "fontSize": "11px",
+        "fields": [
+          { "key": "companyName", "label": "Ünvan", "relativeXpath": "cac:PartyName/cbc:Name", "visible": true, "order": 0 },
+          { "key": "vkn", "label": "VKN/TCKN", "relativeXpath": "cac:PartyIdentification/cbc:ID", "visible": true, "order": 1 },
+          { "key": "taxOffice", "label": "Vergi Dairesi", "relativeXpath": "cac:PartyTaxScheme/cac:TaxScheme/cbc:Name", "visible": true, "order": 2 },
+          { "key": "street", "label": "Adres", "relativeXpath": "cac:PostalAddress/cbc:StreetName", "visible": true, "order": 3 },
+          { "key": "district", "label": "İlçe", "relativeXpath": "cac:PostalAddress/cbc:CitySubdivisionName", "visible": true, "order": 4 },
+          { "key": "city", "label": "Şehir", "relativeXpath": "cac:PostalAddress/cbc:CityName", "visible": true, "order": 5 },
+          { "key": "country", "label": "Ülke", "relativeXpath": "cac:PostalAddress/cac:Country/cbc:Name", "visible": false, "order": 6 },
+          { "key": "telephone", "label": "Telefon", "relativeXpath": "cac:Contact/cbc:Telephone", "visible": true, "order": 10 },
+          { "key": "email", "label": "E-Posta", "relativeXpath": "cac:Contact/cbc:ElectronicMail", "visible": true, "order": 12 }
+        ]
+      },
+      "gridLayout": { "x": 14, "y": 8, "width": 70, "height": 50, "autoHeight": true }
+    },
+    "r02-giblogo": {
+      "id": "r02-giblogo",
+      "type": "GibLogo",
+      "config": { "width": "80px", "height": "80px", "alignment": "center", "opacity": 90, "fontSize": "11px" },
+      "gridLayout": { "x": 90, "y": 8, "width": 30, "height": 30, "autoHeight": false }
+    },
+    "r03-invoiceheader": {
+      "id": "r03-invoiceheader",
+      "type": "InvoiceHeader",
+      "config": {
+        "title": "FATURA BİLGİLERİ",
+        "showTitle": false,
+        "bordered": true,
+        "borderStyle": "solid",
+        "labelStyle": "table",
+        "fontSize": "10.4px",
+        "fields": [
+          { "key": "invoiceId", "label": "Fatura No", "xpath": "//cbc:ID", "visible": true, "order": 3 },
+          { "key": "custom-due", "label": "Son Ödeme", "xpath": "//cac:PaymentTerms/cbc:PaymentDueDate", "visible": true, "order": 20, "isCustom": true },
+          { "key": "custom-hidden", "label": "Gizli Alan", "xpath": "//cbc:UUID", "visible": false, "order": 21, "isCustom": true }
+        ]
+      },
+      "gridLayout": { "x": 126, "y": 8, "width": 70, "height": 50, "autoHeight": true }
+    },
+    "r04-party-customer": {
+      "id": "r04-party-customer",
+      "type": "PartyInfo",
+      "config": {
+        "partyType": "CustomerParty",
+        "title": "ALICI",
+        "showTitle": true,
+        "bordered": false,
+        "labelStyle": "inline",
+        "fontSize": "11px",
+        "fields": [
+          { "key": "companyName", "label": "Ünvan", "relativeXpath": "cac:PartyName/cbc:Name", "visible": true, "order": 0 },
+          { "key": "vkn", "label": "VKN/TCKN", "relativeXpath": "cac:PartyIdentification/cbc:ID", "visible": true, "order": 1 },
+          { "key": "city", "label": "Şehir", "relativeXpath": "cac:PostalAddress/cbc:CityName", "visible": true, "order": 5 },
+          { "key": "custom-person", "label": "", "relativeXpath": "cac:Person/cbc:FirstName", "visible": true, "order": 6, "isCustom": true }
+        ]
+      },
+      "gridLayout": { "x": 14, "y": 62, "width": 90, "height": 30, "autoHeight": true }
+    },
+    "r05-ettn": {
+      "id": "r05-ettn",
+      "type": "ETTN",
+      "config": { "ettnXpath": "//cbc:UUID", "showEttn": true, "showQR": true, "qrWidth": 90, "qrHeight": 90, "qrAlignment": "center" },
+      "gridLayout": { "x": 126, "y": 62, "width": 70, "height": 30, "autoHeight": true }
+    },
+    "r06-invoicelinetable": {
+      "id": "r06-invoicelinetable",
+      "type": "InvoiceLineTable",
+      "config": {
+        "iterateOver": "//cac:InvoiceLine",
+        "title": "MAL HİZMET TABLOSU",
+        "showTitle": true,
+        "showHeader": true,
+        "showRowNumber": true,
+        "showCurrency": true,
+        "bordered": true,
+        "borderStyle": "solid",
+        "headerBackgroundColor": "#E0E0E0",
+        "alternateRowColor": "#F9F9F9",
+        "fontSize": "11px",
+        "columns": [
+          { "key": "productCode", "header": "Ürün Kodu", "relativeXpath": "cac:Item/cac:SellersItemIdentification/cbc:ID", "width": "10%", "format": "text", "visible": true, "order": 0 },
+          { "key": "description", "header": "Mal Hizmet", "relativeXpath": "cac:Item/cbc:Name", "width": "20%", "format": "text", "visible": true, "order": 1 },
+          { "key": "quantity", "header": "Miktar", "relativeXpath": "cbc:InvoicedQuantity", "width": "7%", "format": "quantityWithUnit", "visible": true, "order": 2 },
+          { "key": "unitCode", "header": "Birim", "relativeXpath": "cbc:InvoicedQuantity/@unitCode", "width": "5%", "format": "unitCode", "visible": true, "order": 3 },
+          { "key": "unitPrice", "header": "Birim Fiyat", "relativeXpath": "cac:Price/cbc:PriceAmount", "width": "10%", "format": "currency", "visible": true, "order": 4 },
+          { "key": "discountRate", "header": "İskonto/Artırım Oranı", "relativeXpath": "cac:AllowanceCharge/cbc:MultiplierFactorNumeric", "width": "8%", "format": "percent", "visible": true, "order": 5 },
+          { "key": "discountAmount", "header": "İskonto/Artırım Tutarı", "relativeXpath": "cac:AllowanceCharge/cbc:Amount", "width": "10%", "format": "currency", "visible": true, "order": 6 },
+          { "key": "taxPercent", "header": "KDV Oranı", "relativeXpath": "cac:TaxTotal/cac:TaxSubtotal/cbc:Percent", "width": "6%", "format": "percentDirect", "visible": true, "order": 7 },
+          { "key": "taxAmount", "header": "KDV Tutarı", "relativeXpath": "cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount", "width": "10%", "format": "currency", "visible": true, "order": 8 },
+          { "key": "lineExtension", "header": "Mal Hizmet Tutarı", "relativeXpath": "cbc:LineExtensionAmount", "width": "10%", "format": "currency", "visible": true, "order": 9 },
+          { "key": "note", "header": "Not", "relativeXpath": "cbc:Note", "width": "10%", "format": "text", "visible": true, "order": 10 },
+          { "key": "buyerItemId", "header": "Alıcı Ürün Kodu", "relativeXpath": "cac:Item/cac:BuyersItemIdentification/cbc:ID", "width": "10%", "format": "text", "visible": false, "order": 11 },
+          { "key": "custom-rawqty", "header": "Ham Miktar", "relativeXpath": "cbc:InvoicedQuantity", "width": "8%", "format": "number", "visible": true, "order": 12, "isCustom": true }
+        ]
+      },
+      "gridLayout": { "x": 14, "y": 96, "width": 182, "height": 30, "autoHeight": true }
+    },
+    "r07-taxsummary": {
+      "id": "r07-taxsummary",
+      "type": "TaxSummary",
+      "config": {
+        "taxTotalXpath": "//cac:TaxTotal/cac:TaxSubtotal",
+        "percentXpath": "cac:TaxCategory/cbc:Percent",
+        "taxableAmountXpath": "cbc:TaxableAmount",
+        "taxAmountXpath": "cbc:TaxAmount",
+        "showPercent": true
+      },
+      "gridLayout": { "x": 14, "y": 130, "width": 90, "height": 40, "autoHeight": true }
+    },
+    "r08-invoicetotals": {
+      "id": "r08-invoicetotals",
+      "type": "InvoiceTotals",
+      "config": {
+        "showCurrency": true,
+        "currencyXpath": "//cbc:DocumentCurrencyCode",
+        "labelWidth": "55%",
+        "fontSize": "11px",
+        "fields": [
+          { "key": "lineExtension", "label": "Mal Hizmet Tutarı", "xpath": "//cac:LegalMonetaryTotal/cbc:LineExtensionAmount", "visible": true, "highlight": false, "bold": false, "order": 0 },
+          { "key": "allowance", "label": "Toplam İskonto", "xpath": "//cac:LegalMonetaryTotal/cbc:AllowanceTotalAmount", "visible": true, "highlight": false, "bold": false, "order": 1 },
+          { "key": "taxExclusive", "label": "KDV Matrahı (toplam)", "xpath": "//cac:LegalMonetaryTotal/cbc:TaxExclusiveAmount", "visible": false, "highlight": false, "bold": false, "order": 2 },
+          { "key": "taxBaseGroups", "label": "KDV/ÖTV Matrahı (orana göre)", "xpath": "", "visible": true, "highlight": false, "bold": false, "order": 3 },
+          { "key": "taxAmount", "label": "Hesaplanan KDV (toplam)", "xpath": "//cac:TaxTotal/cbc:TaxAmount", "visible": true, "highlight": false, "bold": false, "order": 4 },
+          { "key": "taxSubtotalGroups", "label": "Hesaplanan KDV (orana göre)", "xpath": "", "visible": true, "highlight": false, "bold": false, "order": 5 },
+          { "key": "taxInclusive", "label": "Vergiler Dahil Toplam Tutar", "xpath": "//cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount", "visible": true, "highlight": true, "bold": true, "order": 6 },
+          { "key": "payable", "label": "Ödenecek Tutar", "xpath": "//cac:LegalMonetaryTotal/cbc:PayableAmount", "visible": true, "highlight": true, "bold": true, "order": 7 }
+        ]
+      },
+      "gridLayout": { "x": 106, "y": 130, "width": 90, "height": 40, "autoHeight": true }
+    },
+    "r09-notes": {
+      "id": "r09-notes",
+      "type": "Notes",
+      "config": {
+        "iterateOver": "/n1:Invoice/cbc:Note",
+        "prefix": "Not: ",
+        "staticLines": ["Bu belge test amaçlıdır.", "  "],
+        "staticPosition": "before",
+        "bordered": true,
+        "borderColor": "#555555",
+        "borderStyle": "solid",
+        "fontSize": "11px"
+      },
+      "gridLayout": { "x": 14, "y": 174, "width": 136, "height": 20, "autoHeight": true }
+    },
+    "r10-gibkarekod": {
+      "id": "r10-gibkarekod",
+      "type": "GibKarekod",
+      "config": { "qrWidth": 120, "qrHeight": 120, "qrAlignment": "right", "opacity": 75 },
+      "gridLayout": { "x": 156, "y": 174, "width": 40, "height": 40, "autoHeight": false }
+    }
+  }
+}

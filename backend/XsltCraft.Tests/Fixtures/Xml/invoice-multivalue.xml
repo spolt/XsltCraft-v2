@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Grid V2 golden taban çizgisi — çok değerli alanlar.
+  Amaç: XSLT 1.0 (.NET) "ilk düğüm" semantiği ile XSLT 2.0 (Saxon) "dizi" semantiği
+  arasındaki farkları yakalamak: value-of birleştirme (ayırıcı boşluk), number()/format-number()
+  ve contains() gibi tekil argüman bekleyen yerlerde XPTY0004.
+  - 2 adet fatura düzeyi cbc:Note
+  - 2 adet cac:TaxSubtotal (KDV %10 ve %20)
+  - 2 adet cac:DespatchDocumentReference, 2 adet tedarikçi cac:PartyIdentification (birden çok cbc:ID)
+  - Bir satırda 2 adet cac:AllowanceCharge ve 2 adet cbc:Note
+-->
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent/>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>TR1.2</cbc:CustomizationID>
+  <cbc:ProfileID>TICARIFATURA</cbc:ProfileID>
+  <cbc:ID>TST2026000000002</cbc:ID>
+  <cbc:CopyIndicator>false</cbc:CopyIndicator>
+  <cbc:UUID>222d2222-0c22-02bb-223e-2f2f34b567f8</cbc:UUID>
+  <cbc:IssueDate>2026-02-15</cbc:IssueDate>
+  <cbc:IssueTime>14:30:00</cbc:IssueTime>
+  <cbc:InvoiceTypeCode>SATIS</cbc:InvoiceTypeCode>
+  <cbc:Note>Satış Temsilcisi: Semih Polat</cbc:Note>
+  <cbc:Note>Müşteri Kısa Adı: XsltCraft</cbc:Note>
+  <cbc:DocumentCurrencyCode>TRY</cbc:DocumentCurrencyCode>
+  <cbc:LineCountNumeric>2</cbc:LineCountNumeric>
+  <cac:OrderReference>
+    <cbc:ID>SIP2026000456</cbc:ID>
+    <cbc:IssueDate>2026-02-10</cbc:IssueDate>
+  </cac:OrderReference>
+  <cac:DespatchDocumentReference>
+    <cbc:ID>IRS2026000000011</cbc:ID>
+    <cbc:IssueDate>2026-02-12</cbc:IssueDate>
+  </cac:DespatchDocumentReference>
+  <cac:DespatchDocumentReference>
+    <cbc:ID>IRS2026000000012</cbc:ID>
+    <cbc:IssueDate>2026-02-13</cbc:IssueDate>
+  </cac:DespatchDocumentReference>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="VKN">1111111111</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="MERSISNO">0123456789000015</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name>XsltCraft San. ve Tic. Ltd. Şti.</cbc:Name>
+      </cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>Test Mah. Tasarım Sokak</cbc:StreetName>
+        <cbc:BuildingNumber>35</cbc:BuildingNumber>
+        <cbc:CitySubdivisionName>KARŞIYAKA</cbc:CitySubdivisionName>
+        <cbc:CityName>İZMİR</cbc:CityName>
+        <cbc:PostalZone>35000</cbc:PostalZone>
+        <cac:Country>
+          <cbc:Name>TR</cbc:Name>
+        </cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cac:TaxScheme>
+          <cbc:Name>TEST V.D.</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:Contact>
+        <cbc:Telephone>5555555555</cbc:Telephone>
+        <cbc:ElectronicMail>info@xsltcraft.test</cbc:ElectronicMail>
+      </cac:Contact>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="VKN">2222222222</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name>Müşteri Ünvan A.Ş.</cbc:Name>
+      </cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>Anadolu Cad. No: 1</cbc:StreetName>
+        <cbc:CitySubdivisionName>BAYRAKLI</cbc:CitySubdivisionName>
+        <cbc:CityName>İZMİR</cbc:CityName>
+        <cbc:PostalZone>35530</cbc:PostalZone>
+        <cac:Country>
+          <cbc:Name>TR</cbc:Name>
+        </cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cac:TaxScheme>
+          <cbc:Name>ANADOLU KURUMLAR</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:Contact>
+        <cbc:Telephone>5444444444</cbc:Telephone>
+        <cbc:ElectronicMail>muhasebe@musteri.test</cbc:ElectronicMail>
+      </cac:Contact>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:PaymentTerms>
+    <cbc:PaymentDueDate>2026-03-15</cbc:PaymentDueDate>
+  </cac:PaymentTerms>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="TRY">245.00</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="TRY">450.00</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="TRY">45.00</cbc:TaxAmount>
+      <cbc:Percent>10</cbc:Percent>
+      <cac:TaxCategory>
+        <cac:TaxScheme>
+          <cbc:Name>KDV</cbc:Name>
+          <cbc:TaxTypeCode>0015</cbc:TaxTypeCode>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="TRY">1000.00</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="TRY">200.00</cbc:TaxAmount>
+      <cbc:Percent>20</cbc:Percent>
+      <cac:TaxCategory>
+        <cac:TaxScheme>
+          <cbc:Name>KDV</cbc:Name>
+          <cbc:TaxTypeCode>0015</cbc:TaxTypeCode>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="TRY">1450.00</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="TRY">1450.00</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="TRY">1695.00</cbc:TaxInclusiveAmount>
+    <cbc:AllowanceTotalAmount currencyID="TRY">50.00</cbc:AllowanceTotalAmount>
+    <cbc:PayableAmount currencyID="TRY">1695.00</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  <cac:InvoiceLine>
+    <cbc:ID>1</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="C62">10</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="TRY">1000.00</cbc:LineExtensionAmount>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="TRY">200.00</cbc:TaxAmount>
+      <cac:TaxSubtotal>
+        <cbc:TaxableAmount currencyID="TRY">1000.00</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="TRY">200.00</cbc:TaxAmount>
+        <cbc:Percent>20</cbc:Percent>
+        <cac:TaxCategory>
+          <cac:TaxScheme>
+            <cbc:Name>KDV</cbc:Name>
+            <cbc:TaxTypeCode>0015</cbc:TaxTypeCode>
+          </cac:TaxScheme>
+        </cac:TaxCategory>
+      </cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:Item>
+      <cbc:Name>Test Ürün A</cbc:Name>
+      <cac:SellersItemIdentification>
+        <cbc:ID>URN-001</cbc:ID>
+      </cac:SellersItemIdentification>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="TRY">100.00</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>
+  <cac:InvoiceLine>
+    <cbc:ID>2</cbc:ID>
+    <cbc:Note>Kampanya indirimi</cbc:Note>
+    <cbc:Note>Sadakat indirimi</cbc:Note>
+    <cbc:InvoicedQuantity unitCode="BX">5</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="TRY">450.00</cbc:LineExtensionAmount>
+    <cac:AllowanceCharge>
+      <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
+      <cbc:MultiplierFactorNumeric>0.05</cbc:MultiplierFactorNumeric>
+      <cbc:Amount currencyID="TRY">25.00</cbc:Amount>
+      <cbc:BaseAmount currencyID="TRY">500.00</cbc:BaseAmount>
+    </cac:AllowanceCharge>
+    <cac:AllowanceCharge>
+      <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
+      <cbc:MultiplierFactorNumeric>0.05</cbc:MultiplierFactorNumeric>
+      <cbc:Amount currencyID="TRY">25.00</cbc:Amount>
+      <cbc:BaseAmount currencyID="TRY">500.00</cbc:BaseAmount>
+    </cac:AllowanceCharge>
+    <cac:TaxTotal>
+      <cbc:TaxAmount currencyID="TRY">45.00</cbc:TaxAmount>
+      <cac:TaxSubtotal>
+        <cbc:TaxableAmount currencyID="TRY">450.00</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="TRY">45.00</cbc:TaxAmount>
+        <cbc:Percent>10</cbc:Percent>
+        <cac:TaxCategory>
+          <cac:TaxScheme>
+            <cbc:Name>KDV</cbc:Name>
+            <cbc:TaxTypeCode>0015</cbc:TaxTypeCode>
+          </cac:TaxScheme>
+        </cac:TaxCategory>
+      </cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:Item>
+      <cbc:Name>Test Ürün B</cbc:Name>
+      <cac:SellersItemIdentification>
+        <cbc:ID>URN-002</cbc:ID>
+      </cac:SellersItemIdentification>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="TRY">100.00</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>
+</Invoice>

@@ -1,0 +1,159 @@
+{
+  "version": 2,
+  "documentType": "Invoice",
+  "blocks": {
+    "c01-heading-static": {
+      "id": "c01-heading-static",
+      "type": "Heading",
+      "config": { "level": "H1", "isStatic": true, "content": "FATURA", "fontWeight": "bold", "fontSize": "18px", "color": "#1F2937" },
+      "gridLayout": { "x": 14, "y": 10, "width": 120, "height": 12, "autoHeight": true }
+    },
+    "c02-image-logo": {
+      "id": "c02-image-logo",
+      "type": "Image",
+      "config": { "assetId": "aaaaaaaa-0000-4000-8000-000000000001", "assetType": "logo", "altText": "Firma Logosu", "width": "40mm", "height": "20mm", "alignment": "right", "editableOnFreeTheme": true, "opacity": 80 },
+      "gridLayout": { "x": 156, "y": 10, "width": 40, "height": 20, "autoHeight": true }
+    },
+    "c03-heading-bound": {
+      "id": "c03-heading-bound",
+      "type": "Heading",
+      "config": { "level": "H3", "isStatic": false, "binding": { "xpath": "//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name" }, "fontStyle": "italic" },
+      "gridLayout": { "x": 14, "y": 24, "width": 120, "height": 10, "autoHeight": true }
+    },
+    "c04-text-static": {
+      "id": "c04-text-static",
+      "type": "Text",
+      "config": { "isStatic": true, "content": "Ödeme & Teslim <Koşulları>", "fontSize": "11px" },
+      "gridLayout": { "x": 14, "y": 36, "width": 182, "height": 8, "autoHeight": true }
+    },
+    "c05-text-bound-fallback": {
+      "id": "c05-text-bound-fallback",
+      "type": "Text",
+      "config": { "isStatic": false, "binding": { "xpath": "//cbc:Note", "fallback": "—" }, "fontWeight": "bold", "color": "#B91C1C" },
+      "gridLayout": { "x": 14, "y": 46, "width": 182, "height": 8, "autoHeight": true }
+    },
+    "c06-paragraph": {
+      "id": "c06-paragraph",
+      "type": "Paragraph",
+      "config": {
+        "lines": [
+          { "isStatic": true, "content": "Fatura No: " },
+          { "isStatic": false, "xpath": "/n1:Invoice/cbc:ID" },
+          { "isStatic": true, "content": " / Tarih: " },
+          { "isStatic": false, "xpath": "//cbc:IssueDate" }
+        ],
+        "fontSize": "11px"
+      },
+      "gridLayout": { "x": 14, "y": 56, "width": 182, "height": 10, "autoHeight": true }
+    },
+    "c07-documentinfo": {
+      "id": "c07-documentinfo",
+      "type": "DocumentInfo",
+      "config": {
+        "rows": [
+          { "label": "Fatura No", "xpath": "//cbc:ID" },
+          { "label": "Fatura Tarihi", "xpath": "//cbc:IssueDate" },
+          { "label": "Para Birimi", "xpath": "//cbc:DocumentCurrencyCode" }
+        ],
+        "bordered": true,
+        "borderStyle": "dashed",
+        "fontSize": "11px"
+      },
+      "gridLayout": { "x": 14, "y": 68, "width": 90, "height": 30, "autoHeight": true }
+    },
+    "c08-totals": {
+      "id": "c08-totals",
+      "type": "Totals",
+      "config": {
+        "rows": [
+          { "label": "Mal Hizmet Toplamı", "xpath": "//cac:LegalMonetaryTotal/cbc:LineExtensionAmount" },
+          { "label": "Ödenecek Tutar", "xpath": "//cbc:PayableAmount", "highlight": true }
+        ],
+        "alignment": "right",
+        "labelWidth": "60%",
+        "fontSize": "11px"
+      },
+      "gridLayout": { "x": 106, "y": 68, "width": 90, "height": 30, "autoHeight": true }
+    },
+    "c09-table": {
+      "id": "c09-table",
+      "type": "Table",
+      "config": {
+        "iterateOver": "//cac:InvoiceLine",
+        "showHeader": true,
+        "headerBackgroundColor": "#DBEAFE",
+        "alternateRowColor": "#F3F4F6",
+        "columns": [
+          { "header": "Ürün", "xpath": "cac:Item/cbc:Name", "width": "35%", "format": "text" },
+          { "header": "Miktar", "xpath": "cbc:InvoicedQuantity", "width": "15%", "format": "number" },
+          { "header": "Birim Fiyat", "xpath": "cac:Price/cbc:PriceAmount", "width": "15%", "format": "currency" },
+          { "header": "İskonto Oranı", "xpath": "cac:AllowanceCharge/cbc:MultiplierFactorNumeric", "width": "15%", "format": "number" },
+          { "header": "Tutar", "xpath": "cbc:LineExtensionAmount", "width": "20%", "format": "currency" }
+        ]
+      },
+      "gridLayout": { "x": 14, "y": 100, "width": 182, "height": 40, "autoHeight": true }
+    },
+    "c10-divider": {
+      "id": "c10-divider",
+      "type": "Divider",
+      "config": { "style": "dashed", "color": "#9CA3AF", "thickness": "2px", "marginTop": "4px", "marginBottom": "4px" },
+      "gridLayout": { "x": 14, "y": 142, "width": 150, "height": 6, "autoHeight": false }
+    },
+    "c11-conditional-greater": {
+      "id": "c11-conditional-greater",
+      "type": "ConditionalText",
+      "config": {
+        "condition": { "xpath": "//cac:LegalMonetaryTotal/cbc:PayableAmount", "operator": "greaterThan", "value": "1000" },
+        "thenIsStatic": true, "thenContent": "Yüksek tutarlı fatura",
+        "elseIsStatic": true, "elseContent": "Standart fatura",
+        "fontSize": "11px"
+      },
+      "gridLayout": { "x": 14, "y": 150, "width": 90, "height": 8, "autoHeight": true }
+    },
+    "c12-conditional-contains": {
+      "id": "c12-conditional-contains",
+      "type": "ConditionalText",
+      "config": {
+        "condition": { "xpath": "//cbc:Note", "operator": "contains", "value": "Temsilci" },
+        "thenIsStatic": false, "thenContent": "//cbc:Note",
+        "elseIsStatic": true, "elseContent": "Temsilci notu yok",
+        "fontSize": "11px"
+      },
+      "gridLayout": { "x": 106, "y": 150, "width": 90, "height": 8, "autoHeight": true }
+    },
+    "c13-conditional-notexists": {
+      "id": "c13-conditional-notexists",
+      "type": "ConditionalText",
+      "config": {
+        "condition": { "xpath": "//cac:OrderReference", "operator": "notExists" },
+        "thenIsStatic": true, "thenContent": "Siparişsiz fatura",
+        "elseIsStatic": false, "elseContent": "//cac:OrderReference/cbc:ID",
+        "fontSize": "11px"
+      },
+      "gridLayout": { "x": 14, "y": 160, "width": 90, "height": 8, "autoHeight": true }
+    },
+    "c14-conditional-equals": {
+      "id": "c14-conditional-equals",
+      "type": "ConditionalText",
+      "config": {
+        "condition": { "xpath": "//cbc:DocumentCurrencyCode", "operator": "equals", "value": "TRY" },
+        "thenIsStatic": true, "thenContent": "Yerel para birimi",
+        "elseIsStatic": false, "elseContent": "//cbc:DocumentCurrencyCode",
+        "fontSize": "11px"
+      },
+      "gridLayout": { "x": 106, "y": 160, "width": 90, "height": 8, "autoHeight": true }
+    },
+    "c15-spacer": {
+      "id": "c15-spacer",
+      "type": "Spacer",
+      "config": { "height": "12px" },
+      "gridLayout": { "x": 14, "y": 170, "width": 182, "height": 5, "autoHeight": false }
+    },
+    "c16-bankinfo": {
+      "id": "c16-bankinfo",
+      "type": "BankInfo",
+      "config": { "bankName": "Örnek Bankası A.Ş.", "iban": "TR00 0000 0000 0000 0000 0000 00", "ibanLabel": "IBAN: ", "bordered": true, "borderColor": "#555555", "borderStyle": "dotted", "fontSize": "11px" },
+      "gridLayout": { "x": 14, "y": 177, "width": 120, "height": 12, "autoHeight": true }
+    }
+  }
+}
