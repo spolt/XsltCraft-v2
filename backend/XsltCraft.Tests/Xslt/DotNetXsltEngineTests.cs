@@ -219,6 +219,37 @@ public sealed class DotNetXsltEngineTests
     }
 
     [Fact]
+    public void LimitedTextWriter_Cancelled_Throws_Timeout_WithCode()
+    {
+        using var cts = new CancellationTokenSource();
+        var inner = new StringWriter();
+        using var writer = new LimitedTextWriter(inner, 1000, Timeout.InfiniteTimeSpan, XsltEngineKind.DotNet, cts.Token);
+        writer.Write("a");
+        cts.Cancel();
+
+        var ex = Assert.Throws<XsltProcessingException>(() => writer.Write("b"));
+
+        Assert.Equal(XsltFailureKind.Timeout, ex.Diagnostic.Kind);
+        Assert.Equal(LimitedTextWriter.CancelledCode, ex.Diagnostic.ErrorCode);
+        Assert.Equal("a", inner.ToString());
+    }
+
+    [Fact]
+    public void Transform_CancelledLimits_StopsAtFirstWrite()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var xslt = $"""<xsl:stylesheet version="1.0" xmlns:xsl="{XslNs}"><xsl:template match="/"><p>x</p></xsl:template></xsl:stylesheet>""";
+        var compiled = _engine.Compile(xslt, XsltExecutionLimits.Default);
+
+        var ex = Assert.Throws<XsltProcessingException>(() =>
+            compiled.Transform("<r/>", new StringWriter(), XsltExecutionLimits.Default with { Cancellation = cts.Token }));
+
+        Assert.Equal(XsltFailureKind.Timeout, ex.Diagnostic.Kind);
+        Assert.Equal(LimitedTextWriter.CancelledCode, ex.Diagnostic.ErrorCode);
+    }
+
+    [Fact]
     public void LimitedTextWriter_ForwardsEncoding_AndCounts()
     {
         var inner = new StringWriter();

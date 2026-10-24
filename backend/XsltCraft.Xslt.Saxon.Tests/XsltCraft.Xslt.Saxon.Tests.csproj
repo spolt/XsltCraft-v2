@@ -30,6 +30,8 @@
     <ProjectReference Include="..\XsltCraft.Xslt.Saxon\XsltCraft.Xslt.Saxon.csproj" />
     <!-- IkvmFlowTests: yalnız build sırası; worker'ın kendi çıktı dizini incelenir. -->
     <ProjectReference Include="..\XsltCraft.XsltWorker\XsltCraft.XsltWorker.csproj" ReferenceOutputAssembly="false" />
+    <!-- IkvmFlowTests.ApiOutput: Api → Infrastructure → Xslt.Saxon (2 seviye) zincirinin Api çıktısı incelenir. -->
+    <ProjectReference Include="..\XsltCraft\XsltCraft.Api.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,15 +39,22 @@
     <None Include="..\XsltCraft.Application\ThemeSlots\Samples\invoice.xml" Link="Fixtures\invoice.xml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- Worker'ın build çıktısı yolu (artifacts-path / RID'den bağımsız) test derlemesine gömülür. -->
+  <!-- Worker'ın ve Api'nin build çıktısı yolları (artifacts-path / RID'den bağımsız) test derlemesine gömülür. -->
   <Target Name="EmbedXsltWorkerTargetPath" BeforeTargets="GetAssemblyAttributes">
     <MSBuild Projects="..\XsltCraft.XsltWorker\XsltCraft.XsltWorker.csproj" Targets="GetTargetPath">
       <Output TaskParameter="TargetOutputs" ItemName="_XsltWorkerTargetPathForTests" />
+    </MSBuild>
+    <MSBuild Projects="..\XsltCraft\XsltCraft.Api.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" ItemName="_XsltApiTargetPathForTests" />
     </MSBuild>
     <ItemGroup>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
         <_Parameter1>XsltWorkerTargetPath</_Parameter1>
         <_Parameter2>@(_XsltWorkerTargetPathForTests)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>XsltApiTargetPath</_Parameter1>
+        <_Parameter2>@(_XsltApiTargetPathForTests)</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>

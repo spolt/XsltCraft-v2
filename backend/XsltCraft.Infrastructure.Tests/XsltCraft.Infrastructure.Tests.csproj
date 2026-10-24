@@ -22,4 +22,10 @@
     <ProjectReference Include="..\XsltCraft.Infrastructure\XsltCraft.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- InProcessXsltHostTests.Grid_DotNet_MatchesXsltHtmlRenderer: gerçek grid generator çıktısı (GridV2 golden) + fatura. -->
+    <None Include="..\XsltCraft.Tests\__snapshots__\GridV2\Xslt.invoice-ready-blocks.verified.txt" Link="Fixtures\grid-invoice-ready.xslt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\XsltCraft.Tests\Fixtures\Xml\invoice-basic.xml" Link="Fixtures\invoice-basic.xml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
