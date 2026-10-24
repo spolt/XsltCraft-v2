@@ -10,6 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="..\XsltCraft.Application\XsltCraft.Application.csproj" />
     <ProjectReference Include="..\XsltCraft.Domain\XsltCraft.Domain.csproj" />
+    <!-- İzole XSLT worker IPC sözleşmesi (bağımlılıksız). Worker exe'nin kendisine referans YOK. -->
+    <ProjectReference Include="..\XsltCraft.XsltWorker.Contracts\XsltCraft.XsltWorker.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,6 +25,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="XsltCraft.Infrastructure.Tests" />
+    <InternalsVisibleTo Include="XsltCraft.XsltWorker.Tests" />
   </ItemGroup>
 
   <ItemGroup>

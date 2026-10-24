@@ -30,4 +30,28 @@
     <Folder Include="Middleware\" />
   </ItemGroup>
 
+  <!--
+    İzole XSLT worker: yalnız build sırası (assembly referansı YOK — Api, worker kodunu yüklemez).
+    Çıktı $(OutDir)xsltworker\ altına kopyalanır; XsltWorkerLocator varsayılan olarak orada arar.
+    Docker/CI'da worker ayrı publish edilir → -p:BuildXsltWorker=false.
+  -->
+  <ItemGroup Condition="'$(BuildXsltWorker)' != 'false'">
+    <ProjectReference Include="..\XsltCraft.XsltWorker\XsltCraft.XsltWorker.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="CopyXsltWorkerOutput" AfterTargets="Build" Condition="'$(BuildXsltWorker)' != 'false'">
+    <MSBuild Projects="..\XsltCraft.XsltWorker\XsltCraft.XsltWorker.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" ItemName="_XsltWorkerTargetPath" />
+    </MSBuild>
+    <PropertyGroup>
+      <_XsltWorkerOutDir>@(_XsltWorkerTargetPath->'%(RootDir)%(Directory)')</_XsltWorkerOutDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_XsltWorkerFiles Include="$(_XsltWorkerOutDir)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_XsltWorkerFiles)"
+          DestinationFiles="@(_XsltWorkerFiles->'$(OutDir)xsltworker\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
