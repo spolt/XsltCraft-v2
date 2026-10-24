@@ -11,7 +11,11 @@ public sealed record XsltHostRequest(
     XsltEngineKind Engine,
     string Xslt,
     string? Xml,
-    XsltExecutionLimits Limits);
+    XsltExecutionLimits Limits)
+{
+    /// <summary>Yalnız log/tanı için (içerik loglanmaz); kapı kararı servistedir.</summary>
+    public Guid UserId { get; init; }
+}
 
 /// <summary>Host yanıtı. <see cref="Diagnostic"/> <c>null</c> → başarılı.</summary>
 public sealed record XsltHostResult(
@@ -21,6 +25,13 @@ public sealed record XsltHostResult(
     bool CacheHit,
     XsltDiagnostic? Diagnostic)
 {
+    /// <summary>
+    /// İsteğin FİİLEN çalıştığı yer; <c>null</c> → çağıranın seçtiği yer. Süreç içi host bozulmuş modda
+    /// worker'a yönlendirdiğinde <see cref="XsltExecutionPlace.Isolated"/> bildirir — kullanıcı kapısının
+    /// kötüye kullanım kesicisi bu yere göre sayar.
+    /// </summary>
+    public XsltExecutionPlace? Place { get; init; }
+
     public static XsltHostResult Failed(XsltDiagnostic diagnostic, XsltEngineKind engine) =>
         new(null, engine, null, false, diagnostic);
 }
@@ -49,8 +60,7 @@ public interface IXsltIsolatedHost : IXsltHost
 }
 
 /// <summary>
-/// Api süreci içi korumalı yürütme (grid; ADR 008 §7). Gerçek uygulama T2.4b
-/// (<c>InProcessXsltHost</c>: guard, bozulmuş mod, Saxon); o gelene dek
-/// <see cref="DotNetInProcessXsltHost"/> geçici olarak kayıtlıdır.
+/// Api süreci içi korumalı yürütme (grid; worker kapalıyken 1.0 Raw/UserTemplate da; ADR 008 §7).
+/// Uygulama: <c>Infrastructure InProcessXsltHost</c> (<see cref="XsltExecutionGuard"/>, bozulmuş mod → worker, Saxon).
 /// </summary>
 public interface IXsltInProcessHost : IXsltHost;

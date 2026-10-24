@@ -7,7 +7,7 @@ namespace XsltCraft.Application.Xslt.Engines;
 /// <summary>
 /// <see cref="DotNetXsltEngine"/> derleme sonucu. Girdi yükleme ve dönüşüm
 /// <see cref="XsltHtmlRenderer"/> ile aynıdır (çıktı bit-aynı); çıktı <see cref="LimitedTextWriter"/>
-/// ile sınırlanır, girdi derinlik/düğüm sınırları DOM kurulurken aynı okuma geçişinde
+/// ile sınırlanır (süre + <see cref="XsltExecutionLimits.Cancellation"/> her yazımda), girdi derinlik/düğüm sınırları DOM kurulurken aynı okuma geçişinde
 /// (<see cref="LimitedXmlReader"/>) denetlenir.
 /// </summary>
 internal sealed class DotNetCompiledXslt(XslCompiledTransform transform) : ICompiledXslt
@@ -27,7 +27,7 @@ internal sealed class DotNetCompiledXslt(XslCompiledTransform transform) : IComp
         var parseMs = sw.ElapsedMilliseconds;
 
         sw.Restart();
-        var limited = new LimitedTextWriter(output, limits.MaxOutputChars, limits.Deadline, Engine);
+        var limited = new LimitedTextWriter(output, limits.MaxOutputChars, limits.Deadline, Engine, limits.Cancellation);
         Run(xmlDoc, limited);
         var transformMs = sw.ElapsedMilliseconds;
 

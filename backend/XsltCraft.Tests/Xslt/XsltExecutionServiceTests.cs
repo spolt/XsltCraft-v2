@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
 using XsltCraft.Application.Validation.Safety;
-using XsltCraft.Application.Xslt;
 using XsltCraft.Application.Xslt.Engines;
 using XsltCraft.Application.Xslt.Execution;
 
@@ -243,17 +242,36 @@ public sealed class XsltExecutionServiceTests
         Assert.Equal((XsltGateLane.Grid, XsltExecutionPlace.Isolated), Assert.Single(_gate.Acquired));
     }
 
+    // Bit-aynılık (gerçek InProcessXsltHost ↔ XsltHtmlRenderer): Infrastructure.Tests
+    // InProcessXsltHostTests.Grid_DotNet_MatchesXsltHtmlRenderer (geçici DotNetInProcessXsltHost kaldırıldı).
+
     [Fact]
-    public async Task Grid_InterimInProcessHost_MatchesXsltHtmlRenderer()
+    public async Task HostReportedPlace_UsedForGateAndResult()
     {
-        var xslt = Stylesheet("2.0", "<xsl:output method=\"html\"/><xsl:template match=\"/\"><div><xsl:value-of select=\"//i\"/></div></xsl:template>");
-        var sut = new XsltExecutionService(new XsltExecutionOptions(), new DefaultXsltSafetyScanner(), _gate, _isolated, new DotNetInProcessXsltHost());
+        // Süreç içi host bozulmuş modda worker'a yönlendirip Place=Isolated bildirir → kapı o yerle sayar.
+        _inProcess.Result = r =>
+        {
+            var timeout = new XsltDiagnostic("süre", 0, 0, XsltFailureKind.Timeout, r.Engine);
+            return XsltHostResult.Failed(timeout, r.Engine) with { Place = XsltExecutionPlace.Isolated };
+        };
+        var request = new XsltRunRequest(XsltRoute.Grid, Stylesheet("1.0"), Xml, XsltOperation.Render, User);
 
-        var result = await sut.ExecuteAsync(new XsltRunRequest(XsltRoute.Grid, xslt, Xml, XsltOperation.Render, User));
+        var result = await Create().ExecuteAsync(request);
 
-        Assert.True(result.Succeeded, result.Diagnostic?.Message);
-        Assert.Equal(new XsltHtmlRenderer().Render(xslt, Xml).Html, result.Html);
-        Assert.Equal(XsltEngineKind.DotNet, result.Engine);
+        Assert.Equal((XsltGateLane.Grid, XsltExecutionPlace.InProcess), Assert.Single(_gate.Acquired));
+        Assert.Equal(XsltExecutionPlace.Isolated, Assert.Single(_gate.ReportedPlaces));
+        Assert.Equal(XsltFailureKind.Timeout, Assert.Single(_gate.Reported));
+        Assert.Equal(XsltExecutionPlace.Isolated, result.Place);
+        Assert.Equal(User, Assert.Single(_inProcess.Requests).UserId);
+    }
+
+    [Fact]
+    public async Task HostWithoutPlace_ReportsSelectedPlace()
+    {
+        var result = await Create().ExecuteAsync(new XsltRunRequest(XsltRoute.Grid, Stylesheet("1.0"), Xml, XsltOperation.Render, User));
+
+        Assert.Equal(XsltExecutionPlace.InProcess, Assert.Single(_gate.ReportedPlaces));
+        Assert.Equal(XsltExecutionPlace.InProcess, result.Place);
     }
 
     // ------------------------------------------------------------------ worker kapalı
@@ -428,6 +446,8 @@ public sealed class XsltExecutionServiceTests
 
         public List<XsltFailureKind?> Reported { get; } = [];
 
+        public List<XsltExecutionPlace?> ReportedPlaces { get; } = [];
+
         public int Disposed { get; private set; }
 
         public bool TryAcquire(
@@ -449,7 +469,11 @@ public sealed class XsltExecutionServiceTests
 
         private sealed class FakeLease(FakeGate gate) : IXsltGateLease
         {
-            public void ReportOutcome(XsltFailureKind? failure) => gate.Reported.Add(failure);
+            public void ReportOutcome(XsltFailureKind? failure, XsltExecutionPlace? actualPlace = null)
+            {
+                gate.Reported.Add(failure);
+                gate.ReportedPlaces.Add(actualPlace);
+            }
 
             public void Dispose() => gate.Disposed++;
         }

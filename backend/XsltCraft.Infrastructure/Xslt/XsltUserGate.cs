@@ -206,10 +206,10 @@ public sealed class XsltUserGate : IXsltUserGate
         private int _reported;
         private int _disposed;
 
-        public void ReportOutcome(XsltFailureKind? failure)
+        public void ReportOutcome(XsltFailureKind? failure, XsltExecutionPlace? actualPlace = null)
         {
             if (Interlocked.Exchange(ref _reported, 1) == 0 && Volatile.Read(ref _disposed) == 0)
-                gate.Report(userId, place, failure);
+                gate.Report(userId, actualPlace ?? place, failure);
         }
 
         public void Dispose()

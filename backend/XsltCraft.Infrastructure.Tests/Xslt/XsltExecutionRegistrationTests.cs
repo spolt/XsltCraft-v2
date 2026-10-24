@@ -7,6 +7,7 @@ using XsltCraft.Application.Xslt.Engines;
 using XsltCraft.Application.Xslt.Execution;
 using XsltCraft.Infrastructure.DependencyInjection;
 using XsltCraft.Infrastructure.Xslt;
+using XsltCraft.Infrastructure.Xslt.InProcess;
 using XsltCraft.Infrastructure.Xslt.Worker;
 
 namespace XsltCraft.Infrastructure.Tests.Xslt;
@@ -43,7 +44,7 @@ public sealed class XsltExecutionRegistrationTests
         Assert.IsType<XsltExecutionService>(provider.GetRequiredService<IXsltExecutionService>());
         Assert.IsType<XsltUserGate>(provider.GetRequiredService<IXsltUserGate>());
         Assert.IsType<WorkerXsltHost>(provider.GetRequiredService<IXsltIsolatedHost>());
-        Assert.IsType<DotNetInProcessXsltHost>(provider.GetRequiredService<IXsltInProcessHost>());
+        Assert.IsType<InProcessXsltHost>(provider.GetRequiredService<IXsltInProcessHost>());
         Assert.IsType<DefaultXsltSafetyScanner>(provider.GetRequiredService<IXsltSafetyScanner>());
         Assert.Same(provider.GetRequiredService<IXsltUserGate>(), provider.GetRequiredService<IXsltUserGate>());
         Assert.Equal(0, provider.GetRequiredService<XsltWorkerPool>().ReadyCount);

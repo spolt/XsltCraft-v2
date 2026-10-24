@@ -29,7 +29,10 @@ public sealed record XsltGateDenial(string Message, string ErrorCode, TimeSpan? 
 public interface IXsltGateLease : IDisposable
 {
     /// <summary>Sonucu bildirir; kötüye kullanım sayacı yalnız sınır öldürmelerini sayar.</summary>
-    void ReportOutcome(XsltFailureKind? failure);
+    /// <param name="failure">Hata sınıfı; başarıda <c>null</c>.</param>
+    /// <param name="actualPlace">Fiilî yürütme yeri (bozulmuş modda grid → worker); <c>null</c> → izin alınırken
+    /// verilen yer. Kesici bu yerin eşiğiyle sayar.</param>
+    void ReportOutcome(XsltFailureKind? failure, XsltExecutionPlace? actualPlace = null);
 }
 
 /// <summary>

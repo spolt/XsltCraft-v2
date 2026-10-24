@@ -138,8 +138,8 @@ public sealed class XsltRouteLimits
 }
 
 /// <summary>
-/// Grid süreç içi yürütme ayarları (ADR 008 §7). Tüketen: T2.4b <c>InProcessXsltHost</c> /
-/// <c>XsltExecutionGuard</c>; burada yalnız bağlanır ve doğrulanır.
+/// Grid süreç içi yürütme ayarları (ADR 008 §7). Tüketen: <see cref="XsltExecutionGuard"/> ve
+/// Infrastructure <c>InProcessXsltHost</c> (bozulmuş mod).
 /// </summary>
 public sealed class XsltGridOptions
 {

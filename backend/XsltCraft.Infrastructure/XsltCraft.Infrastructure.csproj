@@ -12,6 +12,10 @@
     <ProjectReference Include="..\XsltCraft.Domain\XsltCraft.Domain.csproj" />
     <!-- İzole XSLT worker IPC sözleşmesi (bağımlılıksız). Worker exe'nin kendisine referans YOK. -->
     <ProjectReference Include="..\XsltCraft.XsltWorker.Contracts\XsltCraft.XsltWorker.Contracts.csproj" />
+    <!-- Süreç içi grid host'u (InProcessXsltHost) için Saxon-HE 12.10 / IKVM. IKVM/Maven bildirimi YALNIZ
+         Xslt.Saxon'da (LayeringTests); dönüşmüş derlemeler + ikvm home ProjectReference zinciriyle Api çıktısına iner
+         (IkvmFlowTests.ApiOutput_ContainsSaxonAndIkvmHome). -->
+    <ProjectReference Include="..\XsltCraft.Xslt.Saxon\XsltCraft.Xslt.Saxon.csproj" />
   </ItemGroup>
 
   <ItemGroup>

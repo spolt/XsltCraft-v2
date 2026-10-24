@@ -13,7 +13,8 @@ namespace XsltCraft.Application.Xslt.Execution;
 /// <item><see cref="XsltVersionSniffer"/> (&gt; 2.0 → <c>Unsupported</c>) + <see cref="XsltEngineSelector"/> (rota modu).</item>
 /// <item>Yer: Raw/Validate/UserTemplate ve script'li grid → izole; grid → süreç içi.
 ///   Worker kapalıysa 1.0 → süreç içi .NET, ≥ 2.0 ve script'li grid → <c>EngineUnavailable</c>.</item>
-/// <item><see cref="IXsltUserGate"/> → host → sonuç kapıya bildirilir, izin her durumda bırakılır.</item>
+/// <item><see cref="IXsltUserGate"/> → host → sonuç kapıya FİİLÎ yerle (<see cref="XsltHostResult.Place"/>)
+///   bildirilir, izin her durumda bırakılır.</item>
 /// </list>
 /// </summary>
 public sealed class XsltExecutionService : IXsltExecutionService
@@ -75,7 +76,10 @@ public sealed class XsltExecutionService : IXsltExecutionService
 
         using (lease)
         {
-            var hostRequest = new XsltHostRequest(request.Op, engine, request.Xslt, xml, BuildLimits(routeLimits, cancellationToken));
+            var hostRequest = new XsltHostRequest(request.Op, engine, request.Xslt, xml, BuildLimits(routeLimits, cancellationToken))
+            {
+                UserId = request.UserId,
+            };
             var host = place == XsltExecutionPlace.Isolated ? (IXsltHost)_isolatedHost : _inProcessHost;
 
             XsltHostResult result;
@@ -88,10 +92,12 @@ public sealed class XsltExecutionService : IXsltExecutionService
                 result = XsltHostResult.Failed(ex.Diagnostic, engine);
             }
 
-            lease.ReportOutcome(result.Diagnostic?.Kind);
+            // Host fiilî yeri bildirebilir (süreç içi host bozulmuş modda worker'a yönlendirir).
+            var actualPlace = result.Place ?? place;
+            lease.ReportOutcome(result.Diagnostic?.Kind, actualPlace);
 
             var html = request.Op == XsltOperation.Render && result.Diagnostic is null ? result.Html ?? "" : null;
-            return new XsltRunResult(html, result.Engine, result.Timings, result.CacheHit, result.Diagnostic) { Place = place };
+            return new XsltRunResult(html, result.Engine, result.Timings, result.CacheHit, result.Diagnostic) { Place = actualPlace };
         }
     }
 
