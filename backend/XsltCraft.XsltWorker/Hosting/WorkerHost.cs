@@ -6,22 +6,28 @@ using XsltCraft.XsltWorker.Contracts.Messages;
 namespace XsltCraft.XsltWorker.Hosting;
 
 /// <summary>
-/// Host döngüsü: Hello gönder → stdin'den Request oku → işle → Response yaz. Sıralı: worker başına
-/// aynı anda tek istek. stdin EOF (Api kapandı/öldü) veya Shutdown → temiz çıkış.
+/// Host döngüsü: Hello gönder → stdin'den Request oku → <see cref="EngineThread"/>'e ver, bekle → Response yaz.
+/// Sıralı: worker başına aynı anda tek istek. stdin EOF (Api kapandı/öldü) veya Shutdown → temiz çıkış;
+/// bellek tükenmesi yanıtından sonra <see cref="WorkerExitCodes.MemoryExhausted"/>.
 /// </summary>
 internal sealed class WorkerHost
 {
     private readonly Stream _input;
     private readonly Stream _output;
     private readonly RequestHandler _handler;
+    private readonly EngineThread _engineThread;
     private readonly WorkerCommandLine _commandLine;
+    private readonly string? _saxonVersion;
 
-    public WorkerHost(Stream input, Stream output, RequestHandler handler, WorkerCommandLine commandLine)
+    public WorkerHost(
+        Stream input, Stream output, RequestHandler handler, EngineThread engineThread, WorkerCommandLine commandLine, string? saxonVersion)
     {
         _input = input;
         _output = output;
         _handler = handler;
+        _engineThread = engineThread;
         _commandLine = commandLine;
+        _saxonVersion = saxonVersion;
     }
 
     public async Task<int> RunAsync()
@@ -58,7 +64,8 @@ internal sealed class WorkerHost
                 return WorkerExitCodes.Normal;
             }
 
-            var result = _handler.Handle(request, frame.Bodies);
+            var bodies = frame.Bodies;
+            var result = await _engineThread.RunAsync(() => _handler.Handle(request, bodies));
 
             try
             {
@@ -68,6 +75,9 @@ internal sealed class WorkerHost
             {
                 return WorkerExitCodes.OutputClosed;
             }
+
+            if (result.ExitAfterResponse)
+                return WorkerExitCodes.MemoryExhausted;
         }
     }
 
@@ -91,7 +101,7 @@ internal sealed class WorkerHost
         Protocol = _commandLine.HelloProtocolOverride ?? ProtocolVersion.Current,
         WorkerVersion = typeof(WorkerHost).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0",
-        SaxonVersion = null,
+        SaxonVersion = _saxonVersion,
         Pid = Environment.ProcessId,
     };
 }
