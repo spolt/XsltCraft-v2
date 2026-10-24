@@ -83,7 +83,7 @@ public sealed class XsltSafetyScanner
 
     private static void CheckRoot(XmlReader reader, List<XsltSafetyFinding> findings, IXmlLineInfo? lineInfo)
     {
-        bool isXslRoot = reader.NamespaceURI == XsltSafetyRules.Xsl
+        bool isXslRoot = XsltSafetyNamespaces.NormalizeNamespaceUri(reader.NamespaceURI) == XsltSafetyRules.Xsl
                          && (reader.LocalName == "stylesheet" || reader.LocalName == "transform");
         if (isXslRoot)
             return;
@@ -106,7 +106,8 @@ public sealed class XsltSafetyScanner
         IXmlLineInfo? lineInfo,
         HashSet<string> userFunctionNamespaces)
     {
-        string ns = reader.NamespaceURI;
+        // Tüm ad alanı sınıflandırması boşluk-normalize URI ile yapılır (bkz. NormalizeNamespaceUri).
+        string ns = XsltSafetyNamespaces.NormalizeNamespaceUri(reader.NamespaceURI);
         string local = reader.LocalName;
         bool isXslElement = ns == XsltSafetyRules.Xsl;
 
@@ -159,7 +160,7 @@ public sealed class XsltSafetyScanner
         IXmlLineInfo? lineInfo,
         HashSet<string> userFunctionNamespaces)
     {
-        string ans = reader.NamespaceURI;
+        string ans = XsltSafetyNamespaces.NormalizeNamespaceUri(reader.NamespaceURI);
         string alocal = reader.LocalName;
 
         // Ad alanı bildirimleri (xmlns, xmlns:x) — serbest. Yalnız ad alanı URI'sine bakılır:
@@ -367,7 +368,7 @@ public sealed class XsltSafetyScanner
 
         string? ns = prefix.Length == 0
             ? XsltSafetyRules.Fn                // öneksiz → varsayılan fonksiyon ad alanı (fn)
-            : resolver.LookupNamespace(prefix);
+            : XsltSafetyNamespaces.Lookup(resolver, prefix);
 
         if (ns == null)
         {
@@ -393,6 +394,7 @@ public sealed class XsltSafetyScanner
         IXmlLineInfo? lineInfo,
         HashSet<string> userFunctionNamespaces)
     {
+        ns = XsltSafetyNamespaces.NormalizeNamespaceUri(ns); // EQName / önek yolu — idempotent
         if (ns == XsltSafetyRules.Fn)
         {
             if (local == "system-property")
@@ -515,7 +517,7 @@ public sealed class XsltSafetyScanner
                 return false;
 
         string prefix = arg[..colon];
-        string? ns = resolver.LookupNamespace(prefix);
+        string? ns = XsltSafetyNamespaces.Lookup(resolver, prefix);
         // Bildirilmemiş 'xsl'/'msxsl' öneki: işlemci çalışma anında hata verir (XTDE1390) — zararsız.
         // Önek başka bir ad alanına bağlıysa (ör. xmlns:xsl="urn:x") serbest DEĞİL.
         return ns == null

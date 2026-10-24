@@ -21,7 +21,7 @@ internal readonly struct XPathToken(XPathTokenKind kind, string text, string? ur
     /// <summary>Name/Var için QName metni; EqName için yerel ad; String için literal içeriği.</summary>
     public string Text { get; } = text;
 
-    /// <summary>Yalnız <see cref="XPathTokenKind.EqName"/>: <c>Q{...}</c> içindeki ad alanı URI'si.</summary>
+    /// <summary>Yalnız <see cref="XPathTokenKind.EqName"/>: <c>Q{...}</c> içindeki (boşluk-normalize) ad alanı URI'si.</summary>
     public string? Uri { get; } = uri;
 }
 
@@ -92,7 +92,8 @@ internal static class XPathTokenizer
                 int uriStart = i + 2;
                 int k = XPathLexer.FindBracedUriEnd(expr, i, out var uriClosed, out var hasBrace, out var ambiguous);
                 malformed |= !uriClosed || hasBrace || ambiguous;
-                string uri = expr.Substring(uriStart, k - uriStart);
+                // XPath 3.0: BracedURILiteral boşluk-normalize edilir (Saxon da kırpar) → Q{ fn }doc = fn:doc.
+                string uri = XsltSafetyNamespaces.NormalizeNamespaceUri(expr.Substring(uriStart, k - uriStart));
                 k = uriClosed ? k + 1 : k; // '}' atla
                 int localStart = k;
                 while (k < n && IsNcNameChar(expr[k])) k++;

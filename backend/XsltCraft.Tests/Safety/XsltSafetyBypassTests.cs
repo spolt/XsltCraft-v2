@@ -336,6 +336,66 @@ public class XsltSafetyBypassTests
     public void UserFunctionInOwnNs_StillAllowed() =>
         Assert.Empty(Codes(WithFunction("my:f", "xmlns:my=\"urn:my\"", "my:f()")));
 
+    // ── G1 kapanış: ad alanı URI'si boşluk normalizasyonu (Saxon URI'yi kırpar) ───
+
+    [Fact]
+    public void WhitespaceJavaNs_UserFunction_DoesNotWhitelist()
+    {
+        var xslt = WithFunction("j:x", "xmlns:j=\" java:java.lang.System\"",
+            "Q{ java:java.lang.System}getProperty('user.home')");
+        AssertSecurity(xslt, "ForbiddenFunctionNamespace");
+        AssertSecurity(xslt, "ForbiddenNamespace"); // tanımın kendisi
+    }
+
+    [Fact]
+    public void WhitespaceSaxonNs_UserFunction_DoesNotWhitelist()
+    {
+        var xslt = WithFunction("s:x", "xmlns:s=\" http://saxon.sf.net/\"", "Q{ http://saxon.sf.net/}eval('1')");
+        AssertSecurity(xslt, "ForbiddenFunctionNamespace");
+        AssertSecurity(xslt, "ForbiddenNamespace");
+    }
+
+    [Theory]
+    [InlineData("f:x", "xmlns:f=\"http://www.w3.org/2005/xpath-functions \"")]
+    [InlineData("Q{ http://www.w3.org/2005/xpath-functions}x", "")]
+    public void WhitespaceFnNs_UserFunction_IsReserved(string fnName, string nsDecl)
+    {
+        var xslt = WithFunction(fnName, nsDecl, "Q{http://www.w3.org/2005/xpath-functions }doc('x')");
+        AssertSecurity(xslt, "ReservedFunctionNamespace");
+        AssertSecurity(xslt, "ForbiddenFunction"); // fn ad alanı kullanıcı kümesine girmedi
+    }
+
+    [Fact]
+    public void EQNameWhitespaceUri_FnDoc_IsForbidden()
+    {
+        AssertSecurity(Wrap("<xsl:copy-of select=\"Q{ http://www.w3.org/2005/xpath-functions }doc('x')\"/>"),
+            "ForbiddenFunction");
+        AssertSecurity(Wrap("<a href=\"{Q{&#9;http://www.w3.org/2005/xpath-functions&#10;}doc('x')}\"/>"),
+            "ForbiddenFunction");
+    }
+
+    [Fact]
+    public void EQNameWhitespaceUri_Java_IsForbidden() =>
+        AssertSecurity(Wrap("<xsl:value-of select=\"Q{  java:java.lang.System }getProperty('user.home')\"/>"),
+            "ForbiddenFunctionNamespace");
+
+    /// <summary>Normalizasyon sonrası iç boşluk kalan URI kullanıcı fonksiyonu barındıramaz (fail-closed).</summary>
+    [Fact]
+    public void InnerWhitespaceUri_UserFunction_IsNotWhitelisted() =>
+        AssertSecurity(WithFunction("my:f", "xmlns:my=\"urn:a  b\"", "my:f()"), "ForbiddenFunctionNamespace");
+
+    [Fact]
+    public void WhitespaceOwnNs_UserFunction_StillAllowed() =>
+        Assert.Empty(Codes(WithFunction("my:f", "xmlns:my=\" urn:my \"", "Q{urn:my}f()")));
+
+    [Theory]
+    [InlineData(" http://saxon.sf.net/ ", "http://saxon.sf.net/")]
+    [InlineData("\t\r\nurn:a \t b\n", "urn:a b")]
+    [InlineData("urn:x", "urn:x")]
+    [InlineData("   ", "")]
+    public void NormalizeNamespaceUri_TrimsAndCollapses(string raw, string expected) =>
+        Assert.Equal(expected, XsltSafetyNamespaces.NormalizeNamespaceUri(raw));
+
     // ── G1 düzeltmesi: boolean öznitelik (expand-text / static) fail-closed ─────
 
     [Fact]
