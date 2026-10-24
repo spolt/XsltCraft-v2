@@ -304,17 +304,28 @@ public class XsltWorkerPoolTests
     }
 
     [Fact]
-    public async Task RenderAndValidate_EngineUnavailableUntilW2()
+    public async Task RenderAndValidate_EnginesLoaded()
     {
+        // W2 (T2.2): motorlar yüklü — render/validate artık EngineUnavailable dönmez.
         await using var h = await PoolHarness.StartAsync(testOps: false);
+        const string Xslt = "<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"http://www.w3.org/1999/XSL/Transform\"><xsl:template match=\"/\">ok</xsl:template></xsl:stylesheet>";
 
-        var render = await h.Pool.ExecuteAsync(new XsltWorkerRequest(WorkerOps.Render, WorkerEngines.Saxon, HashA, ["<xsl:stylesheet/>", "<a/>"]));
-        var validate = await h.Pool.ExecuteAsync(new XsltWorkerRequest(WorkerOps.Validate, WorkerEngines.DotNet, HashA, ["<xsl:stylesheet/>"]));
+        var render = await h.Pool.ExecuteAsync(new XsltWorkerRequest(WorkerOps.Render, WorkerEngines.Saxon, HashA, [Xslt, "<a/>"]));
+        var validate = await h.Pool.ExecuteAsync(new XsltWorkerRequest(WorkerOps.Validate, WorkerEngines.DotNet, HashA, [Xslt]));
 
-        Assert.Equal(WorkerFailureKinds.EngineUnavailable, render.FailureKind);
-        Assert.Equal(WorkerErrorCodes.EngineNotLoaded, render.ErrorCode);
-        Assert.Equal(WorkerFailureKinds.EngineUnavailable, validate.FailureKind);
+        // HashA gövdenin özeti değil → worker bütünlük denetimiyle reddeder (önbelleğe yazmadan); worker sağlıklı.
+        Assert.Equal(WorkerFailureKinds.EngineInternal, render.FailureKind);
+        Assert.Equal("worker.sha256_mismatch", render.ErrorCode);
+
+        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Xslt)));
+        var okRender = await h.Pool.ExecuteAsync(new XsltWorkerRequest(WorkerOps.Render, WorkerEngines.Saxon, sha, [Xslt, "<a/>"]));
+        var okValidate = await h.Pool.ExecuteAsync(new XsltWorkerRequest(WorkerOps.Validate, WorkerEngines.DotNet, sha, [Xslt]));
+
+        Assert.True(okRender.Ok, okRender.Response.Header.Failure?.Message);
+        Assert.Contains("ok", okRender.Response.Output);
+        Assert.True(okValidate.Ok, okValidate.Response.Header.Failure?.Message);
         Assert.Equal(render.WorkerPid, validate.WorkerPid); // worker sağlıklı kaldı
+        Assert.Equal(render.WorkerPid, okValidate.WorkerPid);
     }
 
     [Fact]
