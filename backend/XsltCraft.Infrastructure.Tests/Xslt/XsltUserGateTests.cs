@@ -39,7 +39,7 @@ public sealed class XsltUserGateTests
     [Fact]
     public void UserGate_SecondConcurrent_UserBusy()
     {
-        var gate = Create();
+        var gate = Create(new XsltUserGateOptions { MaxIsolatedConcurrentPerUser = 4 }); // yalnız şerit sınırı ölçülür
         var first = Acquire(gate, Alice, XsltGateLane.Raw);
 
         var denial = Deny(gate, Alice, XsltGateLane.Raw);
@@ -61,9 +61,36 @@ public sealed class XsltUserGateTests
     }
 
     [Fact]
+    public void IsolatedTotalCap_AcrossLanes_UserBusy()
+    {
+        var gate = Create();
+        var raw = Acquire(gate, Alice, XsltGateLane.Raw);
+
+        // Farklı şerit ama aynı izole yer: toplam sınır (varsayılan 1) → UserBusy.
+        Assert.Equal(XsltUserGate.BusyCode, Deny(gate, Alice, XsltGateLane.UserTemplate).ErrorCode);
+        Assert.Equal(XsltUserGate.BusyCode, Deny(gate, Alice, XsltGateLane.Grid, XsltExecutionPlace.Isolated).ErrorCode);
+
+        // Validate (yalnız derleme) ve süreç içi grid toplamdan muaf; başka kullanıcı etkilenmez.
+        using (Acquire(gate, Alice, XsltGateLane.Validate))
+        using (Acquire(gate, Alice, XsltGateLane.Grid, XsltExecutionPlace.InProcess))
+        using (Acquire(gate, Bob, XsltGateLane.UserTemplate))
+        {
+        }
+
+        raw.Dispose();
+        using (Acquire(gate, Alice, XsltGateLane.UserTemplate))
+            Deny(gate, Alice, XsltGateLane.Raw);
+
+        var two = Create(new XsltUserGateOptions { MaxIsolatedConcurrentPerUser = 2 });
+        using var a = Acquire(two, Alice, XsltGateLane.Raw);
+        using var b = Acquire(two, Alice, XsltGateLane.UserTemplate);
+        Deny(two, Alice, XsltGateLane.Grid, XsltExecutionPlace.Isolated);
+    }
+
+    [Fact]
     public void ConfiguredConcurrency_IsHonored()
     {
-        var gate = Create(new XsltUserGateOptions { UserTemplateMaxConcurrent = 2 });
+        var gate = Create(new XsltUserGateOptions { UserTemplateMaxConcurrent = 2, MaxIsolatedConcurrentPerUser = 2 });
 
         using var a = Acquire(gate, Alice, XsltGateLane.UserTemplate);
         using var b = Acquire(gate, Alice, XsltGateLane.UserTemplate);
@@ -90,9 +117,8 @@ public sealed class XsltUserGateTests
         Deny(gate, Alice, XsltGateLane.Validate);
         Deny(gate, Alice, XsltGateLane.UserTemplate);
         Deny(gate, Alice, XsltGateLane.Grid, XsltExecutionPlace.Isolated); // script'li grid de worker'da
-        using (Acquire(gate, Alice, XsltGateLane.Grid, XsltExecutionPlace.InProcess))
-        {
-        }
+        // Süreç içi grid de kapalı: bozulmuş modda worker'a gidebilir (G2 #7, fail-closed).
+        Deny(gate, Alice, XsltGateLane.Grid, XsltExecutionPlace.InProcess);
 
         _time.Advance(TimeSpan.FromMinutes(10) - TimeSpan.FromSeconds(1));
         Assert.Equal(TimeSpan.FromSeconds(1), Deny(gate, Alice, XsltGateLane.Raw).RetryAfter);
@@ -182,9 +208,7 @@ public sealed class XsltUserGateTests
             Run(gate, Bob, XsltGateLane.Validate, XsltFailureKind.Timeout);
 
         Deny(gate, Bob, XsltGateLane.Raw);
-        using (Acquire(gate, Bob, XsltGateLane.Grid, XsltExecutionPlace.InProcess))
-        {
-        }
+        Deny(gate, Bob, XsltGateLane.Grid, XsltExecutionPlace.InProcess); // G2 #7: grid iki yerin bloğuna bakar
 
         Deny(gate, Alice, XsltGateLane.Raw); // Alice'in kendi izni
         using (Acquire(gate, Alice, XsltGateLane.Validate))

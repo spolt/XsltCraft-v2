@@ -21,12 +21,10 @@ public sealed class WorkerIsolationTests(ITestOutputHelper output)
 
     [Theory]
     [InlineData(nameof(IsolationVectors.InlineFunctionRecursion))]
-    [InlineData(nameof(IsolationVectors.StaticParamInlineRecursion))]
-    [InlineData(nameof(IsolationVectors.ShadowSelectInline))]
     public async Task InlineFunctionRecursion_Unscreened_RejectedAtCompileByXPath20(string vector)
     {
         // G0'da 64 MB'ta bile süreci düşüren satır içi fn özyinelemesi: XPATH_VERSION_FOR_XSLT=20 → derlemede XPST0003,
-        // hiç çalışmaz (static param / gölge _select derleme anı dahil). Worker ölmez. use-when İSTİSNA → ayrı test.
+        // hiç çalışmaz. Worker ölmez. Statik ifadeler (use-when / static / gölge _*) → ayrı test (ön okuma reddi).
         await using var h = await PoolHarness.StartAsync();
         var xslt = (string)typeof(IsolationVectors).GetField(vector)!.GetValue(null)!;
 
@@ -37,19 +35,23 @@ public sealed class WorkerIsolationTests(ITestOutputHelper output)
         await AssertSameWorkerHealthy(h, result);
     }
 
-    [Fact]
-    public async Task UseWhenInlineRecursion_Unscreened_CrashesWorker_PoolSurvives()
+    [Theory]
+    [InlineData(nameof(IsolationVectors.UseWhenInlineRecursion))]
+    [InlineData(nameof(IsolationVectors.StaticParamInlineRecursion))]
+    [InlineData(nameof(IsolationVectors.ShadowSelectInline))]
+    public async Task UseWhenInlineRecursion_Unscreened_CrashesWorker_PoolSurvives(string vector)
     {
-        // T2.3 BULGUSU: use-when ifadeleri XPATH_VERSION_FOR_XSLT=20 tavanına TABİ DEĞİL (Saxon use-when'i kendi statik
-        // bağlamında XPath 3.1 ile derler). Satır içi fn özyinelemesi DERLEME anında 64 MB motor thread'ini taşırır →
-        // worker süreci ölür. Engel yalnız XsltSafety (use-when yasak) + süreç izolasyonu. Api ayakta, havuz toparlanır.
-        await using var h = await PoolHarness.StartAsync(o => o.RenderTimeoutMs = 30_000);
+        // T2.3 BULGUSU (kapatıldı, G2): use-when ifadeleri XPATH_VERSION_FOR_XSLT=20 tavanına tabi değildi ve özyinelemeli
+        // sürüm worker'ı düşürüyordu. Artık motor ön okumasında statik ifade reddi (Security) — Saxon'a hiç ulaşmaz.
+        // Ad tarihsel (izlenebilirlik); beklenti: Security + aynı worker sağlıklı.
+        await using var h = await PoolHarness.StartAsync();
+        var xslt = (string)typeof(IsolationVectors).GetField(vector)!.GetValue(null)!;
 
-        var result = await Unscreened(h, IsolationVectors.UseWhenInlineRecursion, timeout: TimeSpan.FromSeconds(30));
+        var result = await Unscreened(h, xslt);
 
-        Assert.Equal(WorkerFailureKinds.EngineCrashed, result.FailureKind);
-        Assert.Equal(WorkerErrorCodes.Crashed, result.ErrorCode);
-        await AssertPoolRecovered(h, result);
+        Assert.Equal(WorkerFailureKinds.Security, result.FailureKind);
+        Assert.Equal("SandboxStylesheetStaticExpression", result.ErrorCode);
+        await AssertSameWorkerHealthy(h, result);
     }
 
     // ---- çalışma anı: listener / regex ---------------------------------------------------------
@@ -108,8 +110,7 @@ public sealed class WorkerIsolationTests(ITestOutputHelper output)
         var result = await Unscreened(h, IsolationVectors.NestedLre(50_000));
 
         Assert.Equal(WorkerFailureKinds.LimitExceeded, result.FailureKind);
-        // Ön okuma (Application LimitedXmlReader) kod vermiyor (LimitCodes.StylesheetDepth kullanılmıyor) — T2.3 notu.
-        Assert.Null(result.ErrorCode);
+        Assert.Equal("LimitStylesheetDepth", result.ErrorCode); // G2 #4: ön okuma derinlik ihlali kodlu
         Assert.Contains("256", result.Response.Header.Failure!.Message, StringComparison.Ordinal);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), $"süre {sw.Elapsed}");
         await AssertSameWorkerHealthy(h, result);

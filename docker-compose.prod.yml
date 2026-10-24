@@ -65,7 +65,7 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    pids_limit: 256
+    pids_limit: 512
     mem_limit: 5g
     depends_on:
       db:

@@ -156,6 +156,73 @@ public sealed class InProcessXsltHostTests : IDisposable
     }
 
     [Fact]
+    public async Task CanceledRunaway_ReportsTimeoutToGate()
+    {
+        // G2 reviewer Y1: istemci iptali işi kaçağa çevirince kesici bunu süreç içi Timeout sayar — yoksa iptal
+        // tekrarıyla tek kullanıcı API'yi bozulmuş modda tutabilirdi.
+        var (host, guard) = Create(new XsltGridOptions { MaxConcurrent = 4, QueueWaitMs = 0, RunawayMax = 5 });
+        var options = new XsltExecutionOptions();
+        options.UserGate.InProcessAbuseThreshold = 1;
+        var gate = new XsltUserGate(Options.Create(options), TimeProvider.System, NullLogger<XsltUserGate>.Instance);
+        var service = new XsltExecutionService(options, new DefaultXsltSafetyScanner(), gate, _isolated, host);
+        var user = Guid.NewGuid();
+
+        using var cts = new CancellationTokenSource();
+        var running = service.ExecuteAsync(GridRun(slow: true, user), cts.Token);
+        await Eventually(() => guard.ActiveCount == 1);
+        await cts.CancelAsync();
+
+        var ex = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+        Assert.IsType<XsltRunawayCanceledException>(ex);
+        _controlled.Release.Set();
+        await Eventually(() => guard.ActiveCount == 0);
+
+        var next = await service.ExecuteAsync(GridRun(slow: false, user));
+
+        Assert.Equal(XsltFailureKind.UserBusy, next.Diagnostic!.Kind);
+        Assert.Equal(XsltUserGate.BlockedCode, next.Diagnostic.ErrorCode);
+        Assert.NotNull(next.RetryAfter);
+    }
+
+    [Fact]
+    public async Task CanceledRunaway_HoldsUserSlotUntilFinished()
+    {
+        var (host, guard) = Create(new XsltGridOptions { MaxConcurrent = 4, QueueWaitMs = 0, RunawayMax = 5 });
+        var options = new XsltExecutionOptions();
+        var gate = new XsltUserGate(Options.Create(options), TimeProvider.System, NullLogger<XsltUserGate>.Instance);
+        var service = new XsltExecutionService(options, new DefaultXsltSafetyScanner(), gate, _isolated, host);
+        var user = Guid.NewGuid();
+
+        using var cts = new CancellationTokenSource();
+        var running = service.ExecuteAsync(GridRun(slow: true, user), cts.Token);
+        await Eventually(() => guard.ActiveCount == 1);
+        await cts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+
+        // Kaçak sürerken aynı kullanıcının yeni grid isteği: izin hâlâ kaçakta → UserBusy (guard'a ulaşmaz).
+        var busy = await service.ExecuteAsync(GridRun(slow: false, user));
+        Assert.Equal(XsltFailureKind.UserBusy, busy.Diagnostic!.Kind);
+        Assert.Equal(XsltUserGate.BusyCode, busy.Diagnostic.ErrorCode);
+        Assert.Equal(0, _controlled.FastTransforms);
+
+        _controlled.Release.Set();
+        await Eventually(() => guard.ActiveCount == 0);
+        XsltRunResult after = busy;
+        await Eventually(() =>
+        {
+            after = service.ExecuteAsync(GridRun(slow: false, user)).GetAwaiter().GetResult();
+            return after.Succeeded;
+        });
+        Assert.Contains("<p>a</p>", after.Html);
+    }
+
+    private static XsltRunRequest GridRun(bool slow, Guid user) => new(XsltRoute.Grid,
+        Stylesheet("1.0", slow
+            ? ControlledEngine.SlowMarker + "<xsl:template match=\"/\"/>"
+            : "<xsl:template match=\"/\"><xsl:for-each select=\"//i\"><p><xsl:value-of select=\".\"/></p></xsl:for-each></xsl:template>"),
+        Xml, XsltOperation.Render, user);
+
+    [Fact]
     public async Task DegradedPlace_ReportedToGate()
     {
         // Bozulmuş modda grid worker'a gider; worker Timeout'ları İZOLE eşiğiyle (3) sayılmalı, süreç içi (2) değil.
@@ -182,12 +249,11 @@ public sealed class InProcessXsltHostTests : IDisposable
         Assert.All(_isolated.Requests, r => Assert.Equal(user, r.UserId));
     }
 
-    [Fact(Skip = "T3.1'de kapatılacak — kapı blok kontrolü gerçek yere göre")]
+    [Fact]
     public async Task IsolatedBlockedUser_CannotReachWorker_ViaDegradedGrid()
     {
-        // G1 KALINTISI (T2.4b notu, açık): kapı blok kontrolünü İSTENEN yere (grid → InProcess) göre yapıyor. Raw'da
-        // 3 kill ile İZOLE yerde bloklanan kullanıcı, süreç içi host bozulmuş moddayken grid isteğiyle worker'a ulaşıyor.
-        // Skip'siz koşu (T2.3, kırmızı doğrulandı): grid.Diagnostic.Kind = Timeout (istek worker'a gitti), UserBusy değil.
+        // G1 kalıntısı (G2 #7, kapatıldı): Raw'da İZOLE yerde bloklanan kullanıcı, süreç içi host bozulmuş moddayken grid
+        // isteğiyle worker'a ulaşıyordu. Kapı Grid şeridinde iki yerin bloğuna da bakar (fail-closed).
         _isolated.Respond = r => new XsltHostResult(null, r.Engine, null, false,
             new XsltDiagnostic("süre", 0, 0, XsltFailureKind.Timeout, r.Engine));
         var (host, guard) = Create();
@@ -209,7 +275,7 @@ public sealed class InProcessXsltHostTests : IDisposable
 
         var grid = await service.ExecuteAsync(new XsltRunRequest(XsltRoute.Grid, xslt, Xml, XsltOperation.Render, user));
 
-        // Beklenen (T3.1 sonrası): grid isteği de FİİLÎ yer (izole) bloklu olduğu için reddedilir, worker'a gitmez.
+        // Grid isteği de (bozulmuş modda fiilî yer izole olabileceğinden) reddedilir, worker'a gitmez.
         Assert.Equal(XsltFailureKind.UserBusy, grid.Diagnostic!.Kind);
         Assert.Equal(reachedWorker, _isolated.Requests.Count);
     }

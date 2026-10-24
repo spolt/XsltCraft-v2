@@ -5,6 +5,19 @@ using System.Text;
 namespace XsltCraft.Xslt.Saxon.Tests.Support;
 
 /// <summary>
+/// Java (IKVM) ortam değişkenlerini ilk <c>System.getenv</c>'de önbelleğe alır; paralel koleksiyonlardan biri Saxon'u
+/// fikstürden önce kurarsa secret env görünmez ve kontrol (sızma) testleri sıraya bağlı kırılır. Bu yüzden derleme
+/// yüklenirken, herhangi bir Java kodundan önce ayarlanır.
+/// </summary>
+internal static class SecretEnvInitializer
+{
+#pragma warning disable CA2255 // Test derlemesi: Java env önbelleğinden önce çalışmalı.
+    [System.Runtime.CompilerServices.ModuleInitializer]
+#pragma warning restore CA2255
+    internal static void Init() => Environment.SetEnvironmentVariable(SecretFixture.EnvName, SecretFixture.Marker);
+}
+
+/// <summary>
 /// Gerçek erişim kanıtı için geçici "secret" dosyalar + iki loopback dinleyici:
 /// <list type="bullet">
 /// <item><see cref="HttpUri"/>: bağlantıyı kabul edip kapatan "sessiz" TCP dinleyici (yalnız sayaç).</item>

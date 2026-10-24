@@ -35,10 +35,15 @@ public sealed class InProcessXsltEngines
     /// <summary>Üretim kurulumu: .NET + Saxon <see cref="SaxonEngineOptions.InProcessGrid"/> (stylesheet karakter sınırı rotaya hizalı).</summary>
     public static InProcessXsltEngines CreateDefault(int maxStylesheetChars) => new(
         new DotNetXsltEngine(),
-        () => new SaxonXsltEngine(SaxonEngineOptions.InProcessGrid with
+        () =>
         {
-            MaxStylesheetCharacters = Math.Max(SaxonEngineOptions.InProcessGrid.MaxStylesheetCharacters, maxStylesheetChars),
-        }));
+            // İlk Java kodu çalışmadan: IKVM System.out/err fd 1/2'ye doğrudan yazar → yutulur (worker JavaStdio karşılığı).
+            SaxonProcessStdio.DiscardJavaStdio();
+            return new SaxonXsltEngine(SaxonEngineOptions.InProcessGrid with
+            {
+                MaxStylesheetCharacters = Math.Max(SaxonEngineOptions.InProcessGrid.MaxStylesheetCharacters, maxStylesheetChars),
+            });
+        });
 
     public bool IsSaxonLoaded => Volatile.Read(ref _saxon) is not null;
 

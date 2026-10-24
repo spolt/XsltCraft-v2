@@ -91,34 +91,54 @@ public sealed class FullSandboxMatrixTests(SecretFixture fx, ITestOutputHelper o
     public void XslEvaluate_RejectedByDisableXslEvaluateLayer_WhenXPath20Absent()
     {
         // XPath20 yokken ikinci (bağımsız) katman: DISABLE_XSL_EVALUATE → ÇALIŞMA ANINDA XTDE3175 ("not available in this
-        // configuration"). NOT (T2.3 bulgusu): SaxonDiagnostics bu metni Saxon politika reddi olarak tanımıyor → kind Runtime
-        // (Security değil). Sızıntı yok; yalnız sınıflandırma. Eşleme düzeltilirse beklenti (Security, SandboxSaxonPolicy) olur.
+        // configuration") → Saxon politika reddi (Security, SandboxSaxonPolicy).
         var xslt = Stylesheet("<xsl:evaluate xpath=\"'1+1'\"/>", version: "3.0");
         var r = LayeredSandbox.Create(SandboxLayer.Full & ~SandboxLayer.XPath20).Run(xslt);
         output.WriteLine(r.ToString());
-        Assert.Equal((XsltFailureKind.Runtime, "XTDE3175", "runtime"), (r.Diagnostic?.Kind, r.Diagnostic?.ErrorCode, r.Phase));
+        Assert.Equal((XsltFailureKind.Security, SandboxCodes.SaxonPolicy, "runtime"), (r.Diagnostic?.Kind, r.Diagnostic?.ErrorCode, r.Phase));
 
         // Kontrol: iki katman da yoksa xsl:evaluate gerçekten çalışır (katmanlar boşuna değil).
         var open = LayeredSandbox.Create(SandboxLayer.Full & ~SandboxLayer.XPath20 & ~SandboxLayer.Dynamic).Run(xslt);
         Assert.Equal("<out>2</out>", Body(open));
     }
 
-    [Fact]
-    public void UseWhen_InlineFunction_NotCoveredByXPath20Ceiling_ScannerIsOnlyGate()
+    private const string RecursiveStatic = "let $f := function($g, $n) { 1 + $g($g, $n + 1) } return $f($f, 0) gt 0";
+
+    public static TheoryData<string, bool> StaticExpressionVectors => new()
     {
-        // T2.3 BULGUSU: XPATH_VERSION_FOR_XSLT=20 use-when ifadelerine uygulanmıyor — satır içi function() / let derleniyor.
-        // (Özyinelemeli sürümü worker'ı çökertir: WorkerIsolationTests.UseWhenInlineRecursion_Unscreened_CrashesWorker_PoolSurvives.)
-        // Burada ZARARSIZ sürüm: derleme başarılı olmamalıydı ama oluyor; tek kapı XsltSafety (UseWhen → Security).
-        var xslt = Stylesheet("<x/>", top: "<xsl:template name=\"t\" use-when=\"let $f := function($b) { $b } return $f(true())\"/>");
-        Assert.Equal("<out><x/></out>", Render(xslt));
-        Assert.Equal("<out><x/></out>", Render(xslt, engine: GridEngine)); // Api süreci içi profil de aynı
+        { "use-when", false }, { "use-when", true },
+        { "lre-xsl-use-when", false }, { "lre-xsl-use-when", true },
+        { "shadow-use-when", false }, { "shadow-use-when", true },
+    };
 
-        var report = XsltCraft.Application.Validation.XsltSafety.Scan(xslt, XsltCraft.Application.Validation.Safety.XsltSafetyMode.Execute);
-        Assert.Contains(report.Findings, f => f.Code == "UseWhen");
+    [Theory]
+    [MemberData(nameof(StaticExpressionVectors))]
+    public void StaticExpression_RejectedBeforeSaxon_OnSmallStack(string variant, bool grid)
+    {
+        // G2 security #1: use-when / gölge _use-when XPath 3.1 ile derlenir (XPATH_VERSION_FOR_XSLT=20 tavanı dışı);
+        // özyinelemeli sürüm 16 MB'ta (Api süreç içi profil) derlemede yığını taşırıp süreci öldürürdü. Artık .NET ön
+        // okumasında motor düzeyinde Security (XsltSafety'den bağımsız). 16 MB thread: süreç ölmez.
+        var body = variant switch
+        {
+            "use-when" => $"<xsl:template match=\"/\" use-when=\"{RecursiveStatic}\"><o/></xsl:template>",
+            "lre-xsl-use-when" => $"<xsl:template name=\"t\"><o xsl:use-when=\"{RecursiveStatic}\"/></xsl:template>",
+            _ => "<xsl:template match=\"/\" _use-when=\"{concat('let $f := func', 'tion($g, $n) ', codepoints-to-string(123), ' 1 + $g($g, $n + 1) ', codepoints-to-string(125), ' return $f($f, 0) gt 0')}\"><o/></xsl:template>",
+        };
+        var xslt = Stylesheet("<x/>", top: body);
 
-        // Karşılaştırma: aynı ifade normal select'te tavana takılır.
-        var d = Fail(Stylesheet("<xsl:value-of select=\"let $f := function($b) { $b } return $f(true())\"/>"));
-        Assert.Equal((XsltFailureKind.Unsupported, "XPST0003"), (d.Kind, d.ErrorCode));
+        var d = OnBigStack(() => Fail(xslt, engine: grid ? GridEngine : Engine), stackMb: 16);
+
+        Assert.Equal((XsltFailureKind.Security, SandboxCodes.StylesheetStaticExpression), (d.Kind, d.ErrorCode));
+    }
+
+    [Theory]
+    [InlineData("no")]
+    [InlineData("false")]
+    [InlineData("0")]
+    public void StaticNo_Allowed(string value)
+    {
+        var xslt = Stylesheet("<xsl:value-of select=\"$v\"/>", top: $"<xsl:variable name=\"v\" static=\"{value}\" select=\"'ok'\"/>", version: "3.0");
+        Assert.Equal("<out>ok</out>", Render(xslt));
     }
 
     [Fact]
@@ -157,7 +177,8 @@ public sealed class FullSandboxMatrixTests(SecretFixture fx, ITestOutputHelper o
         Assert.Equal(pc.getParseOptions().getParserFeatures().ToString(), tc.getParseOptions().getParserFeatures().ToString());
 
         // Davranışsal eşdeğerlik: tüm vektörlerde aynı kind/kod.
-        foreach (var v in K3Vectors.All)
+        // Statik ifade reddi Saxon öncesi .NET ön okumasıdır (seam'de kapalı — Saxon katmanları tek tek ölçülür).
+        foreach (var v in K3Vectors.All.Where(v => v.Code != SandboxCodes.StylesheetStaticExpression))
         {
             var xml = v.Xml?.Invoke(fx) ?? "<r/>";
             var p = TryRender(v.Xslt(fx), xml, Engine);

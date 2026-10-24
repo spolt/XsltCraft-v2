@@ -32,6 +32,12 @@ public sealed record XsltHostResult(
     /// </summary>
     public XsltExecutionPlace? Place { get; init; }
 
+    /// <summary>
+    /// Süreç içi süre aşımında arka planda süren kaçak iş; bitince tamamlanır. Çağıran kullanıcı iznini o ana dek
+    /// tutmalıdır (kaçak + yeni istek = kullanıcı başı eşzamanlılık delinmesi).
+    /// </summary>
+    public Task? Runaway { get; init; }
+
     public static XsltHostResult Failed(XsltDiagnostic diagnostic, XsltEngineKind engine) =>
         new(null, engine, null, false, diagnostic);
 }

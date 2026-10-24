@@ -44,6 +44,8 @@ internal static class K3Vectors
     private const string Col = SandboxCodes.CollectionDenied;
     private const string Policy = SandboxCodes.SaxonPolicy;
     private const string Default = "Saxon varsayılanı";
+    private const string Static = "Statik ifade reddi (.NET ön okuma)";
+    private const string Stat = SandboxCodes.StylesheetStaticExpression;
 
     public static string Copy(string expr) => Stylesheet($"<xsl:copy-of select=\"{expr}\"/>", extraNs: MapNs);
 
@@ -107,6 +109,9 @@ internal static class K3Vectors
         new("transform(stylesheet-text) iç doc()", Resolver, f => Transform($"<xsl:copy-of select=\"doc('{F(f.SecretXml)}')\"/>"), XsltFailureKind.Security, Res),
         new("transform(stylesheet-text) iç unparsed-text()", Resolver, f => Transform($"<xsl:value-of select=\"unparsed-text('{F(f.SecretTxt)}')\"/>"), XsltFailureKind.Security, Txt),
         new("transform(stylesheet-text) iç env", Env, f => Transform($"[<xsl:value-of select=\"environment-variable('{SecretFixture.EnvName}')\"/>]"), Output: "<out><r>[]</r></out>"),
+        // G2 security (Orta): transform() iç stylesheet'inde iç DOCTYPE/iç entity motor katmanında İŞLENİR (NoDtd yalnız dış
+        // stylesheet + parse-xml'i kapsar). Dosya/ağ yok (harici entity'ler kapalı); engelleyen TEK KAPI XsltSafety (transform yasak).
+        new("transform(stylesheet-text) iç DOCTYPE", "YOK — tek kapı XsltSafety", f => Copy("map:get(transform(map:merge((map:entry('stylesheet-text', '" + SecurityElement.Escape("<!DOCTYPE xsl:stylesheet [<!ENTITY e \"INNER_DTD_EXPANDED\">]>") + Inner("&e;") + "'), map:entry('source-node', /)))), 'output')"), Output: "<out><r>INNER_DTD_EXPANDED</r></out>"),
 
         // ---- XQuery modülü / şema / paket --------------------------------------------------------
         new("load-xquery-module", Resolver, f => Value($"map:get(load-xquery-module('urn:m', map:entry('location-hints', '{F(f.SecretXq)}')), 'functions')"), XsltFailureKind.Security, Res),
@@ -126,7 +131,7 @@ internal static class K3Vectors
         // ---- ortam / sistem özellikleri ----------------------------------------------------------
         new("environment-variable(secret)", Env, f => Value($"environment-variable('{SecretFixture.EnvName}')"), Output: "<out>[]</out>"),
         new("available-environment-variables()", Env, f => Value("count(available-environment-variables())"), Output: "<out>[0]</out>"),
-        new("static değişken environment-variable", Env, f => Stylesheet("[<xsl:value-of select=\"$s\"/>]", top: $"<xsl:variable name=\"s\" static=\"yes\" select=\"environment-variable('{SecretFixture.EnvName}')\"/>", version: "3.0"), Output: "<out>[]</out>"),
+        new("static değişken environment-variable", Static, f => Stylesheet("[<xsl:value-of select=\"$s\"/>]", top: $"<xsl:variable name=\"s\" static=\"yes\" select=\"environment-variable('{SecretFixture.EnvName}')\"/>", version: "3.0"), XsltFailureKind.Security, Stat),
         new("function-lookup(environment-variable)", XPath20 + " (dinamik çağrı)", f => Value($"function-lookup(QName('http://www.w3.org/2005/xpath-functions','environment-variable'), 1)('{SecretFixture.EnvName}')"), XsltFailureKind.Unsupported, "XPST0003"),
         new("system-property(user.dir)", Dynamic, f => Value("system-property('user.dir')"), Output: "<out>[]</out>"),
         new("system-property(java.home)", Dynamic, f => Value("system-property('java.home')"), Output: "<out>[]</out>"),
@@ -135,9 +140,9 @@ internal static class K3Vectors
 
         // ---- dinamik kod / uzantılar -------------------------------------------------------------
         new("xsl:evaluate", XPath20, f => Stylesheet($"<xsl:evaluate xpath=\"'doc(&quot;{F(f.SecretXml)}&quot;)'\"/>", version: "3.0"), XsltFailureKind.Unsupported, "XPST0003"),
-        new("reflexive Q{java:}", XPath20 + " (EQName yok)", f => Value("Q{java:java.lang.System}getProperty('user.dir')"), XsltFailureKind.Compile, "XPST0003"),
+        new("reflexive Q{java:}", XPath20 + " (EQName yok)", f => Value("Q{java:java.lang.System}getProperty('user.dir')"), XsltFailureKind.Unsupported, "XPST0003"),
         new("reflexive java: önekli", Dynamic, f => Value("j:getProperty('user.dir')").Replace("<xsl:stylesheet ", "<xsl:stylesheet xmlns:j=\"java:java.lang.System\" ", StringComparison.Ordinal), XsltFailureKind.Compile, "XPST0017"),
-        new("reflexive Q{clitype:}", XPath20 + " (EQName yok)", f => Value("Q{clitype:System.Environment}get_MachineName()"), XsltFailureKind.Compile, "XPST0003"),
+        new("reflexive Q{clitype:}", XPath20 + " (EQName yok)", f => Value("Q{clitype:System.Environment}get_MachineName()"), XsltFailureKind.Unsupported, "XPST0003"),
         new("reflexive clitype: önekli", Dynamic, f => Value("c:get_MachineName()").Replace("<xsl:stylesheet ", "<xsl:stylesheet xmlns:c=\"clitype:System.Environment\" ", StringComparison.Ordinal), XsltFailureKind.Compile, "XPST0017"),
         new("function-available(java:)", Dynamic, f => Value("function-available('j:getProperty', 1)").Replace("<xsl:stylesheet ", "<xsl:stylesheet xmlns:j=\"java:java.lang.System\" ", StringComparison.Ordinal), Output: "<out>[false]</out>"),
         new("saxon:while uzantı komutu", HeOnly, f => Stylesheet("<saxon:while test=\"true()\" xsl:extension-element-prefixes=\"saxon\"><x/></saxon:while>", extraNs: SaxonNs), XsltFailureKind.Runtime, "XTDE1450"),
@@ -145,14 +150,14 @@ internal static class K3Vectors
         new("saxon:next-in-chain", HeOnly, f => Stylesheet("x", top: $"<xsl:output saxon:next-in-chain=\"{F(f.SecretXsl)}\"/>", extraNs: SaxonNs), XsltFailureKind.Compile, "XTSE0020"),
 
         // ---- derleme anı -------------------------------------------------------------------------
-        new("use-when doc() (derleme)", Resolver, f => Stylesheet("<x/>", top: $"<xsl:template name=\"t\" use-when=\"exists(doc('{F(f.SecretXml)}'))\"/>"), XsltFailureKind.Security, Res),
-        new("use-when unparsed-text() (derleme)", Resolver, f => Stylesheet("<x/>", top: $"<xsl:template name=\"t\" use-when=\"unparsed-text('{F(f.SecretTxt)}') = ''\"/>"), XsltFailureKind.Security, Txt),
-        new("static değişken unparsed-text() (derleme)", Resolver, f => Stylesheet("<xsl:value-of select=\"$s\"/>", top: $"<xsl:variable name=\"s\" static=\"yes\" select=\"unparsed-text('{F(f.SecretTxt)}')\"/>", version: "3.0"), XsltFailureKind.Security, Txt),
+        new("use-when doc() (derleme)", Static, f => Stylesheet("<x/>", top: $"<xsl:template name=\"t\" use-when=\"exists(doc('{F(f.SecretXml)}'))\"/>"), XsltFailureKind.Security, Stat),
+        new("use-when unparsed-text() (derleme)", Static, f => Stylesheet("<x/>", top: $"<xsl:template name=\"t\" use-when=\"unparsed-text('{F(f.SecretTxt)}') = ''\"/>"), XsltFailureKind.Security, Stat),
+        new("static değişken unparsed-text() (derleme)", Static, f => Stylesheet("<xsl:value-of select=\"$s\"/>", top: $"<xsl:variable name=\"s\" static=\"yes\" select=\"unparsed-text('{F(f.SecretTxt)}')\"/>", version: "3.0"), XsltFailureKind.Security, Stat),
 
         // ---- dolaylı çağrı biçimleri -------------------------------------------------------------
         new("function-lookup(doc)", XPath20 + " (dinamik çağrı)", f => Copy($"function-lookup(QName('http://www.w3.org/2005/xpath-functions','doc'), 1)('{F(f.SecretXml)}')"), XsltFailureKind.Unsupported, "XPST0003"),
         new("doc#1 adlı referans", XPath20, f => Copy($"doc#1('{F(f.SecretXml)}')"), XsltFailureKind.Unsupported, "XPST0003"),
-        new("Q{fn}doc EQName", XPath20 + " (EQName yok)", f => Copy($"Q{{http://www.w3.org/2005/xpath-functions}}doc('{F(f.SecretXml)}')"), XsltFailureKind.Compile, "XPST0003"),
+        new("Q{fn}doc EQName", XPath20 + " (EQName yok)", f => Copy($"Q{{http://www.w3.org/2005/xpath-functions}}doc('{F(f.SecretXml)}')"), XsltFailureKind.Unsupported, "XPST0003"),
 
         // ---- URI şemaları ------------------------------------------------------------------------
         new("doc(classpath:)", Resolver, f => Copy("doc('classpath:org/xmlresolver/catalog.xml')"), XsltFailureKind.Security, Res),

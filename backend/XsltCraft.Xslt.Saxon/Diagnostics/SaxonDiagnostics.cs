@@ -76,7 +76,8 @@ internal static class SaxonDiagnostics
 
     private static XsltDiagnostic Classify(string? code, string message, int line, int column, XsltFailureKind fallback)
     {
-        if (code == "XPST0003" && IsXPath3Syntax(message))
+        // Q{uri}local EQName (XPath 3.0) — Saxon bazen "XPath 3" demeden XPST0003 verir.
+        if (code == "XPST0003" && (IsXPath3Syntax(message) || message.Contains("Q{", StringComparison.Ordinal)))
             return new XsltDiagnostic(XPath3SyntaxMessage, line, column, XsltFailureKind.Unsupported, XsltEngineKind.Saxon, code);
 
         if (code == "FORX0006" || message.Contains("backtracking", StringComparison.OrdinalIgnoreCase))
@@ -85,7 +86,8 @@ internal static class SaxonDiagnostics
                 XsltFailureKind.LimitExceeded, XsltEngineKind.Saxon, LimitCodes.Regex);
         }
 
-        if (IsSaxonPolicyRejection(message))
+        // XTDE3175: dinamik değerlendirme (xsl:evaluate) bu yapılandırmada kapalı — Saxon politika reddi.
+        if (code == "XTDE3175" || IsSaxonPolicyRejection(message))
         {
             return new XsltDiagnostic(SaxonMessageSanitizer.Clean(message), line, column,
                 XsltFailureKind.Security, XsltEngineKind.Saxon, SandboxCodes.SaxonPolicy);

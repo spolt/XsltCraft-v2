@@ -74,7 +74,8 @@ public sealed class XsltExecutionService : IXsltExecutionService
                 with { RetryAfter = denial.RetryAfter };
         }
 
-        using (lease)
+        var held = lease;
+        try
         {
             var hostRequest = new XsltHostRequest(request.Op, engine, request.Xslt, xml, BuildLimits(routeLimits, cancellationToken))
             {
@@ -91,14 +92,36 @@ public sealed class XsltExecutionService : IXsltExecutionService
             {
                 result = XsltHostResult.Failed(ex.Diagnostic, engine);
             }
+            catch (XsltRunawayCanceledException ex)
+            {
+                // İstemci iptali süreç içi işi kaçağa çevirdi: kesici bunu Timeout sayar (iptal tekrarıyla API bozulmuş
+                // modda tutulamaz — G2 Y1) ve izin kaçak bitene dek tutulur.
+                lease.ReportOutcome(XsltFailureKind.Timeout, XsltExecutionPlace.InProcess);
+                held = HoldUntil(lease, ex.RunawayFinished);
+                throw;
+            }
 
             // Host fiilî yeri bildirebilir (süreç içi host bozulmuş modda worker'a yönlendirir).
             var actualPlace = result.Place ?? place;
             lease.ReportOutcome(result.Diagnostic?.Kind, actualPlace);
+            if (result.Runaway is { } runaway)
+                held = HoldUntil(lease, runaway);
 
             var html = request.Op == XsltOperation.Render && result.Diagnostic is null ? result.Html ?? "" : null;
             return new XsltRunResult(html, result.Engine, result.Timings, result.CacheHit, result.Diagnostic) { Place = actualPlace };
         }
+        finally
+        {
+            held?.Dispose();
+        }
+    }
+
+    /// <summary>İzni kaçak iş bitince bırakır; çağıranın <c>finally</c>'si artık bırakmaz (<c>null</c> döner).</summary>
+    private static IXsltGateLease? HoldUntil(IXsltGateLease lease, Task runaway)
+    {
+        _ = runaway.ContinueWith(static (_, state) => ((IXsltGateLease)state!).Dispose(), lease,
+            CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return null;
     }
 
     // ------------------------------------------------------------------ rota çözümü

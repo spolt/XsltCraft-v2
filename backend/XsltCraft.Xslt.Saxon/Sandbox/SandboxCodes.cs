@@ -21,6 +21,9 @@ public static class SandboxCodes
     /// <summary>Stylesheet'te DOCTYPE/DTD (derleme öncesi .NET okumasında reddedilir).</summary>
     public const string StylesheetDtd = "SandboxStylesheetDtd";
 
+    /// <summary>Statik ifade (use-when, gölge <c>_*</c>, <c>static="yes"</c>) — derleme öncesi .NET okumasında reddedilir.</summary>
+    public const string StylesheetStaticExpression = "SandboxStylesheetStaticExpression";
+
     /// <summary>Saxon'un kendi protokol/özellik reddi (ALLOWED_PROTOCOLS, dinamik değerlendirme kapalı vb.).</summary>
     public const string SaxonPolicy = "SandboxSaxonPolicy";
 }

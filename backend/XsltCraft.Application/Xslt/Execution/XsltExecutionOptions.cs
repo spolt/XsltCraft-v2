@@ -175,6 +175,12 @@ public sealed class XsltUserGateOptions
 
     public int GridMaxConcurrent { get; set; } = 1;
 
+    /// <summary>
+    /// Şeritlerden bağımsız, kullanıcı başı İZOLE yerdeki (worker) toplam eşzamanlı istek (G2 security). Validate
+    /// muaftır (yalnız derleme, kısa süre; editör önizlemeyle paralel çağırır) — kendi şerit sınırıyla kalır.
+    /// </summary>
+    public int MaxIsolatedConcurrentPerUser { get; set; } = 1;
+
     /// <summary>İzole yürütmede pencere içinde bu kadar Timeout/EngineCrashed/MemoryLimit → blok.</summary>
     public int IsolatedAbuseThreshold { get; set; } = 3;
 
@@ -196,7 +202,8 @@ public sealed class XsltUserGateOptions
 
     internal void CollectErrors(List<string> errors)
     {
-        if (RawMaxConcurrent < 1 || ValidateMaxConcurrent < 1 || UserTemplateMaxConcurrent < 1 || GridMaxConcurrent < 1)
+        if (RawMaxConcurrent < 1 || ValidateMaxConcurrent < 1 || UserTemplateMaxConcurrent < 1 || GridMaxConcurrent < 1
+            || MaxIsolatedConcurrentPerUser < 1)
             errors.Add("UserGate eşzamanlılık sınırları ≥ 1 olmalı.");
         if (IsolatedAbuseThreshold < 1 || InProcessAbuseThreshold < 1 || AbuseWindowMinutes < 1 || BlockMinutes < 1)
             errors.Add("UserGate kötüye kullanım ayarları ≥ 1 olmalı.");

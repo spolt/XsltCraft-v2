@@ -111,7 +111,7 @@ internal sealed class LayeredSandbox
         try
         {
             if (Layers.HasFlag(SandboxLayer.NoDtd))
-                StylesheetSource.PreRead(xslt, 256, Options.MaxStylesheetCharacters);
+                StylesheetSource.PreRead(xslt, 256, Options.MaxStylesheetCharacters, screenStaticExpressions: false); // Saxon katmanları tek tek ölçülür; statik ifade reddi üretim motorunda (K3 matrisi)
 
             var compiler = Processor.newXsltCompiler();
             if (Layers.HasFlag(SandboxLayer.Resolvers))

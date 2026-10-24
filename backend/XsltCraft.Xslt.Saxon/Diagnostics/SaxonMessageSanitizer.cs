@@ -20,6 +20,8 @@ internal static partial class SaxonMessageSanitizer
 
         var s = message.Replace('\r', ' ').Replace('\n', ' ');
         s = CausedBy().Replace(s, string.Empty);
+        s = JdkLimitClause().Replace(s, string.Empty);
+        s = JaxpCode().Replace(s, string.Empty);
         s = s.Replace(StylesheetSystemId, "stylesheet", StringComparison.Ordinal)
              .Replace(InputSystemId, "girdi", StringComparison.Ordinal);
         s = Uri().Replace(s, "<uri>");
@@ -61,6 +63,13 @@ internal static partial class SaxonMessageSanitizer
 
     [GeneratedRegex(@"^\s*(?:[A-Z]\w*(?:Exception|Error))\s*:\s*")]
     private static partial Regex ExceptionPrefix();
+
+    // JDK ayrıştırıcı sınır mesajı: "JAXP00010001: ... ; this is the limit imposed by the JDK." (iç ayrıntı).
+    [GeneratedRegex(@"\bJAXP\d*\s*:?\s*")]
+    private static partial Regex JaxpCode();
+
+    [GeneratedRegex(@"[;,]?\s*[^;,.]*imposed by the JDK[^;.]*\.?", RegexOptions.IgnoreCase)]
+    private static partial Regex JdkLimitClause();
 
     [GeneratedRegex(@"\s{2,}")]
     private static partial Regex Whitespace();

@@ -16,7 +16,8 @@ namespace XsltCraft.Infrastructure.Xslt.InProcess;
 /// <item><b>Sınırlar</b> çağıranın <see cref="XsltExecutionLimits"/>'inden (grid: derinlik 64, 200k düğüm, 8 s;
 ///   çıktı 8M — .NET <c>LimitedTextWriter</c> / Saxon <c>LimitedJavaWriter</c>). Motorlara giden
 ///   <see cref="XsltExecutionLimits.Cancellation"/> guard belirtecidir: çağıran bırakınca (süre/iptal) iptal olur.</item>
-/// <item><b>Önbellek:</b> 32 giriş, anahtar <c>(motor, SHA-256(xslt))</c>, yalnız başarılı derleme.</item>
+/// <item><b>Önbellek:</b> en çok 32 giriş / 64M stylesheet karakteri, anahtar <c>(motor, SHA-256(xslt), derinlik)</c>,
+///   yalnız başarılı derleme.</item>
 /// <item><b>Bozulmuş mod:</b> kaçak ≥ <see cref="XsltGridOptions.RunawayMax"/> iken yeni istekler
 ///   <see cref="IXsltIsolatedHost"/>'a gider (sonuç <see cref="XsltHostResult.Place"/> = Isolated — kapı fiilî yere
 ///   göre sayar); worker kapalıysa <see cref="XsltFailureKind.EngineUnavailable"/>. Kaçaklar bitince süreç içine döner.</item>
@@ -31,6 +32,13 @@ public sealed class InProcessXsltHost : IXsltInProcessHost, IDisposable
     internal const string TimeoutCode = "InProcessTimeout";
     internal const string DegradedCode = "InProcessDegraded";
     internal const string StackCode = "InProcessStack";
+    internal const string CooperativeTimeoutCode = "InProcessCooperativeDeadline";
+
+    /// <summary>
+    /// Motor (işbirlikçi) süresi sert guard süresinden bu kadar kısadır: normal sınır aşımı motor içinde temiz
+    /// <see cref="XsltFailureKind.Timeout"/> olur, kaçak üretmez (worker <c>CooperativeMargin</c> ile aynı mantık).
+    /// </summary>
+    internal static readonly TimeSpan CooperativeMargin = TimeSpan.FromMilliseconds(500);
 
     private readonly XsltExecutionGuard _guard;
     private readonly InProcessXsltEngines _engines;
@@ -87,12 +95,14 @@ public sealed class InProcessXsltHost : IXsltInProcessHost, IDisposable
                 XsltGuardStatus.Completed => outcome.Value!,
                 XsltGuardStatus.Busy => Fail(request.Engine, XsltFailureKind.Busy, BusyCode,
                     "Önizleme motoru şu anda yoğun; lütfen birazdan tekrar deneyin."),
-                _ => Fail(request.Engine, XsltFailureKind.Timeout, TimeoutCode, "XSLT dönüşümü süre sınırını aştı."),
+                _ => Fail(request.Engine, XsltFailureKind.Timeout, TimeoutCode, "XSLT dönüşümü süre sınırını aştı.")
+                    with { Runaway = outcome.Runaway },
             };
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
-            Record(request, "canceled", started);
+            // XsltRunawayCanceledException (iş kaçağa döndü) olduğu gibi yükselir: servis kesiciye Timeout bildirir.
+            Record(request, ex is XsltRunawayCanceledException ? "canceled-runaway" : "canceled", started);
             throw;
         }
 
@@ -135,23 +145,30 @@ public sealed class InProcessXsltHost : IXsltInProcessHost, IDisposable
     /// <summary>Guard thread'inde çalışır: önbellek/derleme → (Render ise) dönüşüm. İçerik hataları teşhis olarak döner.</summary>
     private XsltHostResult Execute(XsltHostRequest request, string sha256, CancellationToken abandon)
     {
-        var limits = request.Limits with { Cancellation = abandon };
+        var cooperative = CooperativeDeadline(request.Limits.Deadline);
+        var limits = request.Limits with { Deadline = cooperative, Cancellation = abandon };
+        var depth = limits.MaxStylesheetDepth;
         try
         {
             var sw = Stopwatch.StartNew();
-            var cacheHit = _cache.TryGet(request.Engine, sha256, out var compiled);
+            var cacheHit = _cache.TryGet(request.Engine, sha256, depth, out var compiled);
             if (!cacheHit)
             {
                 compiled = _engines.Get(request.Engine).Compile(request.Xslt, limits);
-                _cache.Add(request.Engine, sha256, compiled);
+                _cache.Add(request.Engine, sha256, depth, request.Xslt.Length, compiled);
             }
 
             var compileMs = cacheHit ? 0 : sw.ElapsedMilliseconds;
             if (request.Op == XsltOperation.Validate)
                 return new XsltHostResult(null, request.Engine, new XsltTransformTimings(0, compileMs, 0, 0), cacheHit, null);
 
+            // Dönüşüm kalan işbirlikçi süreyle (derleme + dönüşüm toplamı sert sürenin altında kalsın).
+            var remaining = cooperative > TimeSpan.Zero ? cooperative - sw.Elapsed : cooperative;
+            if (cooperative > TimeSpan.Zero && remaining <= TimeSpan.Zero)
+                return Fail(request.Engine, XsltFailureKind.Timeout, CooperativeTimeoutCode, "XSLT dönüşümü süre sınırını aştı.");
+
             using var output = new StringWriter();
-            var timings = compiled.Transform(request.Xml ?? "", output, limits) with { CompileMs = compileMs };
+            var timings = compiled.Transform(request.Xml ?? "", output, limits with { Deadline = remaining }) with { CompileMs = compileMs };
             return new XsltHostResult(output.ToString(), request.Engine, timings, cacheHit, null);
         }
         catch (XsltProcessingException ex)
@@ -165,6 +182,15 @@ public sealed class InProcessXsltHost : IXsltInProcessHost, IDisposable
     }
 
     // ------------------------------------------------------------------ yardımcılar
+
+    /// <summary>Sert süre − pay; pay süreyi tüketiyorsa (çok kısa sınır) sert süre; ≤ 0 (sınırsız) olduğu gibi.</summary>
+    internal static TimeSpan CooperativeDeadline(TimeSpan hard)
+    {
+        if (hard <= TimeSpan.Zero)
+            return hard;
+        var cooperative = hard - CooperativeMargin;
+        return cooperative > TimeSpan.Zero ? cooperative : hard;
+    }
 
     /// <summary>
     /// Beklemeyi hem host belirteci hem istek sınırlarındaki iptal keser; ikisi farklı ve iptal edilebilirse bağlı

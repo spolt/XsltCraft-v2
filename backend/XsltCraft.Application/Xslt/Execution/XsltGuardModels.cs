@@ -15,8 +15,23 @@ public enum XsltGuardStatus
     Timeout,
 }
 
-/// <summary>Guard sonucu. <see cref="Elapsed"/> kuyruk beklemesi dahil toplam süredir.</summary>
-public readonly record struct XsltGuardResult<T>(XsltGuardStatus Status, T? Value, TimeSpan Elapsed);
+/// <summary>
+/// Guard sonucu. <see cref="Elapsed"/> kuyruk beklemesi dahil toplam süredir. <see cref="Runaway"/> yalnız
+/// <see cref="XsltGuardStatus.Timeout"/>'ta dolu: kaçak iş thread'i bitince tamamlanır.
+/// </summary>
+public readonly record struct XsltGuardResult<T>(XsltGuardStatus Status, T? Value, TimeSpan Elapsed, Task? Runaway = null);
+
+/// <summary>
+/// İstemci iptali işi kaçağa çevirdi (iş arka planda sürüyor, slotunu tutuyor). Normal iptalden ayrılır: kesici
+/// bunu süreç içi Timeout sayar (yoksa iptal tekrarıyla bozulmuş mod süresiz tutulabilir — G2 reviewer Y1) ve
+/// kullanıcı izni <see cref="RunawayFinished"/>'a dek tutulur (kullanıcı başı eşzamanlılık delinmez).
+/// </summary>
+public sealed class XsltRunawayCanceledException(Task runawayFinished, CancellationToken token)
+    : OperationCanceledException("XSLT isteği iptal edildi; iş arka planda sürüyor.", token)
+{
+    /// <summary>Kaçak iş thread'i bitince tamamlanır (asla hata ile bitmez).</summary>
+    public Task RunawayFinished { get; } = runawayFinished;
+}
 
 /// <summary>
 /// Log/metrik kimliği — İÇERİK TAŞIMAZ: stylesheet SHA-256'sının ilk 16 hex'i, kullanıcı ve motor.

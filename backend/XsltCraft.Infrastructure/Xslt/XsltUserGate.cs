@@ -10,6 +10,9 @@ namespace XsltCraft.Infrastructure.Xslt;
 /// Kullanıcı başı XSLT kapısı (ADR 008 §4, §7; <c>AiVisionThrottle</c> deseni, singleton).
 /// <list type="bullet">
 /// <item>Şerit başı eşzamanlılık (<see cref="XsltUserGateOptions"/>; varsayılan her şerit 1) → <c>UserBusy</c>.</item>
+/// <item>Şeritlerden bağımsız izole toplam (<see cref="XsltUserGateOptions.MaxIsolatedConcurrentPerUser"/>; Validate
+///   muaf) → <c>UserBusy</c>.</item>
+/// <item>Grid şeridi süreç içi izin alsa da bozulmuş modda worker'a gidebilir → iki yerin bloğuna da bakılır (fail-closed).</item>
 /// <item>Kötüye kullanım kesicisi, yürütme yerine göre ayrı: izole yerde pencere içinde
 ///   ≥ <see cref="XsltUserGateOptions.IsolatedAbuseThreshold"/> Timeout/EngineCrashed/MemoryLimit,
 ///   süreç içinde ≥ <see cref="XsltUserGateOptions.InProcessAbuseThreshold"/> Timeout →
@@ -75,7 +78,7 @@ public sealed class XsltUserGate : IXsltUserGate
                 _users[userId] = state;
             }
 
-            var blockedUntil = state.BlockedUntil[(int)place];
+            var blockedUntil = BlockedUntilLocked(state, lane, place);
             if (blockedUntil > now)
             {
                 lease = null;
@@ -85,7 +88,9 @@ public sealed class XsltUserGate : IXsltUserGate
                 return false;
             }
 
-            if (state.InFlight[(int)lane] >= max)
+            var countsIsolated = CountsTowardIsolatedTotal(lane, place);
+            if (state.InFlight[(int)lane] >= max
+                || (countsIsolated && state.IsolatedInFlight >= _options.MaxIsolatedConcurrentPerUser))
             {
                 lease = null;
                 denial = new XsltGateDenial("Önceki XSLT isteğiniz sürüyor; tamamlanınca tekrar deneyin.", BusyCode, null);
@@ -93,23 +98,43 @@ public sealed class XsltUserGate : IXsltUserGate
             }
 
             state.InFlight[(int)lane]++;
+            if (countsIsolated)
+                state.IsolatedInFlight++;
         }
 
-        lease = new Lease(this, userId, lane, place);
+        lease = new Lease(this, userId, lane, place, countsIsolated: CountsTowardIsolatedTotal(lane, place));
         denial = null;
         return true;
     }
 
     // ------------------------------------------------------------------ izin yaşam döngüsü
 
-    private void Release(Guid userId, XsltGateLane lane)
+    private void Release(Guid userId, XsltGateLane lane, bool countsIsolated)
     {
         lock (_lock)
         {
-            if (_users.TryGetValue(userId, out var state) && state.InFlight[(int)lane] > 0)
+            if (!_users.TryGetValue(userId, out var state))
+                return;
+            if (state.InFlight[(int)lane] > 0)
                 state.InFlight[(int)lane]--;
+            if (countsIsolated && state.IsolatedInFlight > 0)
+                state.IsolatedInFlight--;
         }
     }
+
+    /// <summary>Grid: süreç içi izin bozulmuş modda worker'a ulaşabilir → iki yerin en geç bloğu (G2 #7).</summary>
+    private static DateTimeOffset BlockedUntilLocked(UserState state, XsltGateLane lane, XsltExecutionPlace place)
+    {
+        var own = state.BlockedUntil[(int)place];
+        if (lane != XsltGateLane.Grid)
+            return own;
+        var other = state.BlockedUntil[(int)(place == XsltExecutionPlace.Isolated ? XsltExecutionPlace.InProcess : XsltExecutionPlace.Isolated)];
+        return own > other ? own : other;
+    }
+
+    /// <summary>Validate yalnız derlemedir (kısa, girdi XML yok) ve önizlemeyle paralel çağrılır → toplamdan muaf.</summary>
+    internal static bool CountsTowardIsolatedTotal(XsltGateLane lane, XsltExecutionPlace place) =>
+        place == XsltExecutionPlace.Isolated && lane != XsltGateLane.Validate;
 
     private void Report(Guid userId, XsltExecutionPlace place, XsltFailureKind? failure)
     {
@@ -181,6 +206,8 @@ public sealed class XsltUserGate : IXsltUserGate
     {
         public int[] InFlight { get; } = new int[LaneCount];
 
+        public int IsolatedInFlight { get; set; }
+
         public Queue<DateTimeOffset>[] Strikes { get; } = Enumerable.Range(0, PlaceCount).Select(_ => new Queue<DateTimeOffset>()).ToArray();
 
         public DateTimeOffset[] BlockedUntil { get; } = new DateTimeOffset[PlaceCount];
@@ -201,7 +228,7 @@ public sealed class XsltUserGate : IXsltUserGate
         }
     }
 
-    private sealed class Lease(XsltUserGate gate, Guid userId, XsltGateLane lane, XsltExecutionPlace place) : IXsltGateLease
+    private sealed class Lease(XsltUserGate gate, Guid userId, XsltGateLane lane, XsltExecutionPlace place, bool countsIsolated) : IXsltGateLease
     {
         private int _reported;
         private int _disposed;
@@ -215,7 +242,7 @@ public sealed class XsltUserGate : IXsltUserGate
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) == 0)
-                gate.Release(userId, lane);
+                gate.Release(userId, lane, countsIsolated);
         }
     }
 }

@@ -66,7 +66,10 @@ public sealed class XsltExecutionGuard
     /// <summary>
     /// <paramref name="work"/>'ü korumalı thread'de çalıştırır. <paramref name="work"/>'ün istisnası çağırana
     /// yeniden fırlatılır (yalnız süre içinde bittiyse). <paramref name="cancellationToken"/> iptali
-    /// <see cref="OperationCanceledException"/> fırlatır; iş arka planda sürüyorsa kaçak sayılır.
+    /// <see cref="OperationCanceledException"/> fırlatır; iş arka planda sürüyorsa kaçak sayılır ve istisna
+    /// <see cref="XsltRunawayCanceledException"/>'dır (çağıran kesiciye Timeout bildirip kullanıcı iznini
+    /// <see cref="XsltRunawayCanceledException.RunawayFinished"/>'a dek tutmalı). Süre aşımında da
+    /// <see cref="XsltGuardResult{T}.Runaway"/> aynı görevi taşır.
     /// </summary>
     /// <param name="timeout">Slot alındıktan sonraki sert süre; ≤ 0 → sınırsız.</param>
     /// <param name="work">Belirteç yalnız çağıran bıraktığında (süre/iptal) iptal edilir.</param>
@@ -101,7 +104,7 @@ public sealed class XsltExecutionGuard
         catch (TimeoutException)
         {
             if (job.TryAbandon(timedOut: true))
-                return new XsltGuardResult<T>(XsltGuardStatus.Timeout, default, _time.GetElapsedTime(started));
+                return new XsltGuardResult<T>(XsltGuardStatus.Timeout, default, _time.GetElapsedTime(started), job.Finished);
 
             // Yarış: iş süre dolarken bitti → sonucu kullan (iş kendi TimeoutException'ını attıysa o da fırlar).
             var value = await job.Completion.ConfigureAwait(false);
@@ -109,7 +112,8 @@ public sealed class XsltExecutionGuard
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            job.TryAbandon(timedOut: false);
+            if (job.TryAbandon(timedOut: false))
+                throw new XsltRunawayCanceledException(job.Finished, cancellationToken);
             throw;
         }
     }
@@ -171,6 +175,7 @@ public sealed class XsltExecutionGuard
         private readonly XsltGuardTicket _ticket;
         private readonly Func<CancellationToken, T> _work;
         private readonly TaskCompletionSource<T> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly CancellationTokenSource _abandon = new();
         private readonly object _lock = new();
         private readonly CultureInfo _culture = CultureInfo.CurrentCulture;
@@ -188,6 +193,9 @@ public sealed class XsltExecutionGuard
         }
 
         public Task<T> Completion => _completion.Task;
+
+        /// <summary>İş thread'i bitti (slot bırakıldı) — sonuçtan bağımsız, asla hata ile bitmez.</summary>
+        public Task Finished => _finished.Task;
 
         public void Start()
         {
@@ -228,6 +236,9 @@ public sealed class XsltExecutionGuard
                     due > TimeSpan.Zero ? due : TimeSpan.Zero, Timeout.InfiniteTimeSpan);
             }
 
+            // Kimse beklemiyor: işin istisnası gözlenmeli (UnobservedTaskException olmasın).
+            _ = Completion.ContinueWith(static t => _ = t.Exception, CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             _guard.OnRunawayStarted(_ticket, _guard._time.GetElapsedTime(_startTimestamp), timedOut, runaways);
             return true;
         }
@@ -264,7 +275,14 @@ public sealed class XsltExecutionGuard
 
             timer?.Dispose();
             _abandon.Dispose();
-            _guard.OnFinished(_ticket, wasRunaway, _guard._time.GetElapsedTime(_startTimestamp));
+            try
+            {
+                _guard.OnFinished(_ticket, wasRunaway, _guard._time.GetElapsedTime(_startTimestamp));
+            }
+            finally
+            {
+                _finished.TrySetResult();
+            }
         }
 
         private void OnStuck()
