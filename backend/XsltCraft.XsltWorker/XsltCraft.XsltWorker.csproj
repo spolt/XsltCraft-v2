@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    İzole XSLT worker süreci. Api (Infrastructure/Xslt/Worker) tarafından havuzlanır; stdin/stdout
+    üzerinden XsltCraft.XsltWorker.Contracts çerçeveleriyle konuşur.
+    Referans kuralı: yalnız Contracts (W2'de Application + Xslt.Saxon eklenecek). Infrastructure ASLA.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>1.11.2</Version>
+    <!-- Bellek tavanı DOTNET_GCHeapHardLimit ile Api'den gelir; workstation GC tek istekli süreçte yeterli. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XsltCraft.XsltWorker.Contracts\XsltCraft.XsltWorker.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

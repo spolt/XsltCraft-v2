@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Api (Infrastructure) ↔ XsltWorker IPC sözleşmesi. BAĞIMLILIKSIZ tutulur:
+    paket/proje referansı yok — yalnız BCL (System.Text.Json source-gen dahil).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>1.11.2</Version>
+  </PropertyGroup>
+
+</Project>
