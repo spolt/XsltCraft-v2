@@ -21,24 +21,10 @@
   <ItemGroup>
     <ProjectReference Include="..\XsltCraft.Infrastructure\XsltCraft.Infrastructure.csproj" />
     <ProjectReference Include="..\XsltCraft.XsltWorker.Contracts\XsltCraft.XsltWorker.Contracts.csproj" />
-    <!-- Gerçek worker süreci: yalnız build sırası; çıktı Api'deki gibi $(OutDir)xsltworker\ altına kopyalanır,
-         böylece testler XsltWorkerLocator'ın üretimdeki varsayılan (apphost) yolunu kullanır. -->
-    <ProjectReference Include="..\XsltCraft.XsltWorker\XsltCraft.XsltWorker.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <Target Name="CopyXsltWorkerOutput" AfterTargets="Build">
-    <MSBuild Projects="..\XsltCraft.XsltWorker\XsltCraft.XsltWorker.csproj" Targets="GetTargetPath">
-      <Output TaskParameter="TargetOutputs" ItemName="_XsltWorkerTargetPath" />
-    </MSBuild>
-    <PropertyGroup>
-      <_XsltWorkerOutDir>@(_XsltWorkerTargetPath->'%(RootDir)%(Directory)')</_XsltWorkerOutDir>
-    </PropertyGroup>
-    <ItemGroup>
-      <_XsltWorkerFiles Include="$(_XsltWorkerOutDir)**\*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(_XsltWorkerFiles)"
-          DestinationFiles="@(_XsltWorkerFiles->'$(OutDir)xsltworker\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-  </Target>
+  <!-- Gerçek worker süreci: Api ile aynı ortak hedef; çıktı $(OutDir)xsltworker\ altına kopyalanır, böylece
+       testler XsltWorkerLocator'ın üretimdeki varsayılan (apphost) yolunu kullanır. -->
+  <Import Project="..\build\XsltWorker.targets" />
 
 </Project>
