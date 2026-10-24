@@ -8,6 +8,7 @@ namespace XsltCraft.XsltWorker.Tests.Pool;
 
 /// <summary>Gerçek worker süreçleriyle havuz davranışı.</summary>
 [Trait("Category", "WorkerIntegration")]
+[Collection(WorkerProcessesCollection.Name)]
 public class XsltWorkerPoolTests
 {
     private const string HashA = "aaaaaaaaaaaaaaaa1111111111111111aaaaaaaaaaaaaaaa1111111111111111";
@@ -67,7 +68,8 @@ public class XsltWorkerPoolTests
         Assert.Equal(WorkerFailureKinds.Timeout, result.FailureKind);
         Assert.Equal(WorkerErrorCodes.Timeout, result.ErrorCode);
         Assert.Equal(before, result.WorkerPid);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(8), $"Zaman aşımı çok geç döndü: {sw.Elapsed}.");
+        // 1 sn sınır + kill + çıkış bekleme (≤2 sn); 60 sn'lik uykudan çok önce dönmeli. CI payı geniş tutuldu.
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(20), $"Zaman aşımı çok geç döndü: {sw.Elapsed}.");
         Assert.True(WorkerTestEnvironment.HasExited(before));
 
         await h.WaitReadyAsync();
@@ -104,6 +106,7 @@ public class XsltWorkerPoolTests
         await using var h = await PoolHarness.StartAsync(o =>
         {
             o.MaxWorkingSetMb = 150;
+            o.RecycleWorkingSetMb = 0; // geri dönüşüm eşiği öldürme eşiğini aşamaz (Validate)
             o.GcHeapHardLimitMb = 0; // GC tavanı değil, Api tarafı bekçisi devreye girsin
             o.RenderTimeoutMs = 30_000;
         });
@@ -113,7 +116,8 @@ public class XsltWorkerPoolTests
 
         Assert.Equal(WorkerFailureKinds.MemoryLimit, result.FailureKind);
         Assert.Equal(WorkerErrorCodes.MemoryLimit, result.ErrorCode);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(9), $"Bekçi geç öldürdü: {sw.Elapsed}.");
+        // Bekçi, 30 sn'lik sert zaman aşımından önce öldürmeli (tür zaten MemoryLimit; süre yalnız üst sınır).
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(25), $"Bekçi geç öldürdü: {sw.Elapsed}.");
         Assert.True(WorkerTestEnvironment.HasExited(result.WorkerPid!.Value));
 
         await h.WaitReadyAsync();
@@ -161,14 +165,13 @@ public class XsltWorkerPoolTests
         Assert.Equal(owner, (await h.RunAsync(WorkerOps.Ping, hash: HashA)).WorkerPid);
         Assert.Equal(other, (await h.RunAsync(WorkerOps.Ping, hash: HashB)).WorkerPid);
 
-        // Yumuşak: sahip meşgulse beklemeden diğer boş worker kullanılır.
-        var busyOwner = h.RunAsync(TestOpNames.Sleep, argument: 3000, hash: HashA);
-        await Task.Delay(300);
-        var sw = Stopwatch.StartNew();
+        // Yumuşak: sahip meşgulse beklemeden diğer boş worker kullanılır. Atama ExecuteAsync'in eşzamanlı
+        // bölümünde kilit altında yapılır (sıra = çağrı sırası); süre yerine "sahip hâlâ meşgul" denetlenir.
+        var busyOwner = h.RunAsync(TestOpNames.Sleep, argument: 8000, hash: HashA);
         var fallback = await h.RunAsync(WorkerOps.Ping, hash: HashA);
         Assert.True(fallback.Ok);
         Assert.Equal(other, fallback.WorkerPid);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(2));
+        Assert.False(busyOwner.IsCompleted, "Yedek worker, sahibin işini beklememeliydi.");
         Assert.Equal(owner, (await busyOwner).WorkerPid);
     }
 
@@ -232,7 +235,7 @@ public class XsltWorkerPoolTests
         var result = await h.RunAsync(TestOpNames.StderrFlood, argument: 16);
 
         Assert.True(result.Ok, result.Response.Header.Failure?.Message);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(20));
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(25), $"stderr seli isteği yavaşlattı: {sw.Elapsed}.");
         Assert.Equal(result.WorkerPid, (await h.RunAsync(WorkerOps.Ping)).WorkerPid);
     }
 

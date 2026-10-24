@@ -67,6 +67,15 @@ public sealed class XsltWorkerOptions
         _ => TimeSpan.FromMilliseconds(RenderTimeoutMs),
     };
 
+    /// <summary>Kill/Shutdown sonrası çıkış beklemesi için makul üst sınır (kapanış bekleme hesabı taşmasın).</summary>
+    internal const int MaxShutdownGraceMs = 60_000;
+
+    /// <summary>Başlatma + Hello için makul üst sınır.</summary>
+    internal const int MaxStartupTimeoutMs = 300_000;
+
+    /// <summary>Tek istek sert zaman aşımı için makul üst sınır.</summary>
+    internal const int MaxRequestTimeoutMs = 600_000;
+
     /// <summary>Tutarsız ayarları döndürür (boş → geçerli).</summary>
     public IReadOnlyList<string> Validate()
     {
@@ -75,11 +84,22 @@ public sealed class XsltWorkerOptions
         if (MaxRequestsPerWorker < 1) errors.Add($"{nameof(MaxRequestsPerWorker)} ≥ 1 olmalı.");
         if (MaxWorkerAgeMinutes < 1) errors.Add($"{nameof(MaxWorkerAgeMinutes)} ≥ 1 olmalı.");
         if (MaxWorkingSetMb < 0 || RecycleWorkingSetMb < 0 || GcHeapHardLimitMb < 0) errors.Add("Bellek sınırları negatif olamaz.");
+        if (MaxWorkingSetMb > 0 && RecycleWorkingSetMb > MaxWorkingSetMb)
+        {
+            // Aksi hâlde öldürme eşiği geri dönüşümden önce gelir; geri dönüşüm hiç tetiklenmez.
+            errors.Add($"{nameof(MaxWorkingSetMb)} ≥ {nameof(RecycleWorkingSetMb)} olmalı (ya da {nameof(MaxWorkingSetMb)} = 0).");
+        }
+
         if (QueueWaitMs < 0 || MaxQueue < 0) errors.Add("Kuyruk ayarları negatif olamaz.");
-        if (RenderTimeoutMs < 1 || ValidateTimeoutMs < 1 || StartupTimeoutMs < 1) errors.Add("Zaman aşımları ≥ 1 ms olmalı.");
+        if (RenderTimeoutMs < 1 || ValidateTimeoutMs < 1 || RenderTimeoutMs > MaxRequestTimeoutMs || ValidateTimeoutMs > MaxRequestTimeoutMs)
+            errors.Add($"İstek zaman aşımları 1..{MaxRequestTimeoutMs} ms aralığında olmalı.");
+        if (StartupTimeoutMs < 1 || StartupTimeoutMs > MaxStartupTimeoutMs)
+            errors.Add($"{nameof(StartupTimeoutMs)} 1..{MaxStartupTimeoutMs} ms aralığında olmalı.");
+        if (ShutdownGraceMs < 1 || ShutdownGraceMs > MaxShutdownGraceMs)
+            errors.Add($"{nameof(ShutdownGraceMs)} 1..{MaxShutdownGraceMs} ms aralığında olmalı.");
         if (WorkingSetPollMs < 10) errors.Add($"{nameof(WorkingSetPollMs)} ≥ 10 olmalı.");
-        if (RespawnBackoffInitialMs < 0 || RespawnBackoffMaxMs < RespawnBackoffInitialMs) errors.Add("Backoff aralığı geçersiz.");
-        if (BreakerFailureThreshold < 1 || BreakerWindowSeconds < 1 || BreakerOpenSeconds < 0) errors.Add("Kesici ayarları geçersiz.");
+        if (RespawnBackoffInitialMs < 1 || RespawnBackoffMaxMs < RespawnBackoffInitialMs) errors.Add("Backoff aralığı geçersiz (1 ≤ başlangıç ≤ üst).");
+        if (BreakerFailureThreshold < 1 || BreakerWindowSeconds < 1 || BreakerOpenSeconds < 1) errors.Add("Kesici ayarları ≥ 1 olmalı.");
         if (AffinityHashesPerWorker < 0) errors.Add($"{nameof(AffinityHashesPerWorker)} negatif olamaz.");
         return errors;
     }

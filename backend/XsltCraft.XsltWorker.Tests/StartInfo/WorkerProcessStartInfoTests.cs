@@ -4,6 +4,7 @@ using XsltCraft.XsltWorker.Tests.Support;
 
 namespace XsltCraft.XsltWorker.Tests.StartInfo;
 
+[Collection(WorkerProcessesCollection.Name)]
 public class WorkerProcessStartInfoTests
 {
     /// <summary>Bağımsız beklenti listesi: üretim kodundaki listeyle eşleşmezse test kırılır.</summary>

@@ -24,6 +24,9 @@ namespace XsltCraft.Infrastructure.Xslt.Worker;
 /// </summary>
 public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposable
 {
+    /// <summary><c>xslt.requests{outcome}</c>: kuyruk beklemesi çağıran tarafından iptal edildi.</summary>
+    internal const string CanceledOutcome = "canceled";
+
     private readonly XsltWorkerOptions _options;
     private readonly IWorkerProcessStartInfoFactory _factory;
     private readonly XsltWorkerMetrics _metrics;
@@ -169,12 +172,24 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
         if (waiter is not null)
         {
             var (assigned, failure) = await WaitForWorkerAsync(waiter, id, cancellationToken).ConfigureAwait(false);
+
+            // Kuyrukta geçen süre her sonuçta (atama / zaman aşımı / iptal) kaydedilir.
+            _metrics.QueueWait(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            if (assigned is null && failure is null)
+            {
+                // Çağıran kuyruk beklemesini iptal etti: bekleyen kuyruktan çıkarıldı; sonuç metriği yine kaydedilir.
+                FinishCanceled(request, startedAt);
+                throw new OperationCanceledException(cancellationToken);
+            }
+
             if (assigned is null)
                 return Finish(request, failure!, null, startedAt);
             worker = assigned;
         }
-
-        _metrics.QueueWait(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+        else
+        {
+            _metrics.QueueWait(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+        }
 
         var process = worker!.Process!;
         var header = new RequestHeader
@@ -194,6 +209,11 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
 
     // ------------------------------------------------------------------ istek yolu
 
+    /// <summary>
+    /// Kuyrukta bir worker atanmasını bekler. Dönüş: (worker, null) atandı; (null, hata) zaman aşımı / canlı worker
+    /// yok; (null, null) çağıran iptal etti — bekleyen her durumda kuyruktan çıkarılmıştır. Atama ile iptal yarışında
+    /// atama kazanır (worker sızmaz; istek çalışır).
+    /// </summary>
     private async Task<(PooledWorker? Worker, WorkerResponse? Failure)> WaitForWorkerAsync(
         Waiter waiter, string id, CancellationToken cancellationToken)
     {
@@ -209,7 +229,8 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
                 if (waiter.Node?.List is not null)
                 {
                     _waiters.Remove(waiter.Node);
-                    cancellationToken.ThrowIfCancellationRequested();
+                    if (cancellationToken.IsCancellationRequested)
+                        return (null, null);
                     var anyBusy = _workers.Exists(w => w.State == PooledWorkerState.Busy);
                     return (null, anyBusy
                         ? Failed(id, WorkerFailureKinds.Busy, WorkerErrorCodes.QueueTimeout, "XSLT motoru meşgul; bekleme süresi doldu.")
@@ -261,7 +282,7 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
                 {
                     // Yanıttan hemen sonra çıktı (ör. W2: OOM sonrası kendiliğinden çıkış).
                     exitReason = worker.RetirePending ? WorkerExitReasons.Recycled : WorkerExitReasons.Crashed;
-                    RemoveDeadLocked(worker, exitReason, countsForBreaker: !worker.RetirePending);
+                    RemoveDeadLocked(worker, exitReason, isEngineFailure: !worker.RetirePending);
                     dispose = process;
                 }
                 else if (worker.RetireAfterCurrent)
@@ -282,8 +303,8 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
                 (response, exitReason) = MapDeath(id, exchange.Status);
                 if (!_stopped && _workers.Contains(worker))
                 {
-                    var countsForBreaker = exchange.Status is WorkerExchangeStatus.Crashed or WorkerExchangeStatus.ProtocolViolation;
-                    RemoveDeadLocked(worker, exitReason, countsForBreaker);
+                    var isEngineFailure = exchange.Status is WorkerExchangeStatus.Crashed or WorkerExchangeStatus.ProtocolViolation;
+                    RemoveDeadLocked(worker, exitReason, isEngineFailure);
                 }
                 else
                 {
@@ -343,6 +364,18 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
         }
 
         return new XsltWorkerPoolResult(response, pid);
+    }
+
+    private void FinishCanceled(XsltWorkerRequest request, long startedAt)
+    {
+        var elapsed = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+        _metrics.Request(request.Op, CanceledOutcome, elapsed);
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("XSLT worker isteği kuyrukta iptal edildi: op={Op} xsltHash={XsltHash} süre={DurationMs:F0}ms",
+                request.Op, HashPrefix(request.XsltSha256), elapsed);
+        }
     }
 
     // ------------------------------------------------------------------ havuz durumu (kilit altında)
@@ -411,24 +444,35 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
         EnsureCapacityLocked();
     }
 
-    private void RemoveDeadLocked(PooledWorker worker, string reason, bool countsForBreaker)
+    /// <summary>
+    /// Ölü worker'ı listeden çıkarır ve yerine yenisini ister. <paramref name="isEngineFailure"/> yalnız motor
+    /// sağlığını gösteren çıkışlarda (çökme, protokol ihlali) <c>true</c>'dur: backoff'u ve kesiciyi YALNIZ bunlar
+    /// besler. Kullanıcı kaynaklı Timeout/MemoryLimit öldürmeleri hemen yeniden başlatılır (kapasite boş kalmaz);
+    /// onların kötüye kullanımı kullanıcı kapısının (UserGate) işidir.
+    /// </summary>
+    private void RemoveDeadLocked(PooledWorker worker, string reason, bool isEngineFailure)
     {
         _workers.Remove(worker);
         _metrics.WorkerExited(reason);
         Raise(WorkerPoolEventKind.Exited, worker, reason);
 
-        if (reason != WorkerExitReasons.Recycled)
-            _consecutiveFailures++;
+        if (isEngineFailure)
+            RecordEngineFailureLocked(worker, reason);
 
-        if (countsForBreaker && _breaker.RecordFailure(_time.GetUtcNow()))
+        EnsureCapacityLocked();
+        FailWaitersIfNothingLiveLocked();
+    }
+
+    /// <summary>Çökme / protokol ihlali / başlatma-el sıkışma hatası: backoff sayacı + kesici.</summary>
+    private void RecordEngineFailureLocked(PooledWorker worker, string reason)
+    {
+        _consecutiveFailures++;
+        if (_breaker.RecordFailure(_time.GetUtcNow()))
         {
             Raise(WorkerPoolEventKind.BreakerOpened, worker, reason);
             _logger.LogError("XSLT worker kesicisi AÇILDI: {Window} sn içinde {Threshold} çökme; {Open} sn boyunca istekler reddedilecek.",
                 _options.BreakerWindowSeconds, _options.BreakerFailureThreshold, _options.BreakerOpenSeconds);
         }
-
-        EnsureCapacityLocked();
-        FailWaitersIfNothingLiveLocked();
     }
 
     /// <summary>Geri dönüşümde olmayan yuva sayısını PoolSize'a tamamlar (gerekirse backoff ile).</summary>
@@ -525,7 +569,7 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
         try
         {
             var spec = _factory.Create();
-            process = await WorkerProcess.StartAsync(spec, _options, pid =>
+            process = await WorkerProcess.StartAsync(spec, _options, _time, pid =>
             {
                 launched = true;
                 _metrics.WorkerStarted();
@@ -542,6 +586,12 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
             // Locator (FileNotFoundException ⊂ IOException) veya dizin hazırlığı.
             failure = new WorkerStartException(WorkerExitReasons.StartFailed, ex.Message, ex);
         }
+        catch (Exception ex)
+        {
+            // Beklenmeyen her istisna (fabrika/başlatma kodu) da başlatma hatasıdır: aksi hâlde yuva kalıcı olarak
+            // "Starting"de kalır, kapasite hesabı onu canlı sayar ve havuz yerine yenisini hiç başlatmaz.
+            failure = new WorkerStartException(WorkerExitReasons.StartFailed, $"Beklenmeyen başlatma hatası ({ex.GetType().Name}).", ex);
+        }
 
         WorkerProcess? discard = null;
         lock (_gate)
@@ -555,9 +605,7 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
 
                 if (!_stopped)
                 {
-                    _consecutiveFailures++;
-                    if (_breaker.RecordFailure(_time.GetUtcNow()))
-                        Raise(WorkerPoolEventKind.BreakerOpened, slot, failure.Reason);
+                    RecordEngineFailureLocked(slot, failure.Reason);
                     EnsureCapacityLocked();
                     FailWaitersIfNothingLiveLocked();
                 }
@@ -607,7 +655,7 @@ public sealed class XsltWorkerPool : IHostedService, IAsyncDisposable, IDisposab
                 return;
 
             reason = slot.RetirePending ? WorkerExitReasons.Recycled : WorkerExitReasons.Crashed;
-            RemoveDeadLocked(slot, reason, countsForBreaker: !slot.RetirePending);
+            RemoveDeadLocked(slot, reason, isEngineFailure: !slot.RetirePending);
         }
 
         _logger.LogWarning("XSLT worker boştayken sonlandı: pid={Pid} exitCode={ExitCode} neden={Reason}",

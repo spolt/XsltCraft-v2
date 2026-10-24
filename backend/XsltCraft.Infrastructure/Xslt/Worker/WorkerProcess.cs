@@ -28,13 +28,13 @@ internal sealed class WorkerProcess : IAsyncDisposable
     private int _killStatus = -1;
     private int _disposed;
 
-    private WorkerProcess(Process process, WorkerLaunchSpec spec, XsltWorkerOptions options)
+    private WorkerProcess(Process process, WorkerLaunchSpec spec, XsltWorkerOptions options, TimeProvider timeProvider)
     {
         _process = process;
         _spec = spec;
         _options = options;
         Pid = process.Id;
-        StartedAt = DateTimeOffset.UtcNow;
+        StartedAt = timeProvider.GetUtcNow();
         _stdin = process.StandardInput.BaseStream;
         _stdout = process.StandardOutput.BaseStream;
         _exited = process.WaitForExitAsync();
@@ -43,6 +43,7 @@ internal sealed class WorkerProcess : IAsyncDisposable
 
     public int Pid { get; }
 
+    /// <summary>Başlatma anı — havuzun <see cref="TimeProvider"/>'ından (yaş tabanlı geri dönüşüm aynı saatle ölçülür).</summary>
     public DateTimeOffset StartedAt { get; }
 
     public HelloHeader? Hello { get; private set; }
@@ -85,6 +86,7 @@ internal sealed class WorkerProcess : IAsyncDisposable
     public static async Task<WorkerProcess> StartAsync(
         WorkerLaunchSpec spec,
         XsltWorkerOptions options,
+        TimeProvider timeProvider,
         Action<int>? onLaunched,
         CancellationToken cancellationToken)
     {
@@ -101,12 +103,23 @@ internal sealed class WorkerProcess : IAsyncDisposable
             throw new WorkerStartException(WorkerExitReasons.StartFailed, "Worker süreci başlatılamadı.", ex);
         }
 
-        var worker = new WorkerProcess(process, spec, options);
-        worker.TryLowerPriority();
-        onLaunched?.Invoke(worker.Pid);
+        WorkerProcess worker;
+        try
+        {
+            worker = new WorkerProcess(process, spec, options, timeProvider);
+        }
+        catch (Exception ex)
+        {
+            // Süreç başladı ama sarmalanamadı: yetim bırakma.
+            KillAndDispose(process);
+            DeleteDirectories(spec);
+            throw new WorkerStartException(WorkerExitReasons.StartFailed, $"Worker süreci sarmalanamadı ({ex.GetType().Name}).", ex);
+        }
 
         try
         {
+            worker.TryLowerPriority();
+            onLaunched?.Invoke(worker.Pid);
             await worker.HandshakeAsync(cancellationToken).ConfigureAwait(false);
             return worker;
         }
@@ -416,6 +429,20 @@ internal sealed class WorkerProcess : IAsyncDisposable
         {
             // En iyi çaba.
         }
+    }
+
+    private static void KillAndDispose(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException)
+        {
+            // Zaten çıkmış.
+        }
+
+        process.Dispose();
     }
 
     private static void Observe(Task task) =>

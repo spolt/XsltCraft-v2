@@ -8,6 +8,7 @@ namespace XsltCraft.XsltWorker.Tests.Lifecycle;
 
 /// <summary>Havuz olmadan, ham süreçle worker yaşam döngüsü.</summary>
 [Trait("Category", "WorkerIntegration")]
+[Collection(WorkerProcessesCollection.Name)]
 public class WorkerLifecycleTests
 {
     [Fact]

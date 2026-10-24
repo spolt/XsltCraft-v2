@@ -91,17 +91,38 @@ internal static class WorkerTestEnvironment
     }
 }
 
+/// <summary>
+/// TEST KANCASI: ilk <c>failures</c> çağrıda beklenmeyen bir istisna fırlatır (havuzun dar <c>catch</c>
+/// listesinde olmayan tür), sonra iç fabrikaya devreder.
+/// </summary>
+internal sealed class ThrowingStartInfoFactory(IWorkerProcessStartInfoFactory inner, int failures) : IWorkerProcessStartInfoFactory
+{
+    private int _calls;
+
+    public int Calls => Volatile.Read(ref _calls);
+
+    public WorkerLaunchSpec Create()
+    {
+        if (Interlocked.Increment(ref _calls) <= failures)
+            throw new ArgumentException("Sahte fabrika hatası.");
+        return inner.Create();
+    }
+}
+
 /// <summary>Gerçek worker süreçleriyle çalışan havuz + olay kaydı.</summary>
 internal sealed class PoolHarness : IAsyncDisposable
 {
-    private PoolHarness(XsltWorkerPool pool, XsltWorkerOptions options)
+    private PoolHarness(XsltWorkerPool pool, XsltWorkerOptions options, XsltWorkerMetrics metrics)
     {
         Pool = pool;
         Options = options;
+        Metrics = metrics;
         pool.EventRaised += e => Events.Enqueue(e);
     }
 
     public XsltWorkerPool Pool { get; }
+
+    public XsltWorkerMetrics Metrics { get; }
 
     public XsltWorkerOptions Options { get; }
 
@@ -111,21 +132,26 @@ internal sealed class PoolHarness : IAsyncDisposable
         Action<XsltWorkerOptions>? configure = null,
         bool testOps = true,
         string[]? extraArguments = null,
-        bool waitReady = true)
+        bool waitReady = true,
+        TimeProvider? timeProvider = null,
+        Func<IWorkerProcessStartInfoFactory, IWorkerProcessStartInfoFactory>? wrapFactory = null)
     {
         var options = WorkerTestEnvironment.Options(configure);
         IWorkerProcessStartInfoFactory factory = WorkerTestEnvironment.ProductionFactory(options);
         if (testOps)
             factory = new TestOpsStartInfoFactory(factory, extraArguments ?? []);
+        if (wrapFactory is not null)
+            factory = wrapFactory(factory);
 
+        var metrics = new XsltWorkerMetrics(WorkerTestEnvironment.MeterFactory());
         var pool = new XsltWorkerPool(
             Microsoft.Extensions.Options.Options.Create(options),
             factory,
-            new XsltWorkerMetrics(WorkerTestEnvironment.MeterFactory()),
+            metrics,
             NullLogger<XsltWorkerPool>.Instance,
-            TimeProvider.System);
+            timeProvider ?? TimeProvider.System);
 
-        var harness = new PoolHarness(pool, options);
+        var harness = new PoolHarness(pool, options, metrics);
         await pool.StartAsync(CancellationToken.None);
         if (waitReady)
             await harness.WaitReadyAsync(options.PoolSize);
@@ -138,8 +164,16 @@ internal sealed class PoolHarness : IAsyncDisposable
         Assert.True(ok, $"Havuz {seconds} sn içinde {count} hazır worker'a ulaşmadı (hazır={Pool.ReadyCount}).");
     }
 
-    public Task<XsltWorkerPoolResult> RunAsync(string op, long? argument = null, string? hash = null, TimeSpan? timeout = null, IReadOnlyList<string>? bodies = null) =>
-        Pool.ExecuteAsync(new XsltWorkerRequest(op, null, hash, bodies ?? []) { TestArgument = argument, Timeout = timeout });
+    public Task<XsltWorkerPoolResult> RunAsync(
+        string op,
+        long? argument = null,
+        string? hash = null,
+        TimeSpan? timeout = null,
+        IReadOnlyList<string>? bodies = null,
+        CancellationToken cancellationToken = default) =>
+        Pool.ExecuteAsync(new XsltWorkerRequest(op, null, hash, bodies ?? []) { TestArgument = argument, Timeout = timeout }, cancellationToken);
+
+    public int Count(WorkerPoolEventKind kind) => Events.Count(e => e.Kind == kind);
 
     public IReadOnlyList<WorkerPoolEvent> Snapshot() => Events.ToArray();
 
