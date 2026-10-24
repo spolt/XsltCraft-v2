@@ -14,6 +14,11 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      # IKVM jar→.NET dönüşüm önbelleği (IKVM.MSBuild varsayılanı GetTempPath()/ikvm/cache/1/; TMPDIR'den bağımsız sabit).
+      IkvmCacheDir: /tmp/ikvm/cache/1/
 
     steps:
       - uses: actions/checkout@v4
@@ -23,12 +28,31 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj', 'backend/**/packages.lock.json', 'backend/build/*.targets') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Cache Maven + IKVM (Saxon-HE)
+        uses: actions/cache@v4
+        with:
+          # Jar'lar her build'de maven-hashes.txt'e karşı SHA-256 ile doğrulanır (MavenHashVerification) — önbellek güvenilmez sayılır.
+          path: |
+            ~/.m2/repository
+            /tmp/ikvm/cache
+          key: ${{ runner.os }}-maven-ikvm-${{ hashFiles('backend/XsltCraft.Xslt.Saxon/XsltCraft.Xslt.Saxon.csproj', 'backend/XsltCraft.Xslt.Saxon/maven-hashes.txt', 'backend/XsltCraft.Xslt.Saxon/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-maven-ikvm-
+
       - name: Restore dependencies
-        run: dotnet restore backend/XsltCraft.slnx
+        # --locked-mode: packages.lock.json olan projeler (Xslt.Saxon) kilitten sapamaz (ADR 008 §9).
+        run: dotnet restore backend/XsltCraft.slnx --locked-mode
 
       - name: Build
         run: dotnet build backend/XsltCraft.slnx --no-restore --configuration Release
 
       - name: Test
-        # ECC eval case'leri (Category=Eval) burada hariç; non-blocking eval job'ı ci.yml'de koşar.
-        run: dotnet test backend/XsltCraft.slnx --no-build --configuration Release --filter "Category!=Eval" --verbosity normal
+        # Hariç: Eval (ci.yml'de non-blocking), Measurement (ölçüm), Corpus (prod dökümü gerekir).
+        # WorkerIntegration DAHİL — gerçek worker süreçleri, bloke eder.
+        run: dotnet test backend/XsltCraft.slnx --no-build --configuration Release --filter "Category!=Eval&Category!=Measurement&Category!=Corpus" --verbosity normal

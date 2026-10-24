@@ -55,6 +55,9 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
+    env:
+      # IKVM jar→.NET dönüşüm önbelleği (IKVM.MSBuild varsayılanı GetTempPath()/ikvm/cache/1/; sabitlenir).
+      IkvmCacheDir: /tmp/ikvm/cache/1/
     services:
       postgres:
         image: postgres:16
@@ -79,9 +82,27 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj', 'backend/**/packages.lock.json', 'backend/build/*.targets') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Cache Maven + IKVM (Saxon-HE)
+        uses: actions/cache@v4
+        with:
+          # Jar'lar her build'de maven-hashes.txt'e karşı SHA-256 ile doğrulanır (MavenHashVerification).
+          path: |
+            ~/.m2/repository
+            /tmp/ikvm/cache
+          key: ${{ runner.os }}-maven-ikvm-${{ hashFiles('backend/XsltCraft.Xslt.Saxon/XsltCraft.Xslt.Saxon.csproj', 'backend/XsltCraft.Xslt.Saxon/maven-hashes.txt', 'backend/XsltCraft.Xslt.Saxon/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-maven-ikvm-
+
       - name: Restore
         working-directory: backend
-        run: dotnet restore
+        # --locked-mode: packages.lock.json olan projeler (Xslt.Saxon) kilitten sapamaz (ADR 008 §9).
+        run: dotnet restore --locked-mode
 
       - name: Format check
         working-directory: backend
@@ -95,19 +116,23 @@ jobs:
         working-directory: backend
         env:
           ConnectionStrings__DefaultConnection: "Server=localhost;Port=5432;Database=xsltcraft_test;User Id=postgres;Password=postgres;"
-        run: dotnet test --no-build --configuration Release --filter "Category!=Eval" --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
+        # Hariç: Eval (aşağıda non-blocking), Measurement, Corpus. WorkerIntegration DAHİL (bloke eder).
+        run: dotnet test --no-build --configuration Release --filter "Category!=Eval&Category!=Measurement&Category!=Corpus" --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.os }}
+          name: test-results-backend
           path: '**/test-results.trx'
 
   # ECC eval harness — non-blocking. Bir regresyonu uyarı olarak raporlar ama PR'ı
   # bloklamaz (continue-on-error). Olgunlaşınca continue-on-error kaldırılıp blocking'e geçilir.
   eval:
     runs-on: ubuntu-latest
+    env:
+      # IKVM jar→.NET dönüşüm önbelleği (IKVM.MSBuild varsayılanı GetTempPath()/ikvm/cache/1/; sabitlenir).
+      IkvmCacheDir: /tmp/ikvm/cache/1/
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -117,9 +142,27 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj', 'backend/**/packages.lock.json', 'backend/build/*.targets') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Cache Maven + IKVM (Saxon-HE)
+        uses: actions/cache@v4
+        with:
+          # Jar'lar her build'de maven-hashes.txt'e karşı SHA-256 ile doğrulanır (MavenHashVerification).
+          path: |
+            ~/.m2/repository
+            /tmp/ikvm/cache
+          key: ${{ runner.os }}-maven-ikvm-${{ hashFiles('backend/XsltCraft.Xslt.Saxon/XsltCraft.Xslt.Saxon.csproj', 'backend/XsltCraft.Xslt.Saxon/maven-hashes.txt', 'backend/XsltCraft.Xslt.Saxon/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-maven-ikvm-
+
       - name: Restore
         working-directory: backend
-        run: dotnet restore
+        # --locked-mode: packages.lock.json olan projeler (Xslt.Saxon) kilitten sapamaz (ADR 008 §9).
+        run: dotnet restore --locked-mode
 
       - name: Build
         working-directory: backend
