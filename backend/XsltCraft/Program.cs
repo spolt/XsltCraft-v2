@@ -6,10 +6,16 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
+using XsltCraft.Api.Preview;
+using XsltCraft.Api.Xslt;
 using XsltCraft.Infrastructure.DependencyInjection;
 using XsltCraft.Infrastructure.Persistence;
+using XsltCraft.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Çekirdek dökümü / ptrace ile bellekteki sırların (JWT anahtarı, DB parolası) okunmasını engelle (Linux; Production).
+ProcessHardening.Apply(builder.Configuration);
 
 builder.Services.AddControllers();
 // Docker HEALTHCHECK (`curl /health`) için liveness — süreç ayakta ve istek işliyor mu.
@@ -17,10 +23,15 @@ builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddXsltCraft(builder.Configuration);
+builder.Services.AddScoped<PreviewAssetEmbedder>();
 
 builder.Services.AddRateLimiter(opts =>
 {
     opts.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    opts.OnRejected = RateLimitPolicies.OnRejectedAsync;
+
+    // XSLT önizleme (xslt-preview) + doğrulama (xslt-validate): 120 req/dk/user.
+    opts.AddXsltPolicies();
 
     // Login / refresh / google: 10 istek / dakika / IP
     opts.AddFixedWindowLimiter("auth-sensitive", o =>
@@ -180,8 +191,10 @@ if (app.Environment.IsDevelopment())
 
 // UseCors MUST come before UseRouting when using named policies with endpoint routing
 app.UseCors(app.Environment.IsDevelopment() ? "dev" : "prod");
-app.UseRateLimiter();
+// Kimlik doğrulamadan SONRA: kullanıcı bölümlü politikalar (ai-assistant, xslt-preview, ...) claim'i görebilsin
+// (önceden User boştu → hepsi IP'ye düşüyordu). IP bölümlü auth politikaları etkilenmez.
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");

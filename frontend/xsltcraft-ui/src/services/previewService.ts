@@ -9,10 +9,27 @@ export interface PreviewTimings {
   serializeMs: number
 }
 
+/** Sunucudaki XSLT motoru (2.0.0): 1.0 → DotNet, 2.0 → Saxon. */
+export type XsltEngineName = 'DotNet' | 'Saxon'
+
 export interface PreviewResponse {
   html: string
   generationTimeMs: number
-  timings?: PreviewTimings
+  timings?: PreviewTimings | null
+  engine?: XsltEngineName | null
+  cacheHit?: boolean
+}
+
+/**
+ * Önizleme/doğrulama hata gövdesi (2.0.0): 400 içerik hatası, 429 kullanıcı meşgul / hız sınırı,
+ * 503 motor meşgul/yok (Retry-After), 500 sunucu hatası. `error/line/column` alanları değişmez.
+ */
+export interface PreviewErrorBody {
+  error?: string
+  line?: number
+  column?: number
+  kind?: string
+  engine?: XsltEngineName | null
 }
 
 export async function previewFromBlockTree(
