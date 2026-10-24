@@ -104,6 +104,24 @@ public sealed class FullSandboxMatrixTests(SecretFixture fx, ITestOutputHelper o
     }
 
     [Fact]
+    public void UseWhen_InlineFunction_NotCoveredByXPath20Ceiling_ScannerIsOnlyGate()
+    {
+        // T2.3 BULGUSU: XPATH_VERSION_FOR_XSLT=20 use-when ifadelerine uygulanmıyor — satır içi function() / let derleniyor.
+        // (Özyinelemeli sürümü worker'ı çökertir: WorkerIsolationTests.UseWhenInlineRecursion_Unscreened_CrashesWorker_PoolSurvives.)
+        // Burada ZARARSIZ sürüm: derleme başarılı olmamalıydı ama oluyor; tek kapı XsltSafety (UseWhen → Security).
+        var xslt = Stylesheet("<x/>", top: "<xsl:template name=\"t\" use-when=\"let $f := function($b) { $b } return $f(true())\"/>");
+        Assert.Equal("<out><x/></out>", Render(xslt));
+        Assert.Equal("<out><x/></out>", Render(xslt, engine: GridEngine)); // Api süreci içi profil de aynı
+
+        var report = XsltCraft.Application.Validation.XsltSafety.Scan(xslt, XsltCraft.Application.Validation.Safety.XsltSafetyMode.Execute);
+        Assert.Contains(report.Findings, f => f.Code == "UseWhen");
+
+        // Karşılaştırma: aynı ifade normal select'te tavana takılır.
+        var d = Fail(Stylesheet("<xsl:value-of select=\"let $f := function($b) { $b } return $f(true())\"/>"));
+        Assert.Equal((XsltFailureKind.Unsupported, "XPST0003"), (d.Kind, d.ErrorCode));
+    }
+
+    [Fact]
     public void XslMessage_And_Trace_ProduceNoOutputLeak()
     {
         // stderr boşluğu SaxonStdioTests.XslMessage_And_Trace_ProduceNoStderr'de; burada içerik çıktıya/teşhise sızmaz.

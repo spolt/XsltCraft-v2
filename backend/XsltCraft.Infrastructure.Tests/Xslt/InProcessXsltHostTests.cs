@@ -182,6 +182,38 @@ public sealed class InProcessXsltHostTests : IDisposable
         Assert.All(_isolated.Requests, r => Assert.Equal(user, r.UserId));
     }
 
+    [Fact(Skip = "T3.1'de kapatılacak — kapı blok kontrolü gerçek yere göre")]
+    public async Task IsolatedBlockedUser_CannotReachWorker_ViaDegradedGrid()
+    {
+        // G1 KALINTISI (T2.4b notu, açık): kapı blok kontrolünü İSTENEN yere (grid → InProcess) göre yapıyor. Raw'da
+        // 3 kill ile İZOLE yerde bloklanan kullanıcı, süreç içi host bozulmuş moddayken grid isteğiyle worker'a ulaşıyor.
+        // Skip'siz koşu (T2.3, kırmızı doğrulandı): grid.Diagnostic.Kind = Timeout (istek worker'a gitti), UserBusy değil.
+        _isolated.Respond = r => new XsltHostResult(null, r.Engine, null, false,
+            new XsltDiagnostic("süre", 0, 0, XsltFailureKind.Timeout, r.Engine));
+        var (host, guard) = Create();
+        await host.ExecuteAsync(Slow(TimeSpan.FromMilliseconds(100)));
+        await host.ExecuteAsync(Slow(TimeSpan.FromMilliseconds(100)));
+        Assert.True(guard.IsDegraded);
+
+        var options = new XsltExecutionOptions();
+        var gate = new XsltUserGate(Options.Create(options), TimeProvider.System, NullLogger<XsltUserGate>.Instance);
+        var service = new XsltExecutionService(options, new DefaultXsltSafetyScanner(), gate, _isolated, host);
+        var user = Guid.NewGuid();
+        var xslt = Stylesheet("1.0", "<xsl:template match=\"/\"><b/></xsl:template>");
+
+        for (var i = 0; i < options.UserGate.IsolatedAbuseThreshold; i++)
+            await service.ExecuteAsync(new XsltRunRequest(XsltRoute.Raw, xslt, Xml, XsltOperation.Render, user));
+        var blocked = await service.ExecuteAsync(new XsltRunRequest(XsltRoute.Raw, xslt, Xml, XsltOperation.Render, user));
+        Assert.Equal(XsltFailureKind.UserBusy, blocked.Diagnostic!.Kind); // izole yerde blok çalışıyor
+        var reachedWorker = _isolated.Requests.Count;
+
+        var grid = await service.ExecuteAsync(new XsltRunRequest(XsltRoute.Grid, xslt, Xml, XsltOperation.Render, user));
+
+        // Beklenen (T3.1 sonrası): grid isteği de FİİLÎ yer (izole) bloklu olduğu için reddedilir, worker'a gitmez.
+        Assert.Equal(XsltFailureKind.UserBusy, grid.Diagnostic!.Kind);
+        Assert.Equal(reachedWorker, _isolated.Requests.Count);
+    }
+
     // ------------------------------------------------------------------ sınırlar (gerçek motorlar)
 
     [Theory]
