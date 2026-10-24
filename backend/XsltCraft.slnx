@@ -4,8 +4,11 @@
     <Project Path="XsltCraft.Domain/XsltCraft.Domain.csproj" />
     <Project Path="XsltCraft.Infrastructure/XsltCraft.Infrastructure.csproj" />
     <Project Path="XsltCraft/XsltCraft.Api.csproj" />
+    <Project Path="XsltCraft.XsltWorker.Contracts/XsltCraft.XsltWorker.Contracts.csproj" />
+    <Project Path="XsltCraft.XsltWorker/XsltCraft.XsltWorker.csproj" />
   </Folder>
   <Project Path="XsltCraft.Tests/XsltCraft.Tests.csproj" />
   <Project Path="XsltCraft.Application.Tests/XsltCraft.Application.Tests.csproj" />
   <Project Path="XsltCraft.Infrastructure.Tests/XsltCraft.Infrastructure.Tests.csproj" />
+  <Project Path="XsltCraft.XsltWorker.Tests/XsltCraft.XsltWorker.Tests.csproj" />
 </Solution>
