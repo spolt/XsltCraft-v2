@@ -1,0 +1,90 @@
+<Project>
+
+  <!--
+    Maven jar bütünlük kapısı: IKVM.Maven.Sdk'nın çözdüğü her jar (IkvmReferenceItem.Compile) SHA-256 ile
+    maven-hashes.txt'e karşı doğrulanır. Listede olmayan jar, uyuşmayan hash veya listede olup çözümlenmeyen
+    artefakt → build HATASI (fail-closed). IKVM dönüşümünden (CoreCompile öncesi) önce koşar.
+  -->
+  <PropertyGroup>
+    <MavenHashesFile Condition=" '$(MavenHashesFile)' == '' ">$(MSBuildThisFileDirectory)maven-hashes.txt</MavenHashesFile>
+  </PropertyGroup>
+
+  <UsingTask TaskName="XsltCraftVerifyMavenHashes" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <HashFile ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Linq" />
+      <Using Namespace="System.Collections.Generic" />
+      <Using Namespace="System.Security.Cryptography" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        if (!File.Exists(HashFile))
+        {
+            Log.LogError("Maven hash dosyası bulunamadı: " + HashFile);
+            return false;
+        }
+
+        var expected = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in File.ReadAllLines(HashFile))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith("#"))
+                continue;
+            var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2 || parts[0].Length != 64)
+            {
+                Log.LogError("maven-hashes.txt satırı geçersiz: " + line);
+                return false;
+            }
+            expected[parts[1]] = parts[0].ToLowerInvariant();
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in Files)
+        {
+            var path = item.ItemSpec;
+            var name = Path.GetFileName(path);
+            if (!File.Exists(path))
+            {
+                Log.LogError("Maven jar bulunamadı: " + name);
+                continue;
+            }
+            string actual;
+            using (var sha = SHA256.Create())
+            using (var stream = File.OpenRead(path))
+                actual = string.Concat(sha.ComputeHash(stream).Select(b => b.ToString("x2")));
+
+            string want;
+            if (!expected.TryGetValue(name, out want))
+                Log.LogError("Maven jar maven-hashes.txt'te yok (sabitlenmemiş transitif bağımlılık?): " + name + " sha256=" + actual);
+            else
+            {
+                seen.Add(name);
+                if (want != actual)
+                    Log.LogError("Maven jar SHA-256 UYUŞMUYOR: " + name + " beklenen=" + want + " gerçek=" + actual);
+            }
+        }
+
+        foreach (var name in expected.Keys.Where(k => !seen.Contains(k)))
+            Log.LogError("maven-hashes.txt'teki artefakt çözümlenmedi: " + name);
+
+        return !Log.HasLoggedErrors;
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="VerifyMavenArtifactHashes" AfterTargets="GetMavenIkvmReferenceItems" BeforeTargets="CompileIkvmReferences;_CompileIkvmReferences;CoreCompile">
+    <PropertyGroup>
+      <_XsltCraftMavenJars>@(IkvmReferenceItem->WithMetadataValue('ReferenceSource', 'MavenReference')->'%(Compile)')</_XsltCraftMavenJars>
+    </PropertyGroup>
+    <ItemGroup>
+      <_XsltCraftMavenJar Include="$(_XsltCraftMavenJars)" />
+    </ItemGroup>
+    <Error Condition=" '@(_XsltCraftMavenJar)' == '' " Text="Maven jar listesi boş: IKVM.Maven.Sdk çözümlemesi beklenmedik biçimde değişti; hash doğrulaması yapılamadı." />
+    <XsltCraftVerifyMavenHashes Files="@(_XsltCraftMavenJar)" HashFile="$(MavenHashesFile)" />
+  </Target>
+
+</Project>

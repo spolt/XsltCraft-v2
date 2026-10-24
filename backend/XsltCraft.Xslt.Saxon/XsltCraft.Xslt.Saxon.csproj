@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Saxon-HE 12.10 (Java, MPL-2.0) — IKVM ile .NET'e çevrilir. IKVM/Maven bağımlılığı YALNIZ bu projede
+    bildirilir (LayeringTests bloke eder). Referans kuralı: yalnız XsltCraft.Application.
+    Kullananlar: XsltCraft.XsltWorker (izole worker) ve grid için süreç içi host (ADR 007/008).
+
+    Tedarik zinciri (ADR 008 §9):
+      - MavenReference sürümleri sabit; Saxon-HE 12.10'un transitif grafiği (pom'dan doğrulandı):
+          net.sf.saxon:Saxon-HE:12.10
+            ├─ org.xmlresolver:xmlresolver:5.3.3
+            ├─ org.xmlresolver:xmlresolver:5.3.3:data
+            ├─ nu.validator:htmlparser:1.4.16   (optional → alınmaz)
+            └─ jline:jline:2.14.6               (optional → alınmaz)
+        xmlresolver 5.3.3 pom'u bağımlılık bildirmez. İki xmlresolver artefaktı da aşağıda açıkça sabitlenir.
+      - NuGet: packages.lock.json (RestorePackagesWithLockFile); CI/Docker restore'u locked-mode ile.
+      - Jar bütünlüğü: maven-hashes.txt (SHA-256). Çözümlenen her jar build öncesi doğrulanır; listede
+        olmayan ya da hash'i uyuşmayan jar build'i KIRAR (MavenHashVerification.targets).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>1.11.2</Version>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- IKVM0100: opsiyonel Java bağımlılıkları (htmlparser/jline) yok — kabul.
+         IKVM0117: AnyURIValue.decode ByteBuffer — yalnız %'li collation URI'sinde; RestrictedCollationResolver
+         % içeren URI'yi decode'dan önce reddeder, kalan durum Throwable → EngineInternal (ADR 008 §1). -->
+    <NoWarn>$(NoWarn);IKVM0100;IKVM0117</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IKVM.Maven.Sdk" Version="1.12.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <MavenReference Include="net.sf.saxon:Saxon-HE" Version="12.10" />
+    <MavenReference Include="org.xmlresolver:xmlresolver" Version="5.3.3" />
+    <MavenReference Include="xmlresolver-data">
+      <GroupId>org.xmlresolver</GroupId>
+      <ArtifactId>xmlresolver</ArtifactId>
+      <Classifier>data</Classifier>
+      <Version>5.3.3</Version>
+    </MavenReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XsltCraft.Application\XsltCraft.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="XsltCraft.Xslt.Saxon.Tests" />
+  </ItemGroup>
+
+  <Import Project="MavenHashVerification.targets" />
+
+</Project>
