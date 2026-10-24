@@ -13,6 +13,8 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <NoWarn>$(NoWarn);IKVM0100;IKVM0117</NoWarn>
+    <!-- Measurement/StackProbeProgram: alt süreç yığın ölçümü için kendi Main'i (vstest bunu kullanmaz). -->
+    <GenerateProgramFile>false</GenerateProgramFile>
   </PropertyGroup>
 
   <ItemGroup>
