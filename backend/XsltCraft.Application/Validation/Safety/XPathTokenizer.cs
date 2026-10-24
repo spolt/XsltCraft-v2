@@ -33,8 +33,15 @@ internal readonly struct XPathToken(XPathTokenKind kind, string text, string? ur
 /// </summary>
 internal static class XPathTokenizer
 {
-    public static List<XPathToken> Tokenize(string expr)
+    public static List<XPathToken> Tokenize(string expr) => Tokenize(expr, out _);
+
+    /// <summary>
+    /// <paramref name="malformed"/> = true: kapanmamış string literal / yorum ya da belirsiz
+    /// (kapanmayan veya tırnak / yorum içeren) <c>Q{…}</c> braced URI — çağıran fail-closed davranır.
+    /// </summary>
+    public static List<XPathToken> Tokenize(string expr, out bool malformed)
     {
+        malformed = false;
         var tokens = new List<XPathToken>(Math.Min(expr.Length, 256));
         int i = 0, n = expr.Length;
 
@@ -49,23 +56,19 @@ internal static class XPathTokenizer
             }
 
             // Yorum: (: ... :) — iç içe olabilir.
-            if (c == '(' && i + 1 < n && expr[i + 1] == ':')
+            if (XPathLexer.IsCommentStart(expr, i))
             {
-                int depth = 1;
-                i += 2;
-                while (i < n && depth > 0)
-                {
-                    if (i + 1 < n && expr[i] == '(' && expr[i + 1] == ':') { depth++; i += 2; }
-                    else if (i + 1 < n && expr[i] == ':' && expr[i + 1] == ')') { depth--; i += 2; }
-                    else i++;
-                }
+                i = XPathLexer.SkipComment(expr, i, out var commentClosed);
+                malformed |= !commentClosed;
                 continue;
             }
 
             if (c == '\'' || c == '"')
             {
-                i = ReadString(expr, i, c, out var value);
-                tokens.Add(new XPathToken(XPathTokenKind.String, value));
+                int end = XPathLexer.SkipString(expr, i, out var stringClosed);
+                malformed |= !stringClosed;
+                tokens.Add(new XPathToken(XPathTokenKind.String, StringValue(expr, i, end, stringClosed)));
+                i = end;
                 continue;
             }
 
@@ -84,13 +87,13 @@ internal static class XPathTokenizer
             }
 
             // EQName: Q{uri}local
-            if (c == 'Q' && i + 1 < n && expr[i + 1] == '{')
+            if (XPathLexer.IsBracedUriStart(expr, i))
             {
                 int uriStart = i + 2;
-                int k = uriStart;
-                while (k < n && expr[k] != '}') k++;
-                string uri = expr.Substring(uriStart, Math.Max(0, k - uriStart));
-                k = k < n ? k + 1 : k; // '}' atla
+                int k = XPathLexer.FindBracedUriEnd(expr, i, out var uriClosed, out var hasBrace, out var ambiguous);
+                malformed |= !uriClosed || hasBrace || ambiguous;
+                string uri = expr.Substring(uriStart, k - uriStart);
+                k = uriClosed ? k + 1 : k; // '}' atla
                 int localStart = k;
                 while (k < n && IsNcNameChar(expr[k])) k++;
                 string local = expr.Substring(localStart, k - localStart);
@@ -124,25 +127,12 @@ internal static class XPathTokenizer
         return tokens;
     }
 
-    private static int ReadString(string expr, int i, char quote, out string value)
+    /// <summary>Literal içeriği: tırnaklar hariç, <c>''</c>/<c>""</c> kaçışı çözülmüş.</summary>
+    private static string StringValue(string expr, int start, int end, bool closed)
     {
-        int n = expr.Length;
-        var sb = new System.Text.StringBuilder();
-        i++; // açılış tırnağı
-        while (i < n)
-        {
-            char c = expr[i];
-            if (c == quote)
-            {
-                if (i + 1 < n && expr[i + 1] == quote) { sb.Append(quote); i += 2; continue; } // '' / "" kaçışı
-                i++; // kapanış
-                break;
-            }
-            sb.Append(c);
-            i++;
-        }
-        value = sb.ToString();
-        return i;
+        char quote = expr[start];
+        int contentEnd = closed ? end - 1 : end;
+        return expr.Substring(start + 1, contentEnd - start - 1).Replace(new string(quote, 2), quote.ToString());
     }
 
     private static int ReadQName(string expr, int i, out string name)

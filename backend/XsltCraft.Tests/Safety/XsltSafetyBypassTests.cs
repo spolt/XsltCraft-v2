@@ -195,4 +195,298 @@ public class XsltSafetyBypassTests
     {
         Assert.False(XsltSafety.Scan(Wrap(body), XsltSafetyMode.Execute).HasFindings);
     }
+
+    // ── G1 düzeltmesi: AVT sınırı (yorum / iç içe süslü parantez / braced URI) ───
+
+    private const string XslNs = "http://www.w3.org/1999/XSL/Transform";
+
+    /// <summary>Kök özniteliği ve üst düzey bildirimlerle tam stylesheet (Wrap'ın kapsamadığı durumlar).</summary>
+    private static string Sheet(string rootAttrs, string topLevel, string templateBody = "<p>x</p>", string ns = "") =>
+        $"<xsl:stylesheet version=\"2.0\" {rootAttrs} xmlns:xsl=\"{XslNs}\" {ns}>{topLevel}"
+        + $"<xsl:template match=\"/\">{templateBody}</xsl:template></xsl:stylesheet>";
+
+    private static void AssertSecurity(string xslt, string code)
+    {
+        // Security bulgusu her iki modda da raporlanmalı.
+        Assert.Contains(code, Codes(xslt, XsltSafetyMode.Execute));
+        Assert.Contains(code, Codes(xslt, XsltSafetyMode.Store));
+    }
+
+    [Fact]
+    public void AvtCommentBrace_IsThreat() =>
+        AssertSecurity(Wrap("<a href=\"{(: } :) doc('file:///etc/passwd')}\"/>"), "ForbiddenFunction");
+
+    [Fact]
+    public void AvtNestedCommentBrace_IsThreat() =>
+        AssertSecurity(Wrap("<a href=\"{1 (: dış (: } :) } :) , doc('file:///etc/passwd')}\"/>"), "ForbiddenFunction");
+
+    [Fact]
+    public void AvtUnclosedComment_IsThreat() =>
+        AssertSecurity(Wrap("<a href=\"{(: } doc('x')}\"/>"), "MalformedAvt");
+
+    [Fact]
+    public void AvtUnclosedBrace_IsThreat() =>
+        AssertSecurity(Wrap("<a href=\"x{string(.)\"/>"), "MalformedAvt");
+
+    [Fact]
+    public void AvtUnclosedString_IsThreat() =>
+        AssertSecurity(Wrap("<a href=\"{'abc}\"/>"), "MalformedAvt");
+
+    [Fact]
+    public void AvtMapConstructorBraces_IsThreat() =>
+        // İlk '}' map kurucusunu kapatır, ifadeyi değil — doc() ifadenin içinde kalır.
+        AssertSecurity(Wrap("<a href=\"{map{'a':1}?a, doc('x')}\"/>"), "ForbiddenFunction");
+
+    [Fact]
+    public void AvtBracedUriWithQuote_IsAmbiguous_IsThreat() =>
+        AssertSecurity(Wrap("<a href=\"{Q{'}f(), doc('x')}\"/>"), "MalformedAvt");
+
+    [Fact]
+    public void PrefixedXmlnsLocalName_IsScannedAsAvt() =>
+        // Ad alanı bildirimi yalnız xmlns ad alanıdır; "p:xmlns" sıradan LRE (AVT) özniteliğidir.
+        AssertSecurity(Wrap("<a p:xmlns=\"{doc('x')}\" xmlns:p=\"urn:p\"/>"), "ForbiddenFunction");
+
+    [Theory]
+    [InlineData("<xsl:value-of select=\"'abc\"/>")]
+    [InlineData("<xsl:value-of select=\"1 (: kapanmayan\"/>")]
+    [InlineData("<xsl:value-of select=\"Q{urn:x\"/>")]
+    public void MalformedXPath_IsThreat(string body) =>
+        AssertSecurity(Wrap(body), "MalformedXPath");
+
+    // ── G1 düzeltmesi: collation AVT ──────────────────────────────────────────
+
+    [Fact]
+    public void SortCollationAvt_Doc_IsThreat()
+    {
+        var xslt = Wrap("<xsl:for-each select=\"*\"><xsl:sort select=\".\" collation=\"{doc('file:///x')}\"/></xsl:for-each>");
+        AssertSecurity(xslt, "ForbiddenFunction");
+        AssertSecurity(xslt, "UnsafeCollation");
+    }
+
+    [Theory]
+    [InlineData("{concat('http://saxon', '.sf.net/collation?class=X')}")]
+    [InlineData("http://www.w3.org/2005/xpath-functions/collation/{'codepoint'}")]
+    public void DynamicCollation_IsThreat(string collation) =>
+        AssertSecurity(
+            Wrap($"<xsl:for-each select=\"*\"><xsl:sort select=\".\" collation=\"{collation}\"/></xsl:for-each>"),
+            "UnsafeCollation");
+
+    [Fact]
+    public void StaticCodepointCollation_NoFindings() =>
+        Assert.Empty(Codes(Wrap("<xsl:for-each select=\"*\"><xsl:sort select=\".\" "
+            + "collation=\"http://www.w3.org/2005/xpath-functions/collation/codepoint\"/></xsl:for-each>")));
+
+    // ── G1 düzeltmesi: xsl:function ile yasak ad alanı beyaz listeye girmez ─────
+
+    private static string WithFunction(string fnName, string nsDecl, string call) =>
+        Sheet("", $"<xsl:function name=\"{fnName}\"><xsl:sequence select=\"1\"/></xsl:function>",
+            $"<xsl:value-of select=\"{call}\"/>", nsDecl);
+
+    [Fact]
+    public void UserFunctionInSaxonNs_DoesNotWhitelist()
+    {
+        var xslt = WithFunction("saxon:x", "xmlns:saxon=\"http://saxon.sf.net/\"", "saxon:evaluate('1')");
+        AssertSecurity(xslt, "ForbiddenFunctionNamespace");
+        AssertSecurity(xslt, "ForbiddenNamespace"); // tanımın kendisi
+    }
+
+    [Fact]
+    public void UserFunctionInJavaNs_DoesNotWhitelist()
+    {
+        var xslt = WithFunction("j:f", "xmlns:j=\"java:java.lang.Runtime\"", "j:getRuntime()");
+        AssertSecurity(xslt, "ForbiddenFunctionNamespace");
+        AssertSecurity(xslt, "ForbiddenNamespace");
+    }
+
+    [Fact]
+    public void UserFunctionInClitypeNs_DoesNotWhitelist()
+    {
+        var xslt = WithFunction("c:f", "xmlns:c=\"clitype:System.IO.File\"", "c:ReadAllText('x')");
+        AssertSecurity(xslt, "ForbiddenFunctionNamespace");
+        AssertSecurity(xslt, "ForbiddenNamespace");
+    }
+
+    [Fact]
+    public void UserFunctionEqNameInJavaNs_IsThreat() =>
+        AssertSecurity(Sheet("", "<xsl:function name=\"Q{java:java.lang.Runtime}f\"><xsl:sequence select=\"1\"/></xsl:function>", "<a/>"),
+            "ForbiddenNamespace");
+
+    [Fact]
+    public void UserFunctionInMathNs_StillUnsupported()
+    {
+        var xslt = WithFunction("m:x", "xmlns:m=\"http://www.w3.org/2005/xpath-functions/math\"", "m:pi()");
+        Assert.Contains("UnsupportedFunctionNamespace", Codes(xslt, XsltSafetyMode.Execute));
+        AssertSecurity(xslt, "ReservedFunctionNamespace");
+    }
+
+    [Theory]
+    [InlineData("fn", "http://www.w3.org/2005/xpath-functions")]
+    [InlineData("xs", "http://www.w3.org/2001/XMLSchema")]
+    [InlineData("x", "http://www.w3.org/1999/XSL/Transform")]
+    [InlineData("math", "http://www.w3.org/2005/xpath-functions/math")]
+    [InlineData("map", "http://www.w3.org/2005/xpath-functions/map")]
+    [InlineData("array", "http://www.w3.org/2005/xpath-functions/array")]
+    public void UserFunctionNameInReservedNs_IsThreat(string prefix, string uri) =>
+        AssertSecurity(
+            Sheet("", $"<xsl:function name=\"{prefix}:f\"><xsl:sequence select=\"1\"/></xsl:function>", "<a/>",
+                $"xmlns:{prefix}=\"{uri}\""),
+            "ReservedFunctionNamespace");
+
+    [Fact]
+    public void UserFunctionInOwnNs_StillAllowed() =>
+        Assert.Empty(Codes(WithFunction("my:f", "xmlns:my=\"urn:my\"", "my:f()")));
+
+    // ── G1 düzeltmesi: boolean öznitelik (expand-text / static) fail-closed ─────
+
+    [Fact]
+    public void ExpandTextWhitespace_IsThreat() =>
+        AssertSecurity(Sheet("expand-text=\" yes\"", "", "<p>{doc('file:///etc/passwd')}</p>"), "ExpandText");
+
+    [Fact]
+    public void ExpandTextWhitespace_OnLre_IsThreat() =>
+        AssertSecurity(Wrap("<p xsl:expand-text=\" yes\">{doc('x')}</p>"), "ExpandText");
+
+    [Fact]
+    public void StaticWhitespace_IsThreat() =>
+        AssertSecurity(Sheet("", "<xsl:param name=\"p\" static=\" yes\" select=\"1\"/>"), "StaticVariable");
+
+    [Theory]
+    [InlineData("YES")]
+    [InlineData("Yes")]
+    [InlineData("1")]
+    [InlineData("true ")]
+    [InlineData("TRUE")]
+    [InlineData("")]
+    [InlineData("on")]
+    [InlineData(" no")] // NBSP XML boşluğu değil → "no" sayılmaz
+    public void ExpandTextOddValue_IsThreat(string value) =>
+        AssertSecurity(Sheet($"expand-text=\"{value}\"", ""), "ExpandText");
+
+    [Theory]
+    [InlineData("no")]
+    [InlineData(" no ")]
+    [InlineData("NO")]
+    [InlineData("false")]
+    [InlineData("0")]
+    public void ExpandTextExplicitOff_NoFindings(string value)
+    {
+        Assert.Empty(Codes(Sheet($"expand-text=\"{value}\"", "")));
+        Assert.Empty(Codes(Sheet("", $"<xsl:param name=\"p\" static=\"{value}\" select=\"1\"/>")));
+    }
+
+    // ── Store modu yanlış-pozitif / izin listesi ───────────────────────────────
+
+    private const string MsxslDecl = "xmlns:ms=\"urn:schemas-microsoft-com:xslt\"";
+    private const string ExslDecl = "xmlns:exsl=\"http://exslt.org/common\"";
+
+    [Theory]
+    [InlineData("ms:node-set($v)")]
+    [InlineData("ms:format-date('2020-01-01', 'yyyy')")]
+    [InlineData("ms:format-time('10:00:00', 'HH')")]
+    [InlineData("ms:string-compare('a', 'b')")]
+    [InlineData("ms:utc('2020-01-01')")]
+    [InlineData("ms:local-name('a')")]
+    [InlineData("ms:namespace-uri('a')")]
+    [InlineData("ms:number('1')")]
+    [InlineData("exsl:node-set($v)")]
+    [InlineData("exsl:object-type($v)")]
+    public void HarmlessMsxslExslFunctions_NoFindings(string call)
+    {
+        var xslt = Sheet("", "<xsl:variable name=\"v\"><a/></xsl:variable>",
+            $"<xsl:value-of select=\"string({call})\"/>", MsxslDecl + " " + ExslDecl);
+        Assert.Empty(Codes(xslt, XsltSafetyMode.Store));
+        Assert.Empty(Codes(xslt, XsltSafetyMode.Execute));
+    }
+
+    [Theory]
+    [InlineData("ms:foo()")]
+    [InlineData("exsl:document('x')")]
+    public void UnknownMsxslExslFunctions_AreThreat(string call) =>
+        AssertSecurity(Sheet("", "", $"<xsl:value-of select=\"{call}\"/>", MsxslDecl + " " + ExslDecl),
+            "ForbiddenFunctionNamespace");
+
+    [Theory]
+    [InlineData("xmlns:msxsl=\"urn:schemas-microsoft-com:xslt\"")]
+    [InlineData("")] // bildirilmemiş msxsl öneki: çalışma anı hatası, zararsız
+    public void SystemPropertyMsxslLiteral_NoFindings(string nsDecl) =>
+        Assert.Empty(Codes(Sheet("", "", "<xsl:value-of select=\"system-property('msxsl:version')\"/>", nsDecl),
+            XsltSafetyMode.Store));
+
+    [Theory]
+    [InlineData("system-property(concat('msxsl:', 'version'))")] // dinamik argüman
+    [InlineData("system-property('xsl:' || 'vendor')")]          // literal + birleştirme
+    [InlineData("system-property(' xsl:vendor')")]               // boşluklu ad
+    [InlineData("system-property('java.version')")]              // öneksiz (Java sistem özelliği)
+    public void SystemPropertyNonLiteralOrForeign_IsThreat(string expr) =>
+        AssertSecurity(Wrap($"<xsl:value-of select=\"{expr}\"/>"), "SystemProperty");
+
+    [Fact]
+    public void SystemPropertyXslPrefixReboundToOtherNs_IsThreat() =>
+        AssertSecurity(
+            Wrap("<x:value-of xmlns:x=\"http://www.w3.org/1999/XSL/Transform\" xmlns:xsl=\"urn:other\" "
+                + "select=\"system-property('xsl:vendor')\"/>"),
+            "SystemProperty");
+
+    [Theory]
+    [InlineData("<a _foo=\"bar\">x</a>")]
+    [InlineData("<a _foo=\"{string(.)}\">x</a>")]
+    public void LreUnprefixedUnderscoreAttribute_IsNotShadow(string body) =>
+        // XSLT 3.0 §3.13.2: LRE'de gölge öznitelik yalnız xsl: ad alanında (xsl:_ad); "_foo" sıradan çıktı özniteliği.
+        Assert.Empty(Codes(Wrap(body), XsltSafetyMode.Store));
+
+    [Fact]
+    public void LreUnprefixedUnderscoreAttribute_AvtStillScanned() =>
+        AssertSecurity(Wrap("<a _foo=\"{doc('x')}\">x</a>"), "ForbiddenFunction");
+
+    [Fact]
+    public void LreXslShadowAttribute_IsThreat() =>
+        AssertSecurity(Wrap("<a xsl:_use-when=\"doc-available('x')\">x</a>"), "ShadowAttribute");
+
+    [Fact]
+    public void XslNamespacedUseWhen_OnXslElement_IsThreat() =>
+        AssertSecurity(Wrap("<xsl:value-of xsl:use-when=\"doc-available('x')\" select=\"1\"/>"), "UseWhen");
+
+    // ── Derinlik: en fazla 256 seviye ─────────────────────────────────────────
+
+    /// <summary>Toplam <paramref name="levels"/> eleman seviyesi (stylesheet + template + iç içe a'lar).</summary>
+    private static string NestedSheet(int levels)
+    {
+        int inner = levels - 2;
+        return Wrap(string.Concat(Enumerable.Repeat("<a>", inner)) + string.Concat(Enumerable.Repeat("</a>", inner)));
+    }
+
+    [Fact]
+    public void Depth256_Allowed() =>
+        Assert.DoesNotContain("StylesheetDepthOver256", Codes(NestedSheet(256)));
+
+    [Fact]
+    public void Depth257_IsThreat() =>
+        AssertSecurity(NestedSheet(257), "StylesheetDepthOver256");
+
+    // ── Sürüm ayrıştırma: sniffer ile aynı kural (XsltVersionNumber) ──────────
+
+    [Theory]
+    [InlineData("2.0", false)]
+    [InlineData(" 2.0 ", false)]
+    [InlineData("3.0", true)]
+    [InlineData(" 3.0 ", true)]
+    public void Version_ParsedLikeSniffer(string version, bool above20)
+    {
+        var xslt = $"<xsl:stylesheet version=\"{version}\" xmlns:xsl=\"{XslNs}\"><xsl:template match=\"/\"/></xsl:stylesheet>";
+        Assert.Equal(above20, XsltCraft.Application.Xslt.Engines.XsltVersionSniffer.Sniff(xslt) > 2.0m);
+        Assert.Equal(above20, Codes(xslt).Contains("VersionAbove20"));
+    }
+
+    [Theory]
+    [InlineData("+3.0")]
+    [InlineData("3,0")]
+    [InlineData("abc")]
+    [InlineData("2.0e0")]
+    public void UnparseableVersion_UnsupportedInExecute_AllowedInStore(string version)
+    {
+        var xslt = $"<xsl:stylesheet version=\"{version}\" xmlns:xsl=\"{XslNs}\"><xsl:template match=\"/\"/></xsl:stylesheet>";
+        Assert.Null(XsltCraft.Application.Xslt.Engines.XsltVersionSniffer.Sniff(xslt));
+        Assert.Contains("InvalidVersion", Codes(xslt, XsltSafetyMode.Execute));
+        Assert.Empty(Codes(xslt, XsltSafetyMode.Store));
+    }
 }

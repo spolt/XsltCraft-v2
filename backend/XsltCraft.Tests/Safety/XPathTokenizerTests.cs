@@ -68,6 +68,46 @@ public class XPathTokenizerTests
         Assert.Contains(toks, t => t.Kind == XPathTokenKind.Number && t.Text == "1");
     }
 
+    [Theory]
+    [InlineData("'abc", true)]                 // kapanmamış literal
+    [InlineData("1 (: (: :) x", true)]         // kapanmamış iç içe yorum
+    [InlineData("Q{urn:x", true)]              // kapanmamış braced URI
+    [InlineData("Q{'}f()", true)]              // tırnak içeren braced URI → belirsiz
+    [InlineData("Q{a{b}f()", true)]            // '{' içeren braced URI
+    [InlineData("concat('a''b', \"c\") (: ok :)", false)]
+    [InlineData("Q{urn:x}f()", false)]
+    public void Malformed_IsReported(string expr, bool expected)
+    {
+        XPathTokenizer.Tokenize(expr, out var malformed);
+        Assert.Equal(expected, malformed);
+    }
+
+    [Theory]
+    // (değer, beklenen kapanış '}' indeksi — açılış '{' 0. karakter)
+    [InlineData("{a}", 2)]
+    [InlineData("{'}'}", 4)]
+    [InlineData("{(: } :)a}", 9)]
+    [InlineData("{(: (: } :) } :)a}", 17)]
+    [InlineData("{map{'a':1}?a}", 13)]
+    [InlineData("{Q{urn:x}f()}", 12)]
+    public void FindEnclosedExpressionEnd_SkipsLiteralsCommentsAndNestedBraces(string value, int expectedEnd)
+    {
+        int end = XPathLexer.FindEnclosedExpressionEnd(value, 1, out var malformed);
+        Assert.False(malformed);
+        Assert.Equal(expectedEnd, end);
+    }
+
+    [Theory]
+    [InlineData("{a")]
+    [InlineData("{(: } a}")]
+    [InlineData("{'}")]
+    [InlineData("{Q{'}a}")]
+    public void FindEnclosedExpressionEnd_Unclosed_IsMalformed(string value)
+    {
+        XPathLexer.FindEnclosedExpressionEnd(value, 1, out var malformed);
+        Assert.True(malformed);
+    }
+
     [Fact]
     public void BraceInsideString_DoesNotBreakTokenizing()
     {

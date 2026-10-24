@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml;
 using XsltCraft.Application.Xslt;
 
@@ -25,7 +24,7 @@ public sealed class XsltSafetyScanner
             return XsltSafetyReport.Clean;
 
         var findings = new List<XsltSafetyFinding>();
-        var userFunctionNamespaces = CollectUserFunctionNamespaces(xslt);
+        var userFunctionNamespaces = XsltSafetyNamespaces.CollectUserFunctionNamespaces(xslt);
 
         try
         {
@@ -42,11 +41,12 @@ public sealed class XsltSafetyScanner
                 if (reader.NodeType != XmlNodeType.Element)
                     continue;
 
-                if (reader.Depth > XsltSafetyRules.MaxElementDepth && !depthReported)
+                // Depth 0 tabanlı (kök = 0) → seviye = Depth + 1; en fazla MaxElementDepth seviye serbest.
+                if (reader.Depth + 1 > XsltSafetyRules.MaxElementDepth && !depthReported)
                 {
                     depthReported = true;
                     Add(findings, "StylesheetDepthOver256", XsltSafetySeverity.Security,
-                        $"Stylesheet eleman derinliği çok fazla (>{XsltSafetyRules.MaxElementDepth}).", lineInfo);
+                        $"Stylesheet eleman derinliği çok fazla (en fazla {XsltSafetyRules.MaxElementDepth} seviye).", lineInfo);
                 }
 
                 if (!rootChecked)
@@ -122,7 +122,7 @@ public sealed class XsltSafetyScanner
                 Add(findings, "UnknownXslElement", XsltSafetySeverity.Security,
                     $"Bilinmeyen/izinsiz XSLT elemanı: xsl:{local}.", lineInfo);
         }
-        else if (IsForbiddenNamespace(ns))
+        else if (XsltSafetyNamespaces.IsForbidden(ns))
         {
             Add(findings, "ForbiddenNamespace", XsltSafetySeverity.Security,
                 $"Yasak ad alanında eleman: {{{ns}}}{local}.", lineInfo);
@@ -162,14 +162,22 @@ public sealed class XsltSafetyScanner
         string ans = reader.NamespaceURI;
         string alocal = reader.LocalName;
 
-        // Ad alanı bildirimleri (xmlns, xmlns:x) — serbest.
-        if (ans == XsltSafetyRules.XmlnsNs || alocal == "xmlns")
+        // Ad alanı bildirimleri (xmlns, xmlns:x) — serbest. Yalnız ad alanı URI'sine bakılır:
+        // başka ad alanındaki "p:xmlns" sıradan (AVT) özniteliktir ve taranmalıdır.
+        if (ans == XsltSafetyRules.XmlnsNs)
             return;
 
         string value = reader.Value;
+        bool inNoNs = string.IsNullOrEmpty(ans);
 
-        // Gölge öznitelik: _ ile başlayan (ör. _select) → kaçış vektörü.
-        if (alocal.Length > 0 && alocal[0] == '_')
+        // XSLT denetim özniteliği: xsl: elemanında ad alanısız ya da herhangi bir elemanda xsl: ad alanlı.
+        // (xsl: elemanında xsl: ad alanlı öznitelik XTSE0090'dır; fail-closed olarak yine denetlenir.)
+        bool xslControlAttr = (ownerIsXsl && inNoNs) || ans == XsltSafetyRules.Xsl;
+
+        // Gölge öznitelik (XSLT 3.0 §3.13.2): xsl: elemanında "_ad" veya LRE'de "xsl:_ad" → derleme
+        // anında değerlendirilen statik AVT; kaçış vektörü. LRE üzerindeki ad alanısız "_ad" gölge DEĞİL,
+        // sıradan çıktı özniteliğidir (aşağıda AVT olarak taranır).
+        if (xslControlAttr && alocal.Length > 0 && alocal[0] == '_')
         {
             Add(findings, "ShadowAttribute", XsltSafetySeverity.Security,
                 $"Gölge (shadow) öznitelik yasak: {alocal}.", lineInfo);
@@ -177,15 +185,12 @@ public sealed class XsltSafetyScanner
         }
 
         // Yasak ad alanında öznitelik (saxon:/java:/clitype:).
-        if (IsForbiddenNamespace(ans))
+        if (XsltSafetyNamespaces.IsForbidden(ans))
         {
             Add(findings, "ForbiddenNamespace", XsltSafetySeverity.Security,
                 $"Yasak ad alanında öznitelik: {{{ans}}}{alocal}.", lineInfo);
             return;
         }
-
-        bool inNoNs = string.IsNullOrEmpty(ans);
-        bool xslControlAttr = (ownerIsXsl && inNoNs) || (!ownerIsXsl && ans == XsltSafetyRules.Xsl);
 
         if (xslControlAttr)
         {
@@ -199,13 +204,13 @@ public sealed class XsltSafetyScanner
                     Add(findings, "ExtensionElementPrefixes", XsltSafetySeverity.Security,
                         "extension-element-prefixes yasak — uzantı komutlarını etkinleştirir.", lineInfo);
                     return;
-                case "static" when IsTruthy(value):
+                case "static" when !IsExplicitlyOff(value):
                     Add(findings, "StaticVariable", XsltSafetySeverity.Security,
-                        "static=\"yes\" (statik değişken/parametre) yasak — derleme anında yürütülür.", lineInfo);
+                        "static (statik değişken/parametre) yalnız açıkça \"no\" ile serbest — derleme anında yürütülür.", lineInfo);
                     return;
-                case "expand-text" when IsTruthy(value):
+                case "expand-text" when !IsExplicitlyOff(value):
                     Add(findings, "ExpandText", XsltSafetySeverity.Security,
-                        "expand-text=\"yes\" yasak — metin düğümlerini ifadeye çevirir (tarama atlatma).", lineInfo);
+                        "expand-text yalnız açıkça \"no\" ile serbest — metin düğümlerini ifadeye çevirir (tarama atlatma).", lineInfo);
                     return;
                 case "version" when !ownerIsXsl || ownerLocal is "stylesheet" or "transform":
                     // xsl:stylesheet/xsl:transform (no-ns) veya LRE kökü (xsl:version) = XSLT sürümü.
@@ -214,8 +219,12 @@ public sealed class XsltSafetyScanner
                     return;
                 case "collation":
                 case "default-collation":
-                    CheckCollationLiteral(value, findings, lineInfo);
-                    return;
+                    // Literal kontrolünden sonra değer AVT olarak da taranır (return YOK).
+                    CheckCollation(value, findings, lineInfo);
+                    break;
+                case "name" when ownerIsXsl && inNoNs && ownerLocal == "function":
+                    CheckFunctionName(value, resolver, findings, lineInfo);
+                    break;
             }
         }
 
@@ -242,25 +251,12 @@ public sealed class XsltSafetyScanner
             if (c == '{')
             {
                 if (i + 1 < n && value[i + 1] == '{') { i += 2; continue; } // {{ kaçışı
-                int j = i + 1;
-                char? inString = null;
-                while (j < n)
-                {
-                    char d = value[j];
-                    if (inString is { } q)
-                    {
-                        if (d == q)
-                        {
-                            if (j + 1 < n && value[j + 1] == q) { j += 2; continue; } // '' / "" kaçışı
-                            inString = null;
-                        }
-                        j++;
-                        continue;
-                    }
-                    if (d == '\'' || d == '"') { inString = d; j++; continue; }
-                    if (d == '}') break;
-                    j++;
-                }
+                // Kapanış '}' string literal / (iç içe) yorum / Q{…} içindeyse ifadeyi bitirmez.
+                int j = XPathLexer.FindEnclosedExpressionEnd(value, i + 1, out bool malformed);
+                if (malformed)
+                    Add(findings, "MalformedAvt", XsltSafetySeverity.Security,
+                        "AVT ifadesi kapanmıyor ya da sınırı belirsiz (kapanmamış '{', string literal veya yorum) — fail-closed.",
+                        lineInfo);
                 AnalyzeExpression(value.Substring(i + 1, j - (i + 1)), resolver, findings, lineInfo, userFunctionNamespaces);
                 i = j < n ? j + 1 : j;
                 continue;
@@ -286,7 +282,11 @@ public sealed class XsltSafetyScanner
             Add(findings, "ExpressionOver8KB", XsltSafetySeverity.Security,
                 $"Tek XPath ifadesi çok uzun (>{XsltSafetyRules.MaxExpressionLength} bayt).", lineInfo);
 
-        var tokens = XPathTokenizer.Tokenize(expr);
+        var tokens = XPathTokenizer.Tokenize(expr, out bool malformed);
+        if (malformed)
+            Add(findings, "MalformedXPath", XsltSafetySeverity.Security,
+                "XPath ifadesinde kapanmamış string literal / yorum ya da belirsiz Q{…} — fail-closed.", lineInfo);
+
         int parenDepth = 0, maxParen = 0;
 
         for (int k = 0; k < tokens.Count; k++)
@@ -310,39 +310,39 @@ public sealed class XsltSafetyScanner
                             "Dinamik fonksiyon çağrısı ($değişken(...)) yasak.", lineInfo);
                     break;
                 case XPathTokenKind.Name:
-                {
-                    var next = Next(tokens, k);
-                    if (next.Kind == XPathTokenKind.Hash)
                     {
-                        Add(findings, "NamedFunctionReference", XsltSafetySeverity.Security,
-                            $"İsimli fonksiyon referansı (ad#N) yasak: {t.Text}#…", lineInfo);
-                        break;
-                    }
-                    if (next.Kind == XPathTokenKind.LParen)
-                    {
-                        if (t.Text == "function")
+                        var next = Next(tokens, k);
+                        if (next.Kind == XPathTokenKind.Hash)
                         {
-                            Add(findings, "InlineFunction", XsltSafetySeverity.Security,
-                                "Satır içi fonksiyon (function(...){...}) yasak.", lineInfo);
+                            Add(findings, "NamedFunctionReference", XsltSafetySeverity.Security,
+                                $"İsimli fonksiyon referansı (ad#N) yasak: {t.Text}#…", lineInfo);
                             break;
                         }
-                        ClassifyFunctionCall(t.Text, resolver, tokens, k, findings, lineInfo, userFunctionNamespaces);
-                    }
-                    break;
-                }
-                case XPathTokenKind.EqName:
-                {
-                    var next = Next(tokens, k);
-                    if (next.Kind == XPathTokenKind.Hash)
-                    {
-                        Add(findings, "NamedFunctionReference", XsltSafetySeverity.Security,
-                            $"İsimli fonksiyon referansı (ad#N) yasak: Q{{{t.Uri}}}{t.Text}#…", lineInfo);
+                        if (next.Kind == XPathTokenKind.LParen)
+                        {
+                            if (t.Text == "function")
+                            {
+                                Add(findings, "InlineFunction", XsltSafetySeverity.Security,
+                                    "Satır içi fonksiyon (function(...){...}) yasak.", lineInfo);
+                                break;
+                            }
+                            ClassifyFunctionCall(t.Text, resolver, tokens, k, findings, lineInfo, userFunctionNamespaces);
+                        }
                         break;
                     }
-                    if (next.Kind == XPathTokenKind.LParen)
-                        ClassifyFunction(t.Uri ?? "", t.Text, tokens, k, findings, lineInfo, userFunctionNamespaces);
-                    break;
-                }
+                case XPathTokenKind.EqName:
+                    {
+                        var next = Next(tokens, k);
+                        if (next.Kind == XPathTokenKind.Hash)
+                        {
+                            Add(findings, "NamedFunctionReference", XsltSafetySeverity.Security,
+                                $"İsimli fonksiyon referansı (ad#N) yasak: Q{{{t.Uri}}}{t.Text}#…", lineInfo);
+                            break;
+                        }
+                        if (next.Kind == XPathTokenKind.LParen)
+                            ClassifyFunction(t.Uri ?? "", t.Text, resolver, tokens, k, findings, lineInfo, userFunctionNamespaces);
+                        break;
+                    }
             }
         }
 
@@ -376,12 +376,17 @@ public sealed class XsltSafetyScanner
             return;
         }
 
-        ClassifyFunction(ns, local, tokens, k, findings, lineInfo, userFunctionNamespaces);
+        ClassifyFunction(ns, local, resolver, tokens, k, findings, lineInfo, userFunctionNamespaces);
     }
 
+    /// <remarks>
+    /// Sıra güvenlik açısından önemlidir: yasak / ayrılmış ad alanı kontrolleri, kullanıcı-fonksiyon
+    /// izin kümesinden ÖNCE yapılır — xsl:function ile yasak bir ad alanı "beyaz listeye" sokulamaz.
+    /// </remarks>
     private void ClassifyFunction(
         string ns,
         string local,
+        IXmlNamespaceResolver resolver,
         List<XPathToken> tokens,
         int k,
         List<XsltSafetyFinding> findings,
@@ -392,13 +397,9 @@ public sealed class XsltSafetyScanner
         {
             if (local == "system-property")
             {
-                // Yalnız 'xsl:*' string literal argümanı serbest.
-                var arg = Next(tokens, k + 1); // k:name, k+1:LParen, k+2:ilk arg
-                bool safe = arg.Kind == XPathTokenKind.String
-                            && arg.Text.StartsWith("xsl:", StringComparison.Ordinal);
-                if (!safe)
+                if (!IsSafeSystemPropertyCall(tokens, k, resolver))
                     Add(findings, "SystemProperty", XsltSafetySeverity.Security,
-                        "system-property() yalnız 'xsl:*' sabit argümanıyla serbest.", lineInfo);
+                        "system-property() yalnız tek 'xsl:*' / 'msxsl:*' sabit argümanıyla serbest.", lineInfo);
                 return;
             }
             if (XsltSafetyRules.ForbiddenFnFunctions.Contains(local))
@@ -410,13 +411,7 @@ public sealed class XsltSafetyScanner
         if (ns == XsltSafetyRules.Xs)
             return; // xs: tip oluşturucular serbest
 
-        if (userFunctionNamespaces.Contains(ns))
-            return; // stylesheet'te tanımlı xsl:function
-
-        if ((ns == XsltSafetyRules.Msxsl || ns == XsltSafetyRules.Exsl) && local == "node-set")
-            return;
-
-        if (IsForbiddenNamespace(ns))
+        if (XsltSafetyNamespaces.IsForbidden(ns))
         {
             Add(findings, "ForbiddenFunctionNamespace", XsltSafetySeverity.Security,
                 $"Yasak ad alanında fonksiyon çağrısı: {{{ns}}}{local}().", lineInfo);
@@ -429,6 +424,13 @@ public sealed class XsltSafetyScanner
                 $"Desteklenmeyen (XSLT 2.0 üstü) fonksiyon ad alanı: {{{ns}}}{local}().", lineInfo);
             return;
         }
+
+        if ((ns == XsltSafetyRules.Msxsl && XsltSafetyRules.AllowedMsxslFunctions.Contains(local))
+            || (ns == XsltSafetyRules.Exsl && XsltSafetyRules.AllowedExslFunctions.Contains(local)))
+            return; // yan etkisiz .NET / EXSLT yerleşikleri
+
+        if (userFunctionNamespaces.Contains(ns))
+            return; // stylesheet'te tanımlı xsl:function (küme yasak/ayrılmış ad alanı içermez)
 
         // İzin listesinde olmayan her ad alanı → fail-closed tehdit.
         Add(findings, "ForbiddenFunctionNamespace", XsltSafetySeverity.Security,
@@ -445,62 +447,107 @@ public sealed class XsltSafetyScanner
                 "Collation URI'sinde % kaçışı yasak (NoSuchMethodError / sınıf yükleme riski).", lineInfo);
     }
 
-    private static void CheckCollationLiteral(string value, List<XsltSafetyFinding> findings, IXmlLineInfo? lineInfo)
+    /// <summary>
+    /// Collation özniteliği: AVT ifadesi içeren (dinamik) değer reddedilir — çalışma anında kurulan URI
+    /// (ör. <c>concat('http://saxon', '.sf.net/collation?class=…')</c>) statik olarak doğrulanamaz.
+    /// Statik değerde saxon.sf.net / <c>%</c> yasak. Çağıran değeri ayrıca AVT olarak tarar.
+    /// </summary>
+    private static void CheckCollation(string value, List<XsltSafetyFinding> findings, IXmlLineInfo? lineInfo)
     {
+        if (HasAvtExpression(value))
+        {
+            Add(findings, "UnsafeCollation", XsltSafetySeverity.Security,
+                "Dinamik (AVT ifadeli) collation yasak — collation URI'si statik olmalı.", lineInfo);
+            return;
+        }
         if (value.Contains("saxon.sf.net", StringComparison.OrdinalIgnoreCase)
             || value.Contains('%'))
             Add(findings, "UnsafeCollation", XsltSafetySeverity.Security,
                 "Güvenli olmayan collation URI'si (yalnız codepoint / %'siz UCA serbest).", lineInfo);
     }
 
+    /// <summary>xsl:function/@name yasak veya ayrılmış ad alanında olamaz (bkz. XTSE0740).</summary>
+    private static void CheckFunctionName(
+        string value, IXmlNamespaceResolver resolver, List<XsltSafetyFinding> findings, IXmlLineInfo? lineInfo)
+    {
+        var ns = XsltSafetyNamespaces.ResolveFunctionNamespace(value, resolver.LookupNamespace);
+        if (ns == null)
+            return;
+        if (XsltSafetyNamespaces.IsForbidden(ns))
+            Add(findings, "ForbiddenNamespace", XsltSafetySeverity.Security,
+                $"Yasak ad alanında xsl:function tanımı: {{{ns}}}.", lineInfo);
+        else if (XsltSafetyNamespaces.IsReserved(ns))
+            Add(findings, "ReservedFunctionNamespace", XsltSafetySeverity.Security,
+                $"Ayrılmış ad alanında xsl:function tanımı yasak: {{{ns}}}.", lineInfo);
+    }
+
     private static void CheckVersion(string value, List<XsltSafetyFinding> findings, IXmlLineInfo? lineInfo)
     {
-        if (decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) && v > 2.0m)
+        if (!XsltVersionNumber.TryParse(value, out var v))
+            Add(findings, "InvalidVersion", XsltSafetySeverity.Unsupported,
+                $"XSLT sürümü ayrıştırılamadı: '{value}'.", lineInfo);
+        else if (v > 2.0m)
             Add(findings, "VersionAbove20", XsltSafetySeverity.Unsupported,
                 $"XSLT sürümü {value} desteklenmiyor (tavan 2.0).", lineInfo);
     }
 
     // ── Yardımcılar ─────────────────────────────────────────────────────────
 
-    /// <summary>Ön geçiş: xsl:function bildirimlerinin ad alanlarını toplar (ileri referanslar için).</summary>
-    private static HashSet<string> CollectUserFunctionNamespaces(string xslt)
+    /// <summary>
+    /// system-property() yalnız tam olarak tek string literal argümanla ve argüman QName'inin öneki
+    /// XSLT ya da msxsl ad alanına çözülüyorsa serbesttir (ör. <c>'xsl:vendor'</c>, <c>'msxsl:version'</c>).
+    /// Dinamik argüman, boşluklu/öneksiz ad veya başka ad alanı (Java sistem özellikleri) → engel.
+    /// </summary>
+    private static bool IsSafeSystemPropertyCall(List<XPathToken> tokens, int k, IXmlNamespaceResolver resolver)
     {
-        var result = new HashSet<string>(StringComparer.Ordinal);
-        try
-        {
-            using var reader = XmlReader.Create(new StringReader(xslt), SecureXslt.ReaderSettings());
-            while (reader.Read())
-            {
-                if (reader.NodeType != XmlNodeType.Element
-                    || reader.NamespaceURI != XsltSafetyRules.Xsl
-                    || reader.LocalName != "function")
-                    continue;
+        // k: ad, k+1: '(', k+2: argüman, k+3: ')'
+        if (k + 3 >= tokens.Count
+            || tokens[k + 2].Kind != XPathTokenKind.String
+            || tokens[k + 3].Kind != XPathTokenKind.RParen)
+            return false;
 
-                var name = reader.GetAttribute("name");
-                if (string.IsNullOrEmpty(name))
-                    continue;
-                int colon = name.IndexOf(':');
-                if (colon < 0)
-                    continue;
-                var ns = reader.LookupNamespace(name[..colon]);
-                if (!string.IsNullOrEmpty(ns))
-                    result.Add(ns);
-            }
-        }
-        catch (XmlException)
-        {
-            // Ana geçiş zaten fail-closed raporlayacak; burada sessiz kal.
-        }
-        return result;
+        string arg = tokens[k + 2].Text;
+        int colon = arg.IndexOf(':');
+        if (colon <= 0 || colon == arg.Length - 1 || arg.IndexOf(':', colon + 1) >= 0)
+            return false;
+        foreach (char c in arg)
+            if (c != ':' && !(char.IsLetterOrDigit(c) || c is '-' or '_' or '.'))
+                return false;
+
+        string prefix = arg[..colon];
+        string? ns = resolver.LookupNamespace(prefix);
+        // Bildirilmemiş 'xsl'/'msxsl' öneki: işlemci çalışma anında hata verir (XTDE1390) — zararsız.
+        // Önek başka bir ad alanına bağlıysa (ör. xmlns:xsl="urn:x") serbest DEĞİL.
+        return ns == null
+            ? prefix is "xsl" or "msxsl"
+            : ns == XsltSafetyRules.Xsl || ns == XsltSafetyRules.Msxsl;
     }
 
-    private static bool IsForbiddenNamespace(string ns) =>
-        ns == XsltSafetyRules.Saxon
-        || ns.StartsWith("java:", StringComparison.Ordinal)
-        || ns.StartsWith("clitype:", StringComparison.Ordinal);
+    /// <summary>Değer <c>{{</c> kaçışı dışında bir <c>{</c> (AVT ifadesi) içeriyor mu?</summary>
+    private static bool HasAvtExpression(string value)
+    {
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (value[i] != '{')
+                continue;
+            if (i + 1 < value.Length && value[i + 1] == '{') { i++; continue; }
+            return true;
+        }
+        return false;
+    }
 
-    private static bool IsTruthy(string value) =>
-        value == "yes" || value == "true" || value == "1";
+    /// <summary>
+    /// Boolean XSLT özniteliği için fail-closed değerlendirme: XML boşlukları kırpılmış değer
+    /// (büyük/küçük harf duyarsız) <c>no</c>/<c>false</c>/<c>0</c> ise "kapalı"; boş, boşluklu,
+    /// tanınmayan dahil diğer her değer "açık" sayılır.
+    /// </summary>
+    private static bool IsExplicitlyOff(string value)
+    {
+        var v = value.Trim(XsltSafetyRules.XmlWhitespace);
+        return v.Equals("no", StringComparison.OrdinalIgnoreCase)
+               || v.Equals("false", StringComparison.OrdinalIgnoreCase)
+               || v == "0";
+    }
 
     private static XPathToken Next(List<XPathToken> tokens, int k) =>
         k + 1 < tokens.Count ? tokens[k + 1] : default;

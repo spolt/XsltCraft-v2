@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Xml;
 
 namespace XsltCraft.Application.Xslt.Engines;
@@ -24,7 +23,7 @@ public static class XsltVersionSniffer
             if (reader.MoveToContent() != XmlNodeType.Element)
                 return null;
 
-            return ParseVersion(ReadVersionAttribute(reader));
+            return XsltVersionNumber.Parse(ReadVersionAttribute(reader));
         }
         catch (XmlException)
         {
@@ -43,9 +42,4 @@ public static class XsltVersionSniffer
 
         return root.GetAttribute("version", XslNamespace);
     }
-
-    private static decimal? ParseVersion(string? value) =>
-        decimal.TryParse(value?.Trim(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var version)
-            ? version
-            : null;
 }
