@@ -7,7 +7,8 @@ namespace XsltCraft.Application.Xslt.Engines;
 /// <summary>
 /// <see cref="DotNetXsltEngine"/> derleme sonucu. Girdi yükleme ve dönüşüm
 /// <see cref="XsltHtmlRenderer"/> ile aynıdır (çıktı bit-aynı); çıktı <see cref="LimitedTextWriter"/>
-/// ile sınırlanır, girdi derinlik/düğüm sınırları DOM kurulmadan önce denetlenir.
+/// ile sınırlanır, girdi derinlik/düğüm sınırları DOM kurulurken aynı okuma geçişinde
+/// (<see cref="LimitedXmlReader"/>) denetlenir.
 /// </summary>
 internal sealed class DotNetCompiledXslt(XslCompiledTransform transform) : ICompiledXslt
 {
@@ -41,11 +42,11 @@ internal sealed class DotNetCompiledXslt(XslCompiledTransform transform) : IComp
     {
         try
         {
-            XmlShapeGuard.Ensure(xml, limits.MaxInputDepth, limits.MaxInputNodes, XsltFailureKind.Xml, Engine, "XML");
-
             // XsltHtmlRenderer ile aynı yükleme — XmlDocument'in boşluk davranışı çıktıyı etkiler.
             var xmlDoc = new XmlDocument { XmlResolver = null };
-            using var reader = XmlReader.Create(new StringReader(xml), SecureXslt.ReaderSettings());
+            using var reader = new LimitedXmlReader(
+                XmlReader.Create(new StringReader(xml), SecureXslt.ReaderSettings()),
+                limits.MaxInputDepth, limits.MaxInputNodes, XsltFailureKind.Xml, Engine, "XML");
             xmlDoc.Load(reader);
             return xmlDoc;
         }
@@ -65,7 +66,7 @@ internal sealed class DotNetCompiledXslt(XslCompiledTransform transform) : IComp
         {
             throw;
         }
-        catch (Exception ex) when (FindProcessingException(ex) is { } inner)
+        catch (Exception ex) when (XsltProcessingException.FindIn(ex) is { } inner)
         {
             // Yazıcıdan fırlayan sınır istisnası XslCompiledTransform tarafından sarılmış olabilir.
             throw new XsltProcessingException(inner.Diagnostic, ex);
@@ -78,16 +79,5 @@ internal sealed class DotNetCompiledXslt(XslCompiledTransform transform) : IComp
         {
             throw new XsltProcessingException(XsltDiagnostics.FromXmlException(ex, XsltFailureKind.Runtime, Engine), ex);
         }
-    }
-
-    private static XsltProcessingException? FindProcessingException(Exception ex)
-    {
-        for (Exception? cur = ex.InnerException; cur != null; cur = cur.InnerException)
-        {
-            if (cur is XsltProcessingException xpe)
-                return xpe;
-        }
-
-        return null;
     }
 }

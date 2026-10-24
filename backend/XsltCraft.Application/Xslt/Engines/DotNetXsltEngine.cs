@@ -5,8 +5,9 @@ namespace XsltCraft.Application.Xslt.Engines;
 
 /// <summary>
 /// .NET <see cref="XslCompiledTransform"/> (XSLT 1.0) motoru. Derleme yalnız
-/// <see cref="SecureXslt.Compile"/> üzerinden; hatalar <see cref="XsltProcessingException"/>.
-/// Stylesheet eleman derinliği <see cref="XsltExecutionLimits.MaxStylesheetDepth"/> ile sınırlanır.
+/// <see cref="SecureXslt.CompileWithDepthLimit"/> üzerinden; hatalar <see cref="XsltProcessingException"/>.
+/// Stylesheet eleman derinliği <see cref="XsltExecutionLimits.MaxStylesheetDepth"/> ile derleme okumasının
+/// içinde (tek geçiş) sınırlanır.
 /// </summary>
 public sealed class DotNetXsltEngine : IXsltEngine
 {
@@ -18,9 +19,16 @@ public sealed class DotNetXsltEngine : IXsltEngine
         ArgumentNullException.ThrowIfNull(limits);
         try
         {
-            XmlShapeGuard.Ensure(xslt, limits.MaxStylesheetDepth, int.MaxValue,
-                XsltFailureKind.LimitExceeded, XsltEngineKind.DotNet, "XSLT");
-            return new DotNetCompiledXslt(SecureXslt.Compile(xslt));
+            return new DotNetCompiledXslt(SecureXslt.CompileWithDepthLimit(xslt, limits.MaxStylesheetDepth));
+        }
+        catch (XsltProcessingException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (XsltProcessingException.FindIn(ex) is { } inner)
+        {
+            // Okuyucudan fırlayan sınır istisnası XslCompiledTransform.Load tarafından sarılmış olabilir.
+            throw new XsltProcessingException(inner.Diagnostic, ex);
         }
         catch (XsltException ex)
         {

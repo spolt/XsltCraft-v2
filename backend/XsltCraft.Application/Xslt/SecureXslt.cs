@@ -28,4 +28,19 @@ public static class SecureXslt
         transform.Load(reader, Settings, stylesheetResolver: null);
         return transform;
     }
+
+    /// <summary>
+    /// <see cref="Compile"/> ile aynı güvenli derleme; stylesheet aynı okuma geçişinde
+    /// <see cref="Engines.LimitedXmlReader"/> ile en fazla <paramref name="maxElementDepth"/> eleman
+    /// seviyesine sınırlanır (ihlal → <see cref="Engines.XsltProcessingException"/>, LimitExceeded).
+    /// </summary>
+    public static XslCompiledTransform CompileWithDepthLimit(string xslt, int maxElementDepth)
+    {
+        var transform = new XslCompiledTransform();
+        using var reader = new Engines.LimitedXmlReader(
+            XmlReader.Create(new StringReader(xslt), ReaderSettings()),
+            maxElementDepth, long.MaxValue, Engines.XsltFailureKind.LimitExceeded, Engines.XsltEngineKind.DotNet, "XSLT");
+        transform.Load(reader, Settings, stylesheetResolver: null);
+        return transform;
+    }
 }
