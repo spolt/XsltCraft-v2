@@ -3,7 +3,9 @@
   <!--
     İzole XSLT worker süreci. Api (Infrastructure/Xslt/Worker) tarafından havuzlanır; stdin/stdout
     üzerinden XsltCraft.XsltWorker.Contracts çerçeveleriyle konuşur.
-    Referans kuralı: yalnız Contracts (W2'de Application + Xslt.Saxon eklenecek). Infrastructure ASLA.
+    Referans kuralı: Contracts + Xslt.Saxon (o da yalnız Application'a bağlı). Infrastructure ASLA (LayeringTests).
+    Saxon/IKVM bu projede bildirilmez; IKVM.Maven.Sdk Xslt.Saxon'dan geçişli gelir ve Saxon.HE.dll + ikvm/<rid> home
+    worker çıktısına iner (IkvmFlowTests.WorkerOutput_ContainsSaxonAndIkvmHome).
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -18,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XsltCraft.XsltWorker.Contracts\XsltCraft.XsltWorker.Contracts.csproj" />
+    <ProjectReference Include="..\XsltCraft.Xslt.Saxon\XsltCraft.Xslt.Saxon.csproj" />
   </ItemGroup>
 
 </Project>
