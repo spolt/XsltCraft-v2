@@ -22,4 +22,11 @@ public sealed record XsltExecutionLimits
 
     /// <summary>Girdi XML'inde en fazla düğüm (eleman, öznitelik, metin vb.) sayısı.</summary>
     public int MaxInputNodes { get; init; } = 1_000_000;
+
+    /// <summary>
+    /// İşbirlikçi iptal: süreç içi host/motor bunu <see cref="Deadline"/>'a ek olarak denetler
+    /// (istemci vazgeçti, host süre aştı vb.). Telde taşınmaz — worker'a yalnız
+    /// <see cref="Deadline"/> gider; worker'ın sert sınırı süreç öldürmedir.
+    /// </summary>
+    public CancellationToken Cancellation { get; init; }
 }

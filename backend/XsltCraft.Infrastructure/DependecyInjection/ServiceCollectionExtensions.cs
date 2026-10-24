@@ -81,6 +81,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<XsltCompiler>();
         services.AddScoped<IXsltTemplateRenderer, XsltTemplateRenderer>();
 
+        // Kullanıcı XSLT yürütme hattı: kapı (önce) + worker havuzu + IXsltExecutionService.
+        // Controller'lar T3.1'de bağlanır; o zamana dek önizleme davranışı değişmez.
+        services.AddXsltExecution(configuration);
+
         // -------------------------------------------------
         // Template Core
         // -------------------------------------------------

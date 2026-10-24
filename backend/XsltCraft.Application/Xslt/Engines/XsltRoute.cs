@@ -11,4 +11,10 @@ public enum XsltRoute
 
     /// <summary>Hazır tema XSLT'si.</summary>
     Theme,
+
+    /// <summary>
+    /// Kullanıcının kayıtlı şablonu (<c>POST /api/preview/user-template/{id}</c>). Motor modu grid ile
+    /// aynıdır (<c>Xslt:Engine:Grid</c>) ama yürütme her zaman izole worker'dadır (ADR 007 §2).
+    /// </summary>
+    UserTemplate,
 }
