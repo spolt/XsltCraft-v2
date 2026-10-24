@@ -60,6 +60,13 @@ services:
       dockerfile: Dockerfile
     container_name: xsltcraft_backend
     restart: unless-stopped
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 5g
     depends_on:
       db:
         condition: service_healthy
@@ -81,6 +88,7 @@ services:
       Storage__S3SecretKey: ${MINIO_ROOT_PASSWORD}
       Admin__Email: ${ADMIN_EMAIL}
       Admin__Password: ${ADMIN_PASSWORD}
+      XsltWorker__PoolSize: "2"
     ports:
       - "5000:5000"
     networks:

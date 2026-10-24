@@ -177,6 +177,25 @@
       "xsltcraft.domain": {
         "type": "Project"
       }
+    },
+    "net10.0/linux-x64": {
+      "IKVM": {
+        "type": "Transitive",
+        "resolved": "8.15.0",
+        "contentHash": "d3B8xx1VA6bgQQH8dCrzQgmBNipjLMuqHjEq7sILcWz241ZPjjC6ZBQ0n/KkP0foHhc4Lyl53UbJepyLRfk0kg==",
+        "dependencies": {
+          "IKVM.ByteCode": "9.3.4",
+          "IKVM.Image": "8.15.0",
+          "IKVM.MSBuild": "8.15.0",
+          "Microsoft.Extensions.DependencyModel": "8.0.2",
+          "System.Data.Odbc": "8.0.0"
+        }
+      },
+      "System.Data.Odbc": {
+        "type": "Transitive",
+        "resolved": "8.0.0",
+        "contentHash": "c+GfnZt2/HyU+voKw2fctLZClcNjPZPWS+mnIhGvDknRMqL/fwWlREWPgA4csbp9ZkQIgB4qkufgdh/oh5Ubow=="
+      }
     }
   }
 }

@@ -23,6 +23,11 @@
     <Nullable>enable</Nullable>
     <Version>1.11.2</Version>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Lock dosyası üretim RID'ini de kapsar: Docker/CI "restore -r linux-x64" + locked mode (NETSDK1047'den
+         kaçınmak için restore ve publish aynı RID) RID'siz kilitle NU1004 verir. -r verildiğinde NuGet yalnız
+         RuntimeIdentifier'ı kullanır; RID'siz restore bu listeyi kullanır; iki durumda da {linux-x64}.
+         Not: başka bir RID'le (ör. -r win-x64) restore kilidi değiştirir (locked mode'da NU1004). -->
+    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
     <!-- IKVM0100: opsiyonel Java bağımlılıkları (htmlparser/jline) yok — kabul.
          IKVM0117: AnyURIValue.decode ByteBuffer — yalnız %'li collation URI'sinde; RestrictedCollationResolver
          % içeren URI'yi decode'dan önce reddeder, kalan durum Throwable → EngineInternal (ADR 008 §1). -->
