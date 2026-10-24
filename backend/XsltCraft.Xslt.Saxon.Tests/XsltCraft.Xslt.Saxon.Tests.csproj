@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    XsltCraft.Xslt.Saxon süreç içi testleri (sandbox, motor, teşhis, köprü, sınırlar) + IKVM çıktı akışı.
+    Ayrı proje çünkü XsltWorker.Tests (T2.6) gerçek worker süreçleri içindir ve Infrastructure'a bağlıdır.
+    IKVM dönüşümü burada YENİDEN YAPILMAZ: IKVM.Maven.Sdk Xslt.Saxon'un MavenReference'larını toplar,
+    aynı grafiği çözer ve IKVM önbelleğinden (%LOCALAPPDATA%\ikvm) dönüşmüş derlemeleri alır.
+    Saxon/IKVM PackageReference/MavenReference BURADA YOK (LayeringTests).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);IKVM0100;IKVM0117</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XsltCraft.Xslt.Saxon\XsltCraft.Xslt.Saxon.csproj" />
+    <!-- IkvmFlowTests: yalnız build sırası; worker'ın kendi çıktı dizini incelenir. -->
+    <ProjectReference Include="..\XsltCraft.XsltWorker\XsltCraft.XsltWorker.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\XsltCraft.Application.Tests\ThemeSlots\Fixtures\gib-general.xslt" Link="Fixtures\gib-general.xslt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\XsltCraft.Application\ThemeSlots\Samples\invoice.xml" Link="Fixtures\invoice.xml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Worker'ın build çıktısı yolu (artifacts-path / RID'den bağımsız) test derlemesine gömülür. -->
+  <Target Name="EmbedXsltWorkerTargetPath" BeforeTargets="GetAssemblyAttributes">
+    <MSBuild Projects="..\XsltCraft.XsltWorker\XsltCraft.XsltWorker.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" ItemName="_XsltWorkerTargetPathForTests" />
+    </MSBuild>
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>XsltWorkerTargetPath</_Parameter1>
+        <_Parameter2>@(_XsltWorkerTargetPathForTests)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+</Project>
