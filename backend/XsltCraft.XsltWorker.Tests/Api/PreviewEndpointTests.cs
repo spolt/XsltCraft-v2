@@ -115,7 +115,7 @@ public sealed class PreviewAssetEmbedderTests
             new Asset { Id = OtherAsset, OwnerId = Other, FilePath = "assets/other.png", MimeType = "image/png" });
         await db.SaveChangesAsync();
 
-        var embedder = new PreviewAssetEmbedder(db, new BytesStorage(), new FixedEntitlements(privileged));
+        var embedder = new PreviewAssetEmbedder(db, new FixedBytesStorage(), new FixedEntitlements(privileged));
         var blocks = new Dictionary<string, BlockDto>
         {
             ["a"] = Image("a", MyAsset),
@@ -130,14 +130,6 @@ public sealed class PreviewAssetEmbedderTests
         Type = "Image",
         Config = JsonDocument.Parse($$"""{"assetId":"{{assetId}}"}""").RootElement.Clone(),
     };
-
-    private sealed class BytesStorage : IStorageService
-    {
-        public Task<string> WriteAsync(Stream content, string relativePath, string contentType) => Task.FromResult(relativePath);
-        public Task<Stream> ReadAsync(string relativePath) => Task.FromResult<Stream>(new MemoryStream([1, 2, 3]));
-        public Task DeleteAsync(string relativePath) => Task.CompletedTask;
-        public Task<bool> ExistsAsync(string relativePath) => Task.FromResult(true);
-    }
 
     private sealed class FixedEntitlements(bool privileged) : IEntitlementService
     {
