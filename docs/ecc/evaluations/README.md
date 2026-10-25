@@ -9,6 +9,17 @@ XSLT generator (en yüksek riskli alan) için **regresyon ağı**. Her case: bir
   2. **Invariant assert** — namespace'ler, `version="2.0"`, beklenen `xsl:for-each`/binding düşmemiş, `msxsl:script` yok; çıktı sertleştirilmiş `XmlReader` (`DtdProcessing.Prohibit`, `XmlResolver=null`) + `XslCompiledTransform` ile derlenir.
   3. **Golden snapshot (Verify)** — çıktının *yapısal projeksiyonu* (`xsl:`/`xmlns:` satırları; CSS hariç) `__snapshots__/*.verified.txt`'e karşı doğrulanır. CSS gürültüsüne dayanıklıdır.
 
+## Case'ler
+| # | Case | Test | Not |
+|---|------|------|-----|
+| 001 | [Temsili UBL-TR şablonu](xslt/case001.md) | `XsltCraft.Tests/Eval/XsltEvalTests.cs` | invariant + golden |
+| 002 | [SSRF / harici kaynak fonksiyonları](xslt/case002.md) | `XsltCraft.Tests/Eval/XsltEvalTests.cs` | G3 blok düzeyinde fail-closed |
+| 003–007 | — | — | v3 roadmap'te ayrıldı |
+| 008 | [XSLT 2.0 GİB `general.xslt`](xslt/case008-xslt2-gib-general.md) | `XsltCraft.XsltWorker.Tests/Eval/GibGeneralEvalTests.cs` | Raw rota, gerçek worker (Saxon) |
+| 009 | [Saxon sandbox (K3) + izolasyon (K4)](xslt/case009-saxon-sandbox.md) | `XsltCraft.Xslt.Saxon.Tests/Sandbox/*`, `XsltCraft.XsltWorker.Tests/Isolation/*` | yalnız referans (bloke eden testler) |
+| 010 | [Grid motor paritesi](xslt/case010-engine-parity.md) | `XsltCraft.XsltWorker.Tests/Grid/GridEngineParityTests.cs` | yalnız referans (bloke eden testler) |
+| 011 | [XPath taşınabilirliği / yumuşak düşüş](xslt/case011-xpath-portability.md) | `XsltCraft.Tests/Eval/XPathPortabilityEvalTests.cs` | + `XPathPortabilityTests` |
+
 ## Çalıştırma
 ```bash
 cd backend
