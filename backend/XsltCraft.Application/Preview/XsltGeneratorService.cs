@@ -1141,14 +1141,14 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             "currency" =>
                 $"<xsl:choose>" +
                 $"<xsl:when test=\"number({XmlAttr(xpath)}) = number({XmlAttr(xpath)})\">" +
-                $"<xsl:value-of select=\"format-number(number({XmlAttr(xpath)}), '#,##0.00')\"/>" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({XmlAttr(xpath)})", 2)}, '#,##0.00')\"/>" +
                 $"</xsl:when>" +
                 $"<xsl:otherwise><xsl:value-of select=\"{XmlAttr(xpath)}\"/></xsl:otherwise>" +
                 $"</xsl:choose>",
             "number" =>
                 $"<xsl:choose>" +
                 $"<xsl:when test=\"number({XmlAttr(xpath)}) = number({XmlAttr(xpath)})\">" +
-                $"<xsl:value-of select=\"format-number(number({XmlAttr(xpath)}), '#,##0.##')\"/>" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({XmlAttr(xpath)})", 2)}, '#,##0.##')\"/>" +
                 $"</xsl:when>" +
                 $"<xsl:otherwise><xsl:value-of select=\"{XmlAttr(xpath)}\"/></xsl:otherwise>" +
                 $"</xsl:choose>",
@@ -1330,16 +1330,16 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         {
             "currency" =>
                 $"<xsl:if test=\"number({singleAttr}) = number({singleAttr})\">" +
-                $"<xsl:value-of select=\"format-number(number({singleAttr}),'#.##0,00','tr')\"/>" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({singleAttr})", 2)},'#.##0,00','tr')\"/>" +
                 currencySuffix +
                 "</xsl:if>",
             "number" =>
                 $"<xsl:if test=\"number({singleAttr}) = number({singleAttr})\">" +
-                $"<xsl:value-of select=\"format-number(number({singleAttr}),'#.##0,###','tr')\"/>" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({singleAttr})", 3)},'#.##0,###','tr')\"/>" +
                 "</xsl:if>",
             "percent" =>
                 $"<xsl:if test=\"number({singleAttr}) = number({singleAttr})\">" +
-                $"<xsl:value-of select=\"format-number(number({singleAttr})*100,'#.##0,###','tr')\"/>%" +
+                $"<xsl:value-of select=\"format-number({PreRound($"(number({singleAttr})*100)", 3)},'#.##0,###','tr')\"/>%" +
                 "</xsl:if>",
             "percentDirect" =>
                 $"<xsl:if test=\"string-length({singleAttr}) &gt; 0\">" +
@@ -1347,7 +1347,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                 "</xsl:if>",
             "quantityWithUnit" =>
                 $"<xsl:if test=\"number({singleAttr}) = number({singleAttr})\">" +
-                $"<xsl:value-of select=\"format-number(number({singleAttr}),'#.##0,###','tr')\"/>" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({singleAttr})", 3)},'#.##0,###','tr')\"/>" +
                 "</xsl:if>" +
                 "&#160;" +
                 BuildUnitCodeChoose($"{xpathAttr}/@unitCode"),
@@ -1827,7 +1827,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                     "</td>");
                 sb.AppendLine(
                     $"            <td class=\"val\">" +
-                    "<xsl:value-of select=\"format-number(number(cbc:TaxableAmount),'#.##0,00','tr')\"/>" +
+                    $"<xsl:value-of select=\"format-number({PreRound("number(cbc:TaxableAmount)", 2)},'#.##0,00','tr')\"/>" +
                     dynCurrency +
                     "</td>");
                 sb.AppendLine("          </tr>");
@@ -1842,7 +1842,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                     "</td>");
                 sb.AppendLine(
                     $"            <td class=\"val\">" +
-                    $"<xsl:value-of select=\"format-number(sum({otvFilter}/cbc:TaxableAmount),'#.##0,00','tr')\"/>" +
+                    $"<xsl:value-of select=\"format-number({PreRound($"sum({otvFilter}/cbc:TaxableAmount)", 2)},'#.##0,00','tr')\"/>" +
                     dynCurrency +
                     "</td>");
                 sb.AppendLine("          </tr>");
@@ -1878,7 +1878,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                     "</td>");
                 sb.AppendLine(
                     $"            <td class=\"val\">" +
-                    "<xsl:value-of select=\"format-number(number(cbc:TaxAmount),'#.##0,00','tr')\"/>" +
+                    $"<xsl:value-of select=\"format-number({PreRound("number(cbc:TaxAmount)", 2)},'#.##0,00','tr')\"/>" +
                     dynCurrency +
                     "</td>");
                 sb.AppendLine("          </tr>");
@@ -1893,7 +1893,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                     "</td>");
                 sb.AppendLine(
                     $"            <td class=\"val\">" +
-                    $"<xsl:value-of select=\"format-number(sum({otvFilter}/cbc:TaxAmount),'#.##0,00','tr')\"/>" +
+                    $"<xsl:value-of select=\"format-number({PreRound($"sum({otvFilter}/cbc:TaxAmount)", 2)},'#.##0,00','tr')\"/>" +
                     dynCurrency +
                     "</td>");
                 sb.AppendLine("          </tr>");
@@ -1910,7 +1910,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                 : string.Empty;
             sb.AppendLine($"      <tr{rowClass}>");
             sb.AppendLine($"        <td class=\"lbl\"{lblWidthStyle}>{labelEsc}</td>");
-            sb.AppendLine($"        <td class=\"val\"><xsl:value-of select=\"format-number(number({xpathAttr}),'#.##0,00','tr')\"/>{currencySuffix}</td>");
+            sb.AppendLine($"        <td class=\"val\"><xsl:value-of select=\"format-number({PreRound($"number({xpathAttr})", 2)},'#.##0,00','tr')\"/>{currencySuffix}</td>");
             sb.AppendLine("      </tr>");
         }
         sb.AppendLine("    </table>");

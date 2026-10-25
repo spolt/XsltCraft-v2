@@ -216,7 +216,7 @@
           <td style="border:1px solid #555555;padding:2px 4px;text-align:center"><xsl:value-of select="position()"/></td>
           <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cac:Item/cac:SellersItemIdentification/cbc:ID)[1]"/></td>
           <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cac:Item/cbc:Name)[1]"/></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:DeliveredQuantity)[1]) = number((cbc:DeliveredQuantity)[1])"><xsl:value-of select="format-number(number((cbc:DeliveredQuantity)[1]),'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:DeliveredQuantity)[1]) = number((cbc:DeliveredQuantity)[1])"><xsl:value-of select="format-number(round(number((cbc:DeliveredQuantity)[1]) * 1000 + 0.000001) div 1000,'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='C62'">Adet</xsl:when>
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='BX'">Kutu</xsl:when>
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='TNE'">ton</xsl:when>
@@ -319,8 +319,8 @@
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='D63'">Cilt</xsl:when>
   <xsl:otherwise><xsl:value-of select="(cbc:DeliveredQuantity/@unitCode)[1]"/></xsl:otherwise>
 </xsl:choose></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)[1]) = number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)[1])"><xsl:value-of select="format-number(number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID='TRY' or cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:OutstandingQuantity)[1]) = number((cbc:OutstandingQuantity)[1])"><xsl:value-of select="format-number(number((cbc:OutstandingQuantity)[1]),'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)[1]) = number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)[1])"><xsl:value-of select="format-number(round(number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID='TRY' or cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:OutstandingQuantity)[1]) = number((cbc:OutstandingQuantity)[1])"><xsl:value-of select="format-number(round(number((cbc:OutstandingQuantity)[1]) * 1000 + 0.000001) div 1000,'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='C62'">Adet</xsl:when>
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='BX'">Kutu</xsl:when>
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='TNE'">ton</xsl:when>
@@ -423,7 +423,7 @@
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='D63'">Cilt</xsl:when>
   <xsl:otherwise><xsl:value-of select="(cbc:OutstandingQuantity/@unitCode)[1]"/></xsl:otherwise>
 </xsl:choose></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)[1]) = number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)[1])"><xsl:value-of select="format-number(number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID='TRY' or cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)[1]) = number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)[1])"><xsl:value-of select="format-number(round(number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID='TRY' or cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
           <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cbc:Note)[1]"/></td>
         </tr>
       </xsl:for-each>
@@ -463,7 +463,7 @@
         <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <table class="tot" style="font-size:11px">
       <tr class="hl bd">
         <td class="lbl">Toplam Tutar</td>
-        <td class="val"><xsl:value-of select="format-number(number((//cac:Shipment/cac:GoodsItem/cbc:ValueAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID='TRY' or //cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID)[1]"/></xsl:otherwise></xsl:choose></td>
+        <td class="val"><xsl:value-of select="format-number(round(number((//cac:Shipment/cac:GoodsItem/cbc:ValueAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID='TRY' or //cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID)[1]"/></xsl:otherwise></xsl:choose></td>
       </tr>
     </table>
 </div>

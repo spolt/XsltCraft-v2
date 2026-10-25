@@ -488,7 +488,7 @@
           <td style="border:1px solid #555555;padding:2px 4px;text-align:center"><xsl:value-of select="position()"/></td>
           <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cac:Item/cac:SellersItemIdentification/cbc:ID)[1]"/></td>
           <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cac:Item/cbc:Name)[1]"/></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:InvoicedQuantity)[1]) = number((cbc:InvoicedQuantity)[1])"><xsl:value-of select="format-number(number((cbc:InvoicedQuantity)[1]),'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:InvoicedQuantity)[1]) = number((cbc:InvoicedQuantity)[1])"><xsl:value-of select="format-number(round(number((cbc:InvoicedQuantity)[1]) * 1000 + 0.000001) div 1000,'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
   <xsl:when test="cbc:InvoicedQuantity/@unitCode='C62'">Adet</xsl:when>
   <xsl:when test="cbc:InvoicedQuantity/@unitCode='BX'">Kutu</xsl:when>
   <xsl:when test="cbc:InvoicedQuantity/@unitCode='TNE'">ton</xsl:when>
@@ -592,14 +592,14 @@
   <xsl:otherwise><xsl:value-of select="(cbc:InvoicedQuantity/@unitCode)[1]"/></xsl:otherwise>
 </xsl:choose></td>
           <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cbc:InvoicedQuantity/@unitCode)[1]"/></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:Price/cbc:PriceAmount)[1]) = number((cac:Price/cbc:PriceAmount)[1])"><xsl:value-of select="format-number(number((cac:Price/cbc:PriceAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1]) = number((cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1])"><xsl:value-of select="format-number(number((cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1])*100,'#.##0,###','tr')"/>%</xsl:if></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:AllowanceCharge/cbc:Amount)[1]) = number((cac:AllowanceCharge/cbc:Amount)[1])"><xsl:value-of select="format-number(number((cac:AllowanceCharge/cbc:Amount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:Price/cbc:PriceAmount)[1]) = number((cac:Price/cbc:PriceAmount)[1])"><xsl:value-of select="format-number(round(number((cac:Price/cbc:PriceAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1]) = number((cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1])"><xsl:value-of select="format-number(round((number((cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1])*100) * 1000 + 0.000001) div 1000,'#.##0,###','tr')"/>%</xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:AllowanceCharge/cbc:Amount)[1]) = number((cac:AllowanceCharge/cbc:Amount)[1])"><xsl:value-of select="format-number(round(number((cac:AllowanceCharge/cbc:Amount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
           <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="string-length((cac:TaxTotal/cac:TaxSubtotal/cbc:Percent)[1]) &gt; 0"><xsl:value-of select="(cac:TaxTotal/cac:TaxSubtotal/cbc:Percent)[1]"/>%</xsl:if></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount)[1]) = number((cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount)[1])"><xsl:value-of select="format-number(number((cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:LineExtensionAmount)[1]) = number((cbc:LineExtensionAmount)[1])"><xsl:value-of select="format-number(number((cbc:LineExtensionAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount)[1]) = number((cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount)[1])"><xsl:value-of select="format-number(round(number((cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:LineExtensionAmount)[1]) = number((cbc:LineExtensionAmount)[1])"><xsl:value-of select="format-number(round(number((cbc:LineExtensionAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
           <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cbc:Note)[1]"/></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:InvoicedQuantity)[1]) = number((cbc:InvoicedQuantity)[1])"><xsl:value-of select="format-number(number((cbc:InvoicedQuantity)[1]),'#.##0,###','tr')"/></xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:InvoicedQuantity)[1]) = number((cbc:InvoicedQuantity)[1])"><xsl:value-of select="format-number(round(number((cbc:InvoicedQuantity)[1]) * 1000 + 0.000001) div 1000,'#.##0,###','tr')"/></xsl:if></td>
         </tr>
       </xsl:for-each>
       </tbody>
@@ -619,8 +619,8 @@
         <xsl:for-each select="//cac:TaxTotal/cac:TaxSubtotal">
           <tr>
             <td><xsl:value-of select="(cac:TaxCategory/cbc:Percent)[1]"/>%</td>
-            <td><xsl:choose><xsl:when test="number((cbc:TaxableAmount)[1]) = number((cbc:TaxableAmount)[1])"><xsl:value-of select="format-number(number((cbc:TaxableAmount)[1]), '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="(cbc:TaxableAmount)[1]"/></xsl:otherwise></xsl:choose></td>
-            <td><xsl:choose><xsl:when test="number((cbc:TaxAmount)[1]) = number((cbc:TaxAmount)[1])"><xsl:value-of select="format-number(number((cbc:TaxAmount)[1]), '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="(cbc:TaxAmount)[1]"/></xsl:otherwise></xsl:choose></td>
+            <td><xsl:choose><xsl:when test="number((cbc:TaxableAmount)[1]) = number((cbc:TaxableAmount)[1])"><xsl:value-of select="format-number(round(number((cbc:TaxableAmount)[1]) * 100 + 0.000001) div 100, '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="(cbc:TaxableAmount)[1]"/></xsl:otherwise></xsl:choose></td>
+            <td><xsl:choose><xsl:when test="number((cbc:TaxAmount)[1]) = number((cbc:TaxAmount)[1])"><xsl:value-of select="format-number(round(number((cbc:TaxAmount)[1]) * 100 + 0.000001) div 100, '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="(cbc:TaxAmount)[1]"/></xsl:otherwise></xsl:choose></td>
           </tr>
         </xsl:for-each>
       </tbody>
@@ -630,51 +630,51 @@
         <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <table class="tot" style="font-size:11px">
       <tr>
         <td class="lbl" style="width:55%">Mal Hizmet Tutarı</td>
-        <td class="val"><xsl:value-of select="format-number(number((//cac:LegalMonetaryTotal/cbc:LineExtensionAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
+        <td class="val"><xsl:value-of select="format-number(round(number((//cac:LegalMonetaryTotal/cbc:LineExtensionAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
       </tr>
       <tr>
         <td class="lbl" style="width:55%">Toplam İskonto</td>
-        <td class="val"><xsl:value-of select="format-number(number((//cac:LegalMonetaryTotal/cbc:AllowanceTotalAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
+        <td class="val"><xsl:value-of select="format-number(round(number((//cac:LegalMonetaryTotal/cbc:AllowanceTotalAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
       </tr>
       <xsl:if test="not(//n1:Invoice/cbc:InvoiceTypeCode='TEVKIFATIADE')">
         <xsl:for-each select="//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']">
           <tr>
             <td class="lbl" style="width:55%"><xsl:text>KDV Matrahı</xsl:text><xsl:if test="//n1:Invoice/cbc:InvoiceTypeCode!='OZELMATRAH'"><xsl:text> (%</xsl:text><xsl:value-of select="cbc:Percent"/><xsl:text>)</xsl:text></xsl:if></td>
-            <td class="val"><xsl:value-of select="format-number(number(cbc:TaxableAmount),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
+            <td class="val"><xsl:value-of select="format-number(round(number(cbc:TaxableAmount) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
           </tr>
         </xsl:for-each>
         <xsl:if test="//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']">
           <tr>
             <td class="lbl" style="width:55%"><xsl:text>ÖTV Matrahı</xsl:text></td>
-            <td class="val"><xsl:value-of select="format-number(sum(//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']/cbc:TaxableAmount),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
+            <td class="val"><xsl:value-of select="format-number(round(sum(//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']/cbc:TaxableAmount) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
           </tr>
         </xsl:if>
       </xsl:if>
       <tr>
         <td class="lbl" style="width:55%">Hesaplanan KDV (toplam)</td>
-        <td class="val"><xsl:value-of select="format-number(number((//cac:TaxTotal/cbc:TaxAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
+        <td class="val"><xsl:value-of select="format-number(round(number((//cac:TaxTotal/cbc:TaxAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
       </tr>
       <xsl:if test="not(//n1:Invoice/cbc:InvoiceTypeCode='TEVKIFATIADE')">
         <xsl:for-each select="//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']">
           <tr>
             <td class="lbl" style="width:55%"><xsl:text>Hesaplanan KDV</xsl:text><xsl:if test="//n1:Invoice/cbc:InvoiceTypeCode!='OZELMATRAH'"><xsl:text> (%</xsl:text><xsl:value-of select="cbc:Percent"/><xsl:text>)</xsl:text></xsl:if></td>
-            <td class="val"><xsl:value-of select="format-number(number(cbc:TaxAmount),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
+            <td class="val"><xsl:value-of select="format-number(round(number(cbc:TaxAmount) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
           </tr>
         </xsl:for-each>
         <xsl:if test="//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']">
           <tr>
             <td class="lbl" style="width:55%"><xsl:text>Hesaplanan ÖTV</xsl:text></td>
-            <td class="val"><xsl:value-of select="format-number(sum(//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']/cbc:TaxAmount),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
+            <td class="val"><xsl:value-of select="format-number(round(sum(//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode!='0015']/cbc:TaxAmount) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
           </tr>
         </xsl:if>
       </xsl:if>
       <tr class="hl bd">
         <td class="lbl" style="width:55%">Vergiler Dahil Toplam Tutar</td>
-        <td class="val"><xsl:value-of select="format-number(number((//cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
+        <td class="val"><xsl:value-of select="format-number(round(number((//cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
       </tr>
       <tr class="hl bd">
         <td class="lbl" style="width:55%">Ödenecek Tutar</td>
-        <td class="val"><xsl:value-of select="format-number(number((//cac:LegalMonetaryTotal/cbc:PayableAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
+        <td class="val"><xsl:value-of select="format-number(round(number((//cac:LegalMonetaryTotal/cbc:PayableAmount)[1]) * 100 + 0.000001) div 100,'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode='TRY' or //cbc:DocumentCurrencyCode='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></td>
       </tr>
     </table>
     <xsl:if test="//n1:Invoice/cac:BillingReference/cac:InvoiceDocumentReference/cbc:DocumentTypeCode[text()='İADE' or text()='IADE']">

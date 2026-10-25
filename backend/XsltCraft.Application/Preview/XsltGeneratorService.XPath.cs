@@ -28,6 +28,27 @@ public sealed partial class XsltGeneratorService
         return result is { IsNodeSet: true } ? $"({xpath})[1]" : xpath ?? string.Empty;
     }
 
+    /// <summary>
+    /// A5 G5 — <c>format-number()</c> öncesi motor-bağımsız ön-yuvarlama: <c>round(x * 10^d + 1e-6) div 10^d</c>.
+    /// <para>Neden: <c>format-number</c> kırpmayı motor kendi kuralıyla yapar — .NET yarıyı sıfırdan uzağa
+    /// (0,125 → 0,13), Saxon/XPath 2.0 yarıyı çifte (0,125 → 0,12). Ön-yuvarlanmış değer d. basamakta kesin
+    /// (bağ yok) olduğundan iki motor aynı metni yazar. <c>round()</c> iki motorda aynıdır (yarı → +∞).</para>
+    /// <para>Ölçekli alandaki <c>+1e-6</c> ikili kayan nokta artığını telafi eder (1,005 × 100 = 100,4999…; yalın
+    /// <c>round(x*100)</c> 1,00 verirdi): böylece ondalık gösterimdeki bağlar yukarı yuvarlanır (1,005 → 1,01,
+    /// 2,675 → 2,68) — mevcut .NET davranışı korunur. Bedeli: bir bağın 1e-8'inden (d=2) az altındaki değerler
+    /// yukarı yuvarlanır; negatif bağlar +∞'a (−0,125 → −0,12) gider.</para>
+    /// </summary>
+    private static string PreRound(string numberExpr, int decimals)
+    {
+        var scale = decimals switch
+        {
+            2 => "100",
+            3 => "1000",
+            _ => throw new ArgumentOutOfRangeException(nameof(decimals), decimals, "Yalnız 2 ya da 3 ondalık."),
+        };
+        return $"round({numberExpr} * {scale} + 0.000001) div {scale}";
+    }
+
     /// <summary>Generator'ın kendi ürettiği yol ifadesi (her zaman düğüm kümesi) için ilk düğüm.</summary>
     private static string FirstOf(string pathXpath) => $"({pathXpath})[1]";
 
