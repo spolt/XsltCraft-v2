@@ -15,7 +15,7 @@ public static class RateLimitPolicies
     /// <summary>ValidateXslt: 120 istek/dk/kullanıcı.</summary>
     public const string XsltValidate = "xslt-validate";
 
-    /// <summary>PreviewTheme (anonim olabilir): 30 istek/dk/IP (G3).</summary>
+    /// <summary>PreviewTheme: oturum açmışsa 30 istek/dk/kullanıcı, anonimse 30 istek/dk/IP (G3).</summary>
     public const string ThemePreview = "theme-preview";
 
     private const int PermitPerMinute = 120;
@@ -26,7 +26,7 @@ public static class RateLimitPolicies
     {
         options.AddPolicy(XsltPreview, PerUserPerMinute);
         options.AddPolicy(XsltValidate, PerUserPerMinute);
-        options.AddPolicy(ThemePreview, httpContext => PerIp(httpContext, ThemePreviewPerMinute, TimeSpan.FromMinutes(1)));
+        options.AddPolicy(ThemePreview, httpContext => PerUserOrIp(httpContext, ThemePreviewPerMinute, TimeSpan.FromMinutes(1)));
         return options;
     }
 
@@ -58,8 +58,30 @@ public static class RateLimitPolicies
     /// vekilin adresidir — <c>ForwardedHeaders</c> yapılandırılmadan nginx arkasına alınırsa tek kovaya düşer.
     /// </summary>
     public static RateLimitPartition<string> PerIp(HttpContext httpContext, int permitLimit, TimeSpan window) =>
+        FixedWindow("ip:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon"), permitLimit, window);
+
+    /// <summary>Oturum açmış kullanıcıda kullanıcı, değilse IP bölümlü — aynı ofisten (aynı IP) çalışanlar birbirini kısıtlamaz.</summary>
+    public static RateLimitPartition<string> PerUserOrIp(HttpContext httpContext, int permitLimit, TimeSpan window) =>
+        httpContext.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value is { } userId
+            ? FixedWindow("user:" + userId, permitLimit, window)
+            : PerIp(httpContext, permitLimit, window);
+
+    /// <summary>
+    /// Refresh-token çerezi bölümlü (çerez özeti; ham değer anahtar olmaz), çerez yoksa IP — aynı IP'deki
+    /// kullanıcıların oturum yenilemeleri ortak kovaya düşmez.
+    /// </summary>
+    public static RateLimitPartition<string> PerRefreshTokenOrIp(HttpContext httpContext, string cookieName, int permitLimit, TimeSpan window)
+    {
+        var token = httpContext.Request.Cookies[cookieName];
+        if (string.IsNullOrEmpty(token))
+            return PerIp(httpContext, permitLimit, window);
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+        return FixedWindow("rt:" + hash, permitLimit, window);
+    }
+
+    private static RateLimitPartition<string> FixedWindow(string partitionKey, int permitLimit, TimeSpan window) =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon",
+            partitionKey: partitionKey,
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = permitLimit,

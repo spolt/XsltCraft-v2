@@ -70,15 +70,7 @@ builder.Services.AddRateLimiter(opts =>
             }));
 
     opts.AddPolicy("auth-refresh", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 30,
-                Window = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = 0,
-            }));
+        RateLimitPolicies.PerRefreshTokenOrIp(httpContext, "refreshToken", 30, TimeSpan.FromMinutes(1)));
 
     // İstemci tarafı indirme bildirimleri: 60 req/dk/user
     opts.AddPolicy("activity", httpContext =>
