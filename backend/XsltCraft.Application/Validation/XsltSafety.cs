@@ -18,9 +18,7 @@ namespace XsltCraft.Application.Validation;
 ///   (generator çıktısı render edilecek).</item>
 ///   <item><b>Store</b> (yalnız Security): <c>UserXsltTemplateController</c> (toplu ham yükleme),
 ///   <c>AdminController</c> (ham tema), <c>ThemeUploadProcessor</c>, <c>ThemeSlotAnalyzer</c>,
-///   <c>ThemeOverridesProcessor</c>, <c>ThemeAssetComposer</c>, <c>FixedNoteInjector</c> ve
-///   <c>XsltTemplateRenderer.RenderAsync</c> (/api/render; artık .NET <c>IXsltHtmlRenderer</c> ile
-///   render edilir, Saxon kaldırıldı).</item>
+///   <c>ThemeOverridesProcessor</c>, <c>ThemeAssetComposer</c> ve <c>FixedNoteInjector</c>.</item>
 /// </list>
 /// </summary>
 public static class XsltSafety
