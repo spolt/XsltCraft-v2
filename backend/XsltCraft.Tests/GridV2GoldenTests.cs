@@ -1,6 +1,9 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using VerifyXunit;
 using XsltCraft.Application.Preview;
+using XsltCraft.Application.ThemeSlots;
+using XsltCraft.Application.ThemeSlots.Compose;
 using XsltCraft.Application.Xslt;
 using XsltCraft.Tests.Support;
 
@@ -28,7 +31,7 @@ public class GridV2GoldenTests
 
     /// <summary>
     /// Önizleme denetleyicisinin storage'dan çözdüğü asset → data URI eşlemesinin deterministik karşılığı.
-    /// layout-scenarios'taki ikinci asset kasıtlı olarak eşlenmez (/api/assets/{id}/serve yolu).
+    /// layout-scenarios'taki ikinci asset kasıtlı olarak eşlenmez — generator URL'ye düşmez, o blokta &lt;img&gt; üretmez.
     /// </summary>
     private static readonly Dictionary<string, string> Assets = new()
     {
@@ -129,6 +132,66 @@ public class GridV2GoldenTests
         Assert.All(onDisk, name => Assert.Contains(name!, used));
     }
 
+    /// <summary>
+    /// Sahip kuralları kapısı: üretilen XSLT'de (grid V2 golden fixture'ları, V1 bölüm yolu, tema compose çıktısı)
+    /// görsel URL'si (<c>/api/assets</c>) ve açıklama yorumu (<c>&lt;!-- --&gt;</c>, gömülü JS/CSS <c>/* */</c>,
+    /// JS <c>//</c>) yoktur. İzinli işlevsel işaretçiler: <c>DEV-MODE-OVERRIDES:START/END</c>, <c>xc:fixed-note</c>.
+    /// </summary>
+    [Fact]
+    public void GeneratedOutputs_NoAssetUrl_NoExplanatoryComments()
+    {
+        var outputs = FixtureNames.Select(f => (f, Generate(LoadTree(f)))).ToList();
+
+        var v1 = new XsltGeneratorService().GenerateFromJson("""
+            {"sections":[{"id":"s1","name":"Başlık","order":0,"blockIds":["u","t","i"]}],
+             "blocks":{"u":{"id":"u","type":"Bilinmeyen","config":{}},
+                       "t":{"id":"t","type":"InvoiceTotals","config":{"fields":[]}},
+                       "i":{"id":"i","type":"Image","config":{"assetId":"cccccccc-0000-4000-8000-000000000003"}}}}
+            """);
+        Assert.Null(v1.Error);
+        outputs.Add(("v1-sections", v1.Xslt!));
+
+        const string png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+        const string theme = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <xsl:stylesheet version="2.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/"><html><body><div id="logo"/></body></html></xsl:template>
+            </xsl:stylesheet>
+            """;
+        var composed = new ThemeAssetComposer(new ThemeImageValidator()).Compose(theme, new ThemeComposeInput(
+            [new ThemeAssetInput(ThemeAssetKind.Logo, null, png, null, null, ThemeAlignment.Left)],
+            [new BankInfoInput("Banka", "TR000000000000000000000000")]));
+        Assert.True(composed.Success, composed.Error);
+        Assert.Contains("DEV-MODE-OVERRIDES:START", composed.Xslt);
+        outputs.Add(("theme-compose", composed.Xslt));
+
+        foreach (var (name, xslt) in outputs)
+        {
+            Assert.False(xslt.Contains("/api/assets", StringComparison.Ordinal), $"{name}: asset URL'si");
+
+            var comments = Regex.Matches(xslt, "<!--(.*?)-->", RegexOptions.Singleline)
+                .Select(m => m.Value)
+                .Where(c => !AllowedMarkers.Contains(c))
+                .ToList();
+            Assert.True(comments.Count == 0, $"{name}: açıklama yorumu: {string.Join(" | ", comments)}");
+
+            foreach (Match code in Regex.Matches(xslt, @"<(script|style)\b([^>]*)>(.*?)</\1>", RegexOptions.Singleline))
+            {
+                if (code.Groups[2].Value.Contains("application/json", StringComparison.Ordinal))
+                    continue;
+                var body = code.Groups[3].Value;
+                Assert.False(body.Contains("/*", StringComparison.Ordinal), $"{name}: <{code.Groups[1].Value}> içinde /* */ yorumu");
+                Assert.False(Regex.IsMatch(body, @"(?<![:\\])//"), $"{name}: <{code.Groups[1].Value}> içinde // yorumu");
+            }
+        }
+    }
+
+    private static readonly HashSet<string> AllowedMarkers = new(StringComparer.Ordinal)
+    {
+        "<!-- DEV-MODE-OVERRIDES:START -->", "<!-- DEV-MODE-OVERRIDES:END -->",
+        "<!-- xc:fixed-note:start -->", "<!-- xc:fixed-note:end -->",
+    };
+
     // ── yardımcılar ──────────────────────────────────────────────────────────
 
     private static BlockTreeV2Dto LoadTree(string fixture)
@@ -165,8 +228,5 @@ public class GridV2GoldenTests
         Assert.Contains("xmlns:ext=\"urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2\"", xslt);
         Assert.Contains("exclude-result-prefixes=\"n1 cbc cac ext\"", xslt);
         Assert.Contains("<xsl:output method=\"html\" encoding=\"UTF-8\"", xslt);
-
-        // Her blok tipi generator'da tanınmalı.
-        Assert.DoesNotContain("unknown block type", xslt);
     }
 }

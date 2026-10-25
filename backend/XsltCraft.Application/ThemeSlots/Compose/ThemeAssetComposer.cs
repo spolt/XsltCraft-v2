@@ -40,6 +40,17 @@ public interface IThemeAssetComposer
     ThemeComposeResult Compose(string xslt, ThemeComposeInput input);
 }
 
+/// <remarks>
+/// <para><b>Çalışma betiği (ThemeAssetRuntime.js, v2):</b> veri <c>script[data-xc-overrides-data]</c> içindeki JSON'dur.
+/// Hedef <c>data-xc-slot</c> yuvası; bulunamazsa yedek id'ler (eski temalar). Yuva temadaki bir görselse
+/// (<c>data-xc-placeholder</c>) kullanıcının görseli onun yerini alır (kutu korunur, görsel oranı bozulmadan sığar);
+/// aynı türden görsel başka bir yere yerleştiyse temadakiler gizlenir (yerleri korunur), hiçbir yere yerleşemediyse
+/// temadaki görsel kalır. Yedek id bir <c>img</c> ise (analiz edilmemiş eski tema) içine eklenmez, yerini alır; ikinci
+/// görsel ardına eklenir. <c>data.hide</c>: kullanıcının görsel eklemeden kaldırdığı türler — yalnız
+/// <c>data-xc-removable</c> taşıyanlar gizlenir.</para>
+/// <para>Betik XSLT'ye olduğu gibi gömülür: <c>&lt; &gt; &amp;</c> karakterleri ve açıklama yorumu içermez
+/// (sahip kuralı — üretilen çıktıda yorum yok; açıklamalar burada tutulur).</para>
+/// </remarks>
 public sealed class ThemeAssetComposer(IThemeImageValidator images) : IThemeAssetComposer
 {
     public const int LargeAssetsWarningBytes = 150 * 1024;
@@ -189,6 +200,8 @@ public sealed class ThemeAssetComposer(IThemeImageValidator images) : IThemeAsse
         var code = reader.ReadToEnd().Trim();
         if (code.IndexOfAny(['<', '>', '&']) >= 0)
             throw new InvalidOperationException("ThemeAssetRuntime.js XSLT'ye gömülemez: '<', '>' ya da '&' içeriyor.");
+        if (code.Contains("/*", StringComparison.Ordinal) || code.Contains("//", StringComparison.Ordinal))
+            throw new InvalidOperationException("ThemeAssetRuntime.js açıklama yorumu içeremez (üretilen çıktıda yorum yok).");
         return code;
     }
 }

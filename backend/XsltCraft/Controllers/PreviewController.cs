@@ -152,9 +152,22 @@ public class PreviewController : ControllerBase
             }
 
             string xslt;
-            await using (var stream = await _storage.ReadAsync(template.XsltStoragePath!))
-            using (var reader = new StreamReader(stream))
+            if (route == XsltRoute.UserTemplate && GeneratedXsltCache.IsStale(template.XsltStoragePath, template.Id)
+                && !string.IsNullOrWhiteSpace(template.BlockTree))
+            {
+                // Eski sürüm önbellek asset URL'li olabilir — okunmaz; görseller gömülü olarak yeniden üretilir.
+                var assetBase64 = await _assets.BuildFromJsonAsync(template.BlockTree, userId!.Value, ct);
+                var (generated, genError) = _generator.GenerateFromJson(template.BlockTree, assetBase64);
+                if (generated is null)
+                    return BadRequest(new { error = genError });
+                xslt = generated;
+            }
+            else
+            {
+                await using var stream = await _storage.ReadAsync(template.XsltStoragePath!);
+                using var reader = new StreamReader(stream);
                 xslt = await reader.ReadToEndAsync(ct);
+            }
 
             var result = await _xslt.ExecuteAsync(
                 new XsltRunRequest(route, xslt, request.XmlContent ?? "", XsltOperation.Render, userId ?? AnonymousGateKey()), ct);
@@ -231,7 +244,8 @@ public class PreviewController : ControllerBase
         var sw = Stopwatch.StartNew();
         try
         {
-            var (xslt, genError) = _generator.GenerateFromJson(template.BlockTree);
+            var assetBase64 = await _assets.BuildFromJsonAsync(template.BlockTree, userId, ct);
+            var (xslt, genError) = _generator.GenerateFromJson(template.BlockTree, assetBase64);
             if (xslt is null) return BadRequest(new { error = genError });
 
             var warnings = _generator.Warnings.ToArray();

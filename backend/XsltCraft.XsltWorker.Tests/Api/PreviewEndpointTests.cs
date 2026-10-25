@@ -22,6 +22,7 @@ using XsltCraft.Application.DTO;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Membership;
 using XsltCraft.Application.Preview;
+using XsltCraft.Application.Themes;
 using XsltCraft.Application.Xslt.Engines;
 using XsltCraft.Application.Xslt.Execution;
 using XsltCraft.Domain.Entities;
@@ -115,7 +116,7 @@ public sealed class PreviewAssetEmbedderTests
             new Asset { Id = OtherAsset, OwnerId = Other, FilePath = "assets/other.png", MimeType = "image/png" });
         await db.SaveChangesAsync();
 
-        var embedder = new PreviewAssetEmbedder(db, new FixedBytesStorage(), new FixedEntitlements(privileged));
+        var embedder = new PreviewAssetEmbedder(db, new FixedBytesStorage(), new FixedEntitlements(privileged), new ThemeAccessGuard(new FixedEntitlements(privileged)));
         var blocks = new Dictionary<string, BlockDto>
         {
             ["a"] = Image("a", MyAsset),

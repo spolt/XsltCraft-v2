@@ -32,7 +32,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── Public API ────────────────────────────────────────────────────────
 
-    public (string? Xslt, string? Error) GenerateFromJson(string blockTreeJson)
+    public (string? Xslt, string? Error) GenerateFromJson(string blockTreeJson, Dictionary<string, string>? assetBase64 = null)
     {
         try
         {
@@ -43,13 +43,13 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             {
                 var treeV2 = JsonSerializer.Deserialize<BlockTreeV2Dto>(blockTreeJson, JsonOpts)
                              ?? throw new JsonException("Boş sonuç.");
-                return GenerateV2(treeV2);
+                return GenerateV2(treeV2, assetBase64);
             }
             else
             {
                 var tree = JsonSerializer.Deserialize<BlockTreeDto>(blockTreeJson, JsonOpts)
                            ?? throw new JsonException("Boş sonuç.");
-                return Generate(tree);
+                return Generate(tree, assetBase64);
             }
         }
         catch (Exception ex)
@@ -334,7 +334,6 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                         position: relative;
                         overflow: hidden;
                       }
-                      /* layout tables — multi-column rows, no visible borders */
                       table.lr { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; }
                       table.lr > tbody > tr > td {
                         border: none;
@@ -343,11 +342,9 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                         word-break: break-word;
                         overflow-wrap: break-word;
                       }
-                      /* data tables — Table block */
                       table.dt { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 6px; font-size: 9pt; }
                       table.dt th { border: 1px solid #333; padding: 3px 6px; background: #d0d0d0; font-weight: bold; text-align: center; overflow: hidden; }
                       table.dt td { border: 1px solid #555; padding: 3px 6px; word-break: break-word; overflow-wrap: break-word; overflow: hidden; }
-                      /* document info table — key-value */
                       table.di, table.di-dashed, table.di-dotted { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
                       table.di td { border: 1px solid #555; padding: 2px 6px; }
                       table.di-dashed td { border: 1px dashed #555; padding: 2px 6px; }
@@ -356,14 +353,12 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                       table.di-plain { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
                       table.di-plain td { border: none; padding: 2px 6px; }
                       table.di-plain td:first-child { font-weight: bold; white-space: nowrap; width: 40%; }
-                      /* totals table */
                       table.tot { border-collapse: collapse; margin-left: auto; margin-bottom: 4px; font-size: 9.5pt; min-width: 280px; }
                       table.tot td { border: 1px solid #aaa; padding: 2px 8px; }
                       table.tot td.lbl { text-align: right; padding-right: 12px; white-space: nowrap; }
                       table.tot td.val { text-align: right; white-space: nowrap; min-width: 120px; }
                       table.tot tr.hl td { background: #ffffcc; }
                       table.tot tr.bd td { font-weight: bold; }
-                      /* typography */
                       h1, h2 { padding-bottom: 3px; padding-top: 3px; margin-bottom: 5px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; }
                       h1 { font-size: 1.4em; text-transform: none; }
                       h2 { font-size: 1em; color: brown; }
@@ -429,8 +424,6 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         var sb = new StringBuilder();
         foreach (var section in tree.Sections.OrderBy(s => s.Order))
         {
-            sb.AppendLine($"    <!-- section: {XmlEscape(section.Name)} -->");
-
             var blockList = section.BlockIds
                 .Select(id => tree.Blocks.TryGetValue(id, out var b) ? b : null)
                 .Where(b => b is not null)
@@ -627,7 +620,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             "InvoiceLineTable" => GenerateInvoiceLineTable(block, _isDespatch),
             "InvoiceHeader" => _isDespatch ? GenerateDespatchHeader(block) : GenerateInvoiceHeader(block),
             "ShipmentInfo" => GenerateShipmentInfo(block),
-            _ => $"<!-- unknown block type: {XmlEscape(block.Type)} -->"
+            _ => string.Empty
         };
     }
 
@@ -747,16 +740,23 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         var imgStyle = $"display:inline-block;vertical-align:top;object-fit:contain;{widthStyle}{heightStyle}{opacityStyle}";
         var alt = XmlEscape(cfg.AltText ?? cfg.AssetType);
 
-        string srcAttr;
-        if (!string.IsNullOrEmpty(cfg.AssetId) && _assetBase64.TryGetValue(cfg.AssetId, out var dataUri))
-            srcAttr = $" src=\"{dataUri}\"";
-        else if (!string.IsNullOrEmpty(cfg.AssetId))
-            srcAttr = $" src=\"/api/assets/{XmlAttr(cfg.AssetId)}/serve\"";
-        else
-            srcAttr = string.Empty;
+        var wrapper = $"    <div style=\"{alignStyle};line-height:0;font-size:0;\">";
 
-        return $"    <div style=\"{alignStyle};line-height:0;font-size:0;\"><img{srcAttr} style=\"{imgStyle}\" alt=\"{alt}\"/></div>";
+        // Görseller yalnız base64 data URI olarak gömülür; hiçbir URL'ye (ör. /api/assets/{id}/serve) düşülmez.
+        // Gömülemeyen (yetkisiz / silinmiş / eşlenmemiş) asset için <img> hiç üretilmez.
+        if (string.IsNullOrEmpty(cfg.AssetId))
+            return $"{wrapper}<img style=\"{imgStyle}\" alt=\"{alt}\"/></div>";
+
+        if (!_assetBase64.TryGetValue(cfg.AssetId, out var dataUri) || !IsImageDataUri(dataUri))
+            return $"{wrapper}</div>";
+
+        return $"{wrapper}<img src=\"{dataUri}\" style=\"{imgStyle}\" alt=\"{alt}\"/></div>";
     }
+
+    private static bool IsImageDataUri(string value) =>
+        value.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase)
+        && value.Contains(";base64,", StringComparison.Ordinal)
+        && value.IndexOfAny(['"', '<', '>', '&']) < 0;
 
     // ── BLOCK-08: DocumentInfo ────────────────────────────────────────────
 
@@ -1790,7 +1790,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             .ToList();
 
         if (fields.Count == 0)
-            return "<!-- InvoiceTotals: görünür alan yok -->";
+            return string.Empty;
 
         var rawCurrencyXpath = string.IsNullOrWhiteSpace(cfg.CurrencyXpath)
             ? "//cbc:DocumentCurrencyCode"

@@ -35,7 +35,6 @@
             position: relative;
             overflow: hidden;
           }
-          /* layout tables — multi-column rows, no visible borders */
           table.lr { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; }
           table.lr > tbody > tr > td {
             border: none;
@@ -44,11 +43,9 @@
             word-break: break-word;
             overflow-wrap: break-word;
           }
-          /* data tables — Table block */
           table.dt { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 6px; font-size: 9pt; }
           table.dt th { border: 1px solid #333; padding: 3px 6px; background: #d0d0d0; font-weight: bold; text-align: center; overflow: hidden; }
           table.dt td { border: 1px solid #555; padding: 3px 6px; word-break: break-word; overflow-wrap: break-word; overflow: hidden; }
-          /* document info table — key-value */
           table.di, table.di-dashed, table.di-dotted { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
           table.di td { border: 1px solid #555; padding: 2px 6px; }
           table.di-dashed td { border: 1px dashed #555; padding: 2px 6px; }
@@ -57,14 +54,12 @@
           table.di-plain { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
           table.di-plain td { border: none; padding: 2px 6px; }
           table.di-plain td:first-child { font-weight: bold; white-space: nowrap; width: 40%; }
-          /* totals table */
           table.tot { border-collapse: collapse; margin-left: auto; margin-bottom: 4px; font-size: 9.5pt; min-width: 280px; }
           table.tot td { border: 1px solid #aaa; padding: 2px 8px; }
           table.tot td.lbl { text-align: right; padding-right: 12px; white-space: nowrap; }
           table.tot td.val { text-align: right; white-space: nowrap; min-width: 120px; }
           table.tot tr.hl td { background: #ffffcc; }
           table.tot tr.bd td { font-weight: bold; }
-          /* typography */
           h1, h2 { padding-bottom: 3px; padding-top: 3px; margin-bottom: 5px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; }
           h1 { font-size: 1.4em; text-transform: none; }
           h2 { font-size: 1em; color: brown; }

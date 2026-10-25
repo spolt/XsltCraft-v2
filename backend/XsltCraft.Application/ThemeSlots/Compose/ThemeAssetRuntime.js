@@ -1,11 +1,4 @@
 (function () {
-  /* XsltCraft tema görselleri (v2). Veri: script[data-xc-overrides-data]. Hedef: data-xc-slot yuvası,
-     bulunamazsa yedek id'ler (eski temalar). Yuva temadaki bir görselse (data-xc-placeholder) kullanıcının
-     görseli onun yerini alır; aynı türden görsel başka bir yere yerleştiyse temadakiler gizlenir (yerleri
-     korunur) — hiçbir yere yerleşemediyse temadaki görsel kalır. Yedek id bir img ise (analiz edilmemiş eski
-     tema) içine eklenmez, yerini alır.
-     data.hide: kullanıcının görsel eklemeden kaldırdığı türler — yalnız data-xc-removable taşıyanlar gizlenir.
-     Bu dosya XSLT'ye gömülür: küçüktür, büyüktür ve ampersand karakterleri kullanılmaz. */
   function slotElements(id) {
     var out = [];
     var nodes = document.querySelectorAll('[data-xc-slot]');
@@ -50,7 +43,6 @@
     return wrap;
   }
 
-  /* Temadaki görselin kutusu korunur; boyut verilmişse o kullanılır, görsel kutuya oranı bozulmadan sığar. */
   function replace(el, item) {
     el.src = item.src;
     el.removeAttribute('srcset');
@@ -88,7 +80,6 @@
         }
         continue;
       }
-      /* img içerik alamaz: ilk görsel onun yerini alır, ikincisi ardına eklenir. */
       if ((el.tagName || '').toUpperCase() === 'IMG') {
         if (replaced.indexOf(el) === -1) {
           replace(el, item);

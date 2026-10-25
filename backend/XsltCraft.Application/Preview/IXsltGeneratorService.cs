@@ -12,9 +12,10 @@ public interface IXsltGeneratorService
     (string? Xslt, string? Error) Generate(BlockTreeDto tree, Dictionary<string, string>? assetBase64 = null);
 
     /// <summary>
-    /// JSON string'den BlockTreeDto deserialize eder, ardından Generate çağırır.
+    /// JSON string'den BlockTreeDto deserialize eder, ardından Generate çağırır. <paramref name="assetBase64"/>:
+    /// assetId → <c>data:image/...;base64,...</c> (görseller yalnız gömülü; eşlenmeyen asset için &lt;img&gt; üretilmez).
     /// </summary>
-    (string? Xslt, string? Error) GenerateFromJson(string blockTreeJson);
+    (string? Xslt, string? Error) GenerateFromJson(string blockTreeJson, Dictionary<string, string>? assetBase64 = null);
 
     /// <summary>
     /// V2 (grid-based) block tree'den mutlak konumlu XSLT üretir.
