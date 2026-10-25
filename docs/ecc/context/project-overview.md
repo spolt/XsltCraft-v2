@@ -10,8 +10,8 @@
 ## Temel akış
 1. Kullanıcı A4 grid canvas'a blok yerleştirir (Table, ForEach, Conditional, Image, Text, DocumentInfo, LegalMonetaryTotal, QR/ETTN, GİB karekod, Supplier/Customer party…).
 2. XML ağacı gezgininden node seçip blok alanına **XPath bağlar**.
-3. Canlı önizleme (Saxon HE) HTML'i günceller; UBL-TR iş kuralları (40+) doğrulanır.
-4. Blok ağacı **XSLT 2.0**'a derlenir; görseller base64 gömülür → kendi kendine yeten `.xslt` indirilir.
+3. Canlı önizleme HTML'i günceller (grid: süreç içi korumalı .NET motoru; ham XSLT: 1.0 → .NET, 2.0 → Saxon-HE 12.10, izole worker); UBL-TR iş kuralları (40+) doğrulanır.
+4. Blok ağacı `version="2.0"` stylesheet'e derlenir (içerik iki motorda aynı sonucu veren XPath 1.0 altkümesi); görseller **her zaman** base64 gömülür, çıktıda açıklama yorumu olmaz → `.xslt` indirilir (QR kütüphanesi CDN'den yüklenir).
 
 ## Ürün hedefi
 "XSLT yazmadan, UBL-TR'ye uygun, namespace'i bozulmayan, GİB'e gönderilebilir baskı şablonu." AI asistanı (opsiyonel) seçimi refactor eder ve Türkçe sohbet eder — ama **insan onayı olmadan otomatik insert yapmaz**.

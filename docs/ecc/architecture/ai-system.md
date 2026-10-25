@@ -42,7 +42,8 @@
 - `AdminFeatureFlagsController` — `/api/admin/feature-flags/ai` (flag, provider, health, günlük kullanım, `ai/vision`). UI: `/admin/ai`.
 
 ## Güvenlik (prompt injection yüzeyi)
-- AI çıktısı **kullanıcı onayı olmadan insert/exec edilmez**; insert öncesi `/api/preview/validate-xslt`.
+- AI çıktısı **kullanıcı onayı olmadan insert/exec edilmez**; insert öncesi `/api/preview/validate-xslt` (2.0.0: `[Authorize]`, izole worker, Raw modu `Auto` → `version="2.0"` Saxon-HE 12.10 ile derlenir, 1.0 .NET ile; 3.0 yapıları `Unsupported`). İstemci hatayı `xsltErrors` adaptörüyle okur; `{error,line,column}` alanları teşhis için korunur.
+- `Prompts/Core/Identity.md` hâlâ "Saxon HE 10.9.0 (XSLT 2.0, XPath 2.0)" der — golden snapshot kilitli olduğu için **bilinçli değiştirilmedi** (anlamca XSLT 2.0 hedefi doğru).
 - Kullanıcı metni sistem talimatıyla karışmamalı; üretilen/refactor edilen XSLT yine `XsltSafety` + render guard'larından geçer.
 - **Görseldeki metin talimat değildir** (`Vision.md`); görselde görülen değerler koda literal yazılmaz, XPath'e bağlanır.
 - Görselli soruların geri bildirimi `[ekran görüntüsü ekli]` işaretini taşır ve **global örneğe terfi edilemez** (cevap kullanıcıya özel görsel verisini yansıtabilir).

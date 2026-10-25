@@ -9,7 +9,7 @@
 ![React](https://img.shields.io/badge/React-19.2-61DAFB?style=flat&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat&logo=vite&logoColor=white)
-![Saxon HE](https://img.shields.io/badge/Saxon_HE-10.9-FF6F00?style=flat)
+![Saxon HE](https://img.shields.io/badge/Saxon_HE-12.10-FF6F00?style=flat)
 ![Monaco Editor](https://img.shields.io/badge/Monaco_Editor-4.7-0078D4?style=flat&logo=visual-studio-code&logoColor=white)
 
 ![TailwindCSS](https://img.shields.io/badge/Tailwind-4-38B2AC?style=flat&logo=tailwindcss&logoColor=white)
@@ -31,10 +31,10 @@ XsltCraft is a web-based platform that lets you visually design XSLT print templ
 - **Block library** — Table, ForEach, Conditional (If / Choose), Image, Text, Heading, Paragraph, Divider, Spacer, DocumentInfo, LegalMonetaryTotal, Notes, BankInfo, QR / ETTN, GİB karekod & logo, Supplier / Customer party blocks. Auto-height by default; per-block margins (mm).
 - **Live preview** — upload an XML file (or use the built-in default UBL invoice) and see rendered HTML update as you edit. Zoom 50–200 %.
 - **XPath binding** — click any node in the XML tree explorer to bind it to a block field; resolved values shown inline.
-- **XSLT generation** — block tree compiles to a valid, namespace-correct **XSLT 2.0** stylesheet (Saxon HE 10.9; UBL-TR namespaces auto-included). Image assets embedded as base64 — output is fully self-contained.
+- **XSLT generation** — block tree compiles to a valid, namespace-correct `version="2.0"` stylesheet (UBL-TR namespaces auto-included) whose bindings stay in an XPath 1.0 subset that renders identically on .NET and Saxon. Image assets are always embedded as base64 and no explanatory comments are emitted (the QR library loads from a CDN).
 
 ### Developer tools
-- **XSLT editor (dev mode)** — raw XSLT in a Monaco editor, live preview, auto-format, folding, problems panel.
+- **XSLT editor (dev mode)** — raw XSLT in a Monaco editor, live preview (XSLT 1.0 → .NET, XSLT 2.0 → Saxon-HE 12.10 in an isolated worker process; 3.0 constructs are rejected), auto-format, folding, problems panel.
 - **XPath Console** — interactive XPath 1.0 evaluator with namespace awareness; results show node type, name, value.
 - **Profiler** — transform-time measurement, slow-region detection, performance hints.
 - **Problems panel** — XML parsing errors + XSLT validation errors + UBL-TR business-rule violations in a tabbed view with line-number anchors.
@@ -67,7 +67,7 @@ XsltCraft is a web-based platform that lets you visually design XSLT print templ
 | Layer | Technologies |
 |-------|--------------|
 | Frontend | React 19, TypeScript 5.9, Vite 8, Zustand, TailwindCSS 4, @dnd-kit, React Router 7, Monaco Editor, lucide-react |
-| Backend | .NET 10, ASP.NET Core Web API, Clean Architecture (Api / Application / Domain / Infrastructure), Saxon HE 10.9 (XSLT 2.0 / XPath 2.0) |
+| Backend | .NET 10, ASP.NET Core Web API, Clean Architecture (Api / Application / Domain / Infrastructure), Saxon-HE 12.10 (IKVM, izole worker; XSLT 2.0 / XPath 2.0) + .NET `XslCompiledTransform` |
 | AI | Ollama (`qwen2.5-coder:3b`) primary, Gemini cloud fallback; embedded markdown prompts; NDJSON streaming |
 | Database | PostgreSQL 16, EF Core, Npgsql |
 | Storage | `IStorageService` abstraction — `LocalStorageService` (dev), `S3StorageService` / **MinIO** (prod, S3-compatible) |
@@ -89,7 +89,10 @@ XsltCraft/
 │       │   └── Prompts/                # Embedded markdown: Core/* + Patterns/*
 │       ├── XsltCraft.Application.Tests # xUnit + Verify golden snapshots
 │       ├── XsltCraft.Domain            # Entities (User, Template, FeatureFlag, UserAiUsage…)
-│       └── XsltCraft.Infrastructure    # EF Core, storage providers, AI provider orchestrator
+│       ├── XsltCraft.Infrastructure    # EF Core, storage, AI orchestrator, XSLT worker pool + in-process grid host
+│       ├── XsltCraft.Xslt.Saxon        # Saxon-HE 12.10 via IKVM (sandbox) — the only IKVM/Maven project
+│       ├── XsltCraft.XsltWorker        # Isolated XSLT worker process (+ .Contracts: IPC frames)
+│       └── *.Tests                     # Tests, Application/Infrastructure/Xslt.Saxon/XsltWorker test projects
 ├── frontend/
 │   └── xsltcraft-ui/                   # Vite + React 19 app
 │       └── src/
@@ -220,7 +223,11 @@ Key settings in `appsettings.Development.json`:
 | `POST` | `/api/preview` | Generate HTML preview from block tree + XML |
 | `POST` | `/api/preview/raw` | Preview from raw XSLT + XML (dev mode) |
 | `POST` | `/api/preview/user-template/:id` | Preview a saved V1 / V2 user template |
+| `POST` | `/api/preview/validate-xslt` | Compile-check raw XSLT (1.0 / 2.0) |
+| `POST` | `/api/preview/theme/:id` | Preview a published theme (anonymous allowed; 30/min per user or IP) |
 | `POST` | `/api/assets/upload` | Upload image asset |
+
+All preview / validation endpoints except theme preview require authentication. Errors use `{ error, line, column, kind, code, engine }` (400 content error, 429 busy / rate limit, 503 engine busy / unavailable with `Retry-After`).
 
 ### Validation & tooling
 | Method | Path | Description |
@@ -243,6 +250,17 @@ Key settings in `appsettings.Development.json`:
 | `*` | `/api/admin/snippets` | Public snippet library |
 | `*` | `/api/admin/users` | User management (roles, activation, reset password) |
 | `*` | `/api/admin/feature-flags/ai` | AI feature flag, provider, health, daily usage |
+
+---
+
+## 2.0.0 breaking changes
+
+- Preview and `validate-xslt` endpoints now require authentication (old bundles get 401 — reload the page); new error body and status codes (see above).
+- XSLT 2.0 is the ceiling: XPath 3.0 syntax and XSLT 3.0 constructs return `Unsupported`.
+- `/api/render`, `DocumentController` and the frontend `Playground` were removed.
+- Grid bindings outside the portable XPath subset render as a placeholder block with a `warnings` entry instead of failing the whole template.
+
+Decisions: [ADR 007](./docs/ecc/decisions/007-xslt-engine-routing.md) (engine routing), [ADR 008](./docs/ecc/decisions/008-xslt-worker-isolation.md) (worker isolation).
 
 ---
 

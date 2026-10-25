@@ -16,12 +16,14 @@ Agent'lar (özellikle `reviewer`) bu standartları referans alır. Mevcut Clean 
 
 ## Güvenlik (ödün verilmez)
 - Her yeni XML/XSLT parse noktası `docs/ecc/context/constraints.md`'deki guard pattern'i kullanır (XXE/injection).
+- Kullanıcı XSLT'si yalnız `IXsltExecutionService` üzerinden çalıştırılır (doğrudan motor/`SecureXslt` çağrısı önizleme yolunda yok); Saxon `Processor` yalnız `SaxonProcessorFactory`'den.
 - Authorization: controller/endpoint seviyesinde `[Authorize]`; kaynak sahipliği (IDOR) kontrolü.
 - Exception'lar prod'da generic mesaj + `LogError`; ham `ex.Message` yalnız dev.
 
 ## Test
 - Yeni davranış → test. Generator değişiklikleri `XsltCraft.Tests`; AI pipeline `XsltCraft.Application.Tests` (Verify golden).
-- Üretilen XSLT her zaman derlenebilir olmalı (`XslCompiledTransform.Load` geçer).
+- Üretilen XSLT her zaman derlenebilir olmalı (`SecureXslt.Compile` geçer) **ve** iki motorda aynı sonucu vermeli: grid değişikliklerinde `GridEngineParityTests` (.NET ↔ Saxon, HTML + QR bayt-aynı; bloke eden) yeşil kalır, yeni bağlama XPath'leri `XPathPortability`'den geçer.
+- Saxon/IKVM yalnız `XsltCraft.Xslt.Saxon`'da; katman kuralları `LayeringTests` ile bloke edilir. Gerçek süreç testleri `[Collection("WorkerProcesses")]`; ölçüm testleri `Category=Measurement` (CI dışı).
 - Golden snapshot değişimi **bilinçli** kabul edilir (`.received` → `.verified` gözden geçirilerek).
 
 ## PR hijyeni
