@@ -165,7 +165,7 @@ public sealed class XsltExecutionServiceTests
 
         Assert.Empty(options.Validate());
         var raw = options.Limits.Raw;
-        Assert.Equal(2_000_000, raw.MaxXsltChars);
+        Assert.Equal(5_000_000, raw.MaxXsltChars);
         Assert.Equal(5_000_000, raw.MaxXmlChars);
         Assert.Equal(1_000_000, options.Limits.Validate.MaxXsltChars);
         Assert.Equal(5 * 1024 * 1024, options.Limits.Grid.MaxXmlBytes);
@@ -386,11 +386,23 @@ public sealed class XsltExecutionServiceTests
     }
 
     [Fact]
-    public async Task ThemeRoute_NotRouted()
+    public async Task ThemeRoute_InProcessDotNet_GridLimits()
     {
-        var request = new XsltRunRequest(XsltRoute.Theme, Stylesheet("1.0"), Xml, XsltOperation.Render, User);
+        // Grid motoru Saxon olsa ve tema 2.0 bildirse de tema hattı süreç içi .NET'te kalır (G3).
+        var options = new XsltExecutionOptions { Engine = { Grid = XsltEngineMode.Saxon } };
+        var request = new XsltRunRequest(XsltRoute.Theme, Stylesheet("2.0"), Xml, XsltOperation.Render, User);
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Create().ExecuteAsync(request));
+        var result = await Create(options).ExecuteAsync(request);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(XsltExecutionPlace.InProcess, result.Place);
+        var sent = Assert.Single(_inProcess.Requests);
+        Assert.Equal(XsltEngineKind.DotNet, sent.Engine);
+        Assert.Equal(TimeSpan.FromSeconds(8), sent.Limits.Deadline);
+        Assert.Equal(200_000, sent.Limits.MaxInputNodes);
+        Assert.Equal(64, sent.Limits.MaxInputDepth);
+        Assert.Empty(_isolated.Requests);
+        Assert.Equal((XsltGateLane.Grid, XsltExecutionPlace.InProcess), Assert.Single(_gate.Acquired));
     }
 
     private void AssertNothingExecuted()

@@ -22,7 +22,7 @@ public sealed partial class XsltGeneratorService
 
     // ── InvoiceHeader (irsaliye) — İrsaliye bilgileri tablosu ─────────────
 
-    private static string GenerateDespatchHeader(BlockDto block)
+    private string GenerateDespatchHeader(BlockDto block)
     {
         var cfg = Deserialize<InvoiceHeaderConfig>(block.Config);
         var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "10.4px" : XmlEscape(cfg.FontSize);
@@ -80,7 +80,7 @@ public sealed partial class XsltGeneratorService
         sb.AppendLine("          </xsl:if>");
     }
 
-    private static void AppendCustomRows(StringBuilder sb, BlockDto block, InvoiceHeaderConfig cfg)
+    private void AppendCustomRows(StringBuilder sb, BlockDto block, InvoiceHeaderConfig cfg)
     {
         foreach (var f in (cfg.Fields ?? []).Where(f => f.Visible && f.IsCustom == true).OrderBy(f => f.Order))
         {
@@ -92,7 +92,7 @@ public sealed partial class XsltGeneratorService
 
     // ── ShipmentInfo — Taşıyıcı / araç / şoför bilgileri ──────────────────
 
-    private static string GenerateShipmentInfo(BlockDto block)
+    private string GenerateShipmentInfo(BlockDto block)
     {
         var cfg = Deserialize<InvoiceHeaderConfig>(block.Config);
         var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "10.4px" : XmlEscape(cfg.FontSize);

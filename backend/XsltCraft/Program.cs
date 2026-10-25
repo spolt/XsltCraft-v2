@@ -33,23 +33,11 @@ builder.Services.AddRateLimiter(opts =>
     // XSLT önizleme (xslt-preview) + doğrulama (xslt-validate): 120 req/dk/user.
     opts.AddXsltPolicies();
 
-    // Login / refresh / google: 10 istek / dakika / IP
-    opts.AddFixedWindowLimiter("auth-sensitive", o =>
-    {
-        o.PermitLimit = 10;
-        o.Window = TimeSpan.FromMinutes(1);
-        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        o.QueueLimit = 0;
-    });
+    // Login / refresh / google: 10 istek / dakika / IP (G3: önceden tek global kova — bir saldırgan herkesi kilitliyordu)
+    opts.AddPolicy("auth-sensitive", httpContext => RateLimitPolicies.PerIp(httpContext, 10, TimeSpan.FromMinutes(1)));
 
     // Register: 5 istek / 10 dakika / IP
-    opts.AddFixedWindowLimiter("auth-register", o =>
-    {
-        o.PermitLimit = 5;
-        o.Window = TimeSpan.FromMinutes(10);
-        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        o.QueueLimit = 0;
-    });
+    opts.AddPolicy("auth-register", httpContext => RateLimitPolicies.PerIp(httpContext, 5, TimeSpan.FromMinutes(10)));
 
     // AI panel istekleri: 30 req/dk/user
     opts.AddPolicy("ai-assistant", httpContext =>

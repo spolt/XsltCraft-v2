@@ -11,7 +11,8 @@ namespace XsltCraft.Application.Xslt.Execution;
 /// <item>Boyut: karakter + UTF-8 bayt (worker çerçeve bütçesi) → <see cref="XsltFailureKind.LimitExceeded"/>.</item>
 /// <item><see cref="IXsltSafetyScanner"/> <see cref="XsltSafetyMode.Execute"/> → <c>Security</c>/<c>Unsupported</c> (satır/kolon).</item>
 /// <item><see cref="XsltVersionSniffer"/> (&gt; 2.0 → <c>Unsupported</c>) + <see cref="XsltEngineSelector"/> (rota modu).</item>
-/// <item>Yer: Raw/Validate/UserTemplate ve script'li grid → izole; grid → süreç içi.
+/// <item>Yer: Raw/Validate/UserTemplate ve script'li grid → izole; grid ve hazır tema (<see cref="XsltRoute.Theme"/>:
+///   yönetici yüklemesi, her zaman .NET, grid sınırları — G3) → süreç içi.
 ///   Worker kapalıysa 1.0 → süreç içi .NET, ≥ 2.0 ve script'li grid → <c>EngineUnavailable</c>.</item>
 /// <item><see cref="IXsltUserGate"/> → host → sonuç kapıya FİİLÎ yerle (<see cref="XsltHostResult.Place"/>)
 ///   bildirilir, izin her durumda bırakılır.</item>
@@ -136,7 +137,7 @@ public sealed class XsltExecutionService : IXsltExecutionService
         {
             XsltRoute.Raw => XsltGateLane.Raw,
             XsltRoute.UserTemplate => XsltGateLane.UserTemplate,
-            _ => XsltGateLane.Grid,
+            _ => XsltGateLane.Grid, // Grid + Theme (süreç içi şerit)
         };
     }
 
@@ -149,15 +150,22 @@ public sealed class XsltExecutionService : IXsltExecutionService
         {
             XsltRoute.Raw => _options.Limits.Raw,
             XsltRoute.UserTemplate => _options.Limits.UserTemplate,
-            _ => _options.Limits.Grid,
+            _ => _options.Limits.Grid, // Theme: grid girdi sınırları (XML 5 MB, derinlik 64, 200k düğüm, 8 s)
         };
     }
 
-    private XsltEngineMode ModeFor(XsltRoute route) =>
-        route == XsltRoute.Raw ? _options.Engine.Raw : _options.Engine.Grid;
+    private XsltEngineMode ModeFor(XsltRoute route) => route switch
+    {
+        XsltRoute.Raw => _options.Engine.Raw,
+        XsltRoute.Theme => XsltEngineMode.DotNet, // tema hattı .NET'te kalır (ADR 007 §2)
+        _ => _options.Engine.Grid,
+    };
 
     private (XsltExecutionPlace Place, XsltDiagnostic? Unavailable) ResolvePlace(XsltRunRequest request, XsltEngineKind engine)
     {
+        if (request.Route == XsltRoute.Theme)
+            return (XsltExecutionPlace.InProcess, null);
+
         var isolated = request.Route != XsltRoute.Grid || request.IsUserAuthoredGrid;
         if (!isolated)
             return (XsltExecutionPlace.InProcess, null);
@@ -175,8 +183,8 @@ public sealed class XsltExecutionService : IXsltExecutionService
 
     private static void EnsureSupportedRoute(XsltRoute route)
     {
-        if (route is not (XsltRoute.Raw or XsltRoute.Grid or XsltRoute.UserTemplate))
-            throw new ArgumentOutOfRangeException(nameof(route), route, "Bu rota XsltExecutionService'ten geçmez (Theme → IXsltHtmlRenderer).");
+        if (!Enum.IsDefined(route))
+            throw new ArgumentOutOfRangeException(nameof(route), route, "Bilinmeyen XSLT rotası.");
     }
 
     private XsltExecutionLimits BuildLimits(XsltRouteLimits routeLimits, CancellationToken cancellationToken) => new()

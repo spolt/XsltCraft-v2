@@ -67,7 +67,7 @@ public sealed class XsltExecutionRegistrationTests
         Assert.Equal(XsltEngineMode.Saxon, options.Engine.Raw);
         Assert.Equal(XsltEngineMode.Auto, options.Engine.Grid);
         Assert.Equal(4000, options.Limits.Raw.TimeoutMs);
-        Assert.Equal(2_000_000, options.Limits.Raw.MaxXsltChars); // bağlanmayan alan varsayılanında kalır
+        Assert.Equal(5_000_000, options.Limits.Raw.MaxXsltChars); // bağlanmayan alan varsayılanında kalır
         Assert.Equal(2, options.UserGate.UserTemplateMaxConcurrent);
         Assert.Equal(3, options.Grid.MaxConcurrent);
         Assert.False(options.Grid.RestartOnStuckRunaway);

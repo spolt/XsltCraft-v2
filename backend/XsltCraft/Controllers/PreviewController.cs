@@ -25,19 +25,18 @@ namespace XsltCraft.Api.Controllers;
 [Route("api/[controller]")]
 public class PreviewController : ControllerBase
 {
-    // Gövde sınırları: içerik sınırları XsltExecutionService'tedir (Raw XSLT 2 MB + XML 5 MB, Validate 1 MB);
+    // Gövde sınırları: içerik sınırları XsltExecutionService'tedir (Raw XSLT 5 MB + XML 5 MB, Validate 1 MB);
     // gövde sınırı JSON kaçışı (\" \n \uXXXX) için pay bırakır.
-    private const int MaxRawBodyBytes = 10 * 1024 * 1024;    // 10 MB — raw + user-template
+    private const int MaxRawBodyBytes = 12 * 1024 * 1024;    // 12 MB — raw + user-template
     private const int MaxGridBodyBytes = 10 * 1024 * 1024;   // 10 MB — grid blok ağacı + XML
     private const int MaxXsltBodyBytes = 1024 * 1024;         // 1 MB — validate-xslt
+    private const int MaxThemeBodyBytes = 6 * 1024 * 1024;    // 6 MB — tema önizleme (XML 5 MB + JSON kaçış payı)
 
     private readonly IXsltGeneratorService _generator;
     private readonly IStorageService _storage;
     private readonly AppDbContext _db;
-    private readonly IWebHostEnvironment _env;
     private readonly IUsageQuotaService _quota;
     private readonly IUserActivityRecorder _activity;
-    private readonly IXsltHtmlRenderer _renderer;
     private readonly IXsltExecutionService _xslt;
     private readonly PreviewAssetEmbedder _assets;
     private readonly IThemeAccessGuard _themeAccess;
@@ -47,10 +46,8 @@ public class PreviewController : ControllerBase
         IXsltGeneratorService generator,
         IStorageService storage,
         AppDbContext db,
-        IWebHostEnvironment env,
         IUsageQuotaService quota,
         IUserActivityRecorder activity,
-        IXsltHtmlRenderer renderer,
         IXsltExecutionService xslt,
         PreviewAssetEmbedder assets,
         IThemeAccessGuard themeAccess,
@@ -59,10 +56,8 @@ public class PreviewController : ControllerBase
         _generator = generator;
         _storage = storage;
         _db = db;
-        _env = env;
         _quota = quota;
         _activity = activity;
-        _renderer = renderer;
         _xslt = xslt;
         _assets = assets;
         _themeAccess = themeAccess;
@@ -102,9 +97,10 @@ public class PreviewController : ControllerBase
             if (xslt is null)
                 return BadRequest(new { error = genError });
 
+            var warnings = _generator.Warnings.ToArray();
             var result = await _xslt.ExecuteAsync(
                 new XsltRunRequest(XsltRoute.Grid, xslt, request.XmlContent, XsltOperation.Render, userId), ct);
-            return XsltProblemResults.Render(result, sw.ElapsedMilliseconds, Response);
+            return XsltProblemResults.Render(result, sw.ElapsedMilliseconds, Response, warnings);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -118,48 +114,74 @@ public class PreviewController : ControllerBase
     }
 
     /// <summary>
-    /// Free theme'i storage'dan okur, verilen XML'e uygular, HTML döndürür (galeri önizlemesi).
+    /// Hazır temayı storage'dan okur, verilen XML'e uygular, HTML döndürür (galeri önizlemesi; anonim olabilir).
     /// Kullanıcı logo/imza/IBAN eklenmiş önizleme: POST /api/preview/compose.
-    /// Request: { xmlContent }
-    /// Response: { html, generationTimeMs }
+    /// <para>G3: yalnız <see cref="IThemeAccessGuard"/>'ın izin verdiği yayınlanmış tema → <see cref="XsltRoute.Theme"/>
+    /// (süreç içi .NET, grid girdi sınırları, kullanıcı kapısı — anonimde IP anahtarı). İstisna: oturum sahibinin KENDİ
+    /// saklı XSLT'li şablonu (editörde tema klonu önizlemesi) → <see cref="XsltRoute.UserTemplate"/> (izole worker).
+    /// Başkasının şablonu / yayınlanmamış tema → 404.</para>
+    /// Request: { xmlContent } · Response: { html, generationTimeMs, timings, engine, cacheHit, warnings }
     /// </summary>
     [HttpPost("theme/{themeId:guid}")]
+    [EnableRateLimiting(RateLimitPolicies.ThemePreview)]
+    [RequestSizeLimit(MaxThemeBodyBytes)]
     public async Task<IActionResult> PreviewTheme(Guid themeId, [FromBody] ThemePreviewRequest request)
     {
+        var ct = HttpContext.RequestAborted;
         var sw = Stopwatch.StartNew();
         try
         {
-            var template = await _db.Templates
-                .FirstOrDefaultAsync(t => t.Id == themeId);
-
+            var template = await _db.Templates.FirstOrDefaultAsync(t => t.Id == themeId, ct);
             if (template is null)
                 return NotFound(new { error = "Şablon bulunamadı." });
 
-            if (string.IsNullOrEmpty(template.XsltStoragePath))
-                return BadRequest(new { error = "Bu tema için XSLT dosyası tanımlı değil." });
+            Guid? userId = User.Identity?.IsAuthenticated == true ? CurrentUserId() : null;
+            XsltRoute route;
+            if (userId is { } owner && template.OwnerId == owner && !template.IsFreeTheme
+                && !string.IsNullOrEmpty(template.XsltStoragePath))
+            {
+                route = XsltRoute.UserTemplate;
+            }
+            else
+            {
+                // Ücretli tema galeride herkese ÖNİZLENİR (yalnız HTML; ham XSLT xslt-content'te Pro ister) —
+                // UpgradeRequired burada engel değildir, NotFound (yayınlanmamış / kullanıcı şablonu) engeldir.
+                if (await _themeAccess.CheckAsync(template, userId, ct) == ThemeAccessDecision.NotFound)
+                    return NotFound(new { error = "Şablon bulunamadı." });
+                route = XsltRoute.Theme;
+            }
 
-            await using var stream = await _storage.ReadAsync(template.XsltStoragePath);
-            using var reader = new StreamReader(stream);
-            var xslt = await reader.ReadToEndAsync();
+            string xslt;
+            await using (var stream = await _storage.ReadAsync(template.XsltStoragePath!))
+            using (var reader = new StreamReader(stream))
+                xslt = await reader.ReadToEndAsync(ct);
 
-            var html = ApplyXslt(xslt, request.XmlContent);
-            sw.Stop();
-            return Ok(new { html, generationTimeMs = sw.ElapsedMilliseconds });
+            var result = await _xslt.ExecuteAsync(
+                new XsltRunRequest(route, xslt, request.XmlContent ?? "", XsltOperation.Render, userId ?? AnonymousGateKey()), ct);
+
+            // XML ayrıştırma hatasında motorun ham XmlException metni yerine sabit mesaj (konum korunur).
+            if (result.Diagnostic is { Kind: XsltFailureKind.Xml } xmlError)
+                result = result with { Diagnostic = xmlError with { Message = "XML içeriği okunamadı (geçerli bir XML değil)." } };
+
+            return XsltProblemResults.Render(result, sw.ElapsedMilliseconds, Response);
         }
-        catch (XsltException ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            var (message, line, column) = DescribeXsltError(ex);
-            return BadRequest(new { error = message, line, column });
-        }
-        catch (XmlException ex)
-        {
-            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            return new EmptyResult();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Önizleme sırasında beklenmeyen hata.");
-            return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
+            _logger.LogError(ex, "Tema önizlemesi sırasında beklenmeyen hata.");
+            return XsltProblemResults.Unexpected();
         }
+    }
+
+    /// <summary>Anonim kullanıcı kapısı bölümü: istemci IP'sinden türetilmiş kararlı anahtar (IP'nin kendisi değil).</summary>
+    private Guid AnonymousGateKey()
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "anon";
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("theme-preview:" + ip));
+        return new Guid(hash.AsSpan(0, 16));
     }
 
     /// <summary>
@@ -212,9 +234,10 @@ public class PreviewController : ControllerBase
             var (xslt, genError) = _generator.GenerateFromJson(template.BlockTree);
             if (xslt is null) return BadRequest(new { error = genError });
 
+            var warnings = _generator.Warnings.ToArray();
             var result = await _xslt.ExecuteAsync(
                 new XsltRunRequest(XsltRoute.UserTemplate, xslt, req.XmlContent, XsltOperation.Render, userId), ct);
-            return XsltProblemResults.Render(result, sw.ElapsedMilliseconds, Response);
+            return XsltProblemResults.Render(result, sw.ElapsedMilliseconds, Response, warnings);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -260,7 +283,7 @@ public class PreviewController : ControllerBase
 
     /// <summary>
     /// Ham XSLT + XML ile anlık önizleme — geliştirici mod / XSLT editörü (<see cref="XsltRoute.Raw"/>: 1.0 → .NET,
-    /// 2.0 → Saxon, izole worker). İçerik sınırları serviste (XSLT 2 MB + XML 5 MB); gövde sınırı JSON kaçış payıyla 10 MB.
+    /// 2.0 → Saxon, izole worker). İçerik sınırları serviste (XSLT 5 MB + XML 5 MB); gövde sınırı JSON kaçış payıyla 12 MB.
     /// Request: { xslt, xmlContent }
     /// Response: { html, generationTimeMs, timings: { parseMs, compileMs, transformMs, serializeMs }, engine, cacheHit }
     /// </summary>
@@ -366,8 +389,6 @@ public class PreviewController : ControllerBase
     }
 
     private Guid CurrentUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-    private string ApplyXslt(string xslt, string xmlContent) => _renderer.Render(xslt, xmlContent).Html;
 }
 
 public class ValidateXsltRequest

@@ -15,13 +15,18 @@ public static class RateLimitPolicies
     /// <summary>ValidateXslt: 120 istek/dk/kullanıcı.</summary>
     public const string XsltValidate = "xslt-validate";
 
+    /// <summary>PreviewTheme (anonim olabilir): 30 istek/dk/IP (G3).</summary>
+    public const string ThemePreview = "theme-preview";
+
     private const int PermitPerMinute = 120;
+    private const int ThemePreviewPerMinute = 30;
 
     /// <summary>Kullanıcı bölümlü (kimliksizse IP) sabit pencere politikalarını ekler.</summary>
     public static RateLimiterOptions AddXsltPolicies(this RateLimiterOptions options)
     {
         options.AddPolicy(XsltPreview, PerUserPerMinute);
         options.AddPolicy(XsltValidate, PerUserPerMinute);
+        options.AddPolicy(ThemePreview, httpContext => PerIp(httpContext, ThemePreviewPerMinute, TimeSpan.FromMinutes(1)));
         return options;
     }
 
@@ -47,6 +52,21 @@ public static class RateLimitPolicies
             }, cancellationToken);
         }
     }
+
+    /// <summary>
+    /// İstemci IP'si bölümlü sabit pencere (kimlikten bağımsız). Not: <c>RemoteIpAddress</c> ters vekil arkasında
+    /// vekilin adresidir — <c>ForwardedHeaders</c> yapılandırılmadan nginx arkasına alınırsa tek kovaya düşer.
+    /// </summary>
+    public static RateLimitPartition<string> PerIp(HttpContext httpContext, int permitLimit, TimeSpan window) =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = window,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            });
 
     private static RateLimitPartition<string> PerUserPerMinute(HttpContext httpContext) =>
         RateLimitPartition.GetFixedWindowLimiter(

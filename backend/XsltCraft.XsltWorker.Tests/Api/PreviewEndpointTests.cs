@@ -237,7 +237,7 @@ public sealed class PreviewRawGibGeneralTests
     private static PreviewController Controller(IXsltExecutionService xslt)
     {
         // PreviewRaw/ValidateXslt yalnız servisi ve logger'ı kullanır; diğer bağımlılıklar bu uçlarda dokunulmaz.
-        var controller = new PreviewController(null!, null!, null!, null!, null!, null!, null!, xslt, null!, null!,
+        var controller = new PreviewController(null!, null!, null!, null!, null!, xslt, null!, null!,
             NullLogger<PreviewController>.Instance);
         var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "test"));
         controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = user } };

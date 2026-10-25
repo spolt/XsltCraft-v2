@@ -3,15 +3,47 @@ namespace XsltCraft.Application.Preview;
 // Kullanıcı bağlamalı XPath'ler için çift-motor (.NET XSLT 1.0 / Saxon XSLT 2.0) güvenli yardımcılar (A5 G1–G3).
 public sealed partial class XsltGeneratorService
 {
-    /// <summary>Taşınabilir olmayan kullanıcı XPath'i — Generate*() fail-closed <c>(null, Message)</c> döner.</summary>
-    private sealed class XPathBindingException(string message) : Exception(message);
+    /// <summary>
+    /// Taşınabilir olmayan kullanıcı XPath'i. <see cref="DispatchBlock"/> yakalar: blok yer tutucuyla değiştirilir,
+    /// <see cref="Warnings"/>'e eklenir (G3 — blok düzeyinde yumuşak düşüş); şablonun geri kalanı üretilir.
+    /// </summary>
+    private sealed class XPathBindingException(string message, string code, string xpath) : Exception(message)
+    {
+        public string Code { get; } = code;
+        public string XPath { get; } = xpath;
+    }
+
+    // Generate*() çağrısı boyunca geçerli: XPath → kapı sonucu (aynı ifade Bind + Single ile iki kez denetlenir).
+    private readonly Dictionary<string, XPathPortabilityResult> _portability = new(StringComparer.Ordinal);
+
+    private readonly List<XsltGenerationWarning> _warnings = [];
+
+    /// <inheritdoc />
+    public IReadOnlyList<XsltGenerationWarning> Warnings => _warnings;
+
+    private void ResetCallState()
+    {
+        _portability.Clear();
+        _warnings.Clear();
+    }
+
+    /// <summary>Desteklenmeyen XPath'li bloğun yerine çıkan görünür (GİB çıktısında zararsız, statik) yer tutucu.</summary>
+    private string BindingErrorPlaceholder(BlockDto block, XPathBindingException ex)
+    {
+        _warnings.Add(new XsltGenerationWarning(block.Id, ex.Code, ex.XPath));
+        return "<div class=\"xc-binding-error\" style=\"border:1px dashed #d97706;color:#92400e;padding:2mm;font-size:8pt;\">" +
+               $"Bu blok desteklenmeyen bir XPath içeriyor ({XmlText(ex.Code)})</div>";
+    }
+
+    private static string XmlText(string value) =>
+        value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
     /// <summary>
     /// Kullanıcı XPath'ini <see cref="XPathPortability"/> ile doğrular; taşınabilir değilse
     /// <see cref="XPathBindingException"/> fırlatır. Boş XPath dokunulmadan geçer (mevcut davranış:
     /// stylesheet derlemesi reddeder). <c>=</c>/<c>!=</c>, <c>test</c> EBV ve <c>for-each</c> için.
     /// </summary>
-    private static string Bind(BlockDto block, string? xpath)
+    private string Bind(BlockDto block, string? xpath)
     {
         Check(block, xpath);
         return xpath ?? string.Empty;
@@ -22,7 +54,7 @@ public sealed partial class XsltGeneratorService
     /// <c>format-number()</c>): düğüm kümesi ise <c>(x)[1]</c> — XPath 1.0'ın "ilk düğüm" anlamı Saxon'da da korunur
     /// (2.0'da <c>value-of</c> tüm değerleri birleştirir, tekil-argüman fonksiyonları hata verir).
     /// </summary>
-    private static string Single(BlockDto block, string? xpath)
+    private string Single(BlockDto block, string? xpath)
     {
         var result = Check(block, xpath);
         return result is { IsNodeSet: true } ? $"({xpath})[1]" : xpath ?? string.Empty;
@@ -52,13 +84,15 @@ public sealed partial class XsltGeneratorService
     /// <summary>Generator'ın kendi ürettiği yol ifadesi (her zaman düğüm kümesi) için ilk düğüm.</summary>
     private static string FirstOf(string pathXpath) => $"({pathXpath})[1]";
 
-    private static XPathPortabilityResult? Check(BlockDto block, string? xpath)
+    private XPathPortabilityResult? Check(BlockDto block, string? xpath)
     {
         if (string.IsNullOrWhiteSpace(xpath)) return null;
-        var result = XPathPortability.Analyze(xpath);
+        if (!_portability.TryGetValue(xpath, out var result))
+            _portability[xpath] = result = XPathPortability.Analyze(xpath);
         if (!result.IsPortable)
             throw new XPathBindingException(
-                $"{result.ErrorCode}: '{xpath}' — {block.Type} bloğunda ({block.Id}) XPath kullanılamaz: {result.Message}");
+                $"{result.ErrorCode}: '{xpath}' — {block.Type} bloğunda ({block.Id}) XPath kullanılamaz: {result.Message}",
+                result.ErrorCode!, xpath);
         return result;
     }
 }

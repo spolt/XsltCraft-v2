@@ -5,7 +5,7 @@ namespace XsltCraft.Application.Xslt.Execution;
 /// <summary>
 /// <see cref="IXsltExecutionService"/> girdisi.
 /// </summary>
-/// <param name="Route">İsteğin geldiği hat (<see cref="XsltRoute.Theme"/> bu servisten geçmez).</param>
+/// <param name="Route">İsteğin geldiği hat (<see cref="XsltRoute.Theme"/>: hazır tema önizlemesi, süreç içi .NET).</param>
 /// <param name="Xslt">Stylesheet metni.</param>
 /// <param name="Xml">Girdi XML'i; <see cref="XsltOperation.Validate"/> için yok sayılır.</param>
 /// <param name="Op">İşlem.</param>

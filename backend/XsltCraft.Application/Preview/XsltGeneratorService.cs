@@ -62,6 +62,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     {
         _assetBase64 = assetBase64 ?? [];
         _isDespatch = false;
+        ResetCallState();
         try
         {
             var body = BuildBody(tree);
@@ -91,6 +92,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     {
         _assetBase64 = assetBase64 ?? [];
         _isDespatch = IsDespatch(tree.DocumentType);
+        ResetCallState();
         try
         {
             // Create a BlockTreeDto adapter so existing DispatchBlock/Generate* methods work unchanged
@@ -590,6 +592,18 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     private string DispatchBlock(BlockDto block, BlockTreeDto tree)
     {
+        try
+        {
+            return DispatchBlockCore(block, tree);
+        }
+        catch (XPathBindingException ex)
+        {
+            return BindingErrorPlaceholder(block, ex);
+        }
+    }
+
+    private string DispatchBlockCore(BlockDto block, BlockTreeDto tree)
+    {
         return block.Type switch
         {
             "Text" => GenerateText(block),
@@ -619,7 +633,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK-01: Text ────────────────────────────────────────────────────
 
-    private static string GenerateText(BlockDto block)
+    private string GenerateText(BlockDto block)
     {
         var cfg = Deserialize<TextConfig>(block.Config);
         var styleAttr = BuildStyleAttr(cfg.FontWeight, cfg.FontStyle, cfg.FontSize, cfg.Color);
@@ -638,7 +652,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK-02: Heading ─────────────────────────────────────────────────
 
-    private static string GenerateHeading(BlockDto block)
+    private string GenerateHeading(BlockDto block)
     {
         var cfg = Deserialize<HeadingConfig>(block.Config);
         var tag = cfg.Level.ToLowerInvariant();
@@ -653,7 +667,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK-03: Paragraph ───────────────────────────────────────────────
 
-    private static string GenerateParagraph(BlockDto block)
+    private string GenerateParagraph(BlockDto block)
     {
         var cfg = Deserialize<ParagraphConfig>(block.Config);
         var sb = new StringBuilder("    <p>");
@@ -671,7 +685,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-04: Table ───────────────────────────────────────────────────
     // FIX: <colgroup> ile sütun genişlikleri güvenilir biçimde uygulanır.
 
-    private static string GenerateTable(BlockDto block)
+    private string GenerateTable(BlockDto block)
     {
         var cfg = Deserialize<TableConfig>(block.Config);
         var sb = new StringBuilder();
@@ -746,7 +760,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK-08: DocumentInfo ────────────────────────────────────────────
 
-    private static string GenerateDocumentInfo(BlockDto block)
+    private string GenerateDocumentInfo(BlockDto block)
     {
         var cfg = Deserialize<DocumentInfoConfig>(block.Config);
         var tableClass = (cfg.Bordered ?? true)
@@ -770,7 +784,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-09: Totals ──────────────────────────────────────────────────
     // FIX: Her hücreye explicit hizalama — table element'ine text-align vermek işe yaramıyor.
 
-    private static string GenerateTotals(BlockDto block)
+    private string GenerateTotals(BlockDto block)
     {
         var cfg = Deserialize<TotalsConfig>(block.Config);
         var lblWidthStyle = !string.IsNullOrEmpty(cfg.LabelWidth)
@@ -794,7 +808,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK-10: Notes ───────────────────────────────────────────────────
 
-    private static string GenerateNotes(BlockDto block, bool isDespatch = false)
+    private string GenerateNotes(BlockDto block, bool isDespatch = false)
     {
         var cfg = Deserialize<NotesConfig>(block.Config);
         var prefix = XmlEscape(cfg.Prefix ?? string.Empty);
@@ -900,7 +914,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-12: ETTN ────────────────────────────────────────────────────
     // FIX: Gerçek QR kod üretimi; UUID gizli div'de saklanır, qrcode.js ile görüntülenir.
 
-    private static string GenerateETTN(BlockDto block)
+    private string GenerateETTN(BlockDto block)
     {
         var cfg = Deserialize<EttnConfig>(block.Config);
 
@@ -989,7 +1003,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-15: ConditionalText ─────────────────────────────────────────
     // Koşula göre farklı metin veya XPath değeri gösterir.
 
-    private static string BuildXPathTest(BlockDto block, ConditionalCondition cond)
+    private string BuildXPathTest(BlockDto block, ConditionalCondition cond)
     {
         var xpath = Bind(block, cond.Xpath);
         var val = cond.Value ?? string.Empty;
@@ -1010,7 +1024,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         return Bind(block, test);
     }
 
-    private static string GenerateConditionalText(BlockDto block)
+    private string GenerateConditionalText(BlockDto block)
     {
         var cfg = Deserialize<ConditionalTextConfig>(block.Config);
         var test = BuildXPathTest(block, cfg.Condition);
@@ -1032,7 +1046,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-17: TaxSummary ──────────────────────────────────────────────
     // Türk e-Fatura KDV özet tablosu.
 
-    private static string GenerateTaxSummary(BlockDto block)
+    private string GenerateTaxSummary(BlockDto block)
     {
         var cfg = Deserialize<TaxSummaryConfig>(block.Config);
         var headerBg = cfg.HeaderBackgroundColor ?? "#E0E0E0";
@@ -1132,7 +1146,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     }
 
     /// <summary>Generates XSLT cell content for a table column, applying numeric formatting when needed.</summary>
-    private static string FormatCell(BlockDto block, string xpath, string? format)
+    private string FormatCell(BlockDto block, string xpath, string? format)
     {
         // G2/G3: tekil değer + format-number(number(X)) — 1.0'daki örtük number() dönüşümü açık yazılır.
         xpath = Single(block, xpath);
@@ -1183,7 +1197,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK: PartyInfo ─────────────────────────────────────────────────
 
-    private static string GeneratePartyInfo(BlockDto block)
+    private string GeneratePartyInfo(BlockDto block)
     {
         var cfg = Deserialize<PartyInfoConfig>(block.Config);
         var partyRoot = cfg.PartyType switch
@@ -1246,7 +1260,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK: InvoiceLineTable ───────────────────────────────────────────
 
-    private static string GenerateInvoiceLineTable(BlockDto block, bool isDespatch = false)
+    private string GenerateInvoiceLineTable(BlockDto block, bool isDespatch = false)
     {
         var cfg = Deserialize<InvoiceLineTableConfig>(block.Config);
         var columns = (cfg.Columns ?? new List<InvoiceLineColumn>())
@@ -1474,7 +1488,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK: InvoiceHeader ──────────────────────────────────────────────
 
-    private static string GenerateInvoiceHeader(BlockDto block)
+    private string GenerateInvoiceHeader(BlockDto block)
     {
         var cfg = Deserialize<InvoiceHeaderConfig>(block.Config);
         var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "10.4px" : XmlEscape(cfg.FontSize);
@@ -1767,7 +1781,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK: InvoiceTotals ──────────────────────────────────────────────
 
-    private static string GenerateInvoiceTotals(BlockDto block, bool isDespatch = false)
+    private string GenerateInvoiceTotals(BlockDto block, bool isDespatch = false)
     {
         var cfg = Deserialize<InvoiceTotalsConfig>(block.Config);
         var fields = (cfg.Fields ?? new List<InvoiceTotalsField>())

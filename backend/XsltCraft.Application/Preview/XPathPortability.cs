@@ -25,6 +25,12 @@ public static class XPathPortability
     public const int MaxParenDepth = 16;
     public const int MaxPredicateDepth = 3;
 
+    /// <summary><c>|</c> birleşiminin en çok işlenen sayısı (G3: 12'li birleşim ~10 dk).</summary>
+    public const int MaxUnionOperands = 4;
+
+    /// <summary>İfade başına en çok "önemsiz olmayan" yüklem (<c>[n]</c> ve <c>[local-name()='x']</c> sayılmaz).</summary>
+    public const int MaxPredicates = 4;
+
     public const string TooLong = "XPATH_TOO_LONG";
     public const string TooComplex = "XPATH_TOO_COMPLEX";
     public const string NotPortable = "XPATH_NOT_PORTABLE";
@@ -63,6 +69,24 @@ public static class XPathPortability
         "following", "preceding", "following-sibling", "preceding-sibling",
     };
 
+    /// <summary>Yukarı eksenler (yüklemde: ardından yalnız yukarı/öznitelik adımı; dize değeri kullanılamaz).</summary>
+    private static readonly HashSet<string> UpwardAxes = new(StringComparer.Ordinal)
+    {
+        "parent", "ancestor", "ancestor-or-self",
+    };
+
+    /// <summary>Düğüm kümesini dize değerine çevirmeden tüketen fonksiyonlar (varlık / ilk düğümün adı / sayım).</summary>
+    private static readonly HashSet<string> ExistenceFunctions = new(StringComparer.Ordinal)
+    {
+        "not", "boolean", "count", "name", "local-name", "namespace-uri", "generate-id",
+    };
+
+    /// <summary>Karşılaştırma işleneninde düğüm başına sınırlı sayıda düğüm veren eksenler.</summary>
+    private static readonly HashSet<string> BoundedAxes = new(StringComparer.Ordinal)
+    {
+        "parent", "ancestor", "ancestor-or-self", "self", "attribute",
+    };
+
     public static XPathPortabilityResult Analyze(string xpath)
     {
         if (string.IsNullOrWhiteSpace(xpath))
@@ -97,18 +121,39 @@ public static class XPathPortability
 
     private static XPathPortabilityResult? CheckStructure(List<XPathToken> t)
     {
-        int paren = 0, pred = 0;
+        int paren = 0, pred = 0, unions = 0, predicates = 0;
+        // upSeen[d]: d. yüklem düzeyinin geçerli işleneninde yukarı adım görüldü (ardından // / descendant yasak).
+        var upSeen = new bool[MaxPredicateDepth + 1];
         for (int i = 0; i < t.Count; i++)
         {
             var tok = t[i];
             if (tok.Kind == XPathTokenKind.LParen && ++paren > MaxParenDepth)
                 return Fail(TooComplex, $"Parantez derinliği {MaxParenDepth} sınırını aşıyor.");
             if (tok.Kind == XPathTokenKind.RParen) paren--;
-            if (IsOther(tok, "[") && ++pred > MaxPredicateDepth)
-                return Fail(TooComplex, $"İç içe yüklem derinliği {MaxPredicateDepth} sınırını aşıyor.");
+            if (IsOther(tok, "|") && ++unions >= MaxUnionOperands)
+                return Fail(TooComplex, $"'|' birleşimi en çok {MaxUnionOperands} işlenen içerebilir.");
+            if (IsOther(tok, "["))
+            {
+                if (++pred > MaxPredicateDepth)
+                    return Fail(TooComplex, $"İç içe yüklem derinliği {MaxPredicateDepth} sınırını aşıyor.");
+                if (!IsTrivialPredicate(t, i) && ++predicates > MaxPredicates)
+                    return Fail(TooComplex, $"İfade en çok {MaxPredicates} yüklem içerebilir ([n] ve [local-name()='…'] sayılmaz).");
+                upSeen[pred] = false;
+            }
             if (IsOther(tok, "]")) pred--;
 
             if (pred == 0) continue;
+
+            if (IsOther(tok, ",") || IsOperatorName(t, i, "and") || IsOperatorName(t, i, "or") || IsComparison(t, i, out _))
+                upSeen[pred] = false;
+
+            if (IsUpStep(t, i))
+            {
+                if (CheckUpStep(t, i) is { } up) return up;
+                upSeen[pred] = true;
+                if (IsOther(tok, ".")) i++; // '..' iki token
+                continue;
+            }
 
             // Yüklem içi N-sınıfı eksen kuralları
             if (IsDoubleSlash(t, i, out bool absolute))
@@ -117,33 +162,206 @@ public static class XPathPortability
                     return Fail(TooComplex, "İç içe yüklemde '//' (N-sınıfı eksen) kullanılamaz.");
                 if (absolute)
                     return Fail(TooComplex, "Yüklem içinde mutlak '//' yolu kullanılamaz (her düğüm için tüm belge taranır).");
+                if (AnyUp(upSeen, pred))
+                    return Fail(TooComplex, "Yüklem içinde yukarı adımdan (.., parent::, ancestor::) sonra '//' kullanılamaz.");
+                if (IsFilterEnd(t, i - 1))
+                    return Fail(TooComplex, "Yüklem içinde fonksiyon/değişken sonucundan sonra '//' kullanılamaz.");
             }
             else if (AxisName(t, i) is { } axis && NClassAxes.Contains(axis))
             {
+                if (IsNeighborSibling(t, i))
+                {
+                    // Yerel komşu kardeş (X-sibling::*[1]) O(1); iç içe yüklemde de sınırsız tarama yok.
+                    if (pred > 1)
+                        return Fail(TooComplex, $"İç içe yüklemde '{axis}::' kullanılamaz.");
+                    continue;
+                }
                 if (pred > 1)
                     return Fail(TooComplex, $"İç içe yüklemde '{axis}::' (N-sınıfı eksen) kullanılamaz.");
                 if (UnboundedAxes.Contains(axis))
-                    return Fail(TooComplex, $"Yüklem içinde '{axis}::' ekseni kullanılamaz (her düğüm için belge boyunda tarama).");
+                    return Fail(TooComplex,
+                        $"Yüklem içinde '{axis}::' ekseni kullanılamaz (her düğüm için belge/kardeş boyunda tarama; " +
+                        "yalnız komşu kardeş '" + axis + "::*[1]' kullanılabilir).");
+                if (AnyUp(upSeen, pred))
+                    return Fail(TooComplex, $"Yüklem içinde yukarı adımdan sonra '{axis}::' kullanılamaz.");
                 if (i > 0 && IsOther(t[i - 1], "/") && !IsStepEnd(t, i - 2) && !(i > 1 && IsOther(t[i - 2], "/")))
                     return Fail(TooComplex, $"Yüklem içinde mutlak '/{axis}::' yolu kullanılamaz.");
+                if (i > 1 && IsOther(t[i - 1], "/") && IsFilterEnd(t, i - 2))
+                    return Fail(TooComplex, $"Yüklem içinde fonksiyon/değişken sonucundan sonra '{axis}::' kullanılamaz.");
             }
         }
 
-        // Genel karşılaştırma: iki işlenen de düğüm kümesi ve en az biri N-sınıfı eksen taşıyorsa
-        // maliyet O(|A|·|B|) (açık #2: //i[@v = //i/@w]).
+        // Genel karşılaştırma: iki işlenen de düğüm kümesiyse ve en az biri N-sınıfı eksen taşıyor ya da ikisi de
+        // "geniş" (bağlam başına sınırsız düğüm, ör. alt öğe adımı) ise maliyet O(|A|·|B|) (açık #2: //i[@v = //i/@w];
+        // G3: r[s/p = s/q] 60k kardeşte ~90 s — .NET sağ işleneni her sol düğüm için yeniden değerlendirir).
         for (int i = 0; i < t.Count; i++)
         {
             if (!IsComparison(t, i, out int opLen)) continue;
-            var (lNode, lN) = ClassifyOperand(t, i - 1, -1);
-            var (rNode, rN) = ClassifyOperand(t, i + opLen, +1);
+            var (lNode, lN, lWide) = ClassifyOperand(t, i - 1, -1);
+            var (rNode, rN, rWide) = ClassifyOperand(t, i + opLen, +1);
             if (lNode && rNode && (lN || rN))
                 return Fail(TooComplex,
                     "N-sınıfı eksenli (//, descendant, following, preceding) bir düğüm kümesi başka bir düğüm kümesiyle " +
                     "karşılaştırılamaz (karesel maliyet).");
+            if (lNode && rNode && lWide && rWide)
+                return Fail(TooComplex,
+                    "İki çok-düğümlü küme karşılaştırılamaz (karesel maliyet); bir tarafı '.', öznitelik ya da '[1]' ile tekil yapın.");
             i += opLen - 1;
         }
 
         return null;
+    }
+
+    // ── Yukarı eksen (G3 Y1) ─────────────────────────────────────────────
+
+    /// <summary><paramref name="i"/>: <c>..</c> (ilk nokta) ya da <c>parent::</c>/<c>ancestor::</c>/<c>ancestor-or-self::</c>.</summary>
+    private static bool IsUpStep(List<XPathToken> t, int i) =>
+        (IsOther(t[i], ".") && i + 1 < t.Count && IsOther(t[i + 1], ".") && !(i > 0 && IsOther(t[i - 1], ".")))
+        || (AxisName(t, i) is { } ax && UpwardAxes.Contains(ax));
+
+    private static bool AnyUp(bool[] upSeen, int pred)
+    {
+        for (int d = 1; d <= pred; d++)
+            if (upSeen[d]) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Yüklemde yukarı adım: ardından yalnız yukarı / öznitelik / self adımı gelebilir (<c>../x</c> geniş bir
+    /// ebeveynin tüm çocuklarını her düğüm için tarar — 60k kardeşte ~7 s); yol yukarı adımda bitiyorsa sonuç
+    /// yalnız varlık/sayım/ad olarak kullanılabilir (dize değeri = ata alt ağacının tüm metni → O(n²)).
+    /// </summary>
+    private static XPathPortabilityResult? CheckUpStep(List<XPathToken> t, int i)
+    {
+        int j = SkipStep(t, i);
+        if (j < t.Count && IsOther(t[j], "/"))
+        {
+            if (IsDoubleSlash(t, j, out _))
+                return Fail(TooComplex, "Yüklem içinde yukarı adımdan (.., parent::, ancestor::) sonra '//' kullanılamaz.");
+            int next = j + 1;
+            bool ok = next < t.Count
+                      && (IsUpStep(t, next) || IsOther(t[next], "@")
+                          || AxisName(t, next) is "attribute" or "self");
+            return ok ? null : Fail(TooComplex,
+                "Yüklem içinde yukarı adımdan (.., parent::, ancestor::) sonra alt öğe adımı kullanılamaz " +
+                "(geniş ebeveynde her düğüm için tüm kardeşler taranır); yalnız öznitelik (../@x) okunabilir.");
+        }
+
+        int s = PathStart(t, i);
+        int l = s - 1;
+        bool leftOk = l < 0
+                      || IsOther(t[l], "[")
+                      || IsOperatorName(t, l, "and") || IsOperatorName(t, l, "or")
+                      || (t[l].Kind == XPathTokenKind.LParen
+                          && (!IsFunctionCall(t, l - 1) || ExistenceFunctions.Contains(t[l - 1].Text)));
+        bool rightOk = j >= t.Count
+                       || IsOther(t[j], "]") || t[j].Kind == XPathTokenKind.RParen
+                       || IsOperatorName(t, j, "and") || IsOperatorName(t, j, "or");
+        return leftOk && rightOk ? null : Fail(TooComplex,
+            "Yüklem içinde yukarı eksenin (.., parent::, ancestor::) dize değeri kullanılamaz (her düğüm için ata " +
+            "alt ağacının tüm metni okunur); yalnız varlık, count() ya da name()/local-name() kullanılabilir.");
+    }
+
+    /// <summary>Adımın (eksen + düğüm testi + yüklemleri) bittiği yerden sonraki token indisi.</summary>
+    private static int SkipStep(List<XPathToken> t, int i)
+    {
+        int j;
+        if (IsOther(t[i], ".") && i + 1 < t.Count && IsOther(t[i + 1], ".")) j = i + 2;
+        else
+        {
+            j = AxisName(t, i) is not null ? i + 3 : i;
+            j = SkipNodeTest(t, j);
+        }
+        while (j < t.Count && IsOther(t[j], "[")) j = SkipBalanced(t, j);
+        return j;
+    }
+
+    /// <summary>Düğüm testi (<c>*</c>, <c>ad</c>, <c>önek:*</c>, <c>node()</c>) sonrası indis.</summary>
+    private static int SkipNodeTest(List<XPathToken> t, int j)
+    {
+        if (j >= t.Count) return j;
+        if (IsOther(t[j], "*")) return j + 1;
+        if (t[j].Kind != XPathTokenKind.Name) return j;
+        if (j + 1 < t.Count && t[j + 1].Kind == XPathTokenKind.LParen) return SkipBalanced(t, j + 1);
+        if (j + 2 < t.Count && IsOther(t[j + 1], ":") && IsOther(t[j + 2], "*")) return j + 3;
+        return j + 1;
+    }
+
+    /// <summary><paramref name="open"/>'daki <c>(</c>/<c>[</c>'in eşinden sonraki indis.</summary>
+    private static int SkipBalanced(List<XPathToken> t, int open)
+    {
+        int level = 0, j = open;
+        for (; j < t.Count; j++)
+        {
+            if (IsOpen(t[j])) level++;
+            else if (IsClose(t[j]) && --level == 0) return j + 1;
+        }
+        return j;
+    }
+
+    /// <summary><paramref name="i"/>'deki adımı içeren konum yolunun ilk token'ı (sola doğru).</summary>
+    private static int PathStart(List<XPathToken> t, int i)
+    {
+        int k = i;
+        while (k > 0)
+        {
+            int p = k - 1;
+            var tok = t[p];
+            if (IsClose(tok))
+            {
+                int m = MatchOpen(t, p);
+                if (m < 0) break;
+                k = tok.Kind == XPathTokenKind.RParen && m > 0 && t[m - 1].Kind == XPathTokenKind.Name ? m - 1 : m;
+                if (tok.Kind == XPathTokenKind.RParen && k == m) break; // gruplama parantezi: yolun parçası değil
+                continue;
+            }
+            bool pathPart = IsOther(tok, "/") || IsOther(tok, ":") || IsOther(tok, "@") || IsOther(tok, ".")
+                            || tok.Kind == XPathTokenKind.Var
+                            || (IsOther(tok, "*") && !IsStepEnd(t, p - 1))
+                            || (tok.Kind == XPathTokenKind.Name && !IsOperatorPosition(t, p));
+            if (!pathPart) break;
+            k = p;
+        }
+        return k;
+    }
+
+    private static int MatchOpen(List<XPathToken> t, int close)
+    {
+        int level = 0;
+        for (int j = close; j >= 0; j--)
+        {
+            if (IsClose(t[j])) level++;
+            else if (IsOpen(t[j]) && --level == 0) return j;
+        }
+        return -1;
+    }
+
+    /// <summary><c>)</c> ya da değişken: <c>//</c> bağlamdan değil fonksiyon/değişken sonucundan başlar (<c>current()//x</c>).</summary>
+    private static bool IsFilterEnd(List<XPathToken> t, int i) =>
+        i >= 0 && (t[i].Kind is XPathTokenKind.RParen or XPathTokenKind.Var);
+
+    /// <summary><c>following-sibling::*[1]</c> / <c>preceding-sibling::node()[1]</c> — yalnız komşu kardeş (O(1)).</summary>
+    private static bool IsNeighborSibling(List<XPathToken> t, int i)
+    {
+        if (AxisName(t, i) is not ("following-sibling" or "preceding-sibling")) return false;
+        int j = i + 3;
+        if (j < t.Count && IsOther(t[j], "*")) j++;
+        else if (j + 2 < t.Count && t[j].Kind == XPathTokenKind.Name && t[j].Text == "node"
+                 && t[j + 1].Kind == XPathTokenKind.LParen && t[j + 2].Kind == XPathTokenKind.RParen) j += 3;
+        else return false;
+        return j + 2 < t.Count && IsOther(t[j], "[") && t[j + 1].Kind == XPathTokenKind.Number
+               && t[j + 1].Text == "1" && IsOther(t[j + 2], "]");
+    }
+
+    /// <summary><c>[n]</c> ya da <c>[local-name()='x']</c> / <c>[name()='x']</c> — yüklem bütçesine sayılmaz.</summary>
+    private static bool IsTrivialPredicate(List<XPathToken> t, int open)
+    {
+        if (open + 2 < t.Count && t[open + 1].Kind == XPathTokenKind.Number && IsOther(t[open + 2], "]"))
+            return true;
+        return open + 6 < t.Count
+               && t[open + 1].Kind == XPathTokenKind.Name && t[open + 1].Text is "local-name" or "name"
+               && t[open + 2].Kind == XPathTokenKind.LParen && t[open + 3].Kind == XPathTokenKind.RParen
+               && IsOther(t[open + 4], "=") && t[open + 5].Kind == XPathTokenKind.String && IsOther(t[open + 6], "]");
     }
 
     /// <summary>
@@ -174,16 +392,21 @@ public static class XPathPortability
     }
 
     /// <summary>Düğüm kümesi mi ve (fonksiyon argümanları dışında) N-sınıfı eksen var mı?</summary>
-    private static (bool IsNodeSet, bool HasNAxis) ClassifyOperand(List<XPathToken> t, int from, int dir)
+    private static (bool IsNodeSet, bool HasNAxis, bool IsWide) ClassifyOperand(List<XPathToken> t, int from, int dir)
     {
         int bound = OperandBound(t, from, dir);
         return dir > 0 ? ClassifyRange(t, from, bound) : ClassifyRange(t, bound, from);
     }
 
-    private static (bool, bool) ClassifyRange(List<XPathToken> t, int from, int to)
+    /// <summary>
+    /// <c>IsWide</c>: bağlam düğümü başına sınırsız sayıda düğüm verebilir — alt öğe / kardeş adımı (ardında
+    /// <c>[n]</c> yoksa) ya da <c>id()</c> (değişken tekil sayılır). <c>.</c>, <c>..</c>, öznitelik, yukarı/self eksen ve komşu
+    /// kardeş (<c>*[1]</c>) sınırlıdır.
+    /// </summary>
+    private static (bool, bool, bool) ClassifyRange(List<XPathToken> t, int from, int to)
     {
-        bool node = false, n = false;
-        int fnDepth = 0, depth = 0;
+        bool node = false, n = false, wide = false;
+        int fnDepth = 0, depth = 0, predDepth = 0;
         for (int i = from; i <= to && i < t.Count; i++)
         {
             var tok = t[i];
@@ -193,19 +416,50 @@ public static class XPathPortability
                 if (fnDepth == 0 && tok.Kind == XPathTokenKind.LParen && IsFunctionCall(t, i - 1)
                     && !NodeSetFunctions.Contains(t[i - 1].Text))
                     fnDepth = depth;
+                if (fnDepth == 0 && predDepth == 0 && IsOther(tok, "[")) predDepth = depth;
                 continue;
             }
             if (IsClose(tok))
             {
                 if (fnDepth == depth) fnDepth = 0;
+                if (predDepth == depth) predDepth = 0;
                 depth--;
                 continue;
             }
             if (fnDepth > 0) continue;
             if (IsPathToken(t, i)) node = true;
-            if (IsDoubleSlash(t, i, out _) || (AxisName(t, i) is { } ax && NClassAxes.Contains(ax))) n = true;
+            if (IsDoubleSlash(t, i, out _)
+                || (AxisName(t, i) is { } ax && NClassAxes.Contains(ax) && !IsNeighborSibling(t, i)))
+                n = true;
+            if (predDepth == 0 && !wide) wide = IsWideStep(t, i);
         }
-        return (node, n);
+        return (node, n, wide);
+    }
+
+    /// <summary><paramref name="i"/> geniş bir adımın düğüm testi mi (bkz. <see cref="ClassifyRange"/>).</summary>
+    private static bool IsWideStep(List<XPathToken> t, int i)
+    {
+        var tok = t[i];
+        if (IsFunctionCall(t, i) && tok.Text == "id") return true;
+
+        bool nodeTest = tok.Kind == XPathTokenKind.Name
+            ? IsPathToken(t, i) && AxisName(t, i) is null
+            : IsOther(tok, "*") && !IsStepEnd(t, i - 1);
+        if (!nodeTest) return false;
+        if (i > 0 && IsOther(t[i - 1], ":") && !(i > 1 && IsOther(t[i - 2], ":"))) return false; // önek:* parçası
+
+        if (i > 0 && IsOther(t[i - 1], "@")) return false;
+        if (i > 2 && IsOther(t[i - 1], ":") && IsOther(t[i - 2], ":"))
+        {
+            int axisAt = i - 3;
+            var axis = t[axisAt].Text;
+            if (BoundedAxes.Contains(axis) || IsNeighborSibling(t, axisAt)) return false;
+        }
+
+        int end = SkipNodeTest(t, i);
+        bool positional = end + 2 < t.Count && IsOther(t[end], "[") && t[end + 1].Kind == XPathTokenKind.Number
+                          && IsOther(t[end + 2], "]");
+        return !positional;
     }
 
     // ── Fonksiyon beyaz listesi ──────────────────────────────────────────

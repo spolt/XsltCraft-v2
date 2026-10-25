@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
+using XsltCraft.Application.Preview;
 using XsltCraft.Application.Xslt.Engines;
 using XsltCraft.Application.Xslt.Execution;
 
@@ -8,7 +9,8 @@ namespace XsltCraft.Api.Xslt;
 /// <summary>
 /// <see cref="XsltRunResult"/> → HTTP sözleşmesi (ADR 007 §7, 2.0.0).
 /// <list type="bullet">
-/// <item>Başarı: <c>200 { html, generationTimeMs, timings, engine, cacheHit }</c>.</item>
+/// <item>Başarı: <c>200 { html, generationTimeMs, timings, engine, cacheHit, warnings }</c> — <c>warnings</c>
+///   (G3, geriye uyumlu ek alan): yer tutucuyla değiştirilen bloklar <c>[{ blockId, code, xpath }]</c>; ham XSLT'de boş.</item>
 /// <item>Hata: <c>{ error, line, column, kind, engine }</c> — alan adları <c>error/line/column</c> korunur
 ///   (AI teşhisi ve editörler okur). İçerik hataları 400; <c>Busy</c>/<c>EngineUnavailable</c> 503 + <c>Retry-After</c>;
 ///   <c>UserBusy</c> 429; <c>EngineInternal</c> 500 (jenerik mesaj).</item>
@@ -51,7 +53,8 @@ public static class XsltProblemResults
     };
 
     /// <summary>Render sonucu (önizleme uçları).</summary>
-    public static IActionResult Render(XsltRunResult result, long elapsedMs, HttpResponse response)
+    public static IActionResult Render(XsltRunResult result, long elapsedMs, HttpResponse response,
+        IReadOnlyList<XsltGenerationWarning>? warnings = null)
     {
         if (result.Diagnostic is { } diagnostic)
             return Failure(diagnostic, result, response);
@@ -65,6 +68,7 @@ public static class XsltProblemResults
                 : null,
             engine = EngineName(result.Engine),
             cacheHit = result.CacheHit,
+            warnings = (warnings ?? []).Select(w => new { blockId = w.BlockId, code = w.Code, xpath = w.XPath }).ToArray(),
         });
     }
 

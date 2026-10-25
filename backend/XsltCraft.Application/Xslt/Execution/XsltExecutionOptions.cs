@@ -49,9 +49,10 @@ public sealed class XsltRouteLimitsOptions
 {
     private const int MiB = 1024 * 1024;
 
+    /// <summary>Ham XSLT: 5 MB (base64 logolu temalar geliştirici modunda sığsın — G3); XSLT+XML 10 MB ≤ izole bütçe.</summary>
     public XsltRouteLimits Raw { get; set; } = new()
     {
-        MaxXsltChars = 2_000_000, MaxXsltBytes = 2 * MiB,
+        MaxXsltChars = 5_000_000, MaxXsltBytes = 5 * MiB,
         MaxXmlChars = 5_000_000, MaxXmlBytes = 5 * MiB,
         TimeoutMs = 10_000,
     };
