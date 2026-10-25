@@ -15,7 +15,13 @@ namespace XsltCraft.Tests.Support;
 /// Kurallar:
 /// <list type="bullet">
 /// <item>HTML5 ayrıştırıcıyla (AngleSharp) DOM'a parse edilir; serileştirme <c>&lt;html&gt;</c> kökünden başlar → DOCTYPE (varsa, hangi biçimde olursa olsun) atılır.</item>
-/// <item><c>&lt;meta http-equiv&gt;</c> atılır (motorlar html çıktı yöntemiyle kendiliğinden ekler); <c>&lt;meta charset&gt;</c> korunur.</item>
+/// <item>Karakter kümesi bildirimi kanonikleşir: kardeşler arasında tek bildirim yazılır, <c>&lt;meta charset="X"&gt;</c>
+///   (X büyük harf) biçiminde. Seçim: ilk <c>&lt;meta charset&gt;</c>; yoksa ilk
+///   <c>&lt;meta http-equiv="Content-Type" content="…; charset=X"&gt;</c>. Motorlar html çıktı yönteminde bunu farklı
+///   yazar: .NET şablonun <c>meta charset</c>'ının önüne kendi http-equiv'ini ekler (string'e yazarken
+///   <c>charset=utf-16</c> — TextWriter kodlaması, yok sayılır), Saxon şablonun <c>meta charset</c>'ını kaldırıp yerine
+///   <c>xsl:output</c> kodlamasıyla http-equiv koyar. Bildirimin hiç olmaması ya da farklı karakter kümesi görünür kalır.
+///   Diğer <c>http-equiv</c> meta'ları atılır.</item>
 /// <item>Yorumlar atılır.</item>
 /// <item>Metin düğümlerinde HTML boşluk karakterleri (space/tab/CR/LF/FF) tek boşluğa indirgenir ve kırpılır; yalnız boşluktan oluşan (girinti) düğümler atılır. NBSP (U+00A0) boşluk sayılmaz.</item>
 /// <item>Entity'ler çözülüp tek biçimde yazılır: metinde yalnız <c>&amp;amp; &amp;lt; &amp;gt;</c>, öznitelikte <c>&amp;amp; &amp;quot;</c>; NBSP her yerde görünür olsun diye <c>&amp;nbsp;</c>.</item>
@@ -49,6 +55,12 @@ public static partial class HtmlNormalizer
     {
         var name = element.LocalName;
         Indent(sb, depth);
+        if (CharsetOf(element) is { } charset)
+        {
+            sb.Append("<meta charset=\"").Append(EscapeAttribute(charset)).Append("\">\n");
+            return;
+        }
+
         sb.Append('<').Append(name);
         foreach (var attr in element.Attributes.OrderBy(a => a.Name, StringComparer.Ordinal))
             sb.Append(' ').Append(attr.Name).Append("=\"").Append(EscapeAttribute(CollapseWhitespace(attr.Value))).Append('"');
@@ -98,10 +110,17 @@ public static partial class HtmlNormalizer
 
     private static IEnumerable<INode> SignificantChildren(IElement element)
     {
+        // Şablonun kendi <meta charset>'ı motorun eklediği http-equiv'den önceliklidir; yalnız seçilen yazılır.
+        var charsetMetas = element.Children.Where(c => CharsetOf(c) is not null).ToList();
+        var chosenCharset = charsetMetas.FirstOrDefault(c => c.HasAttribute("charset")) ?? charsetMetas.FirstOrDefault();
         foreach (var node in element.ChildNodes)
         {
             switch (node)
             {
+                case IElement child when CharsetOf(child) is not null:
+                    if (ReferenceEquals(child, chosenCharset))
+                        yield return child;
+                    break;
                 case IElement child when IsHttpEquivMeta(child):
                     continue;
                 case IElement child:
@@ -118,6 +137,25 @@ public static partial class HtmlNormalizer
     private static bool IsHttpEquivMeta(IElement element) =>
         string.Equals(element.LocalName, "meta", StringComparison.OrdinalIgnoreCase)
         && element.HasAttribute("http-equiv");
+
+    /// <summary>
+    /// Karakter kümesi bildiren meta'nın değeri (büyük harf): <c>meta[charset]</c> ya da
+    /// <c>meta[http-equiv=Content-Type]</c> içeriğindeki <c>charset=</c>. Değilse <c>null</c>.
+    /// </summary>
+    private static string? CharsetOf(IElement element)
+    {
+        if (!string.Equals(element.LocalName, "meta", StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (element.GetAttribute("charset") is { } charset)
+            return charset.Trim().ToUpperInvariant();
+        if (!string.Equals(element.GetAttribute("http-equiv")?.Trim(), "Content-Type", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var match = ContentTypeCharset().Match(element.GetAttribute("content") ?? "");
+        return match.Success ? match.Groups[1].Value.ToUpperInvariant() : null;
+    }
+
+    [GeneratedRegex(@"charset\s*=\s*([^\s;]+)", RegexOptions.IgnoreCase)]
+    private static partial Regex ContentTypeCharset();
 
     /// <summary>Yalnız HTML boşluk karakterleri (NBSP hariç) tek boşluğa indirgenir.</summary>
     private static string CollapseWhitespace(string value) =>

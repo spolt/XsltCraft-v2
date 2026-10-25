@@ -17,6 +17,7 @@ public class HtmlNormalizerTests
     [Theory]
     [InlineData("<META http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">")]
     [InlineData("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">")]
+    [InlineData("<META http-equiv=\"Content-Type\" content=\"text/html; charset=utf-16\">")]
     public void Normalize_MetaHttpEquiv_IsDroppedAndMetaCharsetKept(string httpEquivMeta)
     {
         var withMeta = Body.Replace("<head>", "<head>" + httpEquivMeta);
@@ -26,6 +27,28 @@ public class HtmlNormalizerTests
         Assert.Equal(HtmlNormalizer.Normalize(Body), normalized);
         Assert.DoesNotContain("http-equiv", normalized, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("<meta charset=\"UTF-8\">", normalized);
+    }
+
+    [Fact]
+    public void Normalize_SaxonReplacesMetaCharsetWithHttpEquiv_EqualsMetaCharset()
+    {
+        // Saxon html çıktı yöntemi şablonun <meta charset>'ını kaldırıp yerine Content-Type http-equiv yazar.
+        var saxon = Body.Replace("<meta charset=\"UTF-8\">",
+            "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">");
+
+        Assert.Equal(HtmlNormalizer.Normalize(Body), HtmlNormalizer.Normalize(saxon));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("<meta charset=\"ISO-8859-9\">")]
+    [InlineData("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=windows-1254\">")]
+    [InlineData("<meta http-equiv=\"refresh\" content=\"5\">")]
+    public void Normalize_MissingOrDifferentCharset_RemainsVisible(string meta)
+    {
+        var other = Body.Replace("<meta charset=\"UTF-8\">", meta);
+
+        Assert.NotEqual(HtmlNormalizer.Normalize(Body), HtmlNormalizer.Normalize(other));
     }
 
     [Fact]

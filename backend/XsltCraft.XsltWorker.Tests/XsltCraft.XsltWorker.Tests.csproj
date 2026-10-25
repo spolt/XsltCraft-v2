@@ -8,6 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- AngleSharp: XsltCraft.Tests ile aynı sürüm — grid motor paritesinde linklenen HtmlNormalizer için. -->
+    <PackageReference Include="AngleSharp" Version="1.8.5" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
@@ -24,6 +26,14 @@
     <ProjectReference Include="..\XsltCraft\XsltCraft.Api.csproj" />
     <ProjectReference Include="..\XsltCraft.Infrastructure\XsltCraft.Infrastructure.csproj" />
     <ProjectReference Include="..\XsltCraft.XsltWorker.Contracts\XsltCraft.XsltWorker.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Grid motor paritesi (T3.3): T1.4 golden fixture'ları, normalizer ve .NET snapshot'ları tek kaynaktan linklenir. -->
+    <Compile Include="..\XsltCraft.Tests\Support\HtmlNormalizer.cs" Link="Grid\Linked\HtmlNormalizer.cs" />
+    <Compile Include="..\XsltCraft.Tests\Support\SnapshotScrubber.cs" Link="Grid\Linked\SnapshotScrubber.cs" />
+    <None Include="..\XsltCraft.Tests\Fixtures\**\*" LinkBase="Fixtures" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\XsltCraft.Tests\__snapshots__\GridV2\Html.*.verified.txt" LinkBase="GridSnapshots" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Gerçek worker süreci: Api ile aynı ortak hedef; çıktı $(OutDir)xsltworker\ altına kopyalanır, böylece
