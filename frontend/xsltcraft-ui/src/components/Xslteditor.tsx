@@ -9,6 +9,11 @@ export type XsltError = {
   message: string
   line: number
   column: number
+  /** Varsayılan 'error'. 'warning' marker'ları kaydetme/önizlemeyi etkilemez. */
+  severity?: 'error' | 'warning'
+  /** İşaretlenecek metnin uzunluğu (varsayılan 20 karakter). */
+  length?: number
+  code?: string
 }
 
 type EditorFns = {
@@ -745,12 +750,13 @@ export default function XsltEditor({
     }
 
     const markers = errors.map((err) => ({
-      severity: monaco.MarkerSeverity.Error,
+      severity: err.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error,
       message: err.message,
+      code: err.code,
       startLineNumber: err.line || 1,
       startColumn: err.column || 1,
       endLineNumber: err.line || 1,
-      endColumn: (err.column || 1) + 20,
+      endColumn: (err.column || 1) + (err.length ?? 20),
     }))
 
     monaco.editor.setModelMarkers(model, "xslt", markers)

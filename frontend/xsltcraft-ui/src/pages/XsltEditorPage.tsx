@@ -36,6 +36,7 @@ import { printActivePreview } from '../components/xslt-editor/previewFrame'
 import { useEditorMaximize } from '../hooks/useEditorMaximize'
 import SaveTemplateDialog from '../components/xslt-editor/SaveTemplateDialog'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
+import { useXslt1CompatWarnings } from '../hooks/useXslt1CompatWarnings'
 import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
 import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
 import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
@@ -698,6 +699,10 @@ export default function XsltEditorPage() {
   // İlk satırdaki XML bildirimi eksikse XSLT problemleri arasına ekle
   const declProblem = useMemo(() => xmlDeclarationProblem(xsltContent), [xsltContent])
 
+  // XSLT 1.0 uyumluluk uyarıları (2.0'a özgü fonksiyon/yapı) — yalnız uyarı, hiçbir akışı engellemez
+  const compat = useXslt1CompatWarnings(xsltContent)
+  const editorMarkers = useMemo(() => [...xsltErrors, ...compat.markers], [xsltErrors, compat.markers])
+
   // XML Kaynak sekmesinde gösterilecek metin. Yalnızca minify edilmiş belgeler
   // biçimlendirilir: zaten satırlara yayılmış bir XML'e dokunmayınca problem panelinden
   // "satıra git" ve AI'ya giden imleç-penceresi ham metinle birebir hizalı kalır.
@@ -1006,7 +1011,7 @@ export default function XsltEditorPage() {
                     focusEditorRef.current = focus
                   }}
                   onRequestImageInsert={handleRequestImageInsert}
-                  errors={xsltErrors}
+                  errors={editorMarkers}
                   aiEnabled={aiEnabled}
                   onAiRefactor={handleAiRefactor}
                   onCursorLineChange={setXsltCursorLine}
@@ -1227,6 +1232,7 @@ export default function XsltEditorPage() {
                 line: e.line,
                 column: e.column,
               })),
+              ...compat.problems,
             ]}
             xmlProblems={xmlErrors.map(e => ({
               source: 'xml' as const,

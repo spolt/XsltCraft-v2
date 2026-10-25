@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import Editor from '@monaco-editor/react'
@@ -7,6 +7,7 @@ import XsltEditor from '../components/Xslteditor'
 import XsltEditorPreview from '../components/xslt-editor/XsltEditorPreview'
 import { printActivePreview } from '../components/xslt-editor/previewFrame'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
+import { useXslt1CompatWarnings } from '../hooks/useXslt1CompatWarnings'
 import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
 import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
 import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
@@ -380,6 +381,10 @@ export default function DevModePage() {
   const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null
   const totalErrorCount = xsltErrors.length + xmlErrors.length + (ublTrErrorCount ?? 0)
 
+  // XSLT 1.0 uyumluluk uyarıları (2.0'a özgü fonksiyon/yapı) — yalnız uyarı, hiçbir akışı engellemez
+  const compat = useXslt1CompatWarnings(xslt)
+  const editorMarkers = useMemo(() => [...xsltErrors, ...compat.markers], [xsltErrors, compat.markers])
+
   // ─── Phase 1: no XML ─────────────────────────────────────────────────────────
   if (!xmlContent) {
     return (
@@ -601,7 +606,7 @@ export default function DevModePage() {
                       userSnippets={userSnippets}
                       onEvaluateXPath={handleEvaluateXPath}
                       onRequestImageInsert={handleRequestImageInsert}
-                      errors={xsltErrors}
+                      errors={editorMarkers}
                       onEditorReady={({ revealLine, insertTextAtLine, toggleComment, formatDocument }) => {
                         revealLineRef.current = revealLine
                         insertTextAtLineRef.current = insertTextAtLine
@@ -714,14 +719,17 @@ export default function DevModePage() {
 
         {showProblems && (
           <ProblemsPanel
-            xsltProblems={xsltErrors.map(e => ({
-              source: 'xslt' as const,
-              severity: 'error' as const,
-              ruleName: 'XSLT Sözdizimi',
-              message: e.message,
-              line: e.line,
-              column: e.column,
-            }))}
+            xsltProblems={[
+              ...xsltErrors.map(e => ({
+                source: 'xslt' as const,
+                severity: 'error' as const,
+                ruleName: 'XSLT Sözdizimi',
+                message: e.message,
+                line: e.line,
+                column: e.column,
+              })),
+              ...compat.problems,
+            ]}
             xmlProblems={xmlErrors.map(e => ({
               source: 'xml' as const,
               severity: 'error' as const,
