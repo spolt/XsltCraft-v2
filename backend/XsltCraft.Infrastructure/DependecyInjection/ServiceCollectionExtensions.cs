@@ -66,8 +66,7 @@ public static class ServiceCollectionExtensions
         // XSLT Engine
         // -------------------------------------------------
 
-        // Kullanıcı XSLT yürütme hattı: kapı (önce) + worker havuzu + IXsltExecutionService.
-        // Controller'lar T3.1'de bağlanır; o zamana dek önizleme davranışı değişmez.
+        // XSLT yürütme hattı: kullanıcı kapısı (havuzdan önce) + worker havuzu + süreç içi host + IXsltExecutionService.
         services.AddXsltExecution(configuration);
 
         // -------------------------------------------------
