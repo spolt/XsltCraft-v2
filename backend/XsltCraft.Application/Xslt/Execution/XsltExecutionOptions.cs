@@ -21,8 +21,8 @@ public sealed class XsltExecutionOptions
     public IReadOnlyList<string> Validate()
     {
         var errors = new List<string>();
-        if (!Enum.IsDefined(Engine.Raw) || !Enum.IsDefined(Engine.Grid))
-            errors.Add("Engine:Raw/Grid geçersiz (Auto | DotNet | Saxon).");
+        if (!Enum.IsDefined(Engine.Raw) || !Enum.IsDefined(Engine.Grid) || !Enum.IsDefined(Engine.Theme))
+            errors.Add("Engine:Raw/Grid/Theme geçersiz (Auto | DotNet | Saxon).");
 
         Limits.CollectErrors(errors);
         Grid.CollectErrors(errors);
@@ -38,6 +38,13 @@ public sealed class XsltEngineRoutingOptions
 
     /// <summary>Grid + UserTemplate. <c>DotNet</c> başlangıç ve 2.0.x boyunca acil anahtar.</summary>
     public XsltEngineMode Grid { get; set; } = XsltEngineMode.DotNet;
+
+    /// <summary>
+    /// Hazır tema hattı (yükleme/analiz, compose, galeri önizlemesi). <c>Auto</c>: <c>version ≥ 2.0</c> VE 2.0 yapısı
+    /// (<see cref="Xslt2FeatureDetector"/>) → Saxon (izole worker); aksi hâlde .NET (süreç içi, çıktı bit-aynı).
+    /// <c>DotNet</c> acil anahtar (2.0 temalar yine reddedilir).
+    /// </summary>
+    public XsltEngineMode Theme { get; set; } = XsltEngineMode.Auto;
 }
 
 /// <summary>

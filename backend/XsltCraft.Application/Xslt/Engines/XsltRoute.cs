@@ -9,7 +9,10 @@ public enum XsltRoute
     /// <summary>Grid blok ağacından üretilen XSLT.</summary>
     Grid,
 
-    /// <summary>Hazır tema XSLT'si.</summary>
+    /// <summary>
+    /// Hazır tema XSLT'si (yükleme/analiz, compose, galeri önizlemesi). Motor <c>Xslt:Engine:Theme</c>
+    /// (<see cref="XsltEngineSelector.SelectForTheme"/>); .NET süreç içi, Saxon izole worker.
+    /// </summary>
     Theme,
 
     /// <summary>

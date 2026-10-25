@@ -18,7 +18,7 @@ public class ThemeImageSlotTests
     private static ThemeImageDecision Design => new(ThemeImageRole.Design, false);
 
     private static readonly IThemeUploadProcessor Processor =
-        new ThemeUploadProcessor(new ThemeOverridesProcessor(new ThemeImageValidator()), Analyzer, ThemeFixtures.Renderer, ThemeFixtures.Samples);
+        new ThemeUploadProcessor(new ThemeOverridesProcessor(new ThemeImageValidator()), Analyzer, ThemeFixtures.Execution, ThemeFixtures.Samples);
 
     [Fact]
     public void Detects_company_logo_and_stamp_but_not_gib_logo_or_barcode()

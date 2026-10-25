@@ -388,7 +388,7 @@ public sealed class XsltExecutionServiceTests
     [Fact]
     public async Task ThemeRoute_InProcessDotNet_GridLimits()
     {
-        // Grid motoru Saxon olsa ve tema 2.0 bildirse de tema hattı süreç içi .NET'te kalır (G3).
+        // Grid motoru Saxon olsa ve tema 2.0 bildirse de 2.0 yapısı kullanmayan tema süreç içi .NET'te kalır (G3, T-izi).
         var options = new XsltExecutionOptions { Engine = { Grid = XsltEngineMode.Saxon } };
         var request = new XsltRunRequest(XsltRoute.Theme, Stylesheet("2.0"), Xml, XsltOperation.Render, User);
 
@@ -403,6 +403,33 @@ public sealed class XsltExecutionServiceTests
         Assert.Equal(64, sent.Limits.MaxInputDepth);
         Assert.Empty(_isolated.Requests);
         Assert.Equal((XsltGateLane.Grid, XsltExecutionPlace.InProcess), Assert.Single(_gate.Acquired));
+    }
+
+    [Fact]
+    public async Task ThemeRoute_Xslt2Constructs_SaxonIsolated_ThemeLimits_AndEmergencySwitch()
+    {
+        // T-izi: 2.0 bildirip 2.0 yapısı (exists()) kullanan tema → Saxon, izole worker; derleme denetimi de tema sınırlarıyla.
+        var xslt = Stylesheet("2.0", "<xsl:template match=\"/\"><p><xsl:value-of select=\"exists(//i)\"/></p></xsl:template>");
+        _isolated.IsEnabled = true;
+
+        var render = await Create().ExecuteAsync(new XsltRunRequest(XsltRoute.Theme, xslt, Xml, XsltOperation.Render, User));
+        var validate = await Create().ExecuteAsync(new XsltRunRequest(XsltRoute.Theme, xslt, null, XsltOperation.Validate, User));
+
+        Assert.True(render.Succeeded && validate.Succeeded);
+        Assert.Equal(XsltExecutionPlace.Isolated, render.Place);
+        Assert.Empty(_inProcess.Requests);
+        Assert.All(_isolated.Requests, r => Assert.Equal(XsltEngineKind.Saxon, r.Engine));
+        Assert.All(_isolated.Requests, r => Assert.Equal(TimeSpan.FromSeconds(8), r.Limits.Deadline));
+
+        // Worker kapalı → EngineUnavailable; acil anahtar Engine:Theme=DotNet → süreç içi .NET.
+        _isolated.IsEnabled = false;
+        var unavailable = await Create().ExecuteAsync(new XsltRunRequest(XsltRoute.Theme, xslt, Xml, XsltOperation.Render, User));
+        Assert.Equal(XsltFailureKind.EngineUnavailable, unavailable.Diagnostic?.Kind);
+
+        var dotNet = await Create(new XsltExecutionOptions { Engine = { Theme = XsltEngineMode.DotNet } })
+            .ExecuteAsync(new XsltRunRequest(XsltRoute.Theme, xslt, Xml, XsltOperation.Render, User));
+        Assert.Equal(XsltExecutionPlace.InProcess, dotNet.Place);
+        Assert.Equal(XsltEngineKind.DotNet, Assert.Single(_inProcess.Requests).Engine);
     }
 
     private void AssertNothingExecuted()

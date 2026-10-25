@@ -11,8 +11,9 @@ namespace XsltCraft.Application.Xslt.Execution;
 /// <item>Boyut: karakter + UTF-8 bayt (worker çerçeve bütçesi) → <see cref="XsltFailureKind.LimitExceeded"/>.</item>
 /// <item><see cref="IXsltSafetyScanner"/> <see cref="XsltSafetyMode.Execute"/> → <c>Security</c>/<c>Unsupported</c> (satır/kolon).</item>
 /// <item><see cref="XsltVersionSniffer"/> (&gt; 2.0 → <c>Unsupported</c>) + <see cref="XsltEngineSelector"/> (rota modu).</item>
-/// <item>Yer: Raw/Validate/UserTemplate ve script'li grid → izole; grid ve hazır tema (<see cref="XsltRoute.Theme"/>:
-///   yönetici yüklemesi, her zaman .NET, grid sınırları — G3) → süreç içi.
+/// <item>Yer: Raw/Validate/UserTemplate ve script'li grid → izole; grid → süreç içi. Hazır tema
+///   (<see cref="XsltRoute.Theme"/>: yükleme/analiz, compose, galeri; grid sınırları — G3, T-izi): .NET → süreç içi,
+///   Saxon (2.0 yapısı kullanan tema, <see cref="XsltEngineRoutingOptions.Theme"/>) → izole.
 ///   Worker kapalıysa 1.0 → süreç içi .NET, ≥ 2.0 ve script'li grid → <c>EngineUnavailable</c>.</item>
 /// <item><see cref="IXsltUserGate"/> → host → sonuç kapıya FİİLÎ yerle (<see cref="XsltHostResult.Place"/>)
 ///   bildirilir, izin her durumda bırakılır.</item>
@@ -64,7 +65,9 @@ public sealed class XsltExecutionService : IXsltExecutionService
         if (CheckVersion(version) is { } unsupported)
             return XsltRunResult.Failed(unsupported);
 
-        var engine = XsltEngineSelector.Select(ModeFor(request.Route), version);
+        var engine = request.Route == XsltRoute.Theme
+            ? XsltEngineSelector.SelectForTheme(_options.Engine.Theme, version, request.Xslt)
+            : XsltEngineSelector.Select(ModeFor(request.Route), version);
         var (place, unavailable) = ResolvePlace(request, engine);
         if (unavailable is not null)
             return XsltRunResult.Failed(unavailable, engine);
@@ -143,7 +146,8 @@ public sealed class XsltExecutionService : IXsltExecutionService
 
     private XsltRouteLimits RouteLimitsFor(XsltRunRequest request)
     {
-        if (request.Op == XsltOperation.Validate)
+        // Tema derleme denetimi (yükleme/analiz) temanın kendi sınırlarıyla: base64 görselli temalar 1 MB'ı aşar.
+        if (request.Op == XsltOperation.Validate && request.Route != XsltRoute.Theme)
             return _options.Limits.Validate;
 
         return request.Route switch
@@ -157,13 +161,13 @@ public sealed class XsltExecutionService : IXsltExecutionService
     private XsltEngineMode ModeFor(XsltRoute route) => route switch
     {
         XsltRoute.Raw => _options.Engine.Raw,
-        XsltRoute.Theme => XsltEngineMode.DotNet, // tema hattı .NET'te kalır (ADR 007 §2)
         _ => _options.Engine.Grid,
     };
 
     private (XsltExecutionPlace Place, XsltDiagnostic? Unavailable) ResolvePlace(XsltRunRequest request, XsltEngineKind engine)
     {
-        if (request.Route == XsltRoute.Theme)
+        // Tema: .NET (1.0 ve 2.0 bildirip 1.0 kullanan GİB temaları) süreç içinde kalır — çıktı bit-aynı.
+        if (request.Route == XsltRoute.Theme && engine == XsltEngineKind.DotNet)
             return (XsltExecutionPlace.InProcess, null);
 
         var isolated = request.Route != XsltRoute.Grid || request.IsUserAuthoredGrid;

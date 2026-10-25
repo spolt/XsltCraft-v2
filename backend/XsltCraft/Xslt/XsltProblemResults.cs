@@ -72,6 +72,11 @@ public static class XsltProblemResults
         });
     }
 
+    /// <summary>Başarısız sonucun hata yanıtı — başarı gövdesini kendisi kuran uçlar için (tema compose).</summary>
+    public static IActionResult Failed(XsltRunResult result, HttpResponse response) =>
+        Failure(result.Diagnostic ?? throw new ArgumentException("Sonuç başarılı; hata yanıtı üretilemez.", nameof(result)),
+            result, response);
+
     /// <summary>Doğrulama sonucu (<c>validate-xslt</c>).</summary>
     public static IActionResult Validate(XsltRunResult result, HttpResponse response)
     {

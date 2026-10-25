@@ -9,8 +9,9 @@ public sealed record XsltRenderResult(string Html, long ParseMs, long CompileMs,
 }
 
 /// <summary>
-/// Ham XSLT'yi XML'e uygulayıp HTML üretir — önizleme ve tema yuvası doğrulamasının ortak yolu.
-/// Derleme her zaman <see cref="SecureXslt.Compile"/> üzerinden; XML okuma XXE korumalı.
+/// Ham XSLT'yi .NET (XSLT 1.0) ile XML'e uygulayıp HTML üretir — korumasız, senkron başvuru uygulaması: testlerde
+/// bit-aynılık referansıdır (süreç içi .NET host çıktısı bununla aynıdır). Üretimde DI'da YOK — tema hattı dahil tüm
+/// yürütme <c>IXsltExecutionService</c>'ten geçer (T-izi). Derleme <see cref="SecureXslt.Compile"/>; XML okuma XXE korumalı.
 /// <see cref="System.Xml.Xsl.XsltException"/> / <see cref="XmlException"/> fırlatabilir.
 /// </summary>
 public interface IXsltHtmlRenderer

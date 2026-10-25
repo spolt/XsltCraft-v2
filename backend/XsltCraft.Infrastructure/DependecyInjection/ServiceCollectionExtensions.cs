@@ -78,7 +78,6 @@ public static class ServiceCollectionExtensions
         // Kendi guard'ı (grid slotlarından ayrı); fabrika: DI, grid XsltExecutionGuard'lı ctor'u seçmesin.
         services.AddSingleton<IXPathEvaluator>(_ => new XPathEvaluator());
         services.AddSingleton<IFixedNoteInjector, FixedNoteInjector>();
-        services.AddSingleton<IXsltHtmlRenderer, XsltHtmlRenderer>();
 
         // Hazır tema logo/imza yuvaları: yüklemede analiz + kullanıcı görsellerinin tek kaynaktan eklenmesi.
         services.AddSingleton<IThemeSampleXmlProvider, ThemeSampleXmlProvider>();

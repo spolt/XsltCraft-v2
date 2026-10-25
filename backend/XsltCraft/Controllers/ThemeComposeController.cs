@@ -1,19 +1,19 @@
 using System.Diagnostics;
 using System.Security.Claims;
-using System.Xml;
-using System.Xml.Xsl;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
+using XsltCraft.Api.Xslt;
 using XsltCraft.Application.DTO;
 using XsltCraft.Application.Themes;
 using XsltCraft.Application.ThemeSlots;
 using XsltCraft.Application.ThemeSlots.Catalog;
 using XsltCraft.Application.ThemeSlots.Compose;
-using XsltCraft.Application.Xslt;
+using XsltCraft.Application.Xslt.Engines;
+using XsltCraft.Application.Xslt.Execution;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
 
@@ -21,7 +21,8 @@ namespace XsltCraft.Api.Controllers;
 
 /// <summary>
 /// Hazır temaya kullanıcı logo/imza/IBAN bilgisini ekler. Önizleme (html) ve indirme/kaydetme (xslt) aynı
-/// birleştirme kodundan geçer; html, dönen xslt'den render edilir.
+/// birleştirme kodundan geçer; html, dönen xslt'den <see cref="XsltRoute.Theme"/> ile render edilir (1.0 tema .NET
+/// süreç içi, 2.0 tema Saxon izole worker; kullanıcı kapısı, grid girdi sınırları).
 /// </summary>
 [ApiController]
 [Route("api/preview/compose")]
@@ -33,8 +34,7 @@ public class ThemeComposeController(
     IThemeAccessGuard themeAccess,
     IThemeAssetComposer composer,
     IThemeSlotProjector projector,
-    IXsltHtmlRenderer renderer,
-    IWebHostEnvironment env,
+    IXsltExecutionService xsltExecution,
     ILogger<ThemeComposeController> logger) : ControllerBase
 {
     private const int MaxBodyBytes = 6 * 1024 * 1024;
@@ -47,6 +47,7 @@ public class ThemeComposeController(
             return BadRequest(new { error = invalid.Message, field = invalid.Field });
 
         var sw = Stopwatch.StartNew();
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         string xslt;
         IReadOnlyDictionary<ThemeAssetKind, string>? defaults = null;
         IReadOnlySet<string>? conditional = null;
@@ -57,7 +58,6 @@ public class ThemeComposeController(
             if (theme is null)
                 return NotFound(new { error = "Tema bulunamadı." });
 
-            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             switch (await themeAccess.CheckAsync(theme, userId, ct))
             {
                 case ThemeAccessDecision.NotFound:
@@ -93,25 +93,26 @@ public class ThemeComposeController(
         string? html = null;
         if (request.IncludeHtml)
         {
+            XsltRunResult run;
             try
             {
-                html = renderer.Render(result.Xslt, request.XmlContent!).Html;
+                run = await xsltExecution.ExecuteAsync(
+                    new XsltRunRequest(XsltRoute.Theme, result.Xslt, request.XmlContent!, XsltOperation.Render, userId), ct);
             }
-            catch (XsltException ex)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                var (message, line, column) = PreviewController.DescribeXsltError(ex);
-                return BadRequest(new { error = message, line, column });
-            }
-            catch (XmlException ex)
-            {
-                return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+                return new EmptyResult();
             }
             catch (Exception ex)
             {
                 // Görsel verisi (data URL) loglanmaz — yalnız hata.
                 logger.LogError(ex, "Tema birleştirme önizlemesi sırasında beklenmeyen hata.");
-                return BadRequest(new { error = env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
+                return XsltProblemResults.Unexpected();
             }
+
+            if (!run.Succeeded)
+                return XsltProblemResults.Failed(run, Response);
+            html = run.Html;
         }
 
         sw.Stop();

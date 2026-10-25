@@ -108,7 +108,11 @@ internal static class ThemeFixtures
     public static string Load(string name) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "ThemeSlots", "Fixtures", name));
 
+    /// <summary>Bit-aynılık referansı (.NET, korumasız) — beklenen çıktıyı üretmek için.</summary>
     public static readonly IXsltHtmlRenderer Renderer = new XsltHtmlRenderer();
     public static readonly IThemeSampleXmlProvider Samples = new ThemeSampleXmlProvider();
-    public static IThemeSlotAnalyzer Analyzer() => new ThemeSlotAnalyzer(Renderer, Samples);
+
+    /// <summary>Tema hattının yürütme servisi (sahte; .NET eşzamanlı, Saxon yok).</summary>
+    public static readonly DotNetThemeExecution Execution = new();
+    public static IThemeSlotAnalyzer Analyzer() => new ThemeSlotAnalyzer(Execution, Samples);
 }

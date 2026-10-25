@@ -97,8 +97,9 @@ public class ThemeSlotAnalyzerTests
     [Fact]
     public void Theme_that_cannot_render_fails_and_stays_unmarked()
     {
-        // general.xslt XSLT 2.0 fonksiyonu (exists()) kullanıyor; önizleme motoru da render edemiyor.
-        var source = ThemeFixtures.Load(ThemeFixtures.GibGeneral);
+        // Derlenir ama örnek belgeyle çalışırken durur. (general.xslt artık Saxon'la analiz edilir — Worker.Tests.)
+        var source = ThemeFixtures.Load(ThemeFixtures.GibEInvoice)
+            .Replace("</body>", """<xsl:message terminate="yes">dur</xsl:message></body>""");
         var result = Analyzer.Analyze(source, DocumentType.Invoice, []);
 
         Assert.Equal(ThemeSlotStatus.Failed, result.Catalog.Status);

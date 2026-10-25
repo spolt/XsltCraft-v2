@@ -61,7 +61,7 @@ public class AdminController(
         }
 
         // Analiz + (varsa) önceden gömülü görsel bloğu kararı — hiçbir şey yazılmadan önce.
-        var outcome = themeUploads.Process(upload!.Text, docType, decision, imageRoles);
+        var outcome = await themeUploads.ProcessAsync(upload!.Text, docType, decision, imageRoles, AdminId(), HttpContext.RequestAborted);
         if (OutcomeError(outcome) is { } outcomeError)
             return outcomeError;
         var ready = (ThemeUploadOutcome.Ready)outcome;
@@ -98,6 +98,10 @@ public class AdminController(
 
         return CreatedAtAction(nameof(GetTheme), new { id = themeId }, ToResponse(template));
     }
+
+    /// <summary>Tema yürütme kapısı bölümü: yükleyen admin (kimliksiz → ortak bölüm).</summary>
+    private Guid AdminId() =>
+        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : Guid.Empty;
 
     // GET /api/admin/themes/:id  (helper for CreatedAtAction)
     [HttpGet("themes/{id:guid}")]
@@ -141,7 +145,8 @@ public class AdminController(
                 return BadRequest(new { message = ImageRolesError });
 
             // Önce işle (409/422 dönebilir), eski dosya ancak sonra silinir.
-            var outcome = themeUploads.Process(upload!.Text, template.DocumentType, decision, imageRoles);
+            var outcome = await themeUploads.ProcessAsync(upload!.Text, template.DocumentType, decision, imageRoles, AdminId(),
+                HttpContext.RequestAborted);
             if (OutcomeError(outcome) is { } outcomeError)
                 return outcomeError;
             var ready = (ThemeUploadOutcome.Ready)outcome;

@@ -10,7 +10,7 @@ namespace XsltCraft.Application.Tests.ThemeSlots;
 public class ThemeUploadProcessorTests
 {
     private static readonly IThemeUploadProcessor Processor =
-        new ThemeUploadProcessor(new ThemeOverridesProcessor(new ThemeImageValidator()), ThemeFixtures.Analyzer(), ThemeFixtures.Renderer, ThemeFixtures.Samples);
+        new ThemeUploadProcessor(new ThemeOverridesProcessor(new ThemeImageValidator()), ThemeFixtures.Analyzer(), ThemeFixtures.Execution, ThemeFixtures.Samples);
 
     [Fact]
     public void Theme_with_embedded_block_requires_decision()
@@ -81,14 +81,15 @@ public class ThemeUploadProcessorTests
     }
 
     [Fact]
-    public void Theme_using_xslt2_functions_is_rejected_with_hint()
+    public void Xslt2_theme_without_saxon_engine_is_rejected_as_unavailable()
     {
-        // general.xslt XSLT 2.0 fonksiyonu (exists()) kullanıyor: önizleme motoru render edemez → yüklenmez.
+        // general.xslt (exists()) Saxon'a yönlenir; Saxon yoksa tema hatası değil, geçici motor durumu olarak reddedilir.
+        // Saxon'la kabul (yükleme + yuvalar): XsltCraft.XsltWorker.Tests/Themes/ThemeSaxonPipelineTests.
         var rejected = Assert.IsType<ThemeUploadOutcome.Rejected>(
             Processor.Process(ThemeFixtures.Load(ThemeFixtures.GibGeneral), DocumentType.Invoice, null));
 
-        Assert.Contains("exists()", rejected.Message);
-        Assert.Contains("XSLT 1.0", rejected.Message);
+        Assert.StartsWith("XSLT motoru şu anda kullanılamıyor", rejected.Message);
+        Assert.DoesNotContain("XSLT 1.0", rejected.Message);
     }
 
     [Fact]

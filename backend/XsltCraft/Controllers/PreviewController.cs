@@ -117,7 +117,8 @@ public class PreviewController : ControllerBase
     /// Hazır temayı storage'dan okur, verilen XML'e uygular, HTML döndürür (galeri önizlemesi; anonim olabilir).
     /// Kullanıcı logo/imza/IBAN eklenmiş önizleme: POST /api/preview/compose.
     /// <para>G3: yalnız <see cref="IThemeAccessGuard"/>'ın izin verdiği yayınlanmış tema → <see cref="XsltRoute.Theme"/>
-    /// (süreç içi .NET, grid girdi sınırları, kullanıcı kapısı — anonimde IP anahtarı). İstisna: oturum sahibinin KENDİ
+    /// (1.0 tema süreç içi .NET, 2.0 yapısı kullanan tema Saxon izole worker — T-izi; grid girdi sınırları, kullanıcı
+    /// kapısı — anonimde IP anahtarı). İstisna: oturum sahibinin KENDİ
     /// saklı XSLT'li şablonu (editörde tema klonu önizlemesi) → <see cref="XsltRoute.UserTemplate"/> (izole worker).
     /// Başkasının şablonu / yayınlanmamış tema → 404.</para>
     /// Request: { xmlContent } · Response: { html, generationTimeMs, timings, engine, cacheHit, warnings }

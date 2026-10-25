@@ -1,7 +1,7 @@
 using XsltCraft.Application.ThemeSlots.Analysis;
 using XsltCraft.Application.ThemeSlots.Source;
 using XsltCraft.Application.Validation;
-using XsltCraft.Application.Xslt;
+using XsltCraft.Application.Xslt.Execution;
 using XsltCraft.Domain.Entities;
 
 namespace XsltCraft.Application.ThemeSlots;
@@ -12,22 +12,27 @@ public sealed record ThemeSlotAnalysis(string Xslt, ThemeSlotCatalog Catalog);
 /// <summary>
 /// Admin'in yüklediği temayı analiz eder: zorunlu alanları (çapaları) bulur, logo/imza konulabilecek
 /// konumları (yuvaları) çıkarır, bunları XSLT'ye boş işaret olarak yazar ve örnek belgeyle render ederek
-/// doğrular. Saf servis: string girer, string + katalog çıkar.
+/// doğrular. String girer, string + katalog çıkar; render/derleme tema hattından (<see cref="ThemeXsltRuns"/>:
+/// 1.0 → .NET süreç içi, 2.0 → Saxon izole worker).
 /// </summary>
 public interface IThemeSlotAnalyzer
 {
     /// <param name="imageRoles">Temadaki statik görsellerin rolleri, <see cref="DetectImages"/> sırasıyla. null ya da
     /// sayısı tutmuyorsa hepsi tasarım görseli sayılır.</param>
-    ThemeSlotAnalysis Analyze(string xslt, DocumentType type, IReadOnlyCollection<string> occupiedHolderIds,
-        IReadOnlyList<ThemeImageDecision>? imageRoles = null);
+    /// <param name="userId">Yürütme kapısı bölümü (yükleyen admin).</param>
+    Task<ThemeSlotAnalysis> AnalyzeAsync(string xslt, DocumentType type, IReadOnlyCollection<string> occupiedHolderIds,
+        IReadOnlyList<ThemeImageDecision>? imageRoles = null, Guid userId = default, CancellationToken cancellationToken = default);
 
     /// <summary>Yuva yapılabilecek statik görseller ve önerilen rolleri (admin'e sorulur). Ayrıştırılamayan temada boş.</summary>
     IReadOnlyList<ThemeImageInfo> DetectImages(string xslt, DocumentType type);
 }
 
-public sealed class ThemeSlotAnalyzer(IXsltHtmlRenderer renderer, IThemeSampleXmlProvider samples) : IThemeSlotAnalyzer
+public sealed class ThemeSlotAnalyzer(IXsltExecutionService execution, IThemeSampleXmlProvider samples) : IThemeSlotAnalyzer
 {
-    private readonly ThemeRenderVerifier _verifier = new(renderer, samples);
+    /// <summary>Analiz, motor geçici olarak kullanılamadığı için yapılamadı (tema hatası değil; yükleme reddedilir).</summary>
+    public const string EngineUnavailableCode = "engine-unavailable";
+
+    private readonly ThemeRenderVerifier _verifier = new(execution, samples);
 
     public IReadOnlyList<ThemeImageInfo> DetectImages(string xslt, DocumentType type)
     {
@@ -38,13 +43,14 @@ public sealed class ThemeSlotAnalyzer(IXsltHtmlRenderer renderer, IThemeSampleXm
         return ThemeImageDetector.Detect(doc, anchors, new InsertionPointResolver(doc)).Select(i => i.ToInfo()).ToList();
     }
 
-    public ThemeSlotAnalysis Analyze(string xslt, DocumentType type, IReadOnlyCollection<string> occupiedHolderIds,
-        IReadOnlyList<ThemeImageDecision>? imageRoles = null)
+    public async Task<ThemeSlotAnalysis> AnalyzeAsync(string xslt, DocumentType type, IReadOnlyCollection<string> occupiedHolderIds,
+        IReadOnlyList<ThemeImageDecision>? imageRoles = null, Guid userId = default, CancellationToken cancellationToken = default)
     {
         // Admin'in "temadan kaldır" dediği görseller önce çıkarılır; analiz ve doğrulama kalan metin üzerinde.
         var stripped = ThemeImageStripper.Strip(xslt, type, imageRoles);
         var images = new List<(DetectedImage Image, ThemeImageRole Role, bool Removable)>();
-        var result = AnalyzeCore(stripped.Xslt, type, occupiedHolderIds, stripped.Decisions, images);
+        var result = await AnalyzeCoreAsync(stripped.Xslt, type, occupiedHolderIds, stripped.Decisions, images, userId, cancellationToken)
+            .ConfigureAwait(false);
         if (images.Count == 0 && stripped.Removed.Count == 0)
             return result;
 
@@ -60,8 +66,9 @@ public sealed class ThemeSlotAnalyzer(IXsltHtmlRenderer renderer, IThemeSampleXm
         return result with { Catalog = result.Catalog with { Images = records } };
     }
 
-    private ThemeSlotAnalysis AnalyzeCore(string xslt, DocumentType type, IReadOnlyCollection<string> occupiedHolderIds,
-        IReadOnlyList<ThemeImageDecision>? imageRoles, List<(DetectedImage Image, ThemeImageRole Role, bool Removable)> images)
+    private async Task<ThemeSlotAnalysis> AnalyzeCoreAsync(string xslt, DocumentType type, IReadOnlyCollection<string> occupiedHolderIds,
+        IReadOnlyList<ThemeImageDecision>? imageRoles, List<(DetectedImage Image, ThemeImageRole Role, bool Removable)> images,
+        Guid userId, CancellationToken cancellationToken)
     {
         var baseXslt = ThemeSlotMarkers.Clean(xslt);
         var warnings = new List<ThemeSlotWarning>();
@@ -101,18 +108,22 @@ public sealed class ThemeSlotAnalyzer(IXsltHtmlRenderer renderer, IThemeSampleXm
 
             if (XsltSafety.FindThreat(marked) is { } threat)
                 return Fail(baseXslt, occupiedHolderIds, anchors.Report, warnings, "threat", threat);
-            try
+            var compiled = await execution.CompileThemeAsync(marked, userId, cancellationToken).ConfigureAwait(false);
+            if (compiled.Diagnostic is { } compileError)
             {
-                SecureXslt.Compile(marked);
-            }
-            catch (Exception ex)
-            {
-                return Fail(baseXslt, occupiedHolderIds, anchors.Report, warnings, "compile-failed", $"İşaretli tema derlenemedi: {ex.Message}");
+                return ThemeXsltRuns.IsOperational(compileError)
+                    ? Fail(baseXslt, occupiedHolderIds, anchors.Report, warnings, EngineUnavailableCode, $"XSLT motoru kullanılamadı: {compileError.Message}")
+                    : Fail(baseXslt, occupiedHolderIds, anchors.Report, warnings, "compile-failed", $"İşaretli tema derlenemedi: {ThemeXsltRuns.Describe(compileError)}");
             }
 
-            var check = _verifier.Verify(baseXslt, marked, type, reduced.Select(r => r.Id));
+            var check = await _verifier.VerifyAsync(baseXslt, marked, type, reduced.Select(r => r.Id), userId, cancellationToken)
+                .ConfigureAwait(false);
             if (!check.Rendered)
-                return Fail(baseXslt, occupiedHolderIds, anchors.Report, warnings, "render-failed", $"Tema örnek belgeyle render edilemedi: {check.Error}");
+            {
+                return check.Operational
+                    ? Fail(baseXslt, occupiedHolderIds, anchors.Report, warnings, EngineUnavailableCode, $"XSLT motoru kullanılamadı: {check.Error}")
+                    : Fail(baseXslt, occupiedHolderIds, anchors.Report, warnings, "render-failed", $"Tema örnek belgeyle render edilemedi: {check.Error}");
+            }
             if (!check.EquivalentAfterStrip)
                 return Fail(baseXslt, occupiedHolderIds, anchors.Report, warnings, "render-mismatch", "İşaretler temanın çıktısını değiştirdi; konumlar eklenmedi.");
 
