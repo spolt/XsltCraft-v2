@@ -46,6 +46,8 @@ const MSG_RESOURCE = 'Dönüşüm kaynak sınırını aştı; şablonu sadeleşt
 const MSG_INTERNAL = 'Beklenmeyen bir hata oluştu.'
 const MSG_NETWORK = 'Sunucuya ulaşılamadı; bağlantınızı kontrol edin.'
 const MSG_AUTH = 'Oturumunuz sona erdi; lütfen yeniden giriş yapın.'
+/** Backend `XsltProblemResults.MessageFor` — geçici `EngineUnavailable` metni (değişirse burası da güncellenmeli). */
+const BACKEND_UNAVAILABLE_TRANSIENT = 'XSLT motoru şu an kullanılamıyor, birazdan tekrar deneyin.'
 
 interface ErrorBody {
   error?: unknown
@@ -88,8 +90,11 @@ function messageFor(
   fallback: string,
 ): string {
   switch (kind) {
-    case 'Busy':
     case 'EngineUnavailable':
+      // Gövde hata kodu taşımaz; geçici yokluğun sabit metni dışındaki mesaj kalıcı nedendir (ör. WorkerDisabled).
+      if (backendMessage && backendMessage !== BACKEND_UNAVAILABLE_TRANSIENT) return backendMessage
+      return retryAfterSeconds ? `${MSG_BUSY} (~${retryAfterSeconds} sn)` : MSG_BUSY
+    case 'Busy':
       return retryAfterSeconds ? `${MSG_BUSY} (~${retryAfterSeconds} sn)` : MSG_BUSY
     case 'UserBusy':
     case 'RateLimited':
