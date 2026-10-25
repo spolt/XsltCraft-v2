@@ -56,6 +56,7 @@ import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
 import api from '../services/apiService'
+import { toXsltError } from '../services/xsltErrors'
 
 const LOCK_HEARTBEAT_MS = 30_000
 
@@ -498,16 +499,11 @@ export default function XsltEditorPage() {
       setLastMs(result.generationTimeMs)
       setLastTimings(result.timings ?? null)
     } catch (e: unknown) {
-      if (e && typeof e === 'object' && 'response' in e) {
-        const data = (e as { response?: { data?: { error?: string; line?: number; column?: number } } }).response?.data
-        const msg = data?.error ?? 'Önizleme alınamadı.'
-        setPreviewError(msg)
-        if (data?.line) {
-          setXsltErrors([{ message: msg, line: data.line, column: data.column ?? 1 }])
-          setXsltValid(false)
-        }
-      } else {
-        setPreviewError('Önizleme alınamadı.')
+      const err = toXsltError(e)
+      setPreviewError(err.message)
+      if (err.line) {
+        setXsltErrors([{ message: err.message, line: err.line, column: err.column || 1 }])
+        setXsltValid(false)
       }
     } finally {
       setPreviewLoading(false)
@@ -534,7 +530,8 @@ export default function XsltEditorPage() {
           setXsltErrors([])
         } else {
           setXsltValid(false)
-          setXsltErrors([{ message: data.error ?? 'XSLT hatası', line: data.line ?? 1, column: data.column ?? 1 }])
+          const err = toXsltError(data, 'XSLT hatası')
+          setXsltErrors([{ message: err.message, line: err.line || 1, column: err.column || 1 }])
         }
       } catch {
         // silently fail validation

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore'
 import { useXmlStore } from '../../store/xmlStore'
 import { previewFromBlockTree, previewFromStoredXslt } from '../../services/previewService'
+import { toXsltError } from '../../services/xsltErrors'
 
 const DEBOUNCE_MS = 1500
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000'
@@ -45,11 +46,7 @@ export default function EditorPreviewPanel() {
         setHtml(patched)
         setLastMs(result.generationTimeMs)
       } catch (e: unknown) {
-        const msg =
-          e && typeof e === 'object' && 'response' in e
-            ? (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Önizleme alınamadı.'
-            : 'Önizleme alınamadı.'
-        setError(msg)
+        setError(toXsltError(e).message)
       } finally {
         setLoading(false)
       }

@@ -54,6 +54,7 @@ import { validateBusinessRules, type BusinessRuleResult } from '../services/ublT
 import { listSnippets, type UserSnippet } from '../services/snippetService'
 import { useAuthStore } from '../store/authStore'
 import api from '../services/apiService'
+import { toXsltError } from '../services/xsltErrors'
 
 const DEBOUNCE_MS = 1000
 const XSLT_VALIDATION_DEBOUNCE_MS = 1500
@@ -237,11 +238,7 @@ export default function DevModePage() {
       setHtml(result.html)
       setLastMs(result.generationTimeMs)
     } catch (e: unknown) {
-      const msg =
-        e && typeof e === 'object' && 'response' in e
-          ? (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Önizleme alınamadı.'
-          : 'Önizleme alınamadı.'
-      setPreviewError(msg)
+      setPreviewError(toXsltError(e).message)
     } finally {
       setPreviewLoading(false)
     }
@@ -267,7 +264,8 @@ export default function DevModePage() {
           setXsltErrors([])
         } else {
           setXsltValid(false)
-          setXsltErrors([{ message: data.error ?? 'XSLT hatası', line: data.line ?? 1, column: data.column ?? 1 }])
+          const err = toXsltError(data, 'XSLT hatası')
+          setXsltErrors([{ message: err.message, line: err.line || 1, column: err.column || 1 }])
         }
       } catch { /* silently fail */ }
     }, XSLT_VALIDATION_DEBOUNCE_MS)

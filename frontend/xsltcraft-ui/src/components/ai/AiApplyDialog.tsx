@@ -3,6 +3,7 @@ import { DiffEditor, Editor } from '@monaco-editor/react'
 import { Sparkles, X, Check, Loader2, Copy, ClipboardCheck, AlertTriangle, MousePointerClick } from 'lucide-react'
 import type { ApplyTarget } from '../../utils/xsltApply'
 import api from '../../services/apiService'
+import { toXsltError } from '../../services/xsltErrors'
 
 interface Props {
   target: ApplyTarget
@@ -35,7 +36,7 @@ export default function AiApplyDialog({ target, onAccept, onClose }: Props) {
         { xslt: target.newDoc },
       )
       if (!data.valid) {
-        setValidateError(`Uygulanan XSLT sözdizimi hatalı: ${data.error ?? 'bilinmeyen hata'}. Yine de uygulamak ister misin?`)
+        setValidateError(`Uygulanan XSLT sözdizimi hatalı: ${toXsltError(data, 'bilinmeyen hata').message}. Yine de uygulamak ister misin?`)
         setValidating(false)
         return
       }

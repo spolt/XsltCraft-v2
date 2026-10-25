@@ -1,6 +1,7 @@
 import api from './apiService'
 import type { GridBlock } from '../types/blocks'
 import type { DocumentType } from '../types/template'
+import type { XsltErrorKind } from './xsltErrors'
 
 export interface PreviewTimings {
   parseMs: number
@@ -28,7 +29,7 @@ export interface PreviewErrorBody {
   error?: string
   line?: number
   column?: number
-  kind?: string
+  kind?: XsltErrorKind
   engine?: XsltEngineName | null
 }
 

@@ -3,6 +3,7 @@ import { DiffEditor } from '@monaco-editor/react'
 import { Sparkles, X, StopCircle, Check, RefreshCcw, Loader2 } from 'lucide-react'
 import { streamAi, type AiChunk } from '../../services/aiAssistantService'
 import api from '../../services/apiService'
+import { toXsltError } from '../../services/xsltErrors'
 
 interface Props {
   /** Refactor edilecek orijinal seçim. */
@@ -80,7 +81,7 @@ export default function AiRefactorDialog({
         { xslt: replaced },
       )
       if (!data.valid) {
-        setValidateError(`Refactor edilen XSLT sözdizimi hatalı: ${data.error ?? 'bilinmeyen hata'}. Yine de uygulamak ister misin?`)
+        setValidateError(`Refactor edilen XSLT sözdizimi hatalı: ${toXsltError(data, 'bilinmeyen hata').message}. Yine de uygulamak ister misin?`)
         setValidating(false)
         return
       }
