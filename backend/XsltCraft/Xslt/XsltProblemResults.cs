@@ -84,13 +84,14 @@ public static class XsltProblemResults
             line = diagnostic.Line,
             column = diagnostic.Column,
             kind = diagnostic.Kind.ToString(),
+            code = diagnostic.ErrorCode,
             engine = EngineName(diagnostic.Engine ?? result.Engine),
         });
     }
 
     /// <summary>Beklenmeyen istisna → 500, iç ayrıntı yok (çağıran loglar).</summary>
     public static IActionResult Unexpected() =>
-        new ObjectResult(Body(GenericServerError, 0, 0, XsltFailureKind.EngineInternal, null))
+        new ObjectResult(Body(GenericServerError, 0, 0, XsltFailureKind.EngineInternal, null, null))
         {
             StatusCode = StatusCodes.Status500InternalServerError,
         };
@@ -108,7 +109,8 @@ public static class XsltProblemResults
             internalError ? 0 : diagnostic.Line,
             internalError ? 0 : diagnostic.Column,
             diagnostic.Kind,
-            diagnostic.Engine ?? result.Engine))
+            diagnostic.Engine ?? result.Engine,
+            internalError ? null : diagnostic.ErrorCode))
         {
             StatusCode = status,
         };
@@ -125,8 +127,8 @@ public static class XsltProblemResults
     private static int? Seconds(TimeSpan? value) =>
         value is { } v && v > TimeSpan.Zero ? (int)Math.Ceiling(v.TotalSeconds) : null;
 
-    private static object Body(string error, int line, int column, XsltFailureKind kind, XsltEngineKind? engine) =>
-        new { error, line, column, kind = kind.ToString(), engine = EngineName(engine) };
+    private static object Body(string error, int line, int column, XsltFailureKind kind, XsltEngineKind? engine, string? code) =>
+        new { error, line, column, kind = kind.ToString(), code, engine = EngineName(engine) };
 
     private static string? EngineName(XsltEngineKind? engine) => engine?.ToString();
 }

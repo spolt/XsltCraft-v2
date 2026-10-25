@@ -30,6 +30,8 @@ export interface PreviewErrorBody {
   line?: number
   column?: number
   kind?: XsltErrorKind
+  /** Backend hata kodu (ör. `WorkerDisabled`, sandbox kodları); 500'de yok. */
+  code?: string | null
   engine?: XsltEngineName | null
 }
 
