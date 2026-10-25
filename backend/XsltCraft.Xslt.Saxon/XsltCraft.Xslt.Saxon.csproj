@@ -21,7 +21,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.11.2</Version>
+    <Version>2.0.0</Version>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <!-- Lock dosyası üretim RID'ini de kapsar: Docker/CI "restore -r linux-x64" + locked mode (NETSDK1047'den
          kaçınmak için restore ve publish aynı RID) RID'siz kilitle NU1004 verir. -r verildiğinde NuGet yalnız

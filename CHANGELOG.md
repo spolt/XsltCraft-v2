@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> 2.0.0 major sürümü hazırlanıyor (XSLT 2.0 motoru + UI/UX yeniden tasarım). `[2.0.0]` başlığı GA'da açılacak; o zamana kadar tüm değişiklikler burada birikir.
+
+### BREAKING
+- **Kaldırılan uçlar**: `POST /api/render/{templateId}` ve `POST /api/document/{layout}` (ikisi de zaten çalışmıyordu). Önizleme/indirme için `/api/preview/*` ve kullanıcı şablonu uçları kullanılır.
+- **Önizleme uçları oturum istiyor**: `/api/preview`, `/api/preview/raw` ve `/api/preview/validate-xslt` artık `[Authorize]`; oturumsuz istek 401 alır. Güncelleme öncesinden açık kalan sekmeler sayfayı yenilemeli.
+- **Yeni hata sözleşmesi**: hata gövdesi `{ error, line, column, kind, code, engine }`; HTTP kodları 400 (içerik hatası), 429 (meşgul / hız sınırı), 503 (motor meşgul ya da kullanılamıyor, `Retry-After` ile), 500. `validate-xslt` operasyonel hatalarda önceden 200 + `valid:false` dönerken artık 4xx/5xx döner.
+- **XSLT tavanı 2.0**: XSLT 3.0 ve XPath 3.x yapıları önizlemede/doğrulamada `Unsupported` ile reddedilir.
+- **Grid bağlamaları sınırlı**: grid bloklarının XPath'leri iki motorda da aynı sonucu veren XPath 1.0 alt kümesiyle ve maliyet kurallarıyla (`XPathPortability`: derinlik, yüklemde yukarı eksen + `//`, birleşim sayısı vb.) sınırlı. Kuralı geçemeyen blok tüm şablonu düşürmez; yerinde yer tutucuyla gösterilir ve yanıtın `warnings` alanında listelenir.
+- **Boyut sınırları**: Raw XSLT 5 MB, XML 5 MB; `validate-xslt` 1 MB.
+- **Docker / işletme**: backend publish RID'i `linux-x64`; imaj Saxon/IKVM worker'ı ile ~626 MB. Prod compose sertleştirildi (`cap_drop`, `pids_limit: 512`, `mem_limit: 5g`). **İşletme notu:** `update.sh` VPS'teki eski compose yedeğini geri yüklediği için compose değişiklikleri VPS'e **elle** işlenmelidir; aksi halde sertleştirme ve bellek sınırı devreye girmez.
+
 ### Fixed
 - **Admin: derlenemeyen ya da render edilemeyen tema yüklenebiliyordu.** Örneğin XSLT 2.0 fonksiyonu (`exists()`) kullanan bir tema "Başarısız" analizle kaydediliyor, kullanıcıya önizlenemeyen bir tema olarak sunuluyordu. Artık yüklenen tema (yeni ya da güncelleme) önce örnek fatura/irsaliye ile derlenip render ediliyor; başarısızsa yükleme 422 ile reddediliyor, mesajda hata ve — XSLT 2.0 fonksiyonu kullanıldıysa — önizleme motorunun XSLT 1.0 olduğu belirtiliyor. Kontrol, görsel/blok kararları sorulmadan önce yapılır. Daha önce bu şekilde kaydedilmiş temalar etkilenmez; admin silebilir.
 
@@ -59,6 +70,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `e2e/theme-compose.spec.ts`: gerçek tarayıcıda yuvaya yerleşim, eski alana düşme, banka kaçışı, SVG reddi, oturumsuz ret (`E2E_API_URL` ile API adresi değiştirilebilir); temadaki görselin yerinde değişmesi (kutu korunur), başka yere taşınınca gizlenmesi, görsel eklenmezse dokunulmaması, görselsiz kaldırmanın yalnız izinli görselde uygulanması.
 - `Application.Tests/ThemeSlots` inceleme düzeltmeleri (+16): img tutucu senaryoları, ikinci işaret reddi, başarısız analizde karar reddi ve son kapı, `ThemeComposeRequestValidatorTests`, satır sonlu data URL/konum kimliği. e2e: yerleşemeyen logo temadakini gizlemez, eski temada img yedek alanın yerine geçme.
 - `Application.Tests/ThemeSlots/ThemeImageSlotTests` (+14): firma temalarının yapısını taşıyan sentetik bir tema (`ThemeFixtures.CompanyImagesTheme`, müşteri verisi yok) ile logo + kaşe tespiti ve önerisi, GİB logosu/barkod hariç tutma, işaretlenen görsellerin varsayılan konum olması, render eşdeğerliği, idempotentlik, aynı rolün tek yuvası, döngüdeki/dinamik görsellerin atlanması, yükleme kararı akışı, birleştiricinin varsayılanı.
+
+### XSLT motoru
+
+Kararlar: [ADR 007](./docs/ecc/decisions/007-xslt-engine-routing.md) (motor yönlendirme), [ADR 008](./docs/ecc/decisions/008-xslt-worker-isolation.md) (worker izolasyonu).
+
+#### Added
+- **XSLT 2.0 önizleme ve doğrulama** (Saxon-HE 12.10, IKVM üzerinden): GİB `general.xslt` gibi `exists()` ve character-map kullanan temalar artık render ediliyor.
+- **İzole worker süreç havuzu**: kullanıcı XSLT'si API sürecinde değil, ayrı ve sınırlandırılmış worker süreçlerinde çalışır; çöken/donan worker API'yi etkilemez, havuz yeniden başlatır.
+- **Grid için motor paritesi**: grid şablonları .NET ve Saxon'da bayt-aynı HTML/QR üretir (testle bloke); grid önizlemesi şimdilik .NET motorunda çalışır.
+- **Kullanıcı başı eşzamanlılık kapısı ve kötüye kullanım kesicisi**: bir kullanıcı aynı anda tek izole render çalıştırır (doğrulama hariç); iptal edilemeyen kaçak işler kesiciye takılır.
+- **Hız sınırı kullanıcı bazlı** (önizleme/doğrulama uçları).
+- Yanıtlarda `engine` (çalışan motor), `cacheHit` ve `warnings` alanları.
+
+#### Changed
+- Önizleme/doğrulama çağrıları kimlik doğrulamalı API istemcisinden yapılıyor; hatalar ortak adaptörle (`xsltErrors`) gösteriliyor, motor kullanılamadığında backend mesajı görünüyor.
+- Docker build: worker imaja dahil, NuGet/Maven cache mount; CI'da kilitli (`--locked-mode`) restore.
+
+#### Security
+- **XsltSafety yasakçı tarayıcı**: stylesheet çalıştırılmadan önce fail-closed taranır (tehlikeli fonksiyonlar, ad alanları, AVT/use-when hileleri).
+- **Saxon sandbox**: kaynak/ağ/ortam erişimi kapalı, collation izin listesi, stylesheet DTD reddi, statik ifade (`use-when`, `static`) reddi.
+- Önizlemede asset IDOR kapatıldı: yalnız erişilebilir görseller gömülür.
+- Tema önizleme ucu korumalı: yalnız yayınlanmış temalar, IP bazlı hız sınırı ve boyut sınırı.
+- Worker süreçlerinde `PR_SET_DUMPABLE` kapalı (bellek dökümü / ptrace engeli).
+- Tedarik zinciri: NuGet kilit dosyası + Maven jar'ları için SHA-256 doğrulaması.
+- nginx `index.html`'i `no-cache` ile sunuyor (yayın sonrası eski bundle kalmaz).
+- Rate limiter artık kimlik doğrulamadan **sonra** çalışıyor: kullanıcı bazlı limitler önceden fiilen IP bazlıydı, artık gerçekten kullanıcı bazlı (aynı IP'deki kullanıcılar birbirini kısıtlamıyor).
+
+#### Fixed
+- **`'exists()' is an unknown XSLT function`** — XSLT 2.0 temalar önizlenemiyordu (asıl sorun).
+- "XSLT ✓" göstergesi derlenemeyen stylesheet'te de yeşil yanıyordu.
+- `/api/render` .NET 10'da Saxon 10.9 yüzünden çalışmıyordu (uç artık kaldırıldı).
+- Klonlanan şablonu güncellemek/silmek kaynak temanın XSLT dosyasını siliyordu.
+- Hesaplanan KDV bloğunun varsayılan yolu belge düzeyine (`/n1:Invoice/cac:TaxTotal/cbc:TaxAmount`) sabitlendi.
+- Görseller her yerde base64 gömülü (indirme ve kullanıcı şablonu önizlemesi dahil); dış URL yedeği kaldırıldı.
+- Üretilen XSLT çıktısından açıklama yorumları kaldırıldı.
+- `format-number` öncesi motor-bağımsız ön-yuvarlama: iki motorda aynı tutar.
+- Docker imajı restore adımında kırılıyordu.
+
+#### Removed
+- Saxon-HE 10.9 bağımlılığı.
+- Dosya tabanlı şablon motoru ve `backend/XsltCraft/Templates/` klasörü.
+- Frontend Playground sayfası.
 
 ## [1.11.2] - 2026-10-04
 
