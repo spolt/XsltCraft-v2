@@ -10,7 +10,7 @@ public sealed record SaxonEngineOptions
 
     /// <summary>
     /// Template / <c>xsl:function</c> iç içe giriş (trace <c>enter()</c>) sınırı. Yığın bütçesine göre seçilir:
-    /// spike ölçümü 1 MB'ta ~200, 64 MB'ta ~5000 fonksiyon derinliği (ADR 008 Bağlam).
+    /// T2.3 ölçümü: 64 MB'ta kırılma ~23.8k template / ~42.2k <c>xsl:function</c> derinliği (ADR 008 Ölçümler).
     /// </summary>
     public int MaxTraceDepth { get; init; } = 1000;
 
@@ -20,8 +20,11 @@ public sealed record SaxonEngineOptions
     /// <summary>Girdi XML'inde en fazla karakter (<c>XmlReaderSettings.MaxCharactersInDocument</c>).</summary>
     public long MaxInputCharacters { get; init; } = 10_000_000;
 
-    /// <summary>Stylesheet'te en fazla karakter (derleme öncesi .NET okumasında).</summary>
-    public long MaxStylesheetCharacters { get; init; } = 4_000_000;
+    /// <summary>
+    /// Stylesheet'te en fazla karakter (derleme öncesi .NET okumasında). Raw rotanın 5M karakterlik XSLT
+    /// sınırının üstünde kalmalı; aksi halde servisin kabul ettiği stylesheet worker'da LimitExceeded alır.
+    /// </summary>
+    public long MaxStylesheetCharacters { get; init; } = 6_000_000;
 
     /// <summary>Transform başına saklanan en fazla <c>xsl:message</c> sayısı (fazlası sayılır, saklanmaz).</summary>
     public int MaxRetainedMessages { get; init; } = 32;
