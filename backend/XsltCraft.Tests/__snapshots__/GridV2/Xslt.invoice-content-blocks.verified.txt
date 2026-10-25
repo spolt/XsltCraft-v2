@@ -95,7 +95,7 @@
     <div style="display:flex;align-items:flex-start;margin-top:10.0mm;">
       <div style="margin-left:14.0mm;width:120.0mm;flex-shrink:0;">
         <div style="margin-top:0.0mm;margin-left:0.0mm;width:120.0mm;">    <h1 style="font-weight:bold;font-size:18px;color:#1F2937">FATURA</h1></div>
-        <div style="margin-top:2.0mm;margin-left:0.0mm;width:120.0mm;">    <h3 style="font-style:italic"><xsl:value-of select="//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name"/></h3></div>
+        <div style="margin-top:2.0mm;margin-left:0.0mm;width:120.0mm;">    <h3 style="font-style:italic"><xsl:value-of select="(//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name)[1]"/></h3></div>
       </div>
       <div style="margin-left:22.0mm;width:40.0mm;flex-shrink:0;">
         <div style="margin-top:0.0mm;margin-left:0.0mm;width:40.0mm;">    <div style="text-align:right;line-height:0;font-size:0;"><img src="data:image/png;base64,[scrubbed len=96 sha256=abbd4841ba31f4d7]" style="display:inline-block;vertical-align:top;object-fit:contain;width:40mm;height:20mm;opacity:0.80;" alt="Firma Logosu"/></div></div>
@@ -108,12 +108,12 @@
     </div>
     <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
       <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
-        <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">    <p style="font-weight:bold;color:#B91C1C"><xsl:choose><xsl:when test="//cbc:Note"><xsl:value-of select="//cbc:Note"/></xsl:when><xsl:otherwise>—</xsl:otherwise></xsl:choose></p></div>
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">    <p style="font-weight:bold;color:#B91C1C"><xsl:choose><xsl:when test="//cbc:Note"><xsl:value-of select="(//cbc:Note)[1]"/></xsl:when><xsl:otherwise>—</xsl:otherwise></xsl:choose></p></div>
       </div>
     </div>
     <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
       <div style="margin-left:14.0mm;width:182.0mm;flex-shrink:0;">
-        <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">    <p>Fatura No: <xsl:value-of select="/n1:Invoice/cbc:ID"/> / Tarih: <xsl:value-of select="//cbc:IssueDate"/></p></div>
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:182.0mm;">    <p>Fatura No: <xsl:value-of select="(/n1:Invoice/cbc:ID)[1]"/> / Tarih: <xsl:value-of select="(//cbc:IssueDate)[1]"/></p></div>
       </div>
     </div>
     <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
@@ -122,15 +122,15 @@
       <tbody>
         <tr>
           <td>Fatura No</td>
-          <td><xsl:value-of select="//cbc:ID"/></td>
+          <td><xsl:value-of select="(//cbc:ID)[1]"/></td>
         </tr>
         <tr>
           <td>Fatura Tarihi</td>
-          <td><xsl:value-of select="//cbc:IssueDate"/></td>
+          <td><xsl:value-of select="(//cbc:IssueDate)[1]"/></td>
         </tr>
         <tr>
           <td>Para Birimi</td>
-          <td><xsl:value-of select="//cbc:DocumentCurrencyCode"/></td>
+          <td><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></td>
         </tr>
       </tbody>
     </table></div>
@@ -140,11 +140,11 @@
       <tbody>
         <tr>
           <td class="lbl" style="width:60%"><strong>Mal Hizmet Toplamı</strong></td>
-          <td class="val"><xsl:value-of select="//cac:LegalMonetaryTotal/cbc:LineExtensionAmount"/></td>
+          <td class="val"><xsl:value-of select="(//cac:LegalMonetaryTotal/cbc:LineExtensionAmount)[1]"/></td>
         </tr>
         <tr class="hl">
           <td class="lbl" style="width:60%"><strong>Ödenecek Tutar</strong></td>
-          <td class="val"><xsl:value-of select="//cbc:PayableAmount"/></td>
+          <td class="val"><xsl:value-of select="(//cbc:PayableAmount)[1]"/></td>
         </tr>
       </tbody>
     </table></div>
@@ -171,11 +171,11 @@
         <xsl:for-each select="//cac:InvoiceLine">
           <xsl:variable name="pos" select="position()"/>
           <tr><xsl:if test="$pos mod 2 = 0"><xsl:attribute name="style">background:#F3F4F6</xsl:attribute></xsl:if>
-            <td><xsl:value-of select="cac:Item/cbc:Name"/></td>
-            <td><xsl:choose><xsl:when test="number(cbc:InvoicedQuantity) = number(cbc:InvoicedQuantity)"><xsl:value-of select="format-number(cbc:InvoicedQuantity, '#,##0.##')"/></xsl:when><xsl:otherwise><xsl:value-of select="cbc:InvoicedQuantity"/></xsl:otherwise></xsl:choose></td>
-            <td><xsl:choose><xsl:when test="number(cac:Price/cbc:PriceAmount) = number(cac:Price/cbc:PriceAmount)"><xsl:value-of select="format-number(cac:Price/cbc:PriceAmount, '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="cac:Price/cbc:PriceAmount"/></xsl:otherwise></xsl:choose></td>
-            <td><xsl:choose><xsl:when test="number(cac:AllowanceCharge/cbc:MultiplierFactorNumeric) = number(cac:AllowanceCharge/cbc:MultiplierFactorNumeric)"><xsl:value-of select="format-number(cac:AllowanceCharge/cbc:MultiplierFactorNumeric, '#,##0.##')"/></xsl:when><xsl:otherwise><xsl:value-of select="cac:AllowanceCharge/cbc:MultiplierFactorNumeric"/></xsl:otherwise></xsl:choose></td>
-            <td><xsl:choose><xsl:when test="number(cbc:LineExtensionAmount) = number(cbc:LineExtensionAmount)"><xsl:value-of select="format-number(cbc:LineExtensionAmount, '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="cbc:LineExtensionAmount"/></xsl:otherwise></xsl:choose></td>
+            <td><xsl:value-of select="(cac:Item/cbc:Name)[1]"/></td>
+            <td><xsl:choose><xsl:when test="number((cbc:InvoicedQuantity)[1]) = number((cbc:InvoicedQuantity)[1])"><xsl:value-of select="format-number(number((cbc:InvoicedQuantity)[1]), '#,##0.##')"/></xsl:when><xsl:otherwise><xsl:value-of select="(cbc:InvoicedQuantity)[1]"/></xsl:otherwise></xsl:choose></td>
+            <td><xsl:choose><xsl:when test="number((cac:Price/cbc:PriceAmount)[1]) = number((cac:Price/cbc:PriceAmount)[1])"><xsl:value-of select="format-number(number((cac:Price/cbc:PriceAmount)[1]), '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="(cac:Price/cbc:PriceAmount)[1]"/></xsl:otherwise></xsl:choose></td>
+            <td><xsl:choose><xsl:when test="number((cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1]) = number((cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1])"><xsl:value-of select="format-number(number((cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1]), '#,##0.##')"/></xsl:when><xsl:otherwise><xsl:value-of select="(cac:AllowanceCharge/cbc:MultiplierFactorNumeric)[1]"/></xsl:otherwise></xsl:choose></td>
+            <td><xsl:choose><xsl:when test="number((cbc:LineExtensionAmount)[1]) = number((cbc:LineExtensionAmount)[1])"><xsl:value-of select="format-number(number((cbc:LineExtensionAmount)[1]), '#,##0.00')"/></xsl:when><xsl:otherwise><xsl:value-of select="(cbc:LineExtensionAmount)[1]"/></xsl:otherwise></xsl:choose></td>
           </tr>
         </xsl:for-each>
       </tbody>
@@ -189,12 +189,12 @@
     </div>
     <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">
       <div style="margin-left:14.0mm;width:90.0mm;flex-shrink:0;">
-        <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="number(//cac:LegalMonetaryTotal/cbc:PayableAmount) > 1000"><xsl:text>Yüksek tutarlı fatura</xsl:text></xsl:when><xsl:otherwise><xsl:text>Standart fatura</xsl:text></xsl:otherwise></xsl:choose></span></div>
-        <div style="margin-top:2.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="not(//cac:OrderReference)"><xsl:text>Siparişsiz fatura</xsl:text></xsl:when><xsl:otherwise><xsl:value-of select="//cac:OrderReference/cbc:ID"/></xsl:otherwise></xsl:choose></span></div>
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="number((//cac:LegalMonetaryTotal/cbc:PayableAmount)[1]) > 1000"><xsl:text>Yüksek tutarlı fatura</xsl:text></xsl:when><xsl:otherwise><xsl:text>Standart fatura</xsl:text></xsl:otherwise></xsl:choose></span></div>
+        <div style="margin-top:2.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="not(//cac:OrderReference)"><xsl:text>Siparişsiz fatura</xsl:text></xsl:when><xsl:otherwise><xsl:value-of select="(//cac:OrderReference/cbc:ID)[1]"/></xsl:otherwise></xsl:choose></span></div>
       </div>
       <div style="margin-left:2.0mm;width:90.0mm;flex-shrink:0;">
-        <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="contains(//cbc:Note, 'Temsilci')"><xsl:value-of select="//cbc:Note"/></xsl:when><xsl:otherwise><xsl:text>Temsilci notu yok</xsl:text></xsl:otherwise></xsl:choose></span></div>
-        <div style="margin-top:2.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode = 'TRY'"><xsl:text>Yerel para birimi</xsl:text></xsl:when><xsl:otherwise><xsl:value-of select="//cbc:DocumentCurrencyCode"/></xsl:otherwise></xsl:choose></span></div>
+        <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="contains((//cbc:Note)[1], 'Temsilci')"><xsl:value-of select="(//cbc:Note)[1]"/></xsl:when><xsl:otherwise><xsl:text>Temsilci notu yok</xsl:text></xsl:otherwise></xsl:choose></span></div>
+        <div style="margin-top:2.0mm;margin-left:0.0mm;width:90.0mm;">    <span><xsl:choose><xsl:when test="//cbc:DocumentCurrencyCode = 'TRY'"><xsl:text>Yerel para birimi</xsl:text></xsl:when><xsl:otherwise><xsl:value-of select="(//cbc:DocumentCurrencyCode)[1]"/></xsl:otherwise></xsl:choose></span></div>
       </div>
     </div>
     <div style="display:flex;align-items:flex-start;margin-top:2.0mm;">

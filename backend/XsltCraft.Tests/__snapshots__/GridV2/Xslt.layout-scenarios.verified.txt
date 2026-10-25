@@ -99,8 +99,8 @@
         <div style="margin-top:10.0mm;margin-left:16.0mm;width:100.0mm;height:4.0mm;overflow:hidden;">    <hr style="border-top-style:solid;border-color:#CCCCCC;border-top-width:1px;"/></div>
       </div>
       <div style="margin-left:0.0mm;width:88.0mm;flex-shrink:0;">
-        <div style="margin-top:2.0mm;margin-left:0.0mm;width:88.0mm;">    <p><xsl:value-of select="/n1:Invoice/cbc:ID"/></p></div>
-        <div style="margin-top:8.0mm;margin-left:4.0mm;width:84.0mm;">    <p><xsl:value-of select="//cbc:IssueDate"/></p></div>
+        <div style="margin-top:2.0mm;margin-left:0.0mm;width:88.0mm;">    <p><xsl:value-of select="(/n1:Invoice/cbc:ID)[1]"/></p></div>
+        <div style="margin-top:8.0mm;margin-left:4.0mm;width:84.0mm;">    <p><xsl:value-of select="(//cbc:IssueDate)[1]"/></p></div>
       </div>
     </div>
     <div style="display:flex;align-items:flex-start;margin-top:4.0mm;">

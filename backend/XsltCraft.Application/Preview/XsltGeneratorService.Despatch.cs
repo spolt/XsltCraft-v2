@@ -12,10 +12,13 @@ public sealed partial class XsltGeneratorService
     private static bool IsDespatch(string? documentType) =>
         string.Equals(documentType, "Despatch", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>TRY/TRL → TL, diğer kodlar olduğu gibi. <paramref name="currencyXpath"/> XML-attr kaçışlı olmalı.</summary>
-    private static string CurrencySuffixFrom(string currencyXpath) =>
+    /// <summary>
+    /// TRY/TRL → TL, diğer kodlar olduğu gibi. <paramref name="currencyXpath"/> (test, <c>=</c> anlamı) ve
+    /// <paramref name="currencySingle"/> (<c>value-of</c>, tekil değer) XML-attr kaçışlı olmalı.
+    /// </summary>
+    private static string CurrencySuffixFrom(string currencyXpath, string currencySingle) =>
         $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when>" +
-        $"<xsl:otherwise><xsl:value-of select=\"{currencyXpath}\"/></xsl:otherwise></xsl:choose>";
+        $"<xsl:otherwise><xsl:value-of select=\"{currencySingle}\"/></xsl:otherwise></xsl:choose>";
 
     // ── InvoiceHeader (irsaliye) — İrsaliye bilgileri tablosu ─────────────
 
@@ -42,19 +45,19 @@ public sealed partial class XsltGeneratorService
         AppendHeaderRow(sb, "İrsaliye No:", "<xsl:value-of select=\"n1:DespatchAdvice/cbc:ID\"/>");
         AppendHeaderRow(sb, "İrsaliye Tarihi:",
             "<xsl:value-of select=\"n1:DespatchAdvice/cbc:IssueDate\"/><xsl:text>&#160;</xsl:text>" +
-            "<xsl:value-of select=\"substring(n1:DespatchAdvice/cbc:IssueTime,1,5)\"/>");
+            "<xsl:value-of select=\"substring((n1:DespatchAdvice/cbc:IssueTime)[1],1,5)\"/>");
 
         const string despatchNode = "n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch";
         AppendHeaderRow(sb, "Sevk Tarihi:",
             $"<xsl:value-of select=\"{despatchNode}/cbc:ActualDespatchDate\"/><xsl:text>&#160;</xsl:text>" +
-            $"<xsl:value-of select=\"substring({despatchNode}/cbc:ActualDespatchTime,1,5)\"/>",
+            $"<xsl:value-of select=\"substring(({despatchNode}/cbc:ActualDespatchTime)[1],1,5)\"/>",
             condition: $"{despatchNode}/cbc:ActualDespatchDate");
-        AppendHeaderRow(sb, "Sipariş No:", "<xsl:value-of select=\"n1:DespatchAdvice/cac:OrderReference/cbc:ID\"/>",
+        AppendHeaderRow(sb, "Sipariş No:", "<xsl:value-of select=\"(n1:DespatchAdvice/cac:OrderReference/cbc:ID)[1]\"/>",
             condition: "n1:DespatchAdvice/cac:OrderReference/cbc:ID");
-        AppendHeaderRow(sb, "Sipariş Tarihi:", "<xsl:value-of select=\"n1:DespatchAdvice/cac:OrderReference/cbc:IssueDate\"/>",
+        AppendHeaderRow(sb, "Sipariş Tarihi:", "<xsl:value-of select=\"(n1:DespatchAdvice/cac:OrderReference/cbc:IssueDate)[1]\"/>",
             condition: "n1:DespatchAdvice/cac:OrderReference/cbc:IssueDate");
 
-        AppendCustomRows(sb, cfg);
+        AppendCustomRows(sb, block, cfg);
 
         sb.AppendLine("        </tbody>");
         sb.AppendLine("      </table>");
@@ -77,11 +80,11 @@ public sealed partial class XsltGeneratorService
         sb.AppendLine("          </xsl:if>");
     }
 
-    private static void AppendCustomRows(StringBuilder sb, InvoiceHeaderConfig cfg)
+    private static void AppendCustomRows(StringBuilder sb, BlockDto block, InvoiceHeaderConfig cfg)
     {
         foreach (var f in (cfg.Fields ?? []).Where(f => f.Visible && f.IsCustom == true).OrderBy(f => f.Order))
         {
-            var xp = XmlAttr(f.Xpath ?? string.Empty);
+            var xp = XmlAttr(Single(block, f.Xpath));
             if (string.IsNullOrWhiteSpace(xp)) continue;
             AppendHeaderRow(sb, f.Label ?? string.Empty, $"<xsl:value-of select=\"{xp}\"/>");
         }
@@ -105,7 +108,7 @@ public sealed partial class XsltGeneratorService
 
         AppendShipmentRow(sb, "Taşıyıcı Firma:", "//cac:Shipment/cac:Delivery/cac:CarrierParty",
             "<xsl:value-of select=\"cac:PartyName/cbc:Name\"/><xsl:text> (VKN: </xsl:text>" +
-            "<xsl:value-of select=\"cac:PartyIdentification/cbc:ID\"/><xsl:text>)</xsl:text>");
+            "<xsl:value-of select=\"(cac:PartyIdentification/cbc:ID)[1]\"/><xsl:text>)</xsl:text>");
         AppendShipmentRow(sb, "Araç Plaka No:",
             "//cac:ShipmentStage/cac:TransportMeans/cac:RoadTransport/cbc:LicensePlateID",
             "<xsl:value-of select=\".\"/>");
@@ -118,7 +121,7 @@ public sealed partial class XsltGeneratorService
         AppendShipmentRow(sb, "Teslim Eden:", "//cac:DespatchSupplierParty/cac:DespatchContact/cbc:Name",
             "<xsl:value-of select=\".\"/>");
 
-        AppendCustomRows(sb, cfg);
+        AppendCustomRows(sb, block, cfg);
 
         sb.AppendLine("        </tbody>");
         sb.AppendLine("      </table>");
@@ -149,17 +152,17 @@ public sealed partial class XsltGeneratorService
         const string d = "n1:DespatchAdvice";
         const string idFilter = "cbc:ID[@schemeID='TCKN' or @schemeID='VKN']";
         var payload =
-            $"{{\"vkntckn\":\"<xsl:value-of select=\"{d}/cac:DespatchSupplierParty/cac:Party/cac:PartyIdentification/{idFilter}\"/>\"," +
-            $"\"avkntckn\":\"<xsl:value-of select=\"{d}/cac:DeliveryCustomerParty/cac:Party/cac:PartyIdentification/{idFilter}\"/>\"," +
-            $"\"senaryo\":\"<xsl:value-of select=\"{d}/cbc:ProfileID\"/>\"," +
-            $"\"tip\":\"<xsl:value-of select=\"{d}/cbc:DespatchAdviceTypeCode\"/>\"," +
-            $"\"tarih\":\"<xsl:value-of select=\"{d}/cbc:IssueDate\"/>\"," +
-            $"\"no\":\"<xsl:value-of select=\"{d}/cbc:ID\"/>\"," +
-            $"\"ettn\":\"<xsl:value-of select=\"{d}/cbc:UUID\"/>\"," +
-            $"\"sevktarihi\":\"<xsl:value-of select=\"{d}/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchDate\"/>\"," +
-            $"\"sevkzamani\":\"<xsl:value-of select=\"{d}/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchTime\"/>\"," +
-            $"\"tasiyicivkn\":\"<xsl:value-of select=\"{d}/cac:Shipment/cac:Delivery/cac:CarrierParty/cac:PartyIdentification/cbc:ID[@schemeID='VKN']\"/>\"," +
-            $"\"plaka\":\"<xsl:value-of select=\"{d}/cac:Shipment/cac:ShipmentStage/cac:TransportMeans/cac:RoadTransport/cbc:LicensePlateID[@schemeID='PLAKA']\"/>\"}}";
+            $"{{\"vkntckn\":\"<xsl:value-of select=\"({d}/cac:DespatchSupplierParty/cac:Party/cac:PartyIdentification/{idFilter})[1]\"/>\"," +
+            $"\"avkntckn\":\"<xsl:value-of select=\"({d}/cac:DeliveryCustomerParty/cac:Party/cac:PartyIdentification/{idFilter})[1]\"/>\"," +
+            $"\"senaryo\":\"<xsl:value-of select=\"({d}/cbc:ProfileID)[1]\"/>\"," +
+            $"\"tip\":\"<xsl:value-of select=\"({d}/cbc:DespatchAdviceTypeCode)[1]\"/>\"," +
+            $"\"tarih\":\"<xsl:value-of select=\"({d}/cbc:IssueDate)[1]\"/>\"," +
+            $"\"no\":\"<xsl:value-of select=\"({d}/cbc:ID)[1]\"/>\"," +
+            $"\"ettn\":\"<xsl:value-of select=\"({d}/cbc:UUID)[1]\"/>\"," +
+            $"\"sevktarihi\":\"<xsl:value-of select=\"({d}/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchDate)[1]\"/>\"," +
+            $"\"sevkzamani\":\"<xsl:value-of select=\"({d}/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchTime)[1]\"/>\"," +
+            $"\"tasiyicivkn\":\"<xsl:value-of select=\"({d}/cac:Shipment/cac:Delivery/cac:CarrierParty/cac:PartyIdentification/cbc:ID[@schemeID='VKN'])[1]\"/>\"," +
+            $"\"plaka\":\"<xsl:value-of select=\"({d}/cac:Shipment/cac:ShipmentStage/cac:TransportMeans/cac:RoadTransport/cbc:LicensePlateID[@schemeID='PLAKA'])[1]\"/>\"}}";
 
         var sb = new StringBuilder();
         sb.AppendLine($"    <div class=\"ettn\" style=\"{qrOpacity}\">");

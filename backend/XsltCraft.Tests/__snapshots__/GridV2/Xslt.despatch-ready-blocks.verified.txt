@@ -98,10 +98,10 @@
         <div style="margin-top:0.0mm;margin-left:0.0mm;width:70.0mm;">    <div style="border:1px solid #555555;padding:4px 8px;">
       <p style="font-weight:bold;margin:0 0 4px 0;font-size:11px">GÖNDERİCİ</p>
       <xsl:for-each select="//cac:DespatchSupplierParty/cac:Party">
-        <p style="margin:0;font-size:11px"><strong>Ünvan: </strong><xsl:value-of select="cac:PartyName/cbc:Name"/></p>
-        <p style="margin:0;font-size:11px"><strong>VKN/TCKN: </strong><xsl:value-of select="cac:PartyIdentification/cbc:ID"/></p>
-        <p style="margin:0;font-size:11px"><strong>Vergi Dairesi: </strong><xsl:value-of select="cac:PartyTaxScheme/cac:TaxScheme/cbc:Name"/></p>
-        <p style="margin:0;font-size:11px"><strong>Şehir: </strong><xsl:value-of select="cac:PostalAddress/cbc:CityName"/></p>
+        <p style="margin:0;font-size:11px"><strong>Ünvan: </strong><xsl:value-of select="(cac:PartyName/cbc:Name)[1]"/></p>
+        <p style="margin:0;font-size:11px"><strong>VKN/TCKN: </strong><xsl:value-of select="(cac:PartyIdentification/cbc:ID)[1]"/></p>
+        <p style="margin:0;font-size:11px"><strong>Vergi Dairesi: </strong><xsl:value-of select="(cac:PartyTaxScheme/cac:TaxScheme/cbc:Name)[1]"/></p>
+        <p style="margin:0;font-size:11px"><strong>Şehir: </strong><xsl:value-of select="(cac:PostalAddress/cbc:CityName)[1]"/></p>
       </xsl:for-each>
     </div>
 </div>
@@ -126,17 +126,17 @@
           <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Senaryo:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="n1:DespatchAdvice/cbc:ProfileID"/></td></tr>
           <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>İrsaliye Tipi:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="n1:DespatchAdvice/cbc:DespatchAdviceTypeCode"/></td></tr>
           <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>İrsaliye No:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="n1:DespatchAdvice/cbc:ID"/></td></tr>
-          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>İrsaliye Tarihi:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="n1:DespatchAdvice/cbc:IssueDate"/><xsl:text>&#160;</xsl:text><xsl:value-of select="substring(n1:DespatchAdvice/cbc:IssueTime,1,5)"/></td></tr>
+          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>İrsaliye Tarihi:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="n1:DespatchAdvice/cbc:IssueDate"/><xsl:text>&#160;</xsl:text><xsl:value-of select="substring((n1:DespatchAdvice/cbc:IssueTime)[1],1,5)"/></td></tr>
           <xsl:if test="n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchDate">
-          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Sevk Tarihi:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchDate"/><xsl:text>&#160;</xsl:text><xsl:value-of select="substring(n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchTime,1,5)"/></td></tr>
+          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Sevk Tarihi:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchDate"/><xsl:text>&#160;</xsl:text><xsl:value-of select="substring((n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchTime)[1],1,5)"/></td></tr>
           </xsl:if>
           <xsl:if test="n1:DespatchAdvice/cac:OrderReference/cbc:ID">
-          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Sipariş No:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="n1:DespatchAdvice/cac:OrderReference/cbc:ID"/></td></tr>
+          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Sipariş No:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="(n1:DespatchAdvice/cac:OrderReference/cbc:ID)[1]"/></td></tr>
           </xsl:if>
           <xsl:if test="n1:DespatchAdvice/cac:OrderReference/cbc:IssueDate">
-          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Sipariş Tarihi:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="n1:DespatchAdvice/cac:OrderReference/cbc:IssueDate"/></td></tr>
+          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Sipariş Tarihi:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="(n1:DespatchAdvice/cac:OrderReference/cbc:IssueDate)[1]"/></td></tr>
           </xsl:if>
-          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Fatura No:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="//cac:AdditionalDocumentReference/cbc:ID"/></td></tr>
+          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Fatura No:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="(//cac:AdditionalDocumentReference/cbc:ID)[1]"/></td></tr>
         </tbody>
       </table>
     </div></div>
@@ -150,15 +150,15 @@
         <table style="width:100%;border-collapse:collapse;font-size:11px">
           <tr>
             <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Ünvan</td>
-            <td style="padding:1px 4px"><xsl:value-of select="cac:PartyName/cbc:Name"/></td>
+            <td style="padding:1px 4px"><xsl:value-of select="(cac:PartyName/cbc:Name)[1]"/></td>
           </tr>
           <tr>
             <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">VKN/TCKN</td>
-            <td style="padding:1px 4px"><xsl:value-of select="cac:PartyIdentification/cbc:ID"/></td>
+            <td style="padding:1px 4px"><xsl:value-of select="(cac:PartyIdentification/cbc:ID)[1]"/></td>
           </tr>
           <tr>
             <td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Adres</td>
-            <td style="padding:1px 4px"><xsl:value-of select="cac:PostalAddress/cbc:StreetName"/></td>
+            <td style="padding:1px 4px"><xsl:value-of select="(cac:PostalAddress/cbc:StreetName)[1]"/></td>
           </tr>
         </table>
       </xsl:for-each>
@@ -171,7 +171,7 @@
       <table style="width:100%;border-collapse:collapse;">
         <tbody>
           <xsl:for-each select="//cac:Shipment/cac:Delivery/cac:CarrierParty">
-            <tr><td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Taşıyıcı Firma:</td><td style="padding:1px 4px"><xsl:value-of select="cac:PartyName/cbc:Name"/><xsl:text> (VKN: </xsl:text><xsl:value-of select="cac:PartyIdentification/cbc:ID"/><xsl:text>)</xsl:text></td></tr>
+            <tr><td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Taşıyıcı Firma:</td><td style="padding:1px 4px"><xsl:value-of select="cac:PartyName/cbc:Name"/><xsl:text> (VKN: </xsl:text><xsl:value-of select="(cac:PartyIdentification/cbc:ID)[1]"/><xsl:text>)</xsl:text></td></tr>
           </xsl:for-each>
           <xsl:for-each select="//cac:ShipmentStage/cac:TransportMeans/cac:RoadTransport/cbc:LicensePlateID">
             <tr><td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Araç Plaka No:</td><td style="padding:1px 4px"><xsl:value-of select="."/></td></tr>
@@ -185,7 +185,7 @@
           <xsl:for-each select="//cac:DespatchSupplierParty/cac:DespatchContact/cbc:Name">
             <tr><td style="font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top">Teslim Eden:</td><td style="padding:1px 4px"><xsl:value-of select="."/></td></tr>
           </xsl:for-each>
-          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Teslimat Şehri:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="//cac:DeliveryAddress/cbc:CityName"/></td></tr>
+          <tr style="height:13px;"><td style="width:50%;"><span style="font-weight:bold;"><xsl:text>Teslimat Şehri:</xsl:text></span></td><td style="width:50%;"><xsl:value-of select="(//cac:DeliveryAddress/cbc:CityName)[1]"/></td></tr>
         </tbody>
       </table>
     </div></div>
@@ -214,9 +214,9 @@
         </xsl:variable>
         <tr style="background:{$rowBg}">
           <td style="border:1px solid #555555;padding:2px 4px;text-align:center"><xsl:value-of select="position()"/></td>
-          <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="cac:Item/cac:SellersItemIdentification/cbc:ID"/></td>
-          <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="cac:Item/cbc:Name"/></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number(cbc:DeliveredQuantity) = number(cbc:DeliveredQuantity)"><xsl:value-of select="format-number(number(cbc:DeliveredQuantity),'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
+          <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cac:Item/cac:SellersItemIdentification/cbc:ID)[1]"/></td>
+          <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cac:Item/cbc:Name)[1]"/></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:DeliveredQuantity)[1]) = number((cbc:DeliveredQuantity)[1])"><xsl:value-of select="format-number(number((cbc:DeliveredQuantity)[1]),'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='C62'">Adet</xsl:when>
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='BX'">Kutu</xsl:when>
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='TNE'">ton</xsl:when>
@@ -317,10 +317,10 @@
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='OMV'">OTV Maktu Vergi</xsl:when>
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='OTB'">OTV Birim Fiyatı</xsl:when>
   <xsl:when test="cbc:DeliveredQuantity/@unitCode='D63'">Cilt</xsl:when>
-  <xsl:otherwise><xsl:value-of select="cbc:DeliveredQuantity/@unitCode"/></xsl:otherwise>
+  <xsl:otherwise><xsl:value-of select="(cbc:DeliveredQuantity/@unitCode)[1]"/></xsl:otherwise>
 </xsl:choose></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount) = number(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)"><xsl:value-of select="format-number(number(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID='TRY' or cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID"/></xsl:otherwise></xsl:choose></xsl:if></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number(cbc:OutstandingQuantity) = number(cbc:OutstandingQuantity)"><xsl:value-of select="format-number(number(cbc:OutstandingQuantity),'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)[1]) = number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)[1])"><xsl:value-of select="format-number(number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID='TRY' or cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cac:Price/cbc:PriceAmount/@currencyID)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cbc:OutstandingQuantity)[1]) = number((cbc:OutstandingQuantity)[1])"><xsl:value-of select="format-number(number((cbc:OutstandingQuantity)[1]),'#.##0,###','tr')"/></xsl:if>&#160;<xsl:choose>
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='C62'">Adet</xsl:when>
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='BX'">Kutu</xsl:when>
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='TNE'">ton</xsl:when>
@@ -421,10 +421,10 @@
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='OMV'">OTV Maktu Vergi</xsl:when>
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='OTB'">OTV Birim Fiyatı</xsl:when>
   <xsl:when test="cbc:OutstandingQuantity/@unitCode='D63'">Cilt</xsl:when>
-  <xsl:otherwise><xsl:value-of select="cbc:OutstandingQuantity/@unitCode"/></xsl:otherwise>
+  <xsl:otherwise><xsl:value-of select="(cbc:OutstandingQuantity/@unitCode)[1]"/></xsl:otherwise>
 </xsl:choose></td>
-          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount) = number(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)"><xsl:value-of select="format-number(number(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID='TRY' or cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID"/></xsl:otherwise></xsl:choose></xsl:if></td>
-          <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="cbc:Note"/></td>
+          <td style="border:1px solid #555555;padding:2px 4px;text-align:right;"><xsl:if test="number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)[1]) = number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)[1])"><xsl:value-of select="format-number(number((cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID='TRY' or cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(cac:Shipment/cac:GoodsItem/cac:InvoiceLine/cbc:LineExtensionAmount/@currencyID)[1]"/></xsl:otherwise></xsl:choose></xsl:if></td>
+          <td style="border:1px solid #555555;padding:2px 4px;"><xsl:value-of select="(cbc:Note)[1]"/></td>
         </tr>
       </xsl:for-each>
       </tbody>
@@ -442,7 +442,7 @@
     </div></div>
         <div style="margin-top:4.0mm;margin-left:0.0mm;width:40.0mm;height:40.0mm;overflow:hidden;">    <div class="ettn" style="">
       <div id="qrvalue" style="visibility: hidden; height: 20px;width: 20px; ; display:none">
-        {"vkntckn":"<xsl:value-of select="n1:DespatchAdvice/cac:DespatchSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN']"/>","avkntckn":"<xsl:value-of select="n1:DespatchAdvice/cac:DeliveryCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN']"/>","senaryo":"<xsl:value-of select="n1:DespatchAdvice/cbc:ProfileID"/>","tip":"<xsl:value-of select="n1:DespatchAdvice/cbc:DespatchAdviceTypeCode"/>","tarih":"<xsl:value-of select="n1:DespatchAdvice/cbc:IssueDate"/>","no":"<xsl:value-of select="n1:DespatchAdvice/cbc:ID"/>","ettn":"<xsl:value-of select="n1:DespatchAdvice/cbc:UUID"/>","sevktarihi":"<xsl:value-of select="n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchDate"/>","sevkzamani":"<xsl:value-of select="n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchTime"/>","tasiyicivkn":"<xsl:value-of select="n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:CarrierParty/cac:PartyIdentification/cbc:ID[@schemeID='VKN']"/>","plaka":"<xsl:value-of select="n1:DespatchAdvice/cac:Shipment/cac:ShipmentStage/cac:TransportMeans/cac:RoadTransport/cbc:LicensePlateID[@schemeID='PLAKA']"/>"}
+        {"vkntckn":"<xsl:value-of select="(n1:DespatchAdvice/cac:DespatchSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN'])[1]"/>","avkntckn":"<xsl:value-of select="(n1:DespatchAdvice/cac:DeliveryCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN'])[1]"/>","senaryo":"<xsl:value-of select="(n1:DespatchAdvice/cbc:ProfileID)[1]"/>","tip":"<xsl:value-of select="(n1:DespatchAdvice/cbc:DespatchAdviceTypeCode)[1]"/>","tarih":"<xsl:value-of select="(n1:DespatchAdvice/cbc:IssueDate)[1]"/>","no":"<xsl:value-of select="(n1:DespatchAdvice/cbc:ID)[1]"/>","ettn":"<xsl:value-of select="(n1:DespatchAdvice/cbc:UUID)[1]"/>","sevktarihi":"<xsl:value-of select="(n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchDate)[1]"/>","sevkzamani":"<xsl:value-of select="(n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:Despatch/cbc:ActualDespatchTime)[1]"/>","tasiyicivkn":"<xsl:value-of select="(n1:DespatchAdvice/cac:Shipment/cac:Delivery/cac:CarrierParty/cac:PartyIdentification/cbc:ID[@schemeID='VKN'])[1]"/>","plaka":"<xsl:value-of select="(n1:DespatchAdvice/cac:Shipment/cac:ShipmentStage/cac:TransportMeans/cac:RoadTransport/cbc:LicensePlateID[@schemeID='PLAKA'])[1]"/>"}
       </div>
       <div style="display:flex; justify-content:flex-start;">
         <div id="qrcd09gibkarekod" style="line-height:0; flex-shrink:0;"></div>
@@ -463,7 +463,7 @@
         <div style="margin-top:0.0mm;margin-left:0.0mm;width:90.0mm;">    <table class="tot" style="font-size:11px">
       <tr class="hl bd">
         <td class="lbl">Toplam Tutar</td>
-        <td class="val"><xsl:value-of select="format-number(number(//cac:Shipment/cac:GoodsItem/cbc:ValueAmount),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID='TRY' or //cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID"/></xsl:otherwise></xsl:choose></td>
+        <td class="val"><xsl:value-of select="format-number(number((//cac:Shipment/cac:GoodsItem/cbc:ValueAmount)[1]),'#.##0,00','tr')"/><xsl:text> </xsl:text><xsl:choose><xsl:when test="//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID='TRY' or //cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID='TRL'">TL</xsl:when><xsl:otherwise><xsl:value-of select="(//cac:Shipment/cac:GoodsItem/cbc:ValueAmount/@currencyID)[1]"/></xsl:otherwise></xsl:choose></td>
       </tr>
     </table>
 </div>

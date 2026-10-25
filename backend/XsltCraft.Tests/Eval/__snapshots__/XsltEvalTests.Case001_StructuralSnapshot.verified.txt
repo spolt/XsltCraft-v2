@@ -8,17 +8,17 @@ exclude-result-prefixes="n1 cbc cac ext">
 <xsl:output method="html" encoding="UTF-8" indent="yes"/>
 <xsl:decimal-format name="tr" decimal-separator="," grouping-separator="."/>
 <xsl:template match="/">
-<td><xsl:value-of select="//cbc:ID"/></td>
-<td><xsl:value-of select="//cbc:IssueDate"/></td>
-<div style="width:100%;">    <p><xsl:choose><xsl:when test="//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name"><xsl:value-of select="//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name"/></xsl:when><xsl:otherwise>—</xsl:otherwise></xsl:choose></p></div>
+<td><xsl:value-of select="(//cbc:ID)[1]"/></td>
+<td><xsl:value-of select="(//cbc:IssueDate)[1]"/></td>
+<div style="width:100%;">    <p><xsl:choose><xsl:when test="//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name"><xsl:value-of select="(//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name)[1]"/></xsl:when><xsl:otherwise>—</xsl:otherwise></xsl:choose></p></div>
 <xsl:for-each select="//cac:InvoiceLine">
 <xsl:variable name="pos" select="position()"/>
 <tr><xsl:if test="$pos mod 2 = 0"><xsl:attribute name="style">background:#F9F9F9</xsl:attribute></xsl:if>
-<td><xsl:value-of select="cbc:ID"/></td>
-<td><xsl:value-of select="cac:Item/cbc:Name"/></td>
-<td><xsl:value-of select="cbc:InvoicedQuantity"/></td>
-<td><xsl:value-of select="cbc:LineExtensionAmount"/></td>
+<td><xsl:value-of select="(cbc:ID)[1]"/></td>
+<td><xsl:value-of select="(cac:Item/cbc:Name)[1]"/></td>
+<td><xsl:value-of select="(cbc:InvoicedQuantity)[1]"/></td>
+<td><xsl:value-of select="(cbc:LineExtensionAmount)[1]"/></td>
 </xsl:for-each>
-<td class="val"><xsl:value-of select="//cac:LegalMonetaryTotal/cbc:PayableAmount"/></td>
+<td class="val"><xsl:value-of select="(//cac:LegalMonetaryTotal/cbc:PayableAmount)[1]"/></td>
 </xsl:template>
 </xsl:stylesheet>
