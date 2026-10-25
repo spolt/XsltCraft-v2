@@ -80,8 +80,10 @@ public class AssetsController(AppDbContext db, IStorageService storage) : Contro
         });
     }
 
-    // GET /api/assets/{id}/serve — XSLT içi <img> tag'larından erişilebilmesi için auth zorunlu değil.
-    // Ancak kimlik doğrulanmış kullanıcı başkasının asset'ine erişemez.
+    // GET /api/assets/{id}/serve — anonim erişim BİLİNÇLİ: editör küçük resimleri (<img>, bearer'sız) ve 2.0 öncesi
+    // indirilmiş XSLT'ler (asset'i URL ile referanslar) buna bağlı. Asset GUID'i erişim anahtarıdır (tahmin edilemez;
+    // URL'yi bilen herkes okuyabilir). Oturumlu başka kullanıcıya dönen 403 GÖSTERMELİKTİR (aynı istek oturumsuz
+    // yapılınca 200 döner) — gerçek erişim denetimi değildir; davranış uyumluluk için korunur (ADR-008 kalan riskler).
     [HttpGet("{id:guid}/serve")]
     [AllowAnonymous]
     public async Task<IActionResult> Serve(Guid id)

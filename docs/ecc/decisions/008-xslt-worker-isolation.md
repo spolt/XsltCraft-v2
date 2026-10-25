@@ -144,7 +144,9 @@ Grid ve Theme rotaları `IXsltInProcessHost` → `InProcessXsltHost` (`InProcess
 | Çıktı yazmayan süper-doğrusal XPath (.NET) süreç içinde iptal edilemez → kaçak (§8) | Kabul; bozulmuş mod. Kalan sınıf: `string-length(/)` gibi satır başı alt ağaç dize değeri |
 | `ForwardedHeaders` yok: Api nginx arkasına alınırsa IP bazlı limitler (`theme-preview` anonim, `auth-sensitive`, `auth-register`) tek kovaya düşer | Açık |
 | IKVM dönüşüm önbelleği (`/tmp/ikvm/cache`) hash'siz | Release'te önbelleksiz build ya da doğrulama |
-| `PreviewTheme`/tema hattı süreç içi .NET; `/api/xpath/evaluate` anonim süreç içi `XPathEvaluator` | T-izi; ayrı iş |
+| `PreviewTheme`/tema hattı süreç içi .NET | T-izi; ayrı iş |
+| `/api/xpath/evaluate` süreç içi `XPathEvaluator` (G4: `[Authorize]` + `xpath-evaluate` 120/dk/kullanıcı; güvenli okuyucu + grid girdi sınırları; `XPathPortability` maliyet kapısı TOO_LONG/TOO_COMPLEX → 400; ayrı guard 2 slot / 5 sn — kaçak slotu tutar) | Kabul; kalan sınıf §8 ile aynı (kapının geçirdiği süper-doğrusal ifade en çok 2 thread) |
+| `/api/assets/{id}/serve` anonim: asset GUID'i erişim anahtarıdır; oturumlu başka kullanıcıya 403 göstermeliktir (oturumsuz aynı istek 200) | Kabul (editör küçük resmi + 2.0 öncesi indirilmiş XSLT'ler bağımlı) |
 | Ağ izolasyonu yok | seccomp/`unshare` sonraki adım |
 
 ## Ölçümler

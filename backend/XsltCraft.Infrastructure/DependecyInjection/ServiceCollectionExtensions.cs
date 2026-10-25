@@ -75,7 +75,8 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IXsltGeneratorService, XsltGeneratorService>();
         services.AddSingleton<IUblTrBusinessRuleService, UblTrBusinessRuleService>();
-        services.AddSingleton<IXPathEvaluator, XPathEvaluator>();
+        // Kendi guard'ı (grid slotlarından ayrı); fabrika: DI, grid XsltExecutionGuard'lı ctor'u seçmesin.
+        services.AddSingleton<IXPathEvaluator>(_ => new XPathEvaluator());
         services.AddSingleton<IFixedNoteInjector, FixedNoteInjector>();
         services.AddSingleton<IXsltHtmlRenderer, XsltHtmlRenderer>();
 

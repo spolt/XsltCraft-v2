@@ -18,6 +18,9 @@ public static class RateLimitPolicies
     /// <summary>PreviewTheme: oturum açmışsa 30 istek/dk/kullanıcı, anonimse 30 istek/dk/IP (G3).</summary>
     public const string ThemePreview = "theme-preview";
 
+    /// <summary>XPath konsolu (<c>/api/xpath/evaluate</c>): 120 istek/dk/kullanıcı (G4).</summary>
+    public const string XPathEvaluate = "xpath-evaluate";
+
     private const int PermitPerMinute = 120;
     private const int ThemePreviewPerMinute = 30;
 
@@ -26,6 +29,7 @@ public static class RateLimitPolicies
     {
         options.AddPolicy(XsltPreview, PerUserPerMinute);
         options.AddPolicy(XsltValidate, PerUserPerMinute);
+        options.AddPolicy(XPathEvaluate, PerUserPerMinute);
         options.AddPolicy(ThemePreview, httpContext => PerUserOrIp(httpContext, ThemePreviewPerMinute, TimeSpan.FromMinutes(1)));
         return options;
     }

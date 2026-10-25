@@ -331,6 +331,8 @@ public class PreviewController : ControllerBase
     /// Standart indiremez (402), Pro günde 3 (4.'te 429), Editör/Admin sınırsız.
     /// </summary>
     [HttpPost("xslt"), Authorize]
+    [EnableRateLimiting(RateLimitPolicies.XsltPreview)]
+    [RequestSizeLimit(MaxGridBodyBytes)]
     public async Task<IActionResult> GenerateXslt([FromBody] PreviewRequest request)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);

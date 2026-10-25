@@ -32,9 +32,9 @@ public class XPathEvalTests
         """;
 
     [Fact]
-    public void XPathCase001_InvoiceNumber_ResolvesSingleNode()
+    public async Task XPathCase001_InvoiceNumber_ResolvesSingleNode()
     {
-        var r = _sut.Evaluate("/n1:Invoice/cbc:ID", UblInvoice);
+        var r = await _sut.EvaluateAsync("/n1:Invoice/cbc:ID", UblInvoice, Guid.Empty);
 
         Assert.Null(r.Error);
         Assert.Equal("node-set", r.Kind);
@@ -44,9 +44,9 @@ public class XPathEvalTests
     }
 
     [Fact]
-    public void XPathCase001_BoundBinding_ResolvesSupplierName()
+    public async Task XPathCase001_BoundBinding_ResolvesSupplierName()
     {
-        var r = _sut.Evaluate("//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name", UblInvoice);
+        var r = await _sut.EvaluateAsync("//cac:AccountingSupplierParty/cac:Party/cac:PartyName/cbc:Name", UblInvoice, Guid.Empty);
 
         Assert.Null(r.Error);
         Assert.Equal("node-set", r.Kind);
@@ -54,9 +54,9 @@ public class XPathEvalTests
     }
 
     [Fact]
-    public void XPathCase001_CountFunction_ReturnsAtomic()
+    public async Task XPathCase001_CountFunction_ReturnsAtomic()
     {
-        var r = _sut.Evaluate("count(//cac:InvoiceLine)", UblInvoice);
+        var r = await _sut.EvaluateAsync("count(//cac:InvoiceLine)", UblInvoice, Guid.Empty);
 
         Assert.Null(r.Error);
         Assert.Equal("atomic", r.Kind);
@@ -64,9 +64,9 @@ public class XPathEvalTests
     }
 
     [Fact]
-    public void XPathCase001_NoMatch_ReturnsEmpty()
+    public async Task XPathCase001_NoMatch_ReturnsEmpty()
     {
-        var r = _sut.Evaluate("/n1:Invoice/cbc:DoesNotExist", UblInvoice);
+        var r = await _sut.EvaluateAsync("/n1:Invoice/cbc:DoesNotExist", UblInvoice, Guid.Empty);
 
         Assert.Null(r.Error);
         Assert.Equal("empty", r.Kind);
@@ -74,10 +74,10 @@ public class XPathEvalTests
     }
 
     [Fact]
-    public void XPathCase001_InvalidExpression_ReturnsErrorNotThrow()
+    public async Task XPathCase001_InvalidExpression_ReturnsErrorNotThrow()
     {
         // Geçersiz XPath exception fırlatmamalı — kullanıcıya güvenli "error" sonucu dönmeli.
-        var r = _sut.Evaluate("//cbc:[unclosed", UblInvoice);
+        var r = await _sut.EvaluateAsync("//cbc:[unclosed", UblInvoice, Guid.Empty);
 
         Assert.Equal("error", r.Kind);
         Assert.NotNull(r.Error);
