@@ -44,10 +44,10 @@ public interface IThemeAssetComposer
 /// <para><b>Çalışma betiği (ThemeAssetRuntime.js, v2):</b> veri <c>script[data-xc-overrides-data]</c> içindeki JSON'dur.
 /// Hedef <c>data-xc-slot</c> yuvası; bulunamazsa yedek id'ler (eski temalar). Yuva temadaki bir görselse
 /// (<c>data-xc-placeholder</c>) kullanıcının görseli onun yerini alır (kutu korunur, görsel oranı bozulmadan sığar);
-/// aynı türden görsel başka bir yere yerleştiyse temadakiler gizlenir (yerleri korunur), hiçbir yere yerleşemediyse
+/// aynı türden görsel başka bir yere yerleştiyse temadakiler çıktıdan çıkarılır (<c>display:none</c>, yer tutmaz), hiçbir yere yerleşemediyse
 /// temadaki görsel kalır. Yedek id bir <c>img</c> ise (analiz edilmemiş eski tema) içine eklenmez, yerini alır; ikinci
 /// görsel ardına eklenir. <c>data.hide</c>: kullanıcının görsel eklemeden kaldırdığı türler — yalnız
-/// <c>data-xc-removable</c> taşıyanlar gizlenir.</para>
+/// <c>data-xc-removable</c> taşıyanlar çıktıdan çıkarılır (<c>display:none</c>).</para>
 /// <para>Betik XSLT'ye olduğu gibi gömülür: <c>&lt; &gt; &amp;</c> karakterleri ve açıklama yorumu içermez
 /// (sahip kuralı — üretilen çıktıda yorum yok; açıklamalar burada tutulur).</para>
 /// </remarks>

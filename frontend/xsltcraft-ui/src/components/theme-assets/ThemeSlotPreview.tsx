@@ -15,8 +15,9 @@ const EDIT_CSS =
   'html.xc-edit [data-xc-slot]{outline:2px dashed #60a5fa;outline-offset:-2px;border-radius:6px}' +
   'html.xc-edit [data-xc-slot]:not(img){display:block;min-height:44px;min-width:110px}' +
   'html.xc-edit [data-xc-slot]:not(img):not(:has([data-xc-asset])){background:rgba(219,234,254,.55)}' +
-  // Temadaki görsel yuvası: yerini kullanıcının görseli aldıysa gizlenir; düzenlerken soluk görünsün ki geri bırakılabilsin.
-  'html.xc-edit img[data-xc-hidden]{visibility:visible!important;opacity:.25}' +
+  // Temadaki görsel kaldırıldıysa/yerini kullanıcının görseli aldıysa çıktıdan tamamen çıkar (display:none);
+  // düzenlerken soluk görünsün ki geri bırakılabilsin.
+  'html.xc-edit img[data-xc-hidden]{display:inline-block!important;opacity:.25}' +
   // Kutu, görselin nihai yerleşimiyle aynı akışta dursun (runtime aynı kuralları sarmalayıcıya uygular).
   'html.xc-edit [data-xc-slot][data-xc-layout="block-clear"]{clear:both}' +
   'html.xc-edit [data-xc-slot][data-xc-layout="float-left"]{float:left;margin:0 8px 4px 0}' +

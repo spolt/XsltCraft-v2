@@ -106,7 +106,7 @@
       if (removed[k] === true) { if (p.hasAttribute('data-xc-removable')) { drop = true; } }
       if (drop) {
         if (replaced.indexOf(p) === -1) {
-          p.style.visibility = 'hidden';
+          p.style.display = 'none';
           p.setAttribute('data-xc-hidden', '1');
         }
       }
