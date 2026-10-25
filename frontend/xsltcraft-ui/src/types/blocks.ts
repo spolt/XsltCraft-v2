@@ -415,7 +415,7 @@ export const DEFAULT_INVOICE_TOTALS_FIELDS: InvoiceTotalsField[] = [
   { key: 'allowance',          label: 'Toplam İskonto',                xpath: '//cac:LegalMonetaryTotal/cbc:AllowanceTotalAmount',  visible: true,  highlight: false, bold: false, order: 1 },
   { key: 'taxExclusive',       label: 'KDV Matrahı (toplam)',           xpath: '//cac:LegalMonetaryTotal/cbc:TaxExclusiveAmount',    visible: false, highlight: false, bold: false, order: 2 },
   { key: 'taxBaseGroups',      label: 'KDV/ÖTV Matrahı (orana göre)', xpath: '',                                                   visible: false, highlight: false, bold: false, order: 3 },
-  { key: 'taxAmount',          label: 'Hesaplanan KDV (toplam)',        xpath: '//cac:TaxTotal/cbc:TaxAmount',                       visible: false, highlight: false, bold: false, order: 4 },
+  { key: 'taxAmount',          label: 'Hesaplanan KDV (toplam)',        xpath: '/*/cac:TaxTotal/cbc:TaxAmount',                      visible: false, highlight: false, bold: false, order: 4 },
   { key: 'taxSubtotalGroups',  label: 'Hesaplanan KDV (orana göre)',   xpath: '',                                                   visible: true,  highlight: false, bold: false, order: 5 },
   { key: 'taxInclusive',       label: 'Vergiler Dahil Toplam Tutar',   xpath: '//cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount',    visible: true,  highlight: true,  bold: true,  order: 6 },
   { key: 'payable',            label: 'Ödenecek Tutar',                xpath: '//cac:LegalMonetaryTotal/cbc:PayableAmount',         visible: true,  highlight: true,  bold: true,  order: 7 },
