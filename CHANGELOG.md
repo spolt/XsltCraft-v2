@@ -82,6 +82,7 @@ Kararlar: [ADR 007](./docs/ecc/decisions/007-xslt-engine-routing.md) (motor yön
 - **Kullanıcı başı eşzamanlılık kapısı ve kötüye kullanım kesicisi**: bir kullanıcı aynı anda tek izole render çalıştırır (doğrulama hariç); iptal edilemeyen kaçak işler kesiciye takılır.
 - **Hız sınırı kullanıcı bazlı** (önizleme/doğrulama uçları).
 - Yanıtlarda `engine` (çalışan motor), `cacheHit` ve `warnings` alanları.
+- **Tema hattında XSLT 2.0** (`Xslt:Engine:Theme`, varsayılan `Auto`): admin panelinden GİB `general.xslt` gibi 2.0 yapısı (`exists()` …) kullanan temalar yüklenebilir; yükleme, yuva analizi, compose ve galeri önizlemesi bu temaları Saxon'la izole worker'da çalıştırır. `version="2.0"` bildirip yalnız 1.0 kullanan temalar .NET'te kalır (çıktı bit-aynı); 3.0 temalar anlaşılır Türkçe mesajla reddedilir.
 
 #### Changed
 - Önizleme/doğrulama çağrıları kimlik doğrulamalı API istemcisinden yapılıyor; hatalar ortak adaptörle (`xsltErrors`) gösteriliyor, motor kullanılamadığında backend mesajı görünüyor.

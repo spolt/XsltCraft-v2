@@ -30,10 +30,10 @@ Saxon-HE **12.10** (`net.sf.saxon:Saxon-HE`, MPL-2.0) — `IKVM.Maven.Sdk 1.12.2
 | **Raw** | `POST /api/preview/raw`, `POST /api/preview/validate-xslt` (Validate işlemi) | Worker havuzu — 1.0 dahil | `Xslt:Engine:Raw` (`Auto`) |
 | **UserTemplate** | `POST /api/preview/user-template/{id}`; sahibin kendi saklı XSLT'li (ücretsiz tema olmayan) şablonu için `PreviewTheme` | Worker | `Xslt:Engine:Grid` (`DotNet`) |
 | **Grid** | `POST /api/preview` (generator çıktısı) | Api süreci içi, korumalı (ADR 008 §7); script bloklu ağaç (`IsUserAuthoredGrid`) → worker | `Xslt:Engine:Grid` (`DotNet`) |
-| **Theme** | `POST /api/preview/theme/{id}` (yayınlanmış hazır tema) | Api süreci içi, grid sınırları | Sabit `DotNet` |
+| **Theme** | `POST /api/preview/theme/{id}` (yayınlanmış hazır tema), `POST /api/preview/compose`, admin tema yükleme/analiz (`ThemeUploadProcessor`, `ThemeSlotAnalyzer`) | .NET → Api süreci içi; Saxon → worker (T-izi). Grid sınırları (derleme denetimi dahil) | `Xslt:Engine:Theme` (`Auto`: `version ≥ 2.0` **ve** 2.0 yapısı — `Xslt2FeatureDetector` — → Saxon; `version="2.0"` bildirip 1.0 kullanan GİB temaları .NET, çıktı bit-aynı; `DotNet` acil anahtar) |
 
 - Kullanıcının yazdığı XSLT (Raw, Validate, UserTemplate) **hiçbir zaman** Api sürecinde çalışmaz. İstisna: `XsltWorker:Enabled=false` (yerel geliştirme) → 1.0 süreç içi .NET, 2.0 ve script'li grid → 503 `EngineUnavailable` (`code: WorkerDisabled`).
-- Tema yükleme/analiz/compose hattı (`ThemeUploadProcessor`, `ThemeSlotAnalyzer`, `ThemeAssetComposer`) `SecureXslt`/`IXsltHtmlRenderer` ile .NET'te kalır — **T-izi (tema izolasyonu)** ayrı karar.
+- Tema hattının tüm render/derleme noktaları (yükleme, yuva analizi, compose, galeri) `XsltRoute.Theme` ile servisten geçer (**T-izi**); `IXsltHtmlRenderer` üretim DI'ından çıktı (yalnız test referansı). Yuva analizindeki işaretsiz ≡ işaretli değişmezi iki render'ı aynı motorla karşılaştırır (motorlar farklıysa analiz başarısız).
 
 ### 3. Sürüm algılama ve modlar
 `XsltVersionSniffer` kök `xsl:stylesheet|transform/@version` veya LRE `@xsl:version`'ı okur (`null` = okunamaz); `> 2.0` → `Unsupported` (`VersionAbove20`, tarayıcıdan bağımsız ikinci savunma). `XsltEngineSelector`:
@@ -107,7 +107,7 @@ Security: `xsl:` eleman izin listesi; `import/include/import-schema/use-package/
 - **+** gib-general ve diğer 2.0 stylesheet'ler ham editörde Saxon ile doğru render edilir (uçtan uca test: `PreviewEndpointTests`, `engine=Saxon`); 1.0 stylesheet'ler bit-aynı kalır. AI'ın ürettiği 2.0 XSLT `validate-xslt`'ten geçer.
 - **+** Generator G1–G5 çıktısı değiştirdi; `.verified` XSLT golden'ları bilinçli güncellendi, HTML snapshot'ları değişmedi.
 - **−** 2.0.0 kırıcı: anonim önizleme/doğrulama kalktı (eski bundle 401 alır → nginx `index.html` `no-cache`), hata sözleşmesi değişti, 3.0 yapıları `Unsupported`, tekilleştirme deseni gibi pahalı XPath'ler yer tutucuya düşer.
-- **−** İki motor, iki yürütme yeri: parite testleri bloke eden kapıdır; Theme rotası T-izi'ne kadar 1.0'da kalır (gib-general tema olarak hâlâ reddedilir).
+- **−** İki motor, iki yürütme yeri: parite testleri bloke eden kapıdır; tema hattında motor seçimi statik yapı algısına dayanır (yalnız hiç çalışmayan bir dalda 2.0 fonksiyonu olan tema Saxon'a geçer).
 
 ## Doğrulama
 
@@ -116,6 +116,7 @@ Security: `xsl:` eleman izin listesi; `import/include/import-schema/use-package/
 | Sniff / seçim / kontrat | `XsltVersionSnifferTests`, `XsltEngineSelectorTests`, `DotNetXsltEngineTests`, `XsltDiagnosticContractTests` |
 | Rotalar | `XsltExecutionServiceTests` (Raw/Validate/UserTemplate/Grid/Theme, boyut, `WorkerDisabled`, kapı) |
 | Uçlar | `XsltWorker.Tests/Api/{PreviewEndpointTests, PreviewThemeEndpointTests, TemplateAssetEmbeddingTests}` (401, asset IDOR, Kind→HTTP, gib-general) |
+| Tema hattı (T-izi) | `XsltWorker.Tests/Themes/ThemeSaxonPipelineTests` (gib-general yükleme + yuvalar + compose + galeri Saxon'da; 1.0 temalar .NET bit-aynı; 3.0 red), `Application.Tests/ThemeSlots/ThemeEngineSelectionTests` |
 | Grid paritesi | `GridV2GoldenTests`, `GridEngineParityTests` + `UserTemplateWorkerParityTests` (bloke eden), `XPathPortabilityTests` (`DeepParens_RejectedBeforeCompile` dahil) |
 | XsltSafety | `XsltSafetyTests`, `Safety/{XsltSafetyBypassTests, XPathTokenizerTests}`, `XsltSafetyFixtureTests` (Store'da 0 Security), `CorpusDryRunTests` (`Category=Corpus`) |
 | Eval | case008+ ve motor parite eval'i — T4.1 (non-blocking). Planlanan `e2e/xslt-engine.spec.ts` yazılmadı |
