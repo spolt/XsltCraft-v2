@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Plus, Pencil, Trash2, Save, X, AlertCircle, Library } from 'lucide-react'
+import { Loader2, Pencil, Plus, Save, Trash2 } from 'lucide-react'
 import {
   listAdminSnippets,
   createAdminSnippet,
@@ -9,77 +8,39 @@ import {
   type UserSnippet,
   type CreateSnippetRequest,
 } from '../../services/snippetService'
+import PageHeader from '../../components/ui/PageHeader'
+import Card from '../../components/ui/Card'
+import type { FnColor } from '../../theme/uiThemes'
+import {
+  AdminPage, Banner, BTN_DANGER, BTN_DANGER_SOFT, BTN_ICON, BTN_ICON_DANGER, BTN_PRIMARY, BTN_SECONDARY, INPUT, LABEL,
+  Modal, Pill, SectionHeader, SegmentGroup, TABLE, TD, TH,
+} from '../../components/admin/adminUi'
 
-const SCOPE_LABELS: Record<string, string> = {
-  xslt: 'XSLT',
-  xpath: 'XPath',
-  html: 'HTML',
-}
+type Scope = 'xslt' | 'xpath' | 'html'
 
-const SCOPE_COLORS: Record<string, string> = {
-  xslt: 'bg-blue-100 text-blue-700',
-  xpath: 'bg-purple-100 text-purple-700',
-  html: 'bg-green-100 text-green-700',
-}
+const SCOPE_LABELS: Record<string, string> = { xslt: 'XSLT', xpath: 'XPath', html: 'HTML' }
+const SCOPE_TONES: Record<string, FnColor> = { xslt: 'purple', xpath: 'blue', html: 'orange' }
+const SCOPE_OPTIONS = [
+  { value: 'xslt', label: 'XSLT' },
+  { value: 'xpath', label: 'XPath' },
+  { value: 'html', label: 'HTML' },
+] as const
 
 interface FormState {
   prefix: string
   body: string
   description: string
-  scope: 'xslt' | 'xpath' | 'html'
+  scope: Scope
 }
 
 const EMPTY_FORM: FormState = { prefix: '', body: '', description: '', scope: 'xslt' }
 
-// ---- Silme onay modal'ı ----
-function DeleteModal({
-  snippet,
-  onConfirm,
-  onCancel,
-  loading,
-}: {
-  snippet: UserSnippet
-  onConfirm: () => void
-  onCancel: () => void
-  loading: boolean
-}) {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
-        <h3 className="text-base font-semibold text-gray-900 mb-2">Snippet'i Sil</h3>
-        <p className="text-sm text-gray-600 mb-6">
-          <span className="font-mono font-medium text-gray-900">{snippet.prefix}</span> snippet'i
-          kütüphaneden kalıcı olarak silinecek.
-        </p>
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition"
-          >
-            İptal
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={loading}
-            className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition"
-          >
-            {loading ? 'Siliniyor…' : 'Evet, Sil'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ---- Snippet form (oluştur / düzenle) ----
-function SnippetForm({
-  initial,
-  onSave,
-  onCancel,
-}: {
+function SnippetForm({ initial, onSave, onCancel, onDelete }: {
   initial?: UserSnippet
   onSave: (s: UserSnippet) => void
   onCancel: () => void
+  onDelete?: () => void
 }) {
   const [form, setForm] = useState<FormState>(
     initial
@@ -113,87 +74,65 @@ function SnippetForm({
   }
 
   return (
-    <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm mb-8">
-      <h2 className="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
-        <Library size={16} className="text-indigo-600" />
-        {initial ? 'Snippet Düzenle' : 'Yeni Kütüphane Snippet\'i'}
+    <Card as="section" padding="none" aria-labelledby="snippet-form-title" className="flex min-w-0 flex-[1_1_340px] flex-col gap-3 p-[18px] lg:sticky lg:top-4">
+      <h2 id="snippet-form-title" className="m-0 text-[15px] font-semibold text-tx">
+        {initial ? 'Snippet düzenle' : 'Yeni kütüphane snippet\'i'}
       </h2>
 
-      {error && (
-        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
-          <AlertCircle size={14} />
-          {error}
-        </div>
-      )}
+      {error && <Banner>{error}</Banner>}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-gray-600">Prefix (tetikleyici kelime)</label>
-          <input
-            value={form.prefix}
-            onChange={e => setForm(f => ({ ...f, prefix: e.target.value }))}
-            placeholder="örn: foreach-inv"
-            autoFocus
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-gray-600">Kapsam</label>
-          <select
-            value={form.scope}
-            onChange={e => setForm(f => ({ ...f, scope: e.target.value as FormState['scope'] }))}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-          >
-            <option value="xslt">XSLT</option>
-            <option value="xpath">XPath</option>
-            <option value="html">HTML</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1 mb-4">
-        <label className="text-xs font-medium text-gray-600">
-          İçerik <span className="text-gray-400">(tab durağı için $1, $2 … — son konum $0)</span>
-        </label>
-        <textarea
-          value={form.body}
-          onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-          rows={6}
-          placeholder={'<xsl:for-each select="$1">\n  $0\n</xsl:for-each>'}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      <label className={LABEL}>
+        Prefix (tetikleyici kelime)
+        <input
+          value={form.prefix}
+          onChange={e => setForm(f => ({ ...f, prefix: e.target.value }))}
+          placeholder="örn: foreach-inv"
+          autoFocus
+          className={`${INPUT} font-mono`}
         />
-      </div>
+      </label>
 
-      <div className="flex flex-col gap-1 mb-5">
-        <label className="text-xs font-medium text-gray-600">Açıklama (opsiyonel)</label>
+      <label className={LABEL}>
+        Açıklama (opsiyonel)
         <input
           value={form.description}
           onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
           placeholder="Snippet'in ne yaptığını kısaca açıklayın"
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className={INPUT}
         />
+      </label>
+
+      <div className={LABEL}>
+        <span>Kapsam</span>
+        <SegmentGroup label="Kapsam" options={SCOPE_OPTIONS} value={form.scope} onChange={scope => setForm(f => ({ ...f, scope }))} />
       </div>
 
-      <div className="flex gap-3">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition"
-        >
-          {saving
-            ? <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            : <Save size={14} />}
+      <label className={LABEL}>
+        İçerik
+        <textarea
+          value={form.body}
+          onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+          rows={8}
+          spellCheck={false}
+          placeholder={'<xsl:for-each select="$1">\n  $0\n</xsl:for-each>'}
+          className="w-full resize-y rounded-lg border border-ed-border bg-ed-bg px-3 py-2.5 font-mono text-[12px] leading-[1.7] text-ed-text outline-none placeholder:text-ed-muted focus:ring-2 focus:ring-ui-soft-line"
+        />
+        <span className="text-[11.5px] font-normal text-tx-muted">Tab durağı için $1, $2 … — son konum $0</span>
+      </label>
+
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={handleSave} disabled={saving} className={`${BTN_PRIMARY} flex-1`}>
+          {saving ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Save size={14} aria-hidden="true" />}
           Kaydet
         </button>
-        <button
-          onClick={onCancel}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition"
-        >
-          <X size={14} />
-          İptal
-        </button>
+        <button type="button" onClick={onCancel} className={`${BTN_SECONDARY} h-10! px-4!`}>İptal</button>
+        {onDelete && (
+          <button type="button" onClick={onDelete} className={`${BTN_DANGER_SOFT} h-10!`}>
+            <Trash2 size={14} aria-hidden="true" />Snippet'i Sil
+          </button>
+        )}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -230,6 +169,7 @@ export default function AdminSnippetsPage() {
     try {
       await deleteAdminSnippet(deletingSnippet.id)
       setSnippets(prev => prev.filter(s => s.id !== deletingSnippet.id))
+      if (editingSnippet?.id === deletingSnippet.id) setEditingSnippet(null)
       setDeletingSnippet(null)
     } catch {
       // modal açık kalır
@@ -238,125 +178,141 @@ export default function AdminSnippetsPage() {
     }
   }
 
+  const formOpen = showForm || editingSnippet !== null
+
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
-      {/* Başlık */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-            <Library size={22} className="text-indigo-600" />
-            Snippet Kütüphanesi
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Tüm kullanıcılara görünecek ortak snippet'ları yönetin.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link
-            to="/admin/themes"
-            className="text-sm text-gray-600 hover:text-gray-900 border border-gray-300 px-3 py-1.5 rounded-lg transition"
+    <AdminPage>
+      <PageHeader
+        title="Snippet Kütüphanesi"
+        description="Tüm kullanıcılara görünecek ortak snippet'ları yönetin — XSLT editöründe prefix yazarak eklenir."
+        actions={
+          <button
+            type="button"
+            onClick={() => { setEditingSnippet(null); setShowForm(true) }}
+            disabled={showForm}
+            className={BTN_PRIMARY}
           >
-            ← Admin Paneli
-          </Link>
-        </div>
+            <Plus size={15} aria-hidden="true" />
+            Yeni Snippet Ekle
+          </button>
+        }
+      />
+
+      <div className="flex flex-wrap items-start gap-4">
+        <Card as="section" padding="none" aria-labelledby="snippet-list-title" className="min-w-0 flex-[999_1_520px]">
+          <SectionHeader
+            id="snippet-list-title"
+            title="Kütüphane snippet'ları"
+            aside={snippets.length > 0 && <span className="text-[12.5px] text-tx-muted">{snippets.length} snippet</span>}
+          />
+
+          {error && <div className="px-4 pt-3"><Banner>{error}</Banner></div>}
+
+          {loading && (
+            <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-tx-muted">
+              <Loader2 size={15} className="animate-spin" aria-hidden="true" /> Yükleniyor…
+            </div>
+          )}
+
+          {!loading && !error && snippets.length === 0 && (
+            <p className="m-0 px-4 py-10 text-center text-[13px] text-tx-muted">
+              Henüz kütüphane snippet'ı yok. "Yeni Snippet Ekle" ile başlayın.
+            </p>
+          )}
+
+          {!loading && snippets.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className={TABLE}>
+                <thead>
+                  <tr>
+                    <th scope="col" className={`${TH} px-4!`}>Prefix</th>
+                    <th scope="col" className={TH}>Açıklama</th>
+                    <th scope="col" className={TH}>Kapsam</th>
+                    <th scope="col" className={TH}>Eklenme</th>
+                    <th scope="col" className={`${TH} px-4! text-right!`}><span className="sr-only">İşlem</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snippets.map(s => {
+                    const selected = editingSnippet?.id === s.id
+                    return (
+                      <tr
+                        key={s.id}
+                        onClick={() => { setEditingSnippet(s); setShowForm(false) }}
+                        className={`cursor-pointer border-t border-ui-line transition-colors ${selected ? 'bg-ui-soft' : 'hover:bg-ui-hover'}`}
+                      >
+                        <td className={`${TD} px-4!`}>
+                          <span className="rounded-md bg-fn-slate-tint px-2 py-0.5 font-mono text-[12px] text-fn-slate-ink">{s.prefix}</span>
+                        </td>
+                        <td className={`${TD} max-w-[280px] truncate text-tx-2`}>
+                          {s.description || <span className="text-tx-subtle">—</span>}
+                        </td>
+                        <td className={TD}>
+                          <Pill tone={SCOPE_TONES[s.scope] ?? 'gray'}>{SCOPE_LABELS[s.scope] ?? s.scope}</Pill>
+                        </td>
+                        <td className={`${TD} text-[12px] text-tx-muted`}>{new Date(s.createdAt).toLocaleDateString('tr-TR')}</td>
+                        <td className={`${TD} px-4!`} onClick={e => e.stopPropagation()}>
+                          <span className="flex justify-end gap-0.5">
+                            <button
+                              type="button"
+                              aria-label={`${s.prefix}: düzenle`}
+                              aria-pressed={selected}
+                              title="Düzenle"
+                              onClick={() => { setEditingSnippet(s); setShowForm(false) }}
+                              className={BTN_ICON}
+                            >
+                              <Pencil size={15} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`${s.prefix}: sil`}
+                              title="Sil"
+                              onClick={() => setDeletingSnippet(s)}
+                              className={BTN_ICON_DANGER}
+                            >
+                              <Trash2 size={15} aria-hidden="true" />
+                            </button>
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {formOpen && (
+          <SnippetForm
+            key={editingSnippet?.id ?? 'new'}
+            initial={editingSnippet ?? undefined}
+            onSave={handleSaved}
+            onCancel={() => { setShowForm(false); setEditingSnippet(null) }}
+            onDelete={editingSnippet ? () => setDeletingSnippet(editingSnippet) : undefined}
+          />
+        )}
       </div>
 
-      {/* Form — oluştur veya düzenle */}
-      {(showForm || editingSnippet) && (
-        <SnippetForm
-          initial={editingSnippet ?? undefined}
-          onSave={handleSaved}
-          onCancel={() => { setShowForm(false); setEditingSnippet(null) }}
-        />
-      )}
-
-      {/* Yeni ekle butonu */}
-      {!showForm && !editingSnippet && (
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition mb-8"
-        >
-          <Plus size={15} />
-          Yeni Snippet Ekle
-        </button>
-      )}
-
-      {/* Snippet tablosu */}
-      <h2 className="text-base font-semibold text-gray-800 mb-3">
-        Kütüphane Snippet'ları
-        {snippets.length > 0 && (
-          <span className="ml-2 text-xs font-normal text-gray-400">({snippets.length})</span>
-        )}
-      </h2>
-
-      {loading && <p className="text-sm text-gray-500">Yükleniyor…</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      {!loading && !error && snippets.length === 0 && (
-        <p className="text-sm text-gray-400">Henüz kütüphane snippet'ı yok. "Yeni Snippet Ekle" ile başlayın.</p>
-      )}
-
-      {!loading && snippets.length > 0 && (
-        <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Prefix</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 w-20">Kapsam</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Açıklama</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Eklenme</th>
-                <th className="px-4 py-3 w-28" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {snippets.map(s => (
-                <tr key={s.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-indigo-700 font-medium">{s.prefix}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${SCOPE_COLORS[s.scope] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {SCOPE_LABELS[s.scope] ?? s.scope}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 truncate max-w-[240px]">
-                    {s.description || <span className="text-gray-300 italic">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">
-                    {new Date(s.createdAt).toLocaleDateString('tr-TR')}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2 justify-end">
-                      <button
-                        onClick={() => { setEditingSnippet(s); setShowForm(false) }}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-700 border border-blue-200 hover:bg-blue-50 rounded-lg transition"
-                      >
-                        <Pencil size={12} />
-                        Düzenle
-                      </button>
-                      <button
-                        onClick={() => setDeletingSnippet(s)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 border border-red-200 hover:bg-red-50 rounded-lg transition"
-                      >
-                        <Trash2 size={12} />
-                        Sil
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Silme modal'ı */}
       {deletingSnippet && (
-        <DeleteModal
-          snippet={deletingSnippet}
-          onConfirm={handleDeleteConfirm}
-          onCancel={() => setDeletingSnippet(null)}
-          loading={deleteLoading}
-        />
+        <Modal
+          titleId="delete-snippet-title"
+          title="Snippet'i Sil"
+          onClose={() => setDeletingSnippet(null)}
+          footer={
+            <>
+              <button type="button" onClick={() => setDeletingSnippet(null)} className={`${BTN_SECONDARY} h-10! px-4!`}>İptal</button>
+              <button type="button" onClick={() => void handleDeleteConfirm()} disabled={deleteLoading} className={BTN_DANGER}>
+                {deleteLoading ? 'Siliniyor…' : 'Evet, Sil'}
+              </button>
+            </>
+          }
+        >
+          <p className="m-0 text-[13px] text-tx-2">
+            <span className="font-mono font-semibold text-tx">{deletingSnippet.prefix}</span> snippet'i kütüphaneden kalıcı olarak silinecek.
+          </p>
+        </Modal>
       )}
-    </div>
+    </AdminPage>
   )
 }

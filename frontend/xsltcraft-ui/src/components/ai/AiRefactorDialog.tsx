@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { DiffEditor } from '@monaco-editor/react'
 import { Sparkles, X, StopCircle, Check, RefreshCcw, Loader2 } from 'lucide-react'
+import { useUiPrefsStore } from '../../store/uiPrefsStore'
+import { defineMonacoThemes, monacoThemeId } from '../../theme/monacoThemes'
 import { streamAi, type AiChunk } from '../../services/aiAssistantService'
 import api from '../../services/apiService'
 import { toXsltError } from '../../services/xsltErrors'
@@ -20,6 +22,7 @@ interface Props {
 export default function AiRefactorDialog({
   originalSelection, fullXslt, initialGoal, onAccept, onClose,
 }: Props) {
+  const editorTheme = useUiPrefsStore(s => s.editorTheme)
   const [goal, setGoal] = useState(initialGoal ?? 'Daha okunabilir ve doğru hâle getir.')
   const [output, setOutput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -100,37 +103,37 @@ export default function AiRefactorDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="bg-gray-900 rounded-xl border border-gray-700 w-[90vw] max-w-6xl h-[80vh] flex flex-col text-gray-100 shadow-2xl"
+        className="bg-ed-bg rounded-xl border border-ed-border w-[90vw] max-w-6xl h-[80vh] flex flex-col text-ed-text shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-700">
-          <Sparkles size={16} className="text-violet-400" />
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-ed-border">
+          <Sparkles size={16} className="text-ui-accent" />
           <h2 className="text-sm font-medium">AI Refactor — Önizleme</h2>
           <div className="flex-1" />
           {streaming && (
-            <button onClick={cancel} className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1">
+            <button onClick={cancel} className="text-xs text-ed-warn hover:brightness-110 flex items-center gap-1">
               <StopCircle size={13} /> İptal
             </button>
           )}
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <button onClick={onClose} className="text-ed-muted hover:text-ed-text">
             <X size={16} />
           </button>
         </div>
 
         {/* Goal input */}
-        <div className="px-4 py-2 border-b border-gray-700 flex gap-2 items-center">
+        <div className="px-4 py-2 border-b border-ed-border flex gap-2 items-center">
           <input
             value={goal}
             onChange={e => setGoal(e.target.value)}
             disabled={streaming}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-violet-500"
+            className="flex-1 bg-ed-panel border border-ed-border rounded px-2 py-1.5 text-xs text-ed-text placeholder:text-ed-muted focus:outline-none focus:border-ui-accent"
             placeholder="Refactor amacı (örn: 'xsl:for-each yerine xsl:apply-templates kullan')"
           />
           <button
             onClick={runRefactor}
             disabled={streaming}
-            className="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-100 flex items-center gap-1 disabled:opacity-30"
+            className="px-3 py-1.5 text-xs rounded bg-ed-active hover:brightness-110 text-ed-text flex items-center gap-1 disabled:opacity-30"
           >
             <RefreshCcw size={12} /> Yeniden üret
           </button>
@@ -139,14 +142,14 @@ export default function AiRefactorDialog({
         {/* Diff */}
         <div className="flex-1 min-h-0 relative">
           {streaming && !refactored && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-10">
-              <div className="flex items-center gap-2 text-sm text-gray-400">
+            <div className="absolute inset-0 flex items-center justify-center bg-ed-bg/80 z-10">
+              <div className="flex items-center gap-2 text-sm text-ed-muted">
                 <Loader2 size={16} className="animate-spin" /> AI cevap üretiyor…
               </div>
             </div>
           )}
           {error && (
-            <div className="absolute inset-0 flex items-center justify-center text-red-400 text-sm">
+            <div className="absolute inset-0 flex items-center justify-center text-fn-red text-sm">
               {error}
             </div>
           )}
@@ -154,7 +157,8 @@ export default function AiRefactorDialog({
             <DiffEditor
               height="100%"
               language="xml"
-              theme="vs-dark"
+              beforeMount={defineMonacoThemes}
+                theme={monacoThemeId(editorTheme)}
               original={originalSelection}
               modified={refactored || (streaming ? '' : output)}
               options={{
@@ -170,26 +174,26 @@ export default function AiRefactorDialog({
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-gray-700 flex items-center gap-3">
-          <span className="text-[11px] text-gray-500">
+        <div className="px-4 py-3 border-t border-ed-border flex items-center gap-3">
+          <span className="text-[11px] text-ed-muted">
             {refactored
               ? 'Sol: orijinal · Sağ: AI önerisi.'
               : streaming ? 'Akış sürüyor…' : 'AI henüz kullanılabilir bir kod bloğu döndürmedi.'}
           </span>
           {validateError && (
-            <span className="text-[11px] text-amber-400 ml-auto">{validateError}</span>
+            <span className="text-[11px] text-ed-warn ml-auto">{validateError}</span>
           )}
           <div className={validateError ? '' : 'ml-auto flex items-center gap-2'}>
             <button
               onClick={onClose}
-              className="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-100"
+              className="px-3 py-1.5 text-xs rounded bg-ed-active hover:brightness-110 text-ed-text"
             >
               Reddet
             </button>
             {validateError ? (
               <button
                 onClick={handleForceAccept}
-                className="px-3 py-1.5 text-xs rounded bg-amber-600 hover:bg-amber-500 text-white flex items-center gap-1"
+                className="px-3 py-1.5 text-xs rounded bg-fn-orange hover:brightness-110 text-white flex items-center gap-1"
               >
                 Yine de uygula
               </button>
@@ -197,7 +201,7 @@ export default function AiRefactorDialog({
               <button
                 onClick={handleAccept}
                 disabled={!refactored || streaming || validating}
-                className="px-3 py-1.5 text-xs rounded bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 text-xs rounded bg-fn-green hover:brightness-110 text-white flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {validating ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                 Kabul et ve uygula

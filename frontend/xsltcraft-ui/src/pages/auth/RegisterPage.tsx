@@ -50,7 +50,7 @@ export default function RegisterPage() {
       <h1 className="text-2xl font-bold text-white mb-2">Hesap Oluştur</h1>
       <p className="text-gray-400 text-sm mb-6">
         Zaten hesabın var mı?{' '}
-        <Link to="/auth/login" className="text-indigo-400 hover:underline">
+        <Link to="/auth/login" className="text-ui-soft-line hover:underline">
           Giriş yap
         </Link>
       </p>
@@ -70,7 +70,7 @@ export default function RegisterPage() {
             autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-ui-accent focus:ring-2 focus:ring-ui-accent/30 transition"
             placeholder="kullanici_adi"
           />
           <p className="mt-1 text-xs text-gray-500">3-30 karakter, harf/rakam/alt çizgi/nokta</p>
@@ -81,7 +81,7 @@ export default function RegisterPage() {
             type="text"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-ui-accent focus:ring-2 focus:ring-ui-accent/30 transition"
             placeholder="Adınız"
           />
         </div>
@@ -92,7 +92,7 @@ export default function RegisterPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-ui-accent focus:ring-2 focus:ring-ui-accent/30 transition"
             placeholder="ornek@mail.com"
           />
         </div>
@@ -103,7 +103,7 @@ export default function RegisterPage() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-ui-accent focus:ring-2 focus:ring-ui-accent/30 transition"
             placeholder="••••••••"
           />
           <p className="mt-1 text-xs text-gray-500">
@@ -113,7 +113,7 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-200"
+          className="w-full py-2.5 bg-ui-accent hover:brightness-110 hover:shadow-[var(--ui-shadow-lift)] disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-200"
         >
           {loading ? 'Kayıt yapılıyor…' : 'Kayıt Ol'}
         </button>

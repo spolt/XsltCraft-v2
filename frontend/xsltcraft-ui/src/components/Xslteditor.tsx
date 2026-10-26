@@ -4,6 +4,11 @@ import { useRef, useEffect } from "react"
 import xmlFormatter from 'xml-formatter'
 import { buildXmlIndex, getXmlPathSuggestions, type XmlIndex } from './xslt-editor/xpathXmlIndex'
 import type { UserSnippet } from '../services/snippetService'
+import { useUiPrefsStore } from '../store/uiPrefsStore'
+import { defineMonacoThemes, monacoThemeId } from '../theme/monacoThemes'
+
+/** Tasarımın kod yazı tipi; yüklenmemişse sistem monospace'ine düşer. */
+const EDITOR_FONT_FAMILY = "'IBM Plex Mono', Consolas, 'Courier New', monospace"
 
 export type XsltError = {
   message: string
@@ -32,14 +37,13 @@ type Props = {
   userSnippets?: UserSnippet[]
   onEditorReady?: (fns: EditorFns) => void
   onRequestImageInsert?: (lineNumber: number) => void
-  onEvaluateXPath?: (expression: string) => void
   errors?: XsltError[]
   options?: MonacoEditor.IStandaloneEditorConstructionOptions
   // ── AI ──────────────────────────────────────
   aiEnabled?: boolean
   onAiRefactor?: (selection: string, range: { startLine: number; endLine: number }) => void
-  /** AI bağlamı için: imlecin bulunduğu satır (1-tabanlı) her değiştiğinde çağrılır. */
-  onCursorLineChange?: (line: number) => void
+  /** AI bağlamı + durum çubuğu: imlecin satırı ve sütunu (1-tabanlı) her değiştiğinde çağrılır. */
+  onCursorLineChange?: (line: number, column: number) => void
   /** AI bağlamı için: seçili metin (boşsa undefined) her değiştiğinde çağrılır. */
   onSelectionChange?: (text: string | undefined) => void
 }
@@ -430,9 +434,15 @@ function registerXsltCompletions(monaco: Monaco) {
 }
 
 export default function XsltEditor({
-  value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, onEvaluateXPath, errors, options,
+  value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, errors, options,
   aiEnabled = false, onAiRefactor, onCursorLineChange, onSelectionChange,
 }: Props) {
+
+  // Görünüm tercihleri (Ayarlar): tema, yazı boyutu, satır kaydırma. Değişimleri Monaco'yu
+  // remount etmez — @monaco-editor/react setTheme/updateOptions ile uygular.
+  const editorTheme = useUiPrefsStore(s => s.editorTheme)
+  const fontSize = useUiPrefsStore(s => s.editorFontSize)
+  const wordWrap = useUiPrefsStore(s => s.editorWordWrap)
 
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
@@ -485,6 +495,7 @@ export default function XsltEditor({
 
   function handleBeforeMount(monaco: Monaco) {
     monacoRef.current = monaco
+    defineMonacoThemes(monaco)
     registerXsltCompletions(monaco)
   }
 
@@ -493,7 +504,7 @@ export default function XsltEditor({
 
     // AI bağlamı: imleç satırı + seçim değişimlerini üst bileşene bildir.
     editor.onDidChangeCursorPosition(e => {
-      onCursorLineChangeRef.current?.(e.position.lineNumber)
+      onCursorLineChangeRef.current?.(e.position.lineNumber, e.position.column)
     })
     editor.onDidChangeCursorSelection(e => {
       const text = editor.getModel()?.getValueInRange(e.selection) ?? ''
@@ -592,19 +603,6 @@ export default function XsltEditor({
       run: toggleComment,
     })
 
-    editor.addAction({
-      id: 'xslt-evaluate-xpath',
-      label: "Seçili XPath'i Test Et",
-      contextMenuGroupId: 'modification',
-      contextMenuOrder: 4,
-      run(ed) {
-        const sel = ed.getSelection()
-        const model = ed.getModel()
-        if (!sel || !model) return
-        const text = model.getValueInRange(sel).trim()
-        if (text && onEvaluateXPath) onEvaluateXPath(text)
-      },
-    })
 
     editor.addAction({
       id: 'xslt-format-document',
@@ -766,7 +764,7 @@ export default function XsltEditor({
     <Editor
       height="100%"
       language="xml"
-      theme="vs-dark"
+      theme={monacoThemeId(editorTheme)}
       value={value}
       onChange={(v) => onChange(v || "")}
       beforeMount={handleBeforeMount}
@@ -777,7 +775,11 @@ export default function XsltEditor({
         wordBasedSuggestions: "currentDocument",
         snippetSuggestions: "top",
         minimap: { enabled: false },
-        fontSize: 14,
+        fontSize,
+        fontFamily: EDITOR_FONT_FAMILY,
+        lineHeight: Math.round(fontSize * 1.6),
+        padding: { top: 8, bottom: 8 },
+        wordWrap: wordWrap ? 'on' : 'off',
         tabSize: 2,
         formatOnPaste: false,
         autoClosingBrackets: "never",

@@ -1,23 +1,15 @@
-import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
-import Navbar from './Navbar'
-import Sidebar from './Sidebar'
+import AppHeader from '../shell/AppHeader'
+import SideNav from '../shell/SideNav'
 
+/** AppShell: üst bar (logo + hızlı arama) + ana menü + sayfa içeriği. Menü durumu uiPrefsStore'da. */
 export default function AppLayout() {
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem('sidebarCollapsed') === 'true'
-  })
-
-  useEffect(() => {
-    localStorage.setItem('sidebarCollapsed', String(collapsed))
-  }, [collapsed])
-
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      <Navbar onToggleSidebar={() => setCollapsed((c) => !c)} />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar collapsed={collapsed} />
-        <main className="flex-1 overflow-y-auto">
+    <div className="flex h-screen flex-col bg-ui-bg text-tx">
+      <AppHeader />
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <SideNav />
+        <main className="min-w-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>

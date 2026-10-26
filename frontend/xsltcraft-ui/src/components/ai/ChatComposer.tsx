@@ -1,5 +1,5 @@
-import { useRef, type ClipboardEvent, type RefObject } from 'react'
-import { Paperclip } from 'lucide-react'
+import { useId, useRef, type ClipboardEvent, type ReactNode, type RefObject } from 'react'
+import { ArrowRight, Paperclip } from 'lucide-react'
 import ChatAttachmentBar from './ChatAttachmentBar'
 import { ACCEPT_ATTR, filesFrom, type PreparedImage } from '../../utils/imageAttachment'
 
@@ -16,14 +16,17 @@ interface Props {
   processing: boolean
   onAddFiles: (files: File[]) => void
   onRemoveAttachment: (id: string) => void
+  /** Yazma kutusunun üstünde (ör. hazır komut çipleri). */
+  above?: ReactNode
 }
 
-/** Sohbet yazma alanı: ataç (ekran görüntüsü), metin, gönder. Ctrl+V ile görsel yapıştırılabilir. */
+/** Sohbet yazma alanı: metin, ataç (ekran görüntüsü), gönder. Ctrl+V ile görsel yapıştırılabilir. */
 export default function ChatComposer({
   value, onChange, onSend, streaming, inputRef,
-  visionEnabled, maxImages, attachments, processing, onAddFiles, onRemoveAttachment,
+  visionEnabled, maxImages, attachments, processing, onAddFiles, onRemoveAttachment, above,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
+  const hintId = useId()
   const canSend = !streaming && !processing && (value.trim() !== '' || attachments.length > 0)
   const full = attachments.length >= maxImages
 
@@ -43,35 +46,15 @@ export default function ChatComposer({
       : 'Ekran görüntüsü ekle (PNG, JPG) — Ctrl+V ile de yapıştırabilirsiniz'
 
   return (
-    <div className="px-3 py-2 border-t border-gray-700 flex-shrink-0">
+    <div className="flex flex-shrink-0 flex-col gap-2 border-t border-ui-line px-3 pb-3 pt-2.5">
+      {above}
       <ChatAttachmentBar
         attachments={attachments}
         processing={processing}
         onRemove={onRemoveAttachment}
         disabled={streaming}
       />
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={!visionEnabled || streaming || full}
-          aria-label="Ekran görüntüsü ekle"
-          title={attachTitle}
-          className="self-stretch px-2 rounded border border-gray-700 bg-gray-800 text-gray-400 hover:text-violet-300 hover:border-violet-500 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:border-gray-700 transition-colors"
-        >
-          <Paperclip size={16} />
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept={ACCEPT_ATTR}
-          multiple={maxImages > 1}
-          hidden
-          onChange={e => {
-            onAddFiles(filesFrom(e.target.files))
-            e.target.value = '' // aynı dosya tekrar seçilebilsin
-          }}
-        />
+      <div className="flex items-end gap-1 rounded-lg border border-field-line bg-ui-card p-1.5 pl-2.5 transition-colors focus-within:border-ui-accent">
         <textarea
           ref={inputRef}
           value={value}
@@ -85,28 +68,53 @@ export default function ChatComposer({
             }
           }}
           rows={2}
-          className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-violet-500 resize-none font-mono"
+          aria-label="AI Asistana sor"
+          aria-describedby={hintId}
+          className="min-w-0 flex-1 resize-none self-center bg-transparent py-0.5 text-[12.5px] leading-[1.5] text-tx outline-none placeholder:text-tx-subtle"
           placeholder={attachments.length > 0
             ? 'Ekran görüntüsü hakkında ne yapılsın? (boş bırakabilirsiniz)'
-            : 'Buraya yaz… (Enter ile gönder)'}
+            : 'Soru sor veya seçili kodu açıklat…'}
           disabled={streaming}
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={!visionEnabled || streaming || full}
+          aria-label="Ekran görüntüsü ekle"
+          title={attachTitle}
+          className="xc-focus flex h-7 w-7 flex-none items-center justify-center rounded-md text-tx-muted transition-colors hover:bg-ui-hover hover:text-ui-accent disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-tx-muted"
+        >
+          <Paperclip size={15} aria-hidden="true" />
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={ACCEPT_ATTR}
+          multiple={maxImages > 1}
+          hidden
+          onChange={e => {
+            onAddFiles(filesFrom(e.target.files))
+            e.target.value = '' // aynı dosya tekrar seçilebilsin
+          }}
         />
         <button
           type="button"
           onClick={onSend}
           disabled={!canSend}
-          className="self-stretch px-3 rounded bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:cursor-not-allowed text-sm text-white font-medium"
+          aria-label="Gönder"
+          title="Gönder (Enter)"
+          className="xc-focus flex h-7 w-7 flex-none items-center justify-center rounded-md bg-ui-accent text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
         >
-          Gönder
+          <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
-      <div className="mt-1 text-[10px] text-gray-500 select-none">
-        <kbd className="font-mono text-gray-400">Enter</kbd> ile gönder ·{' '}
-        <kbd className="font-mono text-gray-400">Shift+Enter</kbd> ile yeni satır
-        {visionEnabled && (
-          <> · <kbd className="font-mono text-gray-400">Ctrl+V</kbd> ile ekran görüntüsü — yalnız bu mesajla gönderilir, saklanmaz</>
-        )}
-      </div>
+      <p id={hintId} className="sr-only">
+        Enter ile gönder, Shift+Enter ile yeni satır.
+        {visionEnabled && ' Ctrl+V ile ekran görüntüsü yapıştırılabilir.'}
+      </p>
+      {attachments.length > 0 && (
+        <p className="text-[10.5px] text-tx-subtle">Ekran görüntüleri yalnız bu mesajla gönderilir, saklanmaz.</p>
+      )}
     </div>
   )
 }

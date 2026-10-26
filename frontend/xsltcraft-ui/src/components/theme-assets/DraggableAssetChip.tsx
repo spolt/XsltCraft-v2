@@ -13,14 +13,14 @@ export default function DraggableAssetChip({ kind, dataUrl }: { kind: AssetKind;
       type="button"
       {...attributes}
       {...listeners}
-      className={`flex items-center gap-1 border border-gray-200 rounded p-1 bg-gray-50 cursor-grab active:cursor-grabbing touch-none hover:border-blue-400 ${
+      className={`xc-focus flex items-center gap-1 rounded border border-field-line bg-ui-side p-1 cursor-grab active:cursor-grabbing touch-none hover:border-ui-accent ${
         isDragging ? 'opacity-40' : ''
       }`}
       title="Önizlemedeki bir konuma sürükleyin"
       aria-label={`${ASSET_LABEL[kind]} — önizlemedeki bir konuma sürükleyin`}
     >
-      <GripVertical size={12} className="text-gray-400 flex-shrink-0" />
-      <img src={dataUrl} alt="" className="max-h-14 max-w-[140px] object-contain" />
+      <GripVertical size={12} aria-hidden="true" className="flex-none text-tx-subtle" />
+      <img src={dataUrl} alt="" className="max-h-14 max-w-[140px] bg-white object-contain" />
     </button>
   )
 }
@@ -28,9 +28,9 @@ export default function DraggableAssetChip({ kind, dataUrl }: { kind: AssetKind;
 /** Sürükleme sırasında imleci izleyen küçük görünüm. */
 export function AssetDragPreview({ kind, dataUrl }: { kind: AssetKind; dataUrl: string }) {
   return (
-    <div className="flex items-center gap-1.5 bg-white border-2 border-blue-500 rounded-md shadow-xl px-2 py-1 pointer-events-none">
+    <div className="pointer-events-none flex items-center gap-1.5 rounded-md border-2 border-ui-accent bg-ui-card px-2 py-1 shadow-[var(--ui-shadow-pop)]">
       <img src={dataUrl} alt="" className="max-h-10 max-w-[100px] object-contain" />
-      <span className="text-xs font-medium text-blue-700">{ASSET_LABEL[kind]}</span>
+      <span className="text-xs font-medium text-ui-ink">{ASSET_LABEL[kind]}</span>
     </div>
   )
 }

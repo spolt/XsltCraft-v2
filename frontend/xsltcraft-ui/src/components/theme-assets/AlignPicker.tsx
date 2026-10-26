@@ -9,23 +9,27 @@ const OPTIONS: { v: Alignment; Icon: typeof AlignLeft; title: string }[] = [
 
 export default function AlignPicker({ value, onChange }: { value: Alignment; onChange: (v: Alignment) => void }) {
   return (
-    <div className="flex gap-1" role="radiogroup" aria-label="Hizalama">
-      {OPTIONS.map(({ v, Icon, title }) => (
+    <div
+      className="grid grid-cols-3 overflow-hidden rounded-md border border-field-line"
+      role="radiogroup"
+      aria-label="Hizalama"
+    >
+      {OPTIONS.map(({ v, Icon, title }, i) => (
         <button
           key={v}
           type="button"
           role="radio"
           aria-checked={value === v}
           onClick={() => onChange(v)}
-          className={`flex items-center justify-center w-7 h-7 rounded border transition-colors ${
+          className={`flex h-[30px] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ui-accent items-center justify-center transition-colors ${i > 0 ? 'border-l border-field-line' : ''} ${
             value === v
-              ? 'bg-blue-600 border-blue-600 text-white'
-              : 'border-gray-200 text-gray-400 hover:border-blue-300 hover:text-blue-500'
+              ? 'bg-ui-soft text-ui-ink'
+              : 'bg-ui-card text-tx-subtle hover:bg-ui-hover hover:text-tx-2'
           }`}
           title={title}
           aria-label={title}
         >
-          <Icon size={13} />
+          <Icon size={14} aria-hidden="true" />
         </button>
       ))}
     </div>

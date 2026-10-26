@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Admin: derlenemeyen ya da render edilemeyen tema yüklenebiliyordu.** Örneğin XSLT 2.0 fonksiyonu (`exists()`) kullanan bir tema "Başarısız" analizle kaydediliyor, kullanıcıya önizlenemeyen bir tema olarak sunuluyordu. Artık yüklenen tema (yeni ya da güncelleme) önce örnek fatura/irsaliye ile derlenip render ediliyor; başarısızsa yükleme 422 ile reddediliyor, mesajda hata ve — XSLT 2.0 fonksiyonu kullanıldıysa — önizleme motorunun XSLT 1.0 olduğu belirtiliyor. Kontrol, görsel/blok kararları sorulmadan önce yapılır. Daha önce bu şekilde kaydedilmiş temalar etkilenmez; admin silebilir.
 
 ### Added
+- **Tema Kullan — sabit notlar**: hazır temanın Notlar kutusuna "Notların üstü" (XML `cbc:Note` satırlarının hemen öncesi) ve "Notların altı" (kutunun sonu) için birer serbest metin notu eklenebiliyor; kalın / italik / altı çizili, yazı boyutu, renk, yazı tipi ve hizalama ayarlı, çok satırlı (≤500 karakter, ≤10 satır). Önizleme, indirilen XSLT ve kaydedilen şablon aynı birleştirme yolundan geçer; XSLT 1.0 ve 2.0 temalarda çalışır. Notlar alanı bulunamayan temalarda bölüm pasiftir (`notes-not-found`). Güvenlik: metin yalnız text node (kaçışlı, AVT/XPath değil), stil yalnız sunucu beyaz listesinden (`FixedNoteStyles`), sunucu doğrulaması (görünmez biçim karakterleri dahil), son adımda `XsltSafety.FindThreat`; çıktıya yorum yazılmaz.
 - **XSLT Editör — tam ekran modu + yüzen mini önizleme**: araç çubuğunun sağ ucundaki büyüt butonu (ya da `Ctrl+Shift+F`) editörü tüm çalışma alanına yayar; kenar çubuğu gizlenir, sağ panel örtülür. Tasarımın canlı önizlemesi kodun üzerinde yüzen küçük bir pencerede (varsayılan 360×480, sağ üst) görünmeye devam eder: tutamaktan sürüklenir, sol-alt köşeden boyutlandırılır, çift tıkla varsayılana döner; önizleme pencere genişliğine sığdırılır ve tıkla→satıra git çalışır. Sağ paneldeki **Önizleme** sekmesine bitişik buton tek tıkla "tam ekran + mini pencere" açar. Açık/kapalı durumu, konum ve boyut `localStorage`'da kalıcıdır.
   - Moda girip çıkmak Monaco'yu remount etmez (geri-al geçmişi, imleç, kaydırma korunur); sağ panelin durumu (AI sohbeti, seçili sekme) korunur — ana önizleme hariç: çıkışta yeniden yüklenir, zoom/kaydırma sıfırlanır. Kısayol yalnız editör ekrandayken ve üzerinde diyalog yokken etkindir. "AI'ya sor" ve "XML satırına git" akışları moddan otomatik çıkar.
   - **Kod incelemesi sonrası düzeltmeler** (özellik yayımlanmadan önce; yayımlanmış bir sürümü etkilemedi):
@@ -113,6 +114,32 @@ Kararlar: [ADR 007](./docs/ecc/decisions/007-xslt-engine-routing.md) (motor yön
 - Saxon-HE 10.9 bağımlılığı.
 - Dosya tabanlı şablon motoru ve `backend/XsltCraft/Templates/` klasörü.
 - Frontend Playground sayfası.
+
+### Arayüz yeniden tasarımı
+
+Plan: [UI 2.0 yeniden tasarımı](./docs/ecc/plans/ui-2-0-redesign.md). Yalnız görsel/yerleşim değişikliği — servis, store ve API davranışı aynı.
+
+#### Added
+- **3 arayüz teması**: Lacivert (varsayılan), Mor, Turuncu. Ayarlar'dan seçilir, tarayıcıda kalıcıdır (`xsltcraft-ui-prefs`); ilk boyamada tema uygulanır (titreme yok). Eski renk tokenları yeni temaya köprülendiği için dokunulmayan diyaloglar da temayı alır.
+- **Yeni kabuk**: daraltılabilir sol menü (açılışta daraltılmış başlama tercihi), üst barda hızlı arama (`Ctrl+K` — sayfalar ve son çalışmalar), **Ayarlar** bölümü (arayüz rengi, menü tercihi), profil kartı ve Pro'ya geç çağrısı.
+- **Dashboard**: XSLT Editör kartı (seçilen dosya doğrudan editörde açılır), Şablonlarım kartı, kısayollar (yeni e-Fatura / e-İrsaliye şablonu, Tema Kütüphanesi, Taslaklarım) ve son çalışmalar tablosu (taslak + XSLT, kaynak etiketiyle).
+- **Tasarım Alanı** (eski grid editör): solda **Bloklar | XML Ağacı** sekmeleri (blok arama + gruplar, XML yükleme ve çoklu XML seçimi, XPath seçim bannerı), sağda seçili blok için **Veri | Konum** sekmeleri (konum mm cinsinden); kanvas araç çubuğu ve durum çubuğu (blok sayısı, seçili blok konumu/boyutu, 5 mm ızgara, kayıt durumu); başlıkta satır içi ad düzenleme, geri al/yinele, Önizle, Kaydet, XSLT İndir.
+- **XSLT Editör**: dört **düzen modu** (Editör + yan önizleme, Yarı yarıya, Mini pencere önizleme, Yalnız editör) ve Ayarlar'dan varsayılan düzen; **editör temaları** (Koyu, Açık, Yüksek kontrast), yazı boyutu (11–18) ve satır kaydırma; sol menüde belirgin XSLT/XML yükleme, Dosyalar ve Snippet Kütüphanesi sekmeleri ve **Ayarlar**; **UBL-TR kontrol** artık editör araç çubuğunda (hata rozetiyle); durum çubuğu (önizleme süresi, hata/uyarı sayısı, satır, düzen); AI Asistan önizlemenin yanında ayrı sütun.
+- **Tema Kullan**: çalışma alanı başlığı, Logo / İmza-Kaşe / Banka-IBAN akordeonları, "Kendi XML'ini yükle", tema bilgisi ve kontrol listesi.
+- **Admin — Kullanım Raporu grafiği**: 7/14/30 gün ve özel aralık; beş metrik kartı (önceki döneme göre değişim + mini grafik), metrik seçilebilir alan grafiği (önceki dönem kesikli, ortalama çizgisi, en yüksek gün, gün bazlı ipucu); harici grafik kütüphanesi yok (SVG).
+- **IBM Plex Sans / Mono** fontları uygulamayla birlikte paketlenir (dış font isteği yok).
+
+#### Changed
+- Tüm sayfalar (Tema Kütüphanesi, Taslaklarım, Şablonlarım, Profil, Planlar, Hakkında, UpgradeModal) yeni kart/başlık bileşenleri ve tema tokenlarıyla yeniden çizildi.
+- **Auth** (giriş/kayıt) sayfaları önceki düzenini koruyor; yalnız düğme, link ve odak renkleri seçili arayüz temasının vurgu rengini kullanıyor.
+- **Admin** sayfaları (Temalar, Snippet'ler, Kullanıcılar, AI, AI Geri Bildirim) yeni yönetim kabuğunda; Kullanıcılar'da istatistik kartları, filtreli tablo ve sağda detay paneli.
+- XSLT Editör'de **Problemler** paneli varsayılan kapalı; UBL-TR kontrolü ya da sayaç tıklanınca açılır.
+- Arayüz metinlerinde "grid canvas" yerine **Tasarım Alanı**.
+- Tasarım Alanı ve XSLT Editör'de avatar menüsündeki **Çıkış yap**, kaydedilmemiş değişiklik varken diğer gezinmelerle aynı onayı soruyor.
+
+#### Removed
+- **XPath konsolu** (XSLT Editör ve Geliştirici Modu); XPath otomatik tamamlama korunur.
+- Eski üst bar/kenar çubuğu, kullanılmayan bileşenler, görseller ve CSS (FlexLayout teması dahil); eski `sidebarCollapsed` tercihi.
 
 ## [1.11.2] - 2026-10-04
 

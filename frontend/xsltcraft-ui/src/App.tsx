@@ -21,10 +21,14 @@ import PricingPage from './pages/PricingPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
 import AppLayout from './components/layout/AppLayout'
+import AdminLayout from './components/layout/AdminLayout'
 import ToastContainer from './components/ui/ToastContainer'
 import UpgradeModal from './components/UpgradeModal'
+import { useApplyUiTheme } from './theme/useApplyUiTheme'
 
 export default function App() {
+  useApplyUiTheme()
+
   return (
     <BrowserRouter>
       <ToastContainer />
@@ -56,12 +60,14 @@ export default function App() {
         <Route element={<AdminRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/admin" element={<Navigate to="/admin/themes" replace />} />
-            <Route path="/admin/themes" element={<AdminThemesPage />} />
-            <Route path="/admin/snippets" element={<AdminSnippetsPage />} />
-            <Route path="/admin/users" element={<AdminUsersPage />} />
-            <Route path="/admin/usage" element={<AdminUsagePage />} />
-            <Route path="/admin/ai" element={<AdminAiPage />} />
-            <Route path="/admin/ai-feedback" element={<AdminAiFeedbackPage />} />
+            <Route element={<AdminLayout />}>
+              <Route path="/admin/themes" element={<AdminThemesPage />} />
+              <Route path="/admin/snippets" element={<AdminSnippetsPage />} />
+              <Route path="/admin/users" element={<AdminUsersPage />} />
+              <Route path="/admin/usage" element={<AdminUsagePage />} />
+              <Route path="/admin/ai" element={<AdminAiPage />} />
+              <Route path="/admin/ai-feedback" element={<AdminAiFeedbackPage />} />
+            </Route>
           </Route>
         </Route>
 

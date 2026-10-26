@@ -1,77 +1,119 @@
-import { FileCode2, BookOpen, Sparkles, FolderOpen } from 'lucide-react'
+import { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
+import { BookOpen, Code2, FileCode2, LayoutGrid, Sparkles, type LucideIcon } from 'lucide-react'
+import Card from '../components/ui/Card'
+import IconTile from '../components/ui/IconTile'
+import type { FnColor } from '../theme/uiThemes'
 
 type Feature = {
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: LucideIcon
   title: string
   description: string
-  color: string
+  color: FnColor
 }
 
 const features: Feature[] = [
   {
-    icon: FileCode2,
+    icon: LayoutGrid,
+    title: 'Tasarım Alanı',
+    description: 'A4 ızgarada sürükle-bırak bloklar ve XPath bağlama.',
+    color: 'blue',
+  },
+  {
+    icon: Code2,
     title: 'XSLT Editör',
     description: 'Monaco tabanlı editör, canlı önizleme ve hata paneli.',
-    color: 'text-purple-500',
+    color: 'purple',
   },
   {
     icon: BookOpen,
     title: 'Tema Kütüphanesi',
     description: 'Hazır UBL-TR şablonları (Invoice, CreditNote, DespatchAdvice).',
-    color: 'text-green-500',
+    color: 'green',
   },
   {
     icon: Sparkles,
     title: 'AI Asistan',
-    description: 'Türkçe doğal dilde XSLT refactor ve sohbet (Ollama + Gemini fallback).',
-    color: 'text-blue-500',
+    description: 'Türkçe doğal dilde XSLT refactor ve sohbet (Ollama + Gemini yedek).',
+    color: 'orange',
   },
   {
-    icon: FolderOpen,
-    title: 'Taslaklar & Şablonlarım',
+    icon: FileCode2,
+    title: 'Taslaklar ve Şablonlarım',
     description: 'Kişisel kayıt, düzenleme ve sürüm takibi.',
-    color: 'text-gray-500',
+    color: 'violet',
   },
 ]
 
+const RELEASE_NOTES = [
+  'XSLT 2.0 desteği — Saxon-HE motoru, izole çalışma alanında.',
+  'XSLT editöründe 1.0 uyumluluk uyarıları.',
+  'Temalarda XSLT 2.0 ile hazırlanmış şablonlar.',
+  'Yeni arayüz: Kurumsal Lacivert, Mor ve Beyaz-Turuncu renkleri.',
+]
+
 export default function AboutPage() {
+  const { hash } = useLocation()
+
+  // "/about#yenilikler" (menü altındaki "Yenilikler") → sürüm notlarına kaydır.
+  useEffect(() => {
+    if (!hash) return
+    const el = document.getElementById(decodeURIComponent(hash.slice(1)))
+    if (!el) return
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
+    el.focus({ preventScroll: true })
+  }, [hash])
+
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10">
-      <div className="flex items-center gap-3 mb-1">
-        <h1 className="text-2xl font-semibold text-gray-800">XsltCraft</h1>
-        <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5">
-          v{__APP_VERSION__}
+    <div className="mx-auto flex w-full max-w-[960px] flex-col gap-5 px-8 pt-7 pb-9">
+      <Card as="section" aria-labelledby="about-title" padding="none" className="flex flex-wrap items-center gap-[22px] p-7">
+        <span
+          aria-hidden="true"
+          className="flex h-[72px] w-[72px] flex-none items-center justify-center rounded-2xl bg-ui-accent text-[34px] font-bold text-white"
+        >
+          X
         </span>
-      </div>
-      <p className="text-gray-500 mb-8 text-sm">
-        UBL-TR e-Fatura ve e-Arşiv XSLT şablonları için görsel editör.
-      </p>
+        <div className="min-w-0 flex-[1_1_360px]">
+          <h1 id="about-title" className="m-0 text-2xl font-semibold text-tx">XsltCraft</h1>
+          <p className="mt-1.5 mb-0 text-sm leading-relaxed text-tx-muted">
+            Türk e-Fatura ve e-İrsaliye (UBL-TR 2.1) için low-code XSLT şablon tasarımcısı.
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <span className="rounded-full bg-ui-soft px-3 py-1 font-bold text-ui-ink">Sürüm {__APP_VERSION__}</span>
+          <span className="text-xs text-tx-muted">Saxon-HE 12.10 · XSLT 2.0</span>
+        </div>
+      </Card>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-4">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Uygulama Hakkında</h2>
-        <p className="text-sm text-gray-600 leading-relaxed">
-          XsltCraft, UBL-TR e-Fatura ve e-Arşiv XSLT şablonlarını kolayca oluşturmak ve düzenlemek
-          için tasarlanmış bir görsel editördür. Hazır tema kütüphanesi, kişisel taslak yönetimi ve AI destekli refactor
-          ile şablon hazırlamayı hızlandırır.
-        </p>
-      </div>
+      <h2 className="mt-1 mb-0 text-[15px] font-semibold text-tx">Öne Çıkan Özellikler</h2>
+      <ul className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-4 p-0">
+        {features.map(({ icon, title, description, color }) => (
+          <li key={title} className="flex">
+            <Card lift fn={color} padding="none" className="flex flex-1 flex-col gap-2.5 p-[18px]">
+              <IconTile icon={icon} size="lg" />
+              <span className="text-sm font-semibold text-tx">{title}</span>
+              <span className="text-[12.5px] leading-normal text-tx-muted">{description}</span>
+            </Card>
+          </li>
+        ))}
+      </ul>
 
-      <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Öne Çıkan Özellikler</h2>
-        <ul className="flex flex-col gap-4">
-          {features.map(({ icon: Icon, title, description, color }) => (
-            <li key={title} className="flex items-start gap-3">
-              <Icon size={20} className={`${color} flex-shrink-0 mt-0.5`} />
-              <div>
-                <p className="text-sm font-medium text-gray-800">{title}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{description}</p>
-              </div>
-            </li>
-          ))}
+      <Card
+        as="section"
+        id="yenilikler"
+        tabIndex={-1}
+        aria-labelledby="about-release-title"
+        padding="none"
+        className="flex scroll-mt-6 flex-col gap-2.5 p-[22px] outline-none"
+      >
+        <h2 id="about-release-title" className="m-0 text-[15px] font-semibold text-tx">2.0.0 sürüm notları</h2>
+        <ul className="m-0 flex flex-col gap-1.5 pl-[18px] leading-relaxed text-tx-2">
+          {RELEASE_NOTES.map((n) => <li key={n}>{n}</li>)}
         </ul>
-      </div>
+      </Card>
 
-      <p className="text-xs text-gray-400 text-center">© 2026 XsltCraft</p>
+      <p className="m-0 text-center text-xs text-tx-muted">© 2026 XsltCraft</p>
     </div>
   )
 }

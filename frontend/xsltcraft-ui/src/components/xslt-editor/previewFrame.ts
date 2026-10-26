@@ -13,7 +13,9 @@ const MIN_FIT_SCALE = 0.2
 const MIN_CONTENT_HEIGHT = 200
 const MAX_CONTENT_HEIGHT = 20000
 
+// Önizleme ölçeği belge içinde CSS zoom ile verilir (ScaledPreviewFrame); yazdırma tam boyutta kalmalı.
 const CLICK_SCRIPT = `
+<style>@media print{html{zoom:1!important}}</style>
 <script>
 document.addEventListener('click', function(e) {
   e.preventDefault();

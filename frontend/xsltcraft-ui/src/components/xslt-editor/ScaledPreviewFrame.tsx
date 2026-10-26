@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   PREVIEW_BASE_HEIGHT,
   PREVIEW_BASE_WIDTH,
@@ -15,10 +15,19 @@ interface Props {
   onElementClick?: (text: string, opts?: { exact?: boolean }) => void
   /** true ise iframe yüksekliği yüklenen içeriğe göre ayarlanır (sabit tampon yerine). */
   fitContentHeight?: boolean
+  /** fitContentHeight ile: içerik kısa olsa da çerçevenin en az bu yükseklikte (px) olması. */
+  minContentHeight?: number
 }
 
-export default function ScaledPreviewFrame({ html, scale, onElementClick, fitContentHeight = false }: Props) {
+/** Belge köküne ölçeği yazar; erişilemezse sessizce geçer. */
+function applyZoom(iframe: HTMLIFrameElement | null, scale: number) {
+  const root = iframe?.contentDocument?.documentElement
+  if (root) root.style.zoom = String(scale)
+}
+
+export default function ScaledPreviewFrame({ html, scale, onElementClick, fitContentHeight = false, minContentHeight = 0 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const scaleRef = useRef(scale)
   const [contentHeight, setContentHeight] = useState<number | null>(null)
   const srcDoc = useMemo(() => buildPreviewSrcDoc(html), [html])
 
@@ -36,32 +45,40 @@ export default function ScaledPreviewFrame({ html, scale, onElementClick, fitCon
     return () => window.removeEventListener('message', handler)
   }, [onElementClick])
 
-  const baseHeight = fitContentHeight && contentHeight ? contentHeight : PREVIEW_BASE_HEIGHT
+  // Ölçek, transform yerine belge içinde CSS zoom ile uygulanır: metin her ölçekte yeniden
+  // çizilir ve küçültünce bulanıklaşmaz. iframe kutusu ölçeklenmiş boyutta durur.
+  useLayoutEffect(() => {
+    scaleRef.current = scale
+    applyZoom(iframeRef.current, scale)
+  }, [scale])
+
+  function handleLoad(e: React.SyntheticEvent<HTMLIFrameElement>) {
+    const iframe = e.currentTarget
+    if (fitContentHeight) {
+      // Yükseklik tam genişlik ve ölçek 1'de ölçülür, sonra ikisi de geri verilir.
+      const previousWidth = iframe.style.width
+      iframe.style.width = `${PREVIEW_BASE_WIDTH}px`
+      applyZoom(iframe, 1)
+      setContentHeight(measurePreviewContentHeight(iframe))
+      iframe.style.width = previousWidth
+    }
+    applyZoom(iframe, scaleRef.current)
+  }
+
+  const baseHeight = fitContentHeight && contentHeight ? Math.max(contentHeight, minContentHeight) : PREVIEW_BASE_HEIGHT
+  const width = Math.round(PREVIEW_BASE_WIDTH * scale)
+  const height = Math.round(baseHeight * scale)
 
   return (
-    /*
-      Wrapper reports scaled dimensions to layout engine.
-      iframe inside is full-size, scaled via transform.
-      overflow:hidden clips any rendering outside the scaled bounds.
-    */
-    <div
-      style={{
-        width: Math.round(PREVIEW_BASE_WIDTH * scale),
-        height: Math.round(baseHeight * scale),
-        overflow: 'hidden',
-        flexShrink: 0,
-      }}
-    >
+    <div style={{ width, height, overflow: 'hidden', flexShrink: 0 }}>
       <iframe
         ref={iframeRef}
         srcDoc={srcDoc}
         sandbox={PREVIEW_SANDBOX}
-        onLoad={fitContentHeight ? (e) => setContentHeight(measurePreviewContentHeight(e.currentTarget)) : undefined}
+        onLoad={handleLoad}
         style={{
-          width: PREVIEW_BASE_WIDTH,
-          height: baseHeight,
-          transform: `scale(${scale})`,
-          transformOrigin: 'top left',
+          width,
+          height,
           border: 'none',
           display: 'block',
           background: 'white',

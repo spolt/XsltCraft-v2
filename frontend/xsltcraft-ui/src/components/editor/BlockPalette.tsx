@@ -1,218 +1,98 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useId } from 'react'
 import { useDraggable } from '@dnd-kit/core'
-import type { BlockType } from '../../types/blocks'
+import { FileText, Search } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
-
-interface BlockPaletteProps {
-  isOpen: boolean
-}
-
-interface PaletteItem {
-  id: string
-  type: BlockType
-  label: string
-  icon: string
-  configOverride?: Record<string, unknown>
-}
-
-const INVOICE_READY_BLOCKS: PaletteItem[] = [
-  {
-    id: 'SupplierInfo', type: 'PartyInfo', label: 'Satıcı Bilgileri', icon: '⊞',
-    configOverride: { partyType: 'SupplierParty', title: 'SATICI' },
-  },
-  {
-    id: 'BuyerInfo', type: 'PartyInfo', label: 'Alıcı Bilgileri', icon: '⊞',
-    configOverride: { partyType: 'CustomerParty', title: 'ALICI' },
-  },
-  { id: 'InvoiceHeader',    type: 'InvoiceHeader',    label: 'Fatura Başlığı',       icon: '☰' },
-  { id: 'InvoiceLineTable', type: 'InvoiceLineTable', label: 'Fatura Satırları',      icon: '⊟' },
-  { id: 'InvoiceTotals',    type: 'InvoiceTotals',    label: 'Fatura Dip Toplamları', icon: '₸' },
-  { id: 'Notes',            type: 'Notes',            label: 'Notlar',                icon: '✎' },
-  { id: 'BankInfo',         type: 'BankInfo',         label: 'Banka Bilgisi',         icon: '₺' },
-]
-
-const DESPATCH_READY_BLOCKS: PaletteItem[] = [
-  {
-    id: 'DespatchSupplierInfo', type: 'PartyInfo', label: 'Gönderici Bilgileri', icon: '⊞',
-    configOverride: { partyType: 'DespatchSupplierParty', title: 'GÖNDERİCİ' },
-  },
-  {
-    id: 'DeliveryCustomerInfo', type: 'PartyInfo', label: 'Alıcı Bilgileri', icon: '⊞',
-    configOverride: { partyType: 'DeliveryCustomerParty', title: 'SAYIN' },
-  },
-  { id: 'DespatchHeader',    type: 'InvoiceHeader',    label: 'İrsaliye Başlığı',   icon: '☰' },
-  { id: 'DespatchLineTable', type: 'InvoiceLineTable', label: 'İrsaliye Satırları', icon: '⊟' },
-  { id: 'DespatchTotals',    type: 'InvoiceTotals',    label: 'Toplam Tutar',       icon: '₸' },
-  { id: 'ShipmentInfo',      type: 'ShipmentInfo',     label: 'Taşıyıcı Bilgileri', icon: '⛟' },
-  { id: 'Notes',             type: 'Notes',            label: 'Notlar',             icon: '✎' },
-  { id: 'BankInfo',          type: 'BankInfo',         label: 'Banka Bilgisi',      icon: '₺' },
-]
-
-const COMMON_CATEGORIES: { name: string; items: PaletteItem[] }[] = [
-  {
-    name: 'METİN',
-    items: [
-      { id: 'Text',            type: 'Text',            label: 'Metin',         icon: 'T' },
-      { id: 'Heading',         type: 'Heading',         label: 'Başlık',        icon: 'H' },
-      { id: 'Paragraph',       type: 'Paragraph',       label: 'Paragraf',      icon: '¶' },
-      { id: 'ConditionalText', type: 'ConditionalText', label: 'Koşullu Metin', icon: '?' },
-    ],
-  },
-  {
-    name: 'VERİ',
-    items: [
-      { id: 'Table',        type: 'Table',        label: 'Tablo',         icon: '⊞' },
-      { id: 'DocumentInfo', type: 'DocumentInfo', label: 'Belge Bilgisi', icon: '⊙' },
-    ],
-  },
-  {
-    name: 'MEDYA',
-    items: [
-      { id: 'Image',      type: 'Image',      label: 'Görsel',          icon: '⬜' },
-      { id: 'ETTN',       type: 'ETTN',       label: 'Dinamik Karekod', icon: '◎' },
-      { id: 'GibKarekod', type: 'GibKarekod', label: 'GİB Karekod',    icon: '◎' },
-      { id: 'GibLogo',    type: 'GibLogo',    label: 'GİB Logo',        icon: '⊕' },
-    ],
-  },
-  {
-    name: 'DÜZEN',
-    items: [
-      { id: 'Divider',    type: 'Divider',    label: 'Ayırıcı',     icon: '—' },
-      { id: 'Spacer',     type: 'Spacer',     label: 'Boşluk',      icon: '↕' },
-    ],
-  },
-]
+import { DOCUMENT_TYPE_LABEL, paletteGroups, type PaletteItem } from './paletteIcons'
 
 function DraggablePaletteItem({ item }: { item: PaletteItem }) {
+  // DnD sözleşmesi: id `palette-{id}` ve data (source/blockType/configOverride) EditorPage.handleDragEnd ile eşleşir.
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `palette-${item.id}`,
     data: { source: 'palette', blockType: item.type, configOverride: item.configOverride },
   })
+  const Icon = item.icon
 
   return (
-    <div
+    <button
+      type="button"
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className="select-none"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '6px 8px',
-        borderRadius: 6,
-        fontSize: 12,
-        color: '#2C2C2A',
-        cursor: 'grab',
-        transition: 'background 120ms',
-        opacity: isDragging ? 0.5 : 1,
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = '#EBF3FC'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = 'transparent'
-      }}
+      title={`${item.label} — sayfaya sürükle`}
+      className={`xc-focus flex h-9 min-w-0 cursor-grab select-none items-center gap-2 rounded-md border border-field-line bg-ui-card px-2.5 text-left text-[12px] text-tx transition-colors hover:border-ui-soft-line hover:bg-ui-soft active:cursor-grabbing ${
+        isDragging ? 'opacity-50' : ''
+      }`}
     >
-      <span
-        style={{
-          width: 24,
-          height: 24,
-          borderRadius: 4,
-          background: '#EBF3FC',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 11,
-          fontWeight: 700,
-          color: '#185FA5',
-          flexShrink: 0,
-        }}
-      >
-        {item.icon}
-      </span>
-      <span>{item.label}</span>
-    </div>
+      <Icon size={15} strokeWidth={1.8} aria-hidden="true" className="flex-none text-ui-accent" />
+      <span className="truncate">{item.label}</span>
+    </button>
   )
 }
 
-export default function BlockPalette({ isOpen }: BlockPaletteProps) {
+/** Sol paneldeki "Bloklar" sekmesi: belge türü (salt-okunur), arama ve gruplu blok kartları. */
+export default function BlockPalette() {
   const [search, setSearch] = useState('')
   const documentType = useEditorStore((s) => s.documentType)
+  const searchId = useId()
 
   const filtered = useMemo(() => {
-    const categories = [
-      { name: 'HAZIR BLOKLAR', items: documentType === 'Despatch' ? DESPATCH_READY_BLOCKS : INVOICE_READY_BLOCKS },
-      ...COMMON_CATEGORIES,
-    ]
-    if (!search.trim()) return categories
-    const q = search.toLowerCase()
-    return categories.map((cat) => ({
-      ...cat,
-      items: cat.items.filter((i) => i.label.toLowerCase().includes(q) || i.type.toLowerCase().includes(q)),
-    })).filter((cat) => cat.items.length > 0)
+    const groups = paletteGroups(documentType)
+    const q = search.trim().toLocaleLowerCase('tr')
+    if (!q) return groups
+    return groups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((i) => i.label.toLocaleLowerCase('tr').includes(q) || i.type.toLowerCase().includes(q)),
+      }))
+      .filter((g) => g.items.length > 0)
   }, [search, documentType])
 
-  if (!isOpen) return null
-
   return (
-    <aside
-      style={{
-        flexShrink: 0,
-        width: 180,
-        background: '#fff',
-        borderRight: '1px solid #E0DDD8',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Search */}
-      <div style={{ padding: '12px 8px 8px', flexShrink: 0 }}>
+    <div className="flex flex-col gap-3 px-4 py-3.5">
+      <div className="flex items-center gap-2 rounded-md bg-ui-hover px-2.5 py-1.5 text-[12px] text-tx-muted">
+        <FileText size={14} strokeWidth={1.8} aria-hidden="true" className="flex-none" />
+        <span>Belge türü:</span>
+        <span className="font-semibold text-tx">{DOCUMENT_TYPE_LABEL[documentType]}</span>
+      </div>
+
+      <label
+        htmlFor={searchId}
+        className="flex h-[34px] items-center gap-2 rounded-md border border-field-line bg-ui-side px-2.5 text-tx-subtle focus-within:border-ui-accent"
+      >
+        <Search size={15} strokeWidth={1.8} aria-hidden="true" />
+        <span className="sr-only">Blok ara</span>
         <input
-          type="text"
-          placeholder="⌕ Ara..."
+          id={searchId}
+          type="search"
+          placeholder="Blok ara…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{
-            width: '100%',
-            height: 28,
-            fontSize: 11,
-            padding: '0 8px',
-            boxSizing: 'border-box',
-            background: '#F9F8F6',
-            border: '1px solid #E0DDD8',
-            borderRadius: 5,
-            outline: 'none',
-            color: '#2C2C2A',
-            fontFamily: 'inherit',
-          }}
-          onFocus={e => (e.currentTarget.style.borderColor = '#185FA5')}
-          onBlur={e => (e.currentTarget.style.borderColor = '#E0DDD8')}
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-tx outline-none placeholder:text-tx-subtle"
         />
-      </div>
+      </label>
 
-      {/* Block list */}
-      <div style={{ overflowY: 'auto', flex: 1, paddingBottom: 8 }}>
-        {filtered.map((cat, catIndex) => (
-          <div key={cat.name}>
-            <p style={{
-              fontSize: 10,
-              letterSpacing: '1px',
-              color: '#888780',
-              padding: catIndex === 0 ? '4px 12px 4px' : '12px 12px 4px',
-              fontWeight: 600,
-            }}>
-              {cat.name}
-            </p>
-            <div style={{ padding: '0 4px' }}>
-              {cat.items.map((item) => (
-                <DraggablePaletteItem key={item.id} item={item} />
-              ))}
-            </div>
+      {filtered.length === 0 && (
+        <p className="py-4 text-center text-[12px] text-tx-subtle">“{search}” ile eşleşen blok yok.</p>
+      )}
+
+      {filtered.map((group) => (
+        <section key={group.id} aria-labelledby={`${searchId}-${group.id}`} className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <h2
+              id={`${searchId}-${group.id}`}
+              className="m-0 text-[11px] font-semibold uppercase tracking-[0.07em] text-tx-muted"
+            >
+              {group.title}
+            </h2>
+            <span className="text-[11px] text-tx-subtle">{group.items.length} blok</span>
           </div>
-        ))}
-      </div>
-    </aside>
+          <div className="grid grid-cols-2 gap-1.5">
+            {group.items.map((item) => (
+              <DraggablePaletteItem key={item.id} item={item} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   )
 }

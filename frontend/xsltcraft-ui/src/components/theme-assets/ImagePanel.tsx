@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from 'react'
+import { ImageUp, Trash2, RefreshCw } from 'lucide-react'
 import type { ThemeSlotOption } from '../../services/templateService'
 import AlignPicker from './AlignPicker'
 import { IMAGE_ACCEPT, usesThemeBox, type ImgState } from './imageState'
@@ -18,11 +19,18 @@ interface Props {
   dragHandle?: ReactNode
   /** Temadaki bu türdeki görsel kullanıcı tarafından kaldırılabilir (admin izni). */
   themeImageRemovable?: boolean
+  /** Başlığı gizle (başlık dışarıda, ör. akordeon düğmesinde gösteriliyorsa). */
+  hideTitle?: boolean
 }
+
+const fieldLabel = 'mb-1 block text-[12px] text-tx-muted'
+const fieldInput =
+  'h-8 w-full rounded-md border border-field-line bg-ui-card px-2.5 text-[12px] text-tx placeholder:text-tx-subtle focus:border-ui-accent focus:outline-none focus:ring-2 focus:ring-ui-soft-line'
 
 /** Logo / imza: yükleme, konum, boyut ve hizalama. */
 export default function ImagePanel({
   label, state, uploading, slots, slotValue, onUpload, onChange, onRemove, dragHandle, themeImageRemovable = false,
+  hideTitle = false,
 }: Props) {
   const groups = [...new Set(slots.map((s) => s.group))]
   const selectId = useId()
@@ -36,54 +44,68 @@ export default function ImagePanel({
       : { [side]: value, sizeTouched: true })
 
   return (
-    <section>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{label}</h3>
+    <section className="flex flex-col gap-3">
+      {!hideTitle && (
+        <h3 className="text-[12px] font-semibold uppercase tracking-wide text-tx-muted">{label}</h3>
+      )}
 
       {state.dataUrl ? (
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2.5 rounded-md border border-field-line bg-ui-card p-2">
           {dragHandle ?? (
-            <img src={state.dataUrl} alt={label} className="max-h-16 object-contain border border-gray-100 rounded p-1 bg-gray-50" />
+            <img src={state.dataUrl} alt={label} className="max-h-16 rounded bg-white object-contain p-1" />
           )}
-          <div className="flex flex-col gap-1">
-            <label className="cursor-pointer text-xs text-blue-600 hover:underline">
+          <div className="ml-auto flex flex-col items-start gap-1">
+            <label className="xc-focus flex cursor-pointer items-center gap-1 rounded text-[12px] font-medium text-ui-ink hover:underline focus-within:outline-2 focus-within:outline-ui-accent">
+              <RefreshCw size={12} aria-hidden="true" />
               Değiştir
-              <input type="file" accept={IMAGE_ACCEPT} className="hidden" onChange={onUpload} />
+              <input type="file" accept={IMAGE_ACCEPT} className="sr-only" onChange={onUpload} />
             </label>
-            <button type="button" onClick={onRemove} className="text-xs text-gray-400 hover:text-red-500 text-left">
+            <button
+              type="button"
+              onClick={onRemove}
+              className="xc-focus flex items-center gap-1 rounded text-[12px] text-tx-subtle hover:text-fn-red-ink"
+            >
+              <Trash2 size={12} aria-hidden="true" />
               Kaldır
             </button>
           </div>
         </div>
       ) : (
-        <label className="cursor-pointer flex items-center gap-2 border border-dashed border-gray-300 rounded-lg px-3 py-3 hover:border-blue-300 hover:bg-blue-50 transition-colors mb-3">
-          {uploading
-            ? <span className="text-xs text-gray-400">Yükleniyor…</span>
-            : <><span className="text-lg">🖼</span><span className="text-xs text-gray-500">Görsel yükle (PNG / JPG, en fazla 500 KB)</span></>}
-          <input type="file" accept={IMAGE_ACCEPT} className="hidden" onChange={onUpload} disabled={uploading} />
+        <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border-[1.5px] border-dashed border-field-line bg-ui-side px-3 py-4 text-tx-2 transition-colors hover:border-ui-soft-line hover:bg-ui-soft focus-within:border-ui-accent focus-within:outline-2 focus-within:outline-ui-accent">
+          {uploading ? (
+            <span className="text-[12px] text-tx-subtle">Yükleniyor…</span>
+          ) : (
+            <>
+              <ImageUp size={20} strokeWidth={1.8} aria-hidden="true" />
+              <span className="text-[12.5px] font-semibold">Görsel yükle</span>
+              <span className="text-[11.5px] text-tx-muted">PNG / JPG, en fazla 500 KB</span>
+            </>
+          )}
+          <input type="file" accept={IMAGE_ACCEPT} className="sr-only" onChange={onUpload} disabled={uploading} />
         </label>
       )}
 
       {themeImageRemovable && !state.dataUrl && (
-        <label className="flex items-center gap-2 text-xs text-gray-600 mb-3 cursor-pointer select-none">
+        <label className="flex cursor-pointer select-none items-center gap-2 text-[12px] text-tx-2">
           <input
             type="checkbox"
             checked={state.hideThemeImage ?? false}
             onChange={(e) => onChange({ hideThemeImage: e.target.checked })}
-            className="w-3.5 h-3.5 rounded border-gray-300"
+            className="h-3.5 w-3.5 rounded border-field-line accent-ui-accent"
           />
           Temadaki görseli kaldır
         </label>
       )}
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2.5">
         {slots.length > 0 && (
           <div>
-            <label htmlFor={selectId} className="text-xs text-gray-400 mb-0.5 block">Konum</label>
+            <label htmlFor={selectId} className={fieldLabel}>Konum</label>
             <select
               id={selectId}
               value={slotValue ?? ''}
               onChange={(e) => onChange({ slot: e.target.value || null })}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className={fieldInput}
             >
               {slotValue === null && <option value="">Temanın varsayılan alanı</option>}
               {groups.map((g) => (
@@ -97,33 +119,33 @@ export default function ImagePanel({
           </div>
         )}
 
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label htmlFor={`${selectId}-w`} className="text-xs text-gray-400 mb-0.5 block">Genişlik (px)</label>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label htmlFor={`${selectId}-w`} className={fieldLabel}>Genişlik (px)</label>
             <input
               id={`${selectId}-w`}
               type="number" min={10} max={1200} placeholder={sizePlaceholder}
               value={themeBox ? '' : state.width}
               onChange={(e) => setSize('width', e.target.value)}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className={fieldInput}
             />
           </div>
-          <div className="flex-1">
-            <label htmlFor={`${selectId}-h`} className="text-xs text-gray-400 mb-0.5 block">Yükseklik (px)</label>
+          <div>
+            <label htmlFor={`${selectId}-h`} className={fieldLabel}>Yükseklik (px)</label>
             <input
               id={`${selectId}-h`}
               type="number" min={10} max={1200} placeholder={sizePlaceholder}
               value={themeBox ? '' : state.height}
               onChange={(e) => setSize('height', e.target.value)}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className={fieldInput}
             />
           </div>
         </div>
 
         <div>
-          <label className="text-xs text-gray-400 mb-0.5 block">
-            Hizalama{slots.length > 0 && <span className="text-gray-300"> · seçili konum içinde</span>}
-          </label>
+          <span className={fieldLabel}>
+            Hizalama{slots.length > 0 && <span className="text-tx-subtle"> · seçili konum içinde</span>}
+          </span>
           <AlignPicker value={state.alignment} onChange={(v) => onChange({ alignment: v })} />
         </div>
       </div>

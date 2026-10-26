@@ -22,7 +22,7 @@ interface Props {
   onClose: () => void
 }
 
-const headerBtn = 'h-5 w-5 flex items-center justify-center rounded text-gray-500 hover:bg-gray-300 hover:text-gray-800 transition-colors'
+const headerBtn = 'h-5 w-5 flex items-center justify-center rounded text-tx-muted hover:bg-ui-hover hover:text-tx transition-colors'
 
 // Ayrı bileşen: pencere sığmadığı için gizlenip yeniden göründüğünde ölçüm baştan kurulur.
 function MiniPreviewBody({ html, frozen, onElementClick }: {
@@ -40,7 +40,7 @@ function MiniPreviewBody({ html, frozen, onElementClick }: {
       className={`flex-1 min-h-0 overflow-y-scroll overflow-x-hidden bg-white ${frozen ? 'pointer-events-none' : ''}`}
     >
       {!html && (
-        <p className="h-full flex items-center justify-center px-4 text-center text-xs text-gray-400">
+        <p className="h-full flex items-center justify-center px-4 text-center text-xs text-tx-subtle">
           Henüz önizleme yok
         </p>
       )}
@@ -87,17 +87,17 @@ export default function FloatingPreviewWindow({
       <div
         {...panel.moveHandleProps}
         onDoubleClick={panel.reset}
-        className={`relative h-7 flex-shrink-0 flex items-center gap-1.5 px-2.5 bg-gray-100 border-b border-gray-200 select-none touch-none ${
+        className={`relative h-7 flex-shrink-0 flex items-center gap-1.5 px-2.5 bg-ui-side border-b border-ui-line select-none touch-none ${
           interacting === 'move' ? 'cursor-grabbing' : 'cursor-grab'
         }`}
         title="Sürükleyerek taşı · çift tık: varsayılan konum ve boyut"
       >
-        <span className="text-[10px] font-mono uppercase tracking-wide text-gray-500">Önizleme</span>
+        <span className="text-[10px] font-mono uppercase tracking-wide text-tx-muted">Önizleme</span>
         {status === 'loading' && (
           <span
             role="status"
             aria-label="Derleniyor"
-            className="inline-block w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"
+            className="inline-block w-3 h-3 border-2 border-ui-accent border-t-transparent rounded-full animate-spin"
             title="Derleniyor"
           />
         )}
@@ -105,11 +105,11 @@ export default function FloatingPreviewWindow({
           <span
             role="status"
             aria-label="Önizleme hatası — son başarılı çıktı gösteriliyor"
-            className="inline-block w-2 h-2 rounded-full bg-red-500"
+            className="inline-block w-2 h-2 rounded-full bg-fn-red"
             title="Önizleme hatası — son başarılı çıktı gösteriliyor"
           />
         )}
-        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-1 rounded-full bg-gray-300 pointer-events-none" />
+        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-1 rounded-full bg-ui-line pointer-events-none" />
         <div className="ml-auto flex items-center gap-0.5">
           <button
             onClick={onDock}
@@ -137,7 +137,7 @@ export default function FloatingPreviewWindow({
         className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize touch-none"
         title="Sürükleyerek boyutlandır"
       >
-        <span className="absolute bottom-1 left-1 w-2 h-2 border-l-2 border-b-2 border-gray-400" />
+        <span className="absolute bottom-1 left-1 w-2 h-2 border-l-2 border-b-2 border-field-line" />
       </div>
     </div>
   )

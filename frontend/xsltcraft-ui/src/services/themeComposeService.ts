@@ -13,6 +13,23 @@ export interface ComposeAsset {
   alignment: Alignment
 }
 
+export type FixedNotePosition = 'before' | 'after'
+export type FixedNoteFontFamily = 'theme' | 'arial' | 'verdana' | 'tahoma' | 'times' | 'georgia' | 'courier'
+
+/** Temanın Notlar kutusuna eklenen sabit metin (konum başına en fazla bir öğe). */
+export interface ComposeFixedNote {
+  position: FixedNotePosition
+  text: string
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  fontSize: number
+  /** #RRGGBB */
+  color: string
+  fontFamily: FixedNoteFontFamily
+  align: Alignment
+}
+
 export interface ComposeRequest {
   /** Tema Kullan: tema kimliği. Geliştirici Modu: editördeki XSLT (`xslt`). Yalnız biri verilir. */
   themeId?: string
@@ -22,6 +39,8 @@ export interface ComposeRequest {
   bankInfo: BankInfoItem[]
   /** Kendi görseli eklenmeden kaldırılan temadaki görseller (yalnız admin'in izin verdikleri gizlenir). */
   hideThemeImages?: AssetKind[]
+  /** Sabit notlar; yok/null → XSLT'ye dokunulmaz. */
+  fixedNotes?: ComposeFixedNote[] | null
   includeXslt: boolean
   includeHtml: boolean
 }
@@ -38,6 +57,8 @@ export interface ComposeResponse {
   generationTimeMs: number
   warnings: ComposeWarning[]
   appliedSlots: Partial<Record<AssetKind, string | null>>
+  /** Temada Notlar alanı var mı (not gönderilmese de hesaplanır). */
+  fixedNotesSupported?: boolean
 }
 
 /**

@@ -1,22 +1,15 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import Editor from '@monaco-editor/react'
-import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
 import XsltEditorPreview from '../components/xslt-editor/XsltEditorPreview'
 import { printActivePreview } from '../components/xslt-editor/previewFrame'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
 import { useXslt1CompatWarnings } from '../hooks/useXslt1CompatWarnings'
-import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
 import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
 import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
 import {
-  LayoutDashboard,
-  BookOpen,
-  FilePlus,
-  FolderOpen,
-  Shield,
   Printer,
   ArrowLeft,
   TriangleAlert,
@@ -26,11 +19,15 @@ import {
   Download,
   WandSparkles,
   ListChecks,
-  Terminal,
   BookMarked,
   ShieldCheck,
   Keyboard,
+  FileUp,
 } from 'lucide-react'
+import WorkspaceHeader from '../components/shell/WorkspaceHeader'
+import { HeaderButton, HeaderChip } from '../components/shell/headerParts'
+import { useUiPrefsStore } from '../store/uiPrefsStore'
+import { defineMonacoThemes, monacoThemeId } from '../theme/monacoThemes'
 import { getTemplate } from '../services/templateService'
 import { toast } from '../store/toastStore'
 import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
@@ -53,7 +50,6 @@ import {
 } from '../components/theme-assets/imageState'
 import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import { listSnippets, type UserSnippet } from '../services/snippetService'
-import { useAuthStore } from '../store/authStore'
 import api from '../services/apiService'
 import { toXsltError } from '../services/xsltErrors'
 
@@ -75,27 +71,6 @@ function extractXmlParseErrors(xml: string): { message: string; line: number | n
     line: lineMatch ? Number(lineMatch[1]) : null,
     column: colMatch ? Number(colMatch[1]) : null,
   }]
-}
-
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
-function EditorSidebar() {
-  const { user } = useAuthStore()
-  const location = useLocation()
-  const isActive = (path: string) => location.pathname.startsWith(path)
-  const base = 'flex items-center justify-center w-9 h-9 rounded-lg transition-colors'
-  const active = 'bg-blue-50 text-blue-700'
-  const inactive = 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-  return (
-    <div className="w-12 border-r border-gray-200 bg-white py-2 flex flex-col gap-1 items-center flex-shrink-0">
-      <Link to="/dashboard" className={`${base} ${isActive('/dashboard') ? active : inactive}`} title="Dashboard"><LayoutDashboard size={18} /></Link>
-      <Link to="/templates" className={`${base} ${isActive('/templates') ? active : inactive}`} title="Tema Kütüphanesi"><BookOpen size={18} /></Link>
-      <Link to="/editor/new" className={`${base} ${isActive('/editor/new') ? active : inactive}`} title="Yeni Şablon"><FilePlus size={18} /></Link>
-      <Link to="/drafts" className={`${base} ${isActive('/drafts') ? active : inactive}`} title="Taslaklarım"><FolderOpen size={18} /></Link>
-      {user?.role === 'Admin' && (
-        <Link to="/admin/themes" className={`${base} ${isActive('/admin/themes') ? active : inactive}`} title="Admin Paneli"><Shield size={18} /></Link>
-      )}
-    </div>
-  )
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -138,10 +113,6 @@ export default function DevModePage() {
   const [ublTrLoading, setUblTrLoading] = useState(false)
   const [ublTrError, setUblTrError] = useState<string | null>(null)
 
-  // XPath console
-  const [showXPathConsole, setShowXPathConsole] = useState(false)
-  const [xpathInitialExpr, setXpathInitialExpr] = useState('')
-
   // Snippets
   const [userSnippets, setUserSnippets] = useState<UserSnippet[]>([])
   const [showSnippetManager, setShowSnippetManager] = useState(false)
@@ -159,8 +130,11 @@ export default function DevModePage() {
   const revealLineRef = useRef<((lineNumber: number, column?: number) => void) | null>(null)
   const insertTextAtLineRef = useRef<((lineNumber: number, text: string) => void) | null>(null)
   const imageFileInputRef = useRef<HTMLInputElement>(null)
+  // Sayfadaki tek XML dosya girişi (tüm "XML yükle / değiştir" butonları bunu tetikler).
+  const xmlInputRef = useRef<HTMLInputElement>(null)
   const pendingInsertLineRef = useRef<number | null>(null)
-  const xmlEditorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  const editorTheme = useUiPrefsStore(s => s.editorTheme)
+  const editorFontSize = useUiPrefsStore(s => s.editorFontSize)
 
   // ─── Load template name + XSLT ───────────────────────────────────────────────
   useEffect(() => {
@@ -339,22 +313,6 @@ export default function DevModePage() {
     }
   }
 
-  function handleEvaluateXPath(expression: string) {
-    setXpathInitialExpr(expression)
-    setShowXPathConsole(true)
-  }
-
-  function handleLocateXmlLine(line: number, column?: number | null) {
-    setRightTab('xml')
-    setTimeout(() => {
-      if (xmlEditorRef.current) {
-        xmlEditorRef.current.revealLineInCenter(line)
-        xmlEditorRef.current.setPosition({ lineNumber: line, column: column ?? 1 })
-        xmlEditorRef.current.focus()
-      }
-    }, 100)
-  }
-
   function handleRequestImageInsert(lineNumber: number) {
     pendingInsertLineRef.current = lineNumber
     imageFileInputRef.current?.click()
@@ -378,6 +336,16 @@ export default function DevModePage() {
     printActivePreview()
   }
 
+  function handleDownload() {
+    const blob = new Blob([xslt], { type: 'application/xslt+xml' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `${templateName.replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
+    a.click()
+    URL.revokeObjectURL(a.href)
+    reportDownload('Template', templateId)
+  }
+
   const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null
   const totalErrorCount = xsltErrors.length + xmlErrors.length + (ublTrErrorCount ?? 0)
 
@@ -385,133 +353,156 @@ export default function DevModePage() {
   const compat = useXslt1CompatWarnings(xslt)
   const editorMarkers = useMemo(() => [...xsltErrors, ...compat.markers], [xsltErrors, compat.markers])
 
+  const header = (
+    <WorkspaceHeader
+      active="themes"
+      center={(
+        <>
+          <span className="max-w-[260px] truncate font-medium">{templateName}</span>
+          <HeaderChip>Geliştirici Modu</HeaderChip>
+        </>
+      )}
+      actions={(
+        <>
+          <HeaderButton icon={ArrowLeft} onClick={() => navigate(`/theme-use/${templateId}`)}>Tema Kullan'a dön</HeaderButton>
+          <HeaderButton variant="primary" icon={Download} onClick={handleDownload} disabled={!xslt}>İndir</HeaderButton>
+        </>
+      )}
+    />
+  )
+
+  const xmlInput = (
+    <input ref={xmlInputRef} type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
+  )
+
+  const edBtn =
+    'xc-focus h-7 px-2 flex items-center gap-1 rounded-md text-ed-text text-xs transition-colors hover:bg-ed-active disabled:opacity-40'
+  const badge = 'inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-semibold'
+
   // ─── Phase 1: no XML ─────────────────────────────────────────────────────────
   if (!xmlContent) {
     return (
-      <div className="h-screen flex overflow-hidden bg-gray-50">
-        <EditorSidebar />
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-4">
+      <div className="h-screen flex flex-col overflow-hidden bg-ui-bg text-tx">
+        {header}
+        <main className="flex-1 flex flex-col items-center justify-center gap-6 px-4">
           <div className="text-center">
-            <p className="text-xs text-gray-400 mb-1">
-              <button onClick={() => navigate(`/theme-use/${templateId}`)} className="hover:text-blue-600 transition-colors">
-                ← {templateName}
-              </button>
-            </p>
-            <h1 className="text-xl font-semibold text-gray-800 mb-1">Geliştirici Modu</h1>
-            <p className="text-sm text-gray-500">XSLT editörünü kullanmak için bir XML dosyası yükleyin.</p>
+            <h1 className="text-xl font-semibold text-tx mb-1">Geliştirici Modu</h1>
+            <p className="text-sm text-tx-muted">XSLT editörünü kullanmak için bir XML dosyası yükleyin.</p>
           </div>
           {xsltLoadError && (
-            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
-              <TriangleAlert size={15} className="flex-shrink-0" />{xsltLoadError}
+            <div role="alert" className="flex items-center gap-2 text-sm text-fn-red-ink bg-fn-red-tint border border-fn-red-line rounded-lg px-4 py-3">
+              <TriangleAlert size={15} className="flex-shrink-0" aria-hidden="true" />{xsltLoadError}
             </div>
           )}
           {!xsltLoadError && !loadingXslt && (
-            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-4 py-3">
-              <CheckCircle2 size={15} className="flex-shrink-0" />XSLT dosyası yüklendi — XML seçmeye hazır.
+            <div role="status" className="flex items-center gap-2 text-sm text-fn-green-ink bg-fn-green-tint border border-fn-green-line rounded-lg px-4 py-3">
+              <CheckCircle2 size={15} className="flex-shrink-0" aria-hidden="true" />XSLT dosyası yüklendi — XML seçmeye hazır.
             </div>
           )}
-          <label className="cursor-pointer flex flex-col items-center gap-3 border-2 border-dashed border-blue-300 rounded-xl px-14 py-10 bg-white hover:border-blue-400 hover:bg-blue-50 transition-colors">
-            <svg className="w-10 h-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-            <span className="text-sm font-medium text-blue-600">XML Dosyası Yükle</span>
-            <span className="text-xs text-gray-400">.xml — fatura veya irsaliye</span>
-            <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
-          </label>
-        </div>
+          <button
+            type="button"
+            onClick={() => xmlInputRef.current?.click()}
+            className="xc-focus xc-lift flex flex-col items-center gap-3 border-2 border-dashed border-ui-soft-line rounded-xl px-14 py-10 bg-ui-card hover:bg-ui-soft transition-colors"
+          >
+            <span aria-hidden="true" className="flex h-12 w-12 items-center justify-center rounded-full bg-ui-soft text-ui-ink">
+              <FileUp size={24} />
+            </span>
+            <span className="text-sm font-semibold text-ui-ink">XML Dosyası Yükle</span>
+            <span className="text-xs text-tx-subtle">.xml — fatura veya irsaliye</span>
+          </button>
+        </main>
+        {xmlInput}
       </div>
     )
   }
 
   // ─── Phase 2: editor + preview + optional edit panel ─────────────────────────
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-900">
-      <EditorSidebar />
+    <div className="h-screen flex flex-col overflow-hidden bg-ui-bg text-tx">
+      {header}
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Toolbar */}
-        <div className="h-10 border-b border-gray-700 bg-gray-900 flex items-center gap-1.5 px-3 flex-shrink-0">
-          <button onClick={() => navigate(`/theme-use/${templateId}`)}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors mr-1" title="Geri dön">
-            <ArrowLeft size={13} />
-          </button>
-          <span className="text-sm font-medium text-gray-200 flex-1 truncate min-w-0">{templateName} — Geliştirici Modu</span>
-
-          {/* Loading / timing */}
+        {/* Durum + araçlar */}
+        <div
+          role="toolbar"
+          aria-label="Geliştirici modu araçları"
+          className="min-h-10 border-b border-ui-line bg-ui-card flex flex-wrap items-center gap-1.5 px-3 py-1 flex-shrink-0 text-xs"
+        >
           {previewLoading && (
-            <span className="text-xs text-blue-400 flex items-center gap-1 flex-shrink-0">
-              <span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            <span role="status" className="text-tx-muted flex items-center gap-1 flex-shrink-0">
+              <span aria-hidden="true" className="inline-block w-3 h-3 border-2 border-ui-accent border-t-transparent rounded-full animate-spin motion-reduce:animate-none" />
               Derleniyor
             </span>
           )}
           {!previewLoading && lastMs !== null && (
-            <span className="text-xs text-gray-500 flex-shrink-0">{lastMs} ms</span>
+            <span className="text-tx-muted flex-shrink-0">{lastMs} ms</span>
           )}
 
-          {/* Validation status */}
           {xsltValid !== null && (
-            <span className={`flex items-center gap-1 text-xs flex-shrink-0 ${xsltValid ? 'text-green-400' : 'text-red-400'}`} title={xsltValid ? 'XSLT geçerli' : 'XSLT hatası'}>
-              {xsltValid ? <CheckCircle2 size={13} /> : <TriangleAlert size={13} />}
+            <span className={`flex items-center gap-1 flex-shrink-0 ${xsltValid ? 'text-fn-green-ink' : 'text-fn-red-ink'}`} title={xsltValid ? 'XSLT geçerli' : 'XSLT hatası'}>
+              {xsltValid ? <CheckCircle2 size={13} aria-hidden="true" /> : <TriangleAlert size={13} aria-hidden="true" />}
               XSLT
             </span>
           )}
           {xmlValid !== null && (
-            <span className={`flex items-center gap-1 text-xs flex-shrink-0 ${xmlValid ? 'text-green-400' : 'text-red-400'}`} title={xmlValid ? 'XML geçerli' : 'XML hatası'}>
-              {xmlValid ? <CheckCircle2 size={13} /> : <TriangleAlert size={13} />}
+            <span className={`flex items-center gap-1 flex-shrink-0 ${xmlValid ? 'text-fn-green-ink' : 'text-fn-red-ink'}`} title={xmlValid ? 'XML geçerli' : 'XML hatası'}>
+              {xmlValid ? <CheckCircle2 size={13} aria-hidden="true" /> : <TriangleAlert size={13} aria-hidden="true" />}
               XML
             </span>
           )}
 
-          <div className="w-px h-4 bg-gray-700 mx-0.5 flex-shrink-0" />
+          <div className="flex-1" />
 
-          <label className="cursor-pointer text-xs text-gray-400 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 flex-shrink-0">
-            XML Değiştir
-            <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
-          </label>
           <button
-            onClick={() => {
-              const blob = new Blob([xslt], { type: 'application/xslt+xml' })
-              const a = document.createElement('a')
-              a.href = URL.createObjectURL(blob)
-              a.download = `${templateName.replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
-              a.click()
-              URL.revokeObjectURL(a.href)
-              reportDownload('Template', templateId)
-            }}
-            disabled={!xslt}
-            className="flex items-center gap-1 text-xs text-gray-400 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 disabled:opacity-30 flex-shrink-0"
-            title="XSLT dosyasını indir"
+            type="button"
+            onClick={() => xmlInputRef.current?.click()}
+            className="xc-focus h-7 flex items-center gap-1 rounded-md border border-field-line bg-ui-card px-2 text-tx-2 hover:bg-ui-hover flex-shrink-0"
           >
-            <Download size={12} />İndir
+            <FileUp size={12} aria-hidden="true" />XML Değiştir
           </button>
-          <button onClick={handlePrint} disabled={!html}
-            className="text-gray-400 border border-gray-600 rounded p-1 hover:bg-gray-800 disabled:opacity-30 flex-shrink-0" title="Yazdır">
-            <Printer size={13} />
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={!html}
+            className="xc-focus h-7 w-7 flex items-center justify-center rounded-md border border-field-line bg-ui-card text-tx-2 hover:bg-ui-hover disabled:opacity-40 flex-shrink-0"
+            title="Yazdır"
+            aria-label="Yazdır"
+          >
+            <Printer size={13} aria-hidden="true" />
           </button>
           {!editMode
-            ? <button onClick={() => setEditMode(true)} className="flex items-center gap-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-2 py-1 flex-shrink-0">
-                <Settings2 size={12} />Düzenle
+            ? (
+              <button
+                type="button"
+                onClick={() => setEditMode(true)}
+                className="xc-focus h-7 flex items-center gap-1 rounded-md bg-ui-accent px-2 font-semibold text-white hover:brightness-110 flex-shrink-0"
+              >
+                <Settings2 size={12} aria-hidden="true" />Düzenle
               </button>
-            : <button onClick={() => setEditMode(false)} className="flex items-center gap-1 text-xs text-gray-300 border border-gray-600 rounded px-2 py-1 hover:bg-gray-800 flex-shrink-0">
-                <X size={12} />Kapat
+            )
+            : (
+              <button
+                type="button"
+                onClick={() => setEditMode(false)}
+                className="xc-focus h-7 flex items-center gap-1 rounded-md border border-field-line bg-ui-card px-2 text-tx-2 hover:bg-ui-hover flex-shrink-0"
+              >
+                <X size={12} aria-hidden="true" />Kapat
               </button>
-          }
-
-          <div className="w-px h-4 bg-gray-700 mx-0.5 flex-shrink-0" />
-
-          {/* Shortcuts */}
+            )}
           <button
+            type="button"
             onClick={() => setShowShortcuts(true)}
-            className="h-6 px-2 flex items-center rounded border border-gray-600 text-gray-300 hover:bg-gray-800 text-xs transition-colors flex-shrink-0"
+            className="xc-focus h-7 w-7 flex items-center justify-center rounded-md border border-field-line bg-ui-card text-tx-2 hover:bg-ui-hover flex-shrink-0"
             title="Klavye Kısayolları (F1)"
+            aria-label="Klavye kısayolları"
           >
-            <Keyboard size={12} />
+            <Keyboard size={13} aria-hidden="true" />
           </button>
         </div>
 
         {previewError && (
-          <div className="px-4 py-2 text-xs text-red-400 bg-red-950 border-b border-red-900 flex-shrink-0 flex items-start gap-2">
-            <TriangleAlert size={13} className="flex-shrink-0 mt-0.5" />
+          <div role="alert" className="px-4 py-2 text-xs text-fn-red-ink bg-fn-red-tint border-b border-fn-red-line flex-shrink-0 flex items-start gap-2">
+            <TriangleAlert size={13} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
             <span className="font-mono whitespace-pre-wrap break-all">{previewError}</span>
           </div>
         )}
@@ -519,83 +510,58 @@ export default function DevModePage() {
         <div className="flex-1 flex overflow-hidden">
           {/* Resizable: XSLT editor | right panel */}
           <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
-            <Panel defaultSize={50} minSize={20}>
-              <div className="h-full flex flex-col">
-                <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between gap-2">
-                  <span className="text-xs text-gray-400 font-mono uppercase tracking-wide whitespace-nowrap">XSLT Editörü</span>
+            <Panel defaultSize="50%" minSize="20%">
+              <div className="h-full flex flex-col bg-ed-bg">
+                <div
+                  role="toolbar"
+                  aria-label="Editör araçları"
+                  className="px-2.5 py-1 bg-ed-panel border-b border-ed-border flex-shrink-0 flex items-center justify-between gap-2"
+                >
+                  <span className="text-xs text-ed-muted font-mono uppercase tracking-wide whitespace-nowrap">XSLT Editörü</span>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => toggleCommentRef.current?.()}
-                      className="h-6 px-2 flex items-center justify-center rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs font-mono transition-colors"
-                      title="Yorum Satırı Ekle / Kaldır (Ctrl+Shift+C)"
-                    >
+                    <button type="button" onClick={() => toggleCommentRef.current?.()} className={`${edBtn} font-mono`} title="Yorum Satırı Ekle / Kaldır (Ctrl+Shift+C)" aria-label="Açıklama satırı yap / kaldır">
                       {'<!--'}
                     </button>
-                    <button
-                      onClick={() => formatDocumentRef.current?.()}
-                      className="h-6 px-2 flex items-center gap-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors"
-                      title="Belgeyi Biçimlendir (Shift+Alt+F)"
-                    >
-                      <WandSparkles size={12} />
+                    <button type="button" onClick={() => formatDocumentRef.current?.()} className={edBtn} title="Belgeyi Biçimlendir (Shift+Alt+F)" aria-label="Belgeyi biçimlendir">
+                      <WandSparkles size={12} aria-hidden="true" />
                     </button>
-
                     <button
+                      type="button"
                       onClick={handleValidateUblTr}
                       disabled={!xmlContent || ublTrLoading}
-                      className="h-6 px-2 flex items-center gap-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors disabled:opacity-30"
+                      className={`${edBtn} border border-ed-border`}
                       title="UBL-TR iş kurallarını kontrol et"
                     >
-                      <ShieldCheck size={12} />
+                      <ShieldCheck size={12} aria-hidden="true" />
+                      UBL-TR kontrol
                       {ublTrErrorCount != null && ublTrErrorCount > 0 && (
-                        <span className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[9px] font-semibold">
-                          {ublTrErrorCount}
-                        </span>
+                        <span className={`${badge} bg-fn-red text-white`}>{ublTrErrorCount}</span>
                       )}
                     </button>
-
-                    <button
-                      onClick={() => setShowXPathConsole(s => !s)}
-                      disabled={!xmlContent}
-                      className={`h-6 px-2 flex items-center rounded border border-gray-600 text-xs transition-colors disabled:opacity-30 ${
-                        showXPathConsole ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
-                      }`}
-                      title="XPath Konsolu"
-                    >
-                      <Terminal size={12} />
-                    </button>
-
-                    <button
-                      onClick={() => setShowSnippetManager(true)}
-                      className="h-6 px-2 flex items-center gap-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors"
-                      title="Snippet Kütüphanesi"
-                    >
-                      <BookMarked size={12} />
+                    <button type="button" onClick={() => setShowSnippetManager(true)} className={edBtn} title="Snippet Kütüphanesi" aria-label="Snippet Kütüphanesi">
+                      <BookMarked size={12} aria-hidden="true" />
                       {userSnippets.length > 0 && (
-                        <span className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-gray-600 text-gray-300 text-[9px] font-medium">
-                          {userSnippets.length}
-                        </span>
+                        <span className={`${badge} bg-ed-seg text-ed-text`}>{userSnippets.length}</span>
                       )}
                     </button>
-
                     <button
+                      type="button"
                       onClick={() => setShowProblems(s => !s)}
-                      className={`h-6 px-2 flex items-center gap-1 rounded border border-gray-600 text-xs transition-colors ${
-                        showProblems ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
-                      }`}
+                      aria-pressed={showProblems}
+                      className={`${edBtn} ${showProblems ? 'bg-ed-active' : ''}`}
                       title="Problemler panelini aç/kapat"
+                      aria-label="Problemler"
                     >
-                      <ListChecks size={12} />
+                      <ListChecks size={12} aria-hidden="true" />
                       {totalErrorCount > 0 && (
-                        <span className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 rounded-full bg-red-500 text-white text-[9px] font-semibold">
-                          {totalErrorCount}
-                        </span>
+                        <span className={`${badge} bg-fn-red text-white`}>{totalErrorCount}</span>
                       )}
                     </button>
                   </div>
                 </div>
                 {loadingXslt ? (
-                  <div className="flex-1 flex items-center justify-center bg-gray-900">
-                    <span className="text-xs text-gray-500">XSLT yükleniyor…</span>
+                  <div className="flex-1 flex items-center justify-center bg-ed-bg">
+                    <span role="status" className="text-xs text-ed-muted">XSLT yükleniyor…</span>
                   </div>
                 ) : (
                   <div className="flex-1 overflow-hidden relative">
@@ -604,7 +570,6 @@ export default function DevModePage() {
                       onChange={(v) => setXslt(v)}
                       xmlContent={xmlContent}
                       userSnippets={userSnippets}
-                      onEvaluateXPath={handleEvaluateXPath}
                       onRequestImageInsert={handleRequestImageInsert}
                       errors={editorMarkers}
                       onEditorReady={({ revealLine, insertTextAtLine, toggleComment, formatDocument }) => {
@@ -614,9 +579,7 @@ export default function DevModePage() {
                         formatDocumentRef.current = formatDocument
                       }}
                       options={{
-                        fontSize: 12,
                         minimap: { enabled: true },
-                        wordWrap: 'off',
                         scrollBeyondLastLine: false,
                         automaticLayout: true,
                         lineNumbers: 'on',
@@ -628,28 +591,27 @@ export default function DevModePage() {
               </div>
             </Panel>
 
-            <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors cursor-col-resize flex-shrink-0" />
+            <PanelResizeHandle className="w-1 bg-ui-line hover:bg-ui-accent transition-colors cursor-col-resize flex-shrink-0" />
 
-            <Panel defaultSize={50} minSize={20}>
-              <div className="h-full flex flex-col">
+            <Panel defaultSize="50%" minSize="20%">
+              <div className="h-full flex flex-col border-l border-ui-line">
                 {/* Sekme başlıkları */}
-                <div className="h-8 flex items-center border-b border-gray-700 bg-gray-800 px-2 gap-0.5 flex-shrink-0">
-                  <button
-                    onClick={() => setRightTab('preview')}
-                    className={`px-3 py-1 rounded text-xs transition-colors ${
-                      rightTab === 'preview' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
-                    }`}
-                  >
-                    Önizleme
-                  </button>
-                  <button
-                    onClick={() => setRightTab('xml')}
-                    className={`px-3 py-1 rounded text-xs transition-colors ${
-                      rightTab === 'xml' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
-                    }`}
-                  >
-                    XML Kaynak
-                  </button>
+                <div className="min-h-10 flex items-center border-b border-ui-line bg-ui-card px-2 flex-shrink-0">
+                  <div role="group" aria-label="Önizleme görünümü" className="flex items-center gap-0.5 rounded-lg bg-ui-hover p-0.5">
+                    {(['preview', 'xml'] as const).map(t => (
+                      <button
+                        key={t}
+                        type="button"
+                        aria-pressed={rightTab === t}
+                        onClick={() => setRightTab(t)}
+                        className={`xc-focus h-7 rounded-md px-2.5 text-[12.5px] transition-colors ${
+                          rightTab === t ? 'bg-ui-card font-semibold text-tx shadow-[var(--ui-shadow-rest)]' : 'font-medium text-tx-muted hover:text-tx'
+                        }`}
+                      >
+                        {t === 'preview' ? 'Önizleme' : 'XML Kaynak'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Sekme içerikleri */}
@@ -660,13 +622,13 @@ export default function DevModePage() {
                     <Editor
                       height="100%"
                       language="xml"
-                      theme="vs-dark"
+                      beforeMount={defineMonacoThemes}
+                      theme={monacoThemeId(editorTheme)}
                       value={xmlContent ?? ''}
-                      onMount={(editor) => { xmlEditorRef.current = editor }}
                       options={{
                         readOnly: true,
                         minimap: { enabled: false },
-                        fontSize: 12,
+                        fontSize: editorFontSize,
                         wordWrap: 'on',
                         lineNumbers: 'on',
                         scrollBeyondLastLine: false,
@@ -681,7 +643,7 @@ export default function DevModePage() {
 
           {/* Right edit panel */}
           {editMode && (
-            <div className="flex-shrink-0 border-l border-gray-700 bg-white flex flex-col overflow-y-auto" style={{ width: 300 }}>
+            <aside aria-label="Tema varlıkları" className="flex-shrink-0 border-l border-ui-line bg-ui-card flex flex-col overflow-y-auto" style={{ width: 300 }}>
               <div className="p-4 flex flex-col gap-6">
                 <ImagePanel
                   label="Logo" state={logo} uploading={logoUploading} slots={slots}
@@ -692,7 +654,7 @@ export default function DevModePage() {
                   themeImageRemovable={themeImageRemovable('logo', slots)}
                 />
 
-                <div className="border-t border-gray-100" />
+                <div className="border-t border-ui-line" />
 
                 <ImagePanel
                   label="İmza / Kaşe" state={signature} uploading={signatureUploading} slots={slots}
@@ -703,17 +665,17 @@ export default function DevModePage() {
                   themeImageRemovable={themeImageRemovable('signature', slots)}
                 />
 
-                <div className="border-t border-gray-100" />
+                <div className="border-t border-ui-line" />
 
                 <BankInfoPanel rows={bankInfo} onChange={(rows) => { setBankInfo(rows); setAssetsTouched(true) }} />
 
-                <div className="border-t border-gray-100 pt-2">
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Düzenlemeler XSLT editörüne <code className="bg-gray-100 px-1 rounded">DEV-MODE-OVERRIDES</code> bloğu olarak yansır.
+                <div className="border-t border-ui-line pt-2">
+                  <p className="text-xs text-tx-subtle leading-relaxed">
+                    Düzenlemeler XSLT editörüne <code className="bg-ui-side px-1 rounded">DEV-MODE-OVERRIDES</code> bloğu olarak yansır.
                   </p>
                 </div>
               </div>
-            </div>
+            </aside>
           )}
         </div>
 
@@ -753,15 +715,6 @@ export default function DevModePage() {
             onClose={() => setShowProblems(false)}
           />
         )}
-
-        {showXPathConsole && (
-          <XPathConsolePanel
-            xmlContent={xmlContent}
-            initialExpression={xpathInitialExpr}
-            onLocateLine={handleLocateXmlLine}
-            onClose={() => setShowXPathConsole(false)}
-          />
-        )}
       </div>
 
       {showSnippetManager && (
@@ -775,6 +728,7 @@ export default function DevModePage() {
         <ShortcutsDialog onClose={() => setShowShortcuts(false)} />
       )}
 
+      {xmlInput}
       <input
         ref={imageFileInputRef}
         type="file"

@@ -123,6 +123,13 @@ function getEffectiveXml(
   return xml
 }
 
+// ─── Hazır komutlar ───────────────────────────────────────────────────────────
+
+const PROMPT_EXPLAIN_SELECTION = 'Seçili kodu açıkla: ne yaptığını ve UBL-TR belgesindeki hangi alanlara dokunduğunu kısaca anlat.'
+
+const chipCls =
+  'xc-focus h-[26px] whitespace-nowrap rounded-full border border-field-line bg-ui-card px-2.5 text-[11.5px] text-tx-2 transition-colors enabled:hover:border-ui-soft-line enabled:hover:bg-ui-soft enabled:hover:text-ui-ink disabled:opacity-45'
+
 // ─── Ana bileşen ──────────────────────────────────────────────────────────────
 
 let msgIdCounter = 0
@@ -345,7 +352,6 @@ export default function AiAssistantPanel({
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setStreaming(true)
-    setLastMeta(null)
 
     const effectiveXml = getEffectiveXml(xml, xmlSelection, xmlCursorLine)
 
@@ -493,58 +499,70 @@ export default function AiAssistantPanel({
 
   return (
     <div
-      className="relative h-full flex flex-col bg-gray-900 text-gray-100"
+      className="relative h-full flex flex-col bg-ui-card text-tx"
       onDragEnter={handleDragEnter}
       onDragOver={e => { if (visionEnabled && isFileDrag(e)) e.preventDefault() }}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       {dragOver && (
-        <div className="pointer-events-none absolute inset-2 z-20 rounded-lg border-2 border-dashed border-violet-400 bg-violet-950/70 flex flex-col items-center justify-center gap-2 text-violet-200">
+        <div className="pointer-events-none absolute inset-2 z-20 rounded-lg border-2 border-dashed border-ui-accent bg-ui-soft/90 flex flex-col items-center justify-center gap-2 text-ui-ink">
           <ImagePlus size={28} />
           <span className="text-sm font-medium">Ekran görüntüsünü buraya bırakın</span>
-          <span className="text-[11px] text-violet-300/80">PNG, JPG · en fazla {maxImages} görsel</span>
+          <span className="text-[11px] text-tx-muted">PNG, JPG · en fazla {maxImages} görsel</span>
         </div>
       )}
-      {/* Header */}
-      <div className="h-9 px-3 flex items-center gap-2 border-b border-gray-700 bg-gray-800 flex-shrink-0">
-        <Sparkles size={14} className="text-violet-400" />
-        <span className="text-xs font-medium uppercase tracking-wide text-gray-300">AI Asistan</span>
-        {lastMeta?.provider && (
-          <span className="text-[10px] text-gray-500 font-mono ml-2">
-            {lastMeta.provider}{lastMeta.model ? ` · ${lastMeta.model}` : ''}{lastMeta.ms ? ` · ${lastMeta.ms}ms` : ''}
+      {/* Header — model adı yalnız gerçek yanıt meta verisinden (ilk yanıttan sonra) */}
+      <div className="h-[36px] pl-3 pr-1.5 flex items-center gap-2 border-b border-ui-line flex-shrink-0">
+        <Sparkles size={15} className="flex-none text-ui-accent" aria-hidden="true" />
+        <h2 className="m-0 flex-none whitespace-nowrap text-[13px] font-semibold text-tx">AI Asistan</h2>
+        {(lastMeta?.model || lastMeta?.provider) && (
+          <span
+            className="min-w-0 truncate font-mono text-[11px] text-tx-muted"
+            title={[lastMeta.provider, lastMeta.model].filter(Boolean).join(' · ')}
+          >
+            {lastMeta.model || lastMeta.provider}
           </span>
         )}
         <div className="flex-1" />
         {streaming && (
           <button
+            type="button"
             onClick={cancel}
-            className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
+            className="xc-focus rounded px-1.5 h-7 text-xs text-fn-orange-ink hover:bg-fn-orange-tint flex items-center gap-1"
           >
-            <StopCircle size={13} /> İptal
+            <StopCircle size={13} aria-hidden="true" /> İptal
           </button>
         )}
         {messages.length > 0 && !streaming && (
           <button
+            type="button"
             onClick={handleNewChat}
-            className="text-gray-500 hover:text-gray-300 transition-colors"
+            className="xc-focus h-7 w-7 flex items-center justify-center rounded-md text-tx-muted hover:bg-ui-hover hover:text-tx transition-colors"
             title="Yeni sohbet"
+            aria-label="Yeni sohbet"
           >
-            <RotateCcw size={13} />
+            <RotateCcw size={13} aria-hidden="true" />
           </button>
         )}
-        <button onClick={onClose} className="text-gray-400 hover:text-white" title="Paneli kapat">
-          <X size={14} />
+        <button
+          type="button"
+          onClick={onClose}
+          className="xc-focus h-7 w-7 flex items-center justify-center rounded-md text-tx-muted hover:bg-ui-hover hover:text-tx"
+          title="Paneli kapat"
+          aria-label="AI Asistanı kapat"
+        >
+          <X size={15} aria-hidden="true" />
         </button>
       </div>
 
       {/* İlk satırda XML bildirimi eksik uyarısı */}
       {xmlDeclarationMissing && (
-        <div className="px-3 py-1.5 border-b border-amber-700/40 bg-amber-900/20 flex items-start gap-1.5 text-[11px] text-amber-300 flex-shrink-0">
-          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+        <div className="px-3 py-1.5 border-b border-fn-orange-line bg-fn-orange-tint flex items-start gap-1.5 text-[11px] text-fn-orange-ink flex-shrink-0">
+          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
           <span>
             XSLT'nin ilk satırında{' '}
-            <code className="font-mono text-amber-200">{'<?xml version="1.0" encoding="UTF-8"?>'}</code>{' '}
+            <code className="font-mono font-semibold">{'<?xml version="1.0" encoding="UTF-8"?>'}</code>{' '}
             bildirimi eksik. İlk satıra eklemeniz gerekir.
           </span>
         </div>
@@ -552,31 +570,31 @@ export default function AiAssistantPanel({
 
       {/* XML seçimi bilgi bandı */}
       {xmlSelection?.trim() && (
-        <div className="px-3 py-1 border-b border-gray-700 bg-gray-850 flex items-center gap-1.5 text-[10px] text-violet-400 flex-shrink-0">
-          <Sparkles size={10} />
+        <div className="px-3 py-1 border-b border-ui-line bg-ui-side flex items-center gap-1.5 text-[10.5px] text-ui-ink flex-shrink-0">
+          <Sparkles size={10} aria-hidden="true" />
           XML seçimi bağlam olarak kullanılıyor ({xmlSelection.split('\n').length} satır)
         </div>
       )}
 
       {/* XSLT seçimi bilgi bandı */}
       {xsltSelection?.trim() && (
-        <div className="px-3 py-1 border-b border-gray-700 bg-gray-850 flex items-center gap-1.5 text-[10px] text-violet-400 flex-shrink-0">
-          <Sparkles size={10} />
+        <div className="px-3 py-1 border-b border-ui-line bg-ui-side flex items-center gap-1.5 text-[10.5px] text-ui-ink flex-shrink-0">
+          <Sparkles size={10} aria-hidden="true" />
           XSLT seçimi bağlam olarak kullanılıyor ({xsltSelection.split('\n').length} satır)
         </div>
       )}
 
       {/* Mesaj listesi */}
       <div className="flex-1 relative min-h-0">
-      <div ref={listRef} onScroll={handleScroll} className="h-full overflow-y-auto px-3 py-3">
+      <div ref={listRef} onScroll={handleScroll} className="h-full overflow-y-auto px-3.5 py-3.5">
         <div ref={contentRef} className="space-y-3">
         {messages.length === 0 && !streaming && (
-          <div className="text-sm text-gray-500 italic text-center mt-8">
+          <div className="mt-8 text-center text-[12.5px] text-tx-muted">
             XSLT şablonunu doğal dille düzenlemek için mesaj yaz.<br />
-            <span className="text-gray-600 text-xs">Örn: "PartyName altındaki cbc:Note alanını kaldır"</span>
+            <span className="text-[11.5px] text-tx-subtle">Örn: "PartyName altındaki cbc:Note alanını kaldır"</span>
             {visionEnabled && (
-              <span className="block mt-2 text-gray-600 text-xs not-italic">
-                Önizlemenin ya da hedef tasarımın ekran görüntüsünü de ekleyebilirsin (📎, Ctrl+V ya da sürükle-bırak).
+              <span className="mt-2 block text-[11.5px] text-tx-subtle">
+                Önizlemenin ya da hedef tasarımın ekran görüntüsünü de ekleyebilirsin (ataç, Ctrl+V ya da sürükle-bırak).
               </span>
             )}
           </div>
@@ -585,10 +603,10 @@ export default function AiAssistantPanel({
         {messages.map((msg) => (
           <div key={msg.id} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
             <div
-              className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+              className={`text-[12.5px] leading-[1.55] ${
                 msg.role === 'user'
-                  ? 'bg-violet-700 text-white'
-                  : 'bg-gray-800 text-gray-100 border border-gray-700'
+                  ? 'max-w-[85%] rounded-[10px_10px_2px_10px] bg-ui-soft px-3 py-2 text-tx'
+                  : 'w-full max-w-full text-tx'
               }`}
             >
               {msg.role === 'user' ? (
@@ -606,38 +624,38 @@ export default function AiAssistantPanel({
                   <MarkdownMessage text={msg.content} />
                   {/* Yazıyor göstergesi: içerik akarken de görünür kalsın. */}
                   {msg.status === 'streaming' && (
-                    <span className="inline-block w-2 h-3 bg-violet-400 animate-pulse align-text-bottom ml-0.5" />
+                    <span aria-hidden="true" className="inline-block w-2 h-3 bg-ui-accent animate-pulse motion-reduce:animate-none align-text-bottom ml-0.5" />
                   )}
                 </>
               ) : msg.status === 'streaming' ? (
-                <span className="flex items-center gap-1 text-gray-500">
-                  <Loader2 size={12} className="animate-spin" /> Yanıt hazırlanıyor…
+                <span className="flex items-center gap-1 text-tx-muted">
+                  <Loader2 size={12} className="animate-spin" aria-hidden="true" /> Yanıt hazırlanıyor…
                 </span>
               ) : msg.status === 'cancelled' ? (
-                <span className="flex items-center gap-1 text-gray-500">
-                  <StopCircle size={12} /> İptal edildi
+                <span className="flex items-center gap-1 text-tx-muted">
+                  <StopCircle size={12} aria-hidden="true" /> İptal edildi
                 </span>
               ) : (
-                <span className="text-gray-500">—</span>
+                <span className="text-tx-subtle">—</span>
               )}
 
               {/* İptal edilmiş kısmi yanıt: içeriğin altında etiketle. */}
               {msg.status === 'cancelled' && msg.content && (
-                <div className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-500">
+                <div className="mt-1.5 flex items-center gap-1 text-[10.5px] text-tx-muted">
                   <StopCircle size={10} /> İptal edildi — yanıt yarım
                 </div>
               )}
 
               {/* Hata ayrı blokta; kısmi yanıt yukarıda korunur. */}
               {msg.status === 'error' && msg.errorMessage && (
-                <div className="mt-1.5 flex items-start gap-1.5 rounded border border-rose-800/60 bg-rose-950/40 px-2 py-1 text-[11px] text-rose-300">
+                <div className="mt-1.5 flex items-start gap-1.5 rounded border border-fn-red-line bg-fn-red-tint px-2 py-1 text-[11px] text-fn-red-ink">
                   <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
                   <span className="break-words">{msg.errorMessage}</span>
                 </div>
               )}
             </div>
             {msg.role === 'assistant' && msg.meta?.provider && (
-              <span className="text-[9px] text-gray-600 font-mono px-1">
+              <span className="font-mono text-[10.5px] text-tx-subtle">
                 {msg.meta.provider}{msg.meta.model ? ` · ${msg.meta.model}` : ''}{msg.meta.ms ? ` · ${msg.meta.ms}ms` : ''}
               </span>
             )}
@@ -646,37 +664,44 @@ export default function AiAssistantPanel({
                 yarım yanıtta gösterilmez — thumbs-up eğitim verisini kirletir,
                 "Uygula" yarım XSLT uygular. */}
             {msg.role === 'assistant' && msg.status === 'done' && msg.content.trim() !== '' && (
-              <div className="flex items-center gap-1.5 px-1 flex-wrap">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {onApplyXslt && extractApplicableBlock(msg.content) && (
                   <button
+                    type="button"
                     onClick={() => openApply(msg)}
-                    className="h-6 px-2 flex items-center gap-1 rounded border border-emerald-700 text-emerald-300 hover:bg-emerald-900/40 text-[11px] transition-colors"
-                    title="Önerilen değişikliği editöre uygula (diff önizlemeli)"
+                    className="xc-focus flex h-[28px] items-center gap-1.5 rounded-md bg-ui-accent px-3 text-[12px] font-semibold text-white transition-[filter] hover:brightness-110"
+                    title="Önerilen değişikliği farkıyla göster, onaylayınca editöre uygula"
                   >
-                    <Wand2 size={12} /> {msg.applied ? 'Tekrar Uygula' : 'Uygula'}
+                    <Wand2 size={13} aria-hidden="true" /> {msg.applied ? 'Tekrar uygula' : 'Editöre uygula'}
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => sendFeedback(msg.id, 'up')}
                   disabled={msg.feedback === 'up'}
-                  className={`h-6 w-6 flex items-center justify-center rounded border text-[11px] transition-colors ${
+                  aria-pressed={msg.feedback === 'up'}
+                  className={`xc-focus h-7 w-7 flex items-center justify-center rounded-md border text-[11px] transition-colors ${
                     msg.feedback === 'up'
-                      ? 'border-emerald-600 bg-emerald-900/40 text-emerald-300'
-                      : 'border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                      ? 'border-fn-green-line bg-fn-green-tint text-fn-green-ink'
+                      : 'border-field-line text-tx-muted hover:bg-ui-hover hover:text-tx'
                   }`}
                   title="İşe yaradı"
+                  aria-label="İşe yaradı"
                 >
                   <ThumbsUp size={12} />
                 </button>
                 <button
+                  type="button"
                   onClick={() => sendFeedback(msg.id, 'down')}
                   disabled={msg.feedback === 'down'}
-                  className={`h-6 w-6 flex items-center justify-center rounded border text-[11px] transition-colors ${
+                  aria-pressed={msg.feedback === 'down'}
+                  className={`xc-focus h-7 w-7 flex items-center justify-center rounded-md border text-[11px] transition-colors ${
                     msg.feedback === 'down'
-                      ? 'border-rose-600 bg-rose-900/40 text-rose-300'
-                      : 'border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                      ? 'border-fn-red-line bg-fn-red-tint text-fn-red-ink'
+                      : 'border-field-line text-tx-muted hover:bg-ui-hover hover:text-tx'
                   }`}
                   title="İşe yaramadı"
+                  aria-label="İşe yaramadı"
                 >
                   <ThumbsDown size={12} />
                 </button>
@@ -684,16 +709,18 @@ export default function AiAssistantPanel({
                 {msg.feedback === 'down' && (
                   <>
                     <button
+                      type="button"
                       onClick={() => retryDifferent(msg.id)}
                       disabled={streaming}
-                      className="h-6 px-2 flex items-center gap-1 rounded border border-gray-700 text-gray-300 hover:bg-gray-700 text-[11px] transition-colors disabled:opacity-30"
+                      className="xc-focus h-7 px-2 flex items-center gap-1 rounded-md border border-field-line bg-ui-card text-tx-2 hover:bg-ui-hover text-[11px] transition-colors disabled:opacity-40"
                       title="Aynı soruyu farklı bir yaklaşımla yeniden sor"
                     >
                       <RefreshCcw size={11} /> Farklı yaklaşım dene
                     </button>
                     <button
+                      type="button"
                       onClick={askForDetail}
-                      className="h-6 px-2 flex items-center gap-1 rounded border border-gray-700 text-gray-300 hover:bg-gray-700 text-[11px] transition-colors"
+                      className="xc-focus h-7 px-2 flex items-center gap-1 rounded-md border border-field-line bg-ui-card text-tx-2 hover:bg-ui-hover text-[11px] transition-colors"
                       title="Neyin çalışmadığını yaz"
                     >
                       <PencilLine size={11} /> Detay vereyim
@@ -711,17 +738,32 @@ export default function AiAssistantPanel({
       {/* Kullanıcı yukarı kaydırdıysa dibe dönüş kısayolu */}
       {showJump && (
         <button
+          type="button"
           onClick={() => scrollToBottom(true)}
-          className="absolute bottom-3 right-3 h-8 w-8 flex items-center justify-center rounded-full bg-gray-800 border border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white shadow-lg transition-colors"
+          className="xc-focus absolute bottom-3 right-3 h-8 w-8 flex items-center justify-center rounded-full bg-ui-card border border-ui-line text-tx-2 hover:bg-ui-hover shadow-[var(--ui-shadow-lift)] transition-colors"
           title="En alta in"
+          aria-label="En alta in"
         >
           <ChevronDown size={16} />
         </button>
       )}
       </div>
 
-      {/* Input alanı */}
+      {/* Input alanı (+ hazır komutlar) */}
       <ChatComposer
+        above={(
+          <div role="group" aria-label="Hazır komutlar" className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              className={chipCls}
+              disabled={streaming || !xsltSelection?.trim()}
+              title={xsltSelection?.trim() ? 'Seçili XSLT kodunu açıklat' : 'Önce editörde kod seçin'}
+              onClick={() => void runChat(PROMPT_EXPLAIN_SELECTION)}
+            >
+              Seçili kodu açıkla
+            </button>
+          </div>
+        )}
         value={input}
         onChange={setInput}
         onSend={handleSend}

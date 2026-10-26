@@ -1,5 +1,6 @@
-// XSLT 1.0 uyumluluk analizi: stylesheet'te FİİLEN kullanılan 2.0'a özgü
-// fonksiyon / eleman / sözdizimini bulur (xsl:stylesheet/@version'a bakmaz).
+// XSLT 1.0 uyumluluk analizi: stylesheet'te FİİLEN çağrılan 2.0'a özgü FONKSİYONLARI bulur
+// (xsl:stylesheet/@version'a bakmaz). Eleman/öznitelik (ör. xsl:character-map,
+// use-character-maps) ve XPath 2.0 sözdizimi bilinçli olarak uyarı sayılmaz.
 import { parseXmlDocument } from './xmlUtils'
 import { findAvtExpressions, scanXPath } from './xpath2Detect'
 
@@ -7,7 +8,7 @@ const XSLT_NS = 'http://www.w3.org/1999/XSL/Transform'
 const FN_NS = 'http://www.w3.org/2005/xpath-functions'
 const XS_NS = 'http://www.w3.org/2001/XMLSchema'
 
-export type Xslt1CompatCode = 'XSLT1_COMPAT_FUNCTION' | 'XSLT1_COMPAT_ELEMENT' | 'XSLT1_COMPAT_SYNTAX'
+export type Xslt1CompatCode = 'XSLT1_COMPAT_FUNCTION'
 
 export interface Xslt1CompatFinding {
   code: Xslt1CompatCode
@@ -34,12 +35,6 @@ const XPATH1_FUNCTIONS = new Set([
   'node-set', 'object-type',
 ])
 
-const ELEMENTS_2 = new Set([
-  'for-each-group', 'function', 'sequence', 'analyze-string', 'matching-substring',
-  'non-matching-substring', 'character-map', 'output-character', 'result-document', 'next-match',
-  'perform-sort', 'namespace', 'document', 'import-schema',
-])
-
 // XSLT elemanlarında XPath ifadesi/deseni taşıyan öznitelikler
 const XPATH_ATTRS = new Set([
   'select', 'test', 'match', 'use', 'value', 'count', 'from',
@@ -55,13 +50,6 @@ const AVT_ATTRS: Record<string, string[]> = {
   sort: ['lang', 'order', 'case-order', 'data-type', 'collation', 'stable'],
   number: ['format', 'lang', 'letter-value', 'grouping-separator', 'grouping-size', 'ordinal'],
   'result-document': ['href', 'format', 'method'],
-}
-
-// 2.0'a özgü öznitelikler: eleman yerel adı → öznitelik adları
-const ATTRS_2: Record<string, string[]> = {
-  output: ['use-character-maps'],
-  'value-of': ['separator'],
-  variable: ['as'], param: ['as'], 'with-param': ['as'], template: ['as'],
 }
 
 interface RawAttr { name: string; valueOffset: number; raw: string }
@@ -171,7 +159,7 @@ export function analyzeXslt1Compat(xslt: string): Xslt1CompatFinding[] {
   }
 
   const scanExpr = (el: Element, attr: RawAttr, text: string, map: number[], start: number, end: number) => {
-    const { calls, syntax } = scanXPath(text.slice(start, end))
+    const { calls } = scanXPath(text.slice(start, end))
     const at = (idx: number) => attr.valueOffset + (map[start + idx] ?? 0)
     for (const call of calls) {
       const ns = call.prefix
@@ -187,27 +175,16 @@ export function analyzeXslt1Compat(xslt: string): Xslt1CompatFinding[] {
         push('XSLT1_COMPAT_FUNCTION', shown, `${shown} xsl:function ile tanımlı kullanıcı fonksiyonudur (XSLT 2.0'a özgü); ${TAIL}`, at(call.index), call.length)
       }
     }
-    for (const hit of syntax) {
-      push('XSLT1_COMPAT_SYNTAX', hit.label, `'${hit.label}' ifadesi XSLT 2.0'a (XPath 2.0) özgüdür; ${TAIL}`, at(hit.index), hit.length)
-    }
   }
 
   els.forEach((el, k) => {
     const tag = tags[k]
     const isXsl = el.namespaceURI === XSLT_NS
     const local = el.localName
-    if (isXsl && ELEMENTS_2.has(local)) {
-      const shown = `<${tag.qname}>`
-      push('XSLT1_COMPAT_ELEMENT', shown, `${shown} elemanı XSLT 2.0'a özgüdür; ${TAIL}`, tag.offset + 1, tag.qname.length)
-    }
     for (const attr of tag.attrs) {
       if (attr.name === 'xmlns' || attr.name.startsWith('xmlns:')) continue
       const c = attr.name.indexOf(':')
       const attrNs = c > 0 ? el.lookupNamespaceURI(attr.name.slice(0, c)) : null
-      if (isXsl && !attrNs && ATTRS_2[local]?.includes(attr.name)) {
-        const shown = `${tag.qname}/@${attr.name}`
-        push('XSLT1_COMPAT_ELEMENT', shown, `${shown} özniteliği XSLT 2.0'a özgüdür; ${TAIL}`, attr.valueOffset, attr.raw.length || 1)
-      }
       const { text, map } = decodeWithMap(attr.raw)
       if (isXsl && !attrNs && XPATH_ATTRS.has(attr.name)) {
         scanExpr(el, attr, text, map, 0, text.length)

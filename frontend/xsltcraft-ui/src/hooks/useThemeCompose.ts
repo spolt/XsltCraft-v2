@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
-import { composeTheme, type AssetKind, type ComposeAsset, type ComposeResponse, type ComposeWarning } from '../services/themeComposeService'
+import { composeTheme, type AssetKind, type ComposeAsset, type ComposeFixedNote, type ComposeResponse, type ComposeWarning } from '../services/themeComposeService'
 import type { BankInfoItem } from '../services/previewService'
 
 const DEBOUNCE_MS = 1200
@@ -12,6 +12,8 @@ interface Options {
   bankInfo: BankInfoItem[]
   /** Kendi görseli eklenmeden kaldırılan temadaki görseller. */
   hideThemeImages?: AssetKind[]
+  /** Sabit notlar — önizleme ve indir/kaydet aynı değeri gönderir. */
+  fixedNotes?: ComposeFixedNote[]
   /** Hata yanıtı (402 vb.) — çağıran yükseltme penceresi/yönlendirme yapar. */
   onError: (err: unknown) => void
 }
@@ -20,9 +22,13 @@ export interface ThemeCompose {
   html: string
   loading: boolean
   error: string | null
+  /** 400 yanıtındaki `field` (ör. "fixedNotes") — hatayı ilgili panelde göstermek için. */
+  errorField: string | null
   warnings: ComposeWarning[]
   lastMs: number | null
   appliedSlots: ComposeResponse['appliedSlots']
+  /** Temada Notlar alanı var mı; null → henüz bilinmiyor (yanıt gelmedi / sunucu bildirmedi). */
+  fixedNotesSupported: boolean | null
   /** Debounce beklemeden hemen yeniden önizle (sürükle-bırak sonrası). */
   composeNow: () => void
   /** İndirme/kaydetme: mevcut ayarlarla birleştirilmiş XSLT (önizlemeyle aynı kod yolu). */
@@ -33,10 +39,12 @@ export interface ThemeCompose {
  * Tema Kullan önizlemesi: logo/imza/IBAN değiştikçe sunucuda birleştirip HTML'i alır. Her yeni istek bir
  * öncekini iptal eder; yalnız son isteğin sonucu uygulanır.
  */
-export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThemeImages, onError }: Options): ThemeCompose {
+export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, onError }: Options): ThemeCompose {
   const [html, setHtml] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorField, setErrorField] = useState<string | null>(null)
+  const [fixedNotesSupported, setFixedNotesSupported] = useState<boolean | null>(null)
   const [warnings, setWarnings] = useState<ComposeWarning[]>([])
   const [lastMs, setLastMs] = useState<number | null>(null)
   const [appliedSlots, setAppliedSlots] = useState<ComposeResponse['appliedSlots']>({})
@@ -48,12 +56,12 @@ export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThe
 
   // İstek gövdesi değişmedikçe yeniden istek atma (dizi kimlikleri her render'da değişebilir).
   const requestKey = useMemo(
-    () => JSON.stringify({ themeId, xmlContent, assets, bankInfo, hideThemeImages }),
-    [themeId, xmlContent, assets, bankInfo, hideThemeImages],
+    () => JSON.stringify({ themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes }),
+    [themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes],
   )
-  const latestRef = useRef({ themeId, xmlContent, assets, bankInfo, hideThemeImages })
-  useEffect(() => { latestRef.current = { themeId, xmlContent, assets, bankInfo, hideThemeImages } },
-    [themeId, xmlContent, assets, bankInfo, hideThemeImages])
+  const latestRef = useRef({ themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes })
+  useEffect(() => { latestRef.current = { themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes } },
+    [themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes])
 
   useEffect(() => {
     if (!themeId || !xmlContent) return
@@ -64,10 +72,11 @@ export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThe
     const timer = setTimeout(async () => {
       setLoading(true)
       setError(null)
+      setErrorField(null)
       try {
-        const { themeId: id, xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h } = latestRef.current
+        const { themeId: id, xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n } = latestRef.current
         const result = await composeTheme(
-          { themeId: id, xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, includeHtml: true, includeXslt: false },
+          { themeId: id, xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: true, includeXslt: false },
           controller.signal,
         )
         // İptalden hemen önce çözülen eski yanıt yenisinin yerine yazılmasın.
@@ -76,10 +85,12 @@ export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThe
         setWarnings(result.warnings)
         setLastMs(result.generationTimeMs)
         setAppliedSlots(result.appliedSlots)
+        setFixedNotesSupported(typeof result.fixedNotesSupported === 'boolean' ? result.fixedNotesSupported : null)
       } catch (err) {
         if (axios.isCancel(err)) return
-        const data = axios.isAxiosError(err) ? (err.response?.data as { error?: string; message?: string } | undefined) : undefined
+        const data = axios.isAxiosError(err) ? (err.response?.data as { error?: string; message?: string; field?: string } | undefined) : undefined
         setError(data?.message ?? data?.error ?? 'Önizleme alınamadı.')
+        setErrorField(data?.field ?? null)
         onErrorRef.current(err)
       } finally {
         if (!controller.signal.aborted) setLoading(false)
@@ -101,10 +112,10 @@ export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThe
   }, [])
 
   const exportXslt = useCallback(async () => {
-    const { themeId: id, assets: a, bankInfo: b, hideThemeImages: h } = latestRef.current
-    const result = await composeTheme({ themeId: id, assets: a, bankInfo: b, hideThemeImages: h, includeHtml: false, includeXslt: true })
+    const { themeId: id, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n } = latestRef.current
+    const result = await composeTheme({ themeId: id, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: false, includeXslt: true })
     return result.xslt ?? ''
   }, [])
 
-  return { html, loading, error, warnings, lastMs, appliedSlots, composeNow, exportXslt }
+  return { html, loading, error, errorField, warnings, lastMs, appliedSlots, fixedNotesSupported, composeNow, exportXslt }
 }

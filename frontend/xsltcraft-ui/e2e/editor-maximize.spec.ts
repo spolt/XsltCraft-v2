@@ -46,6 +46,10 @@ test.afterAll(async () => { await page.close() })
 
 test('tam ekrana girince editör alanı kaplar, önizleme mini pencereye taşınır', async () => {
   const widthBefore = (await monaco().boundingBox())!.width
+  // Başlangıçta önizleme bölmesi yer kaplar (varsayılan "Editör + yan önizleme" ≈ 65/35):
+  // editör grubun en fazla %80'i. Böylece aşağıdaki "grubu kaplar" kontrolü anlamlı kalır.
+  const groupBefore = (await page.getByTestId('xslt-editor-panels').boundingBox())!
+  expect(widthBefore).toBeLessThan(groupBefore.width * 0.8)
 
   await page.getByRole('button', { name: 'Tam ekran editör', exact: true }).click()
 
@@ -60,7 +64,8 @@ test('tam ekrana girince editör alanı kaplar, önizleme mini pencereye taşın
   const group = (await page.getByTestId('xslt-editor-panels').boundingBox())!
   const editor = (await monaco().boundingBox())!
   expect(Math.abs(editor.width - group.width)).toBeLessThan(2)
-  expect(editor.width).toBeGreaterThan(widthBefore * 1.5)
+  // 65/35 yerleşimde beklenen oran ≈1,54; eski 1,5 eşiği tutamak/kenarlık payıyla kırılgandı.
+  expect(editor.width).toBeGreaterThan(widthBefore * 1.25)
 })
 
 test('mini pencere sürüklenir ve konumu kalıcıdır', async () => {

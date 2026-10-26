@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useXmlStore } from '../../store/xmlStore'
 import { parseXmlToTree, type XmlNode } from '../../utils/xmlUtils'
-import { ChevronRight, ChevronDown, Search, X, MousePointerClick } from 'lucide-react'
+import { ChevronRight, ChevronDown, Search, X, MousePointerClick, FileCode, Upload, TriangleAlert } from 'lucide-react'
 
 // ── Single tree node ──────────────────────────────────────────────────────────
 
@@ -22,111 +22,95 @@ function TreeNode({
   const lowerFilter = filter.toLowerCase()
   const nameMatch = !filter || node.name.toLowerCase().includes(lowerFilter)
   const valueMatch = !filter || (node.value ?? '').toLowerCase().includes(lowerFilter)
-
-  // For parent nodes, we still render if any potential child might match (we can't know ahead of time without traversal)
-  // Simpler: just always render when filter is empty; when filter set, only show leaf matches + their ancestors
   const shouldShow = !filter || nameMatch || valueMatch
 
   if (!shouldShow && node.isLeaf) return null
 
   // Auto-expand when filtering
   const effectiveExpanded = filter ? true : expanded
+  const indent = node.depth * 14
+  const interactive = isSelecting || !node.isLeaf
 
-  const indent = node.depth * 16
-
-  return (
-    <div>
-      <div
-        className={`flex items-center gap-1.5 py-1 pr-2 rounded-md group transition-colors ${
-          isSelecting
-            ? 'cursor-pointer hover:bg-blue-50'
-            : node.isLeaf
-            ? 'cursor-default hover:bg-gray-50'
-            : 'cursor-pointer hover:bg-gray-50'
-        }`}
-        style={{ paddingLeft: `${indent + 6}px` }}
-        onClick={() => {
-          if (isSelecting) {
-            onSelect(node.xpath)
-          } else if (!node.isLeaf) {
+  const rowContent = (
+    <>
+      {/* Expand toggle / leaf indicator */}
+      <span
+        aria-hidden="true"
+        className="flex h-4 w-4 flex-none items-center justify-center text-tx-subtle"
+        onClick={(e) => {
+          if (!node.isLeaf) {
+            e.stopPropagation()
             setExpanded((v) => !v)
           }
         }}
       >
-        {/* Expand toggle / leaf indicator */}
-        <span
-          className="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-400"
-          onClick={(e) => {
-            if (!node.isLeaf) {
-              e.stopPropagation()
-              setExpanded((v) => !v)
-            }
+        {!node.isLeaf ? (
+          effectiveExpanded ? <ChevronDown size={12} strokeWidth={2.2} /> : <ChevronRight size={12} strokeWidth={2.2} />
+        ) : (
+          <span className="inline-block h-1 w-1 rounded-full bg-tx-subtle" />
+        )}
+      </span>
+
+      {/* Tag name */}
+      <span className={`flex-none whitespace-nowrap font-mono text-[11.5px] ${node.isLeaf ? 'text-ui-ink' : 'font-medium text-tx'}`}>
+        {node.name}
+      </span>
+
+      {/* Leaf value */}
+      {node.isLeaf && node.value && (
+        <span className="ml-auto min-w-0 truncate pl-2 text-[11.5px] text-tx-subtle" title={node.value}>
+          {node.value}
+        </span>
+      )}
+
+      {/* Child count badge for collapsed parents */}
+      {!node.isLeaf && !effectiveExpanded && node.children.length > 0 && (
+        <span className="flex-none text-[10px] text-tx-subtle">({node.children.length})</span>
+      )}
+
+      {/* Select hint */}
+      {isSelecting && (
+        <span className="ml-1 flex flex-none items-center gap-0.5 text-[10px] font-medium text-ui-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">
+          <MousePointerClick size={10} aria-hidden="true" />
+          seç
+        </span>
+      )}
+    </>
+  )
+
+  const rowClass = `group flex w-full min-h-[25px] items-center gap-1.5 rounded pr-1.5 text-left transition-colors ${
+    isSelecting ? 'cursor-pointer hover:bg-ui-soft' : interactive ? 'cursor-pointer hover:bg-ui-hover' : 'cursor-default'
+  }`
+
+  return (
+    <div>
+      {interactive ? (
+        <button
+          type="button"
+          className={`xc-focus ${rowClass}`}
+          style={{ paddingLeft: indent + 6 }}
+          aria-expanded={!node.isLeaf && !isSelecting ? effectiveExpanded : undefined}
+          aria-label={isSelecting ? `${node.name} öğesini seç` : undefined}
+          onClick={() => {
+            if (isSelecting) onSelect(node.xpath)
+            else if (!node.isLeaf) setExpanded((v) => !v)
           }}
         >
-          {!node.isLeaf ? (
-            effectiveExpanded
-              ? <ChevronDown size={13} />
-              : <ChevronRight size={13} />
-          ) : (
-            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />
-          )}
-        </span>
-
-        {/* Tag name */}
-        <span
-          className={`font-mono text-xs font-medium flex-shrink-0 ${
-            isSelecting
-              ? 'text-blue-700 group-hover:text-blue-800'
-              : node.isLeaf
-              ? 'text-indigo-600'
-              : 'text-gray-700'
-          }`}
-        >
-          {node.name}
-        </span>
-
-        {/* Leaf value pill */}
-        {node.isLeaf && node.value && (
-          <span
-            className="text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5 truncate max-w-[200px] flex-shrink min-w-0"
-            title={node.value}
-          >
-            {node.value}
-          </span>
-        )}
-
-        {/* Child count badge for collapsed parents */}
-        {!node.isLeaf && !effectiveExpanded && node.children.length > 0 && (
-          <span className="text-[10px] text-gray-400 flex-shrink-0">
-            ({node.children.length})
-          </span>
-        )}
-
-        {/* Select hint */}
-        {isSelecting && (
-          <span className="ml-auto text-blue-500 opacity-0 group-hover:opacity-100 text-[10px] font-medium flex-shrink-0 flex items-center gap-0.5">
-            <MousePointerClick size={10} />
-            seç
-          </span>
-        )}
-      </div>
+          {rowContent}
+        </button>
+      ) : (
+        <div className={rowClass} style={{ paddingLeft: indent + 6 }}>
+          {rowContent}
+        </div>
+      )}
 
       {/* Children */}
       {!node.isLeaf && effectiveExpanded && (
         <div className="relative">
           {/* Indent guide line */}
-          <div
-            className="absolute top-0 bottom-0 w-px bg-gray-100"
-            style={{ left: `${indent + 13}px` }}
-          />
+          <div aria-hidden="true" className="absolute bottom-0 top-0 w-px bg-ui-line" style={{ left: indent + 13 }} />
           {node.children.map((child) => (
-            <TreeNode
-              key={child.id}
-              node={child}
-              onSelect={onSelect}
-              isSelecting={isSelecting}
-              filter={filter}
-            />
+            <TreeNode key={child.id} node={child} onSelect={onSelect} isSelecting={isSelecting} filter={filter} />
           ))}
         </div>
       )}
@@ -136,98 +120,142 @@ function TreeNode({
 
 // ── Root XmlTreeExplorer ──────────────────────────────────────────────────────
 
-export default function XmlTreeExplorer() {
+interface XmlTreeExplorerProps {
+  /** Sayfa kökündeki gizli XML input'unu tetikler (EditorPage.xmlInputRef). */
+  onUploadClick: () => void
+  /** Son yükleme hatası (geçersiz XML / doğrulama). */
+  uploadError?: string | null
+}
+
+/** Sol paneldeki "XML Ağacı" sekmesi: dosya çipi, XML yükleme/seçimi, arama ve XPath seçim ağacı. */
+export default function XmlTreeExplorer({ onUploadClick, uploadError }: XmlTreeExplorerProps) {
   const xmlFiles = useXmlStore((s) => s.xmlFiles)
   const activeXmlId = useXmlStore((s) => s.activeXmlId)
+  const setActiveXml = useXmlStore((s) => s.setActiveXml)
   const isSelecting = useXmlStore((s) => s.isSelecting)
   const applyXPathSelection = useXmlStore((s) => s.applyXPathSelection)
   const cancelXPathSelection = useXmlStore((s) => s.cancelXPathSelection)
 
   const [filter, setFilter] = useState('')
+  const baseId = useId()
 
   const activeXml = xmlFiles.find((f) => f.id === activeXmlId)
 
-  const tree = useMemo(
-    () => (activeXml ? parseXmlToTree(activeXml.content) : null),
-    [activeXml]
-  )
-
-  if (!activeXml) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-6">
-        <p className="text-xs text-gray-400 text-center leading-relaxed">
-          Önizleme için toolbar'daki<br />
-          <strong className="text-gray-500">+ XML</strong> butonunu kullanın.
-        </p>
-      </div>
-    )
-  }
-
-  if (!tree) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-4">
-        <p className="text-xs text-red-400 text-center">XML ayrıştırılamadı.</p>
-      </div>
-    )
-  }
+  const tree = useMemo(() => (activeXml ? parseXmlToTree(activeXml.content) : null), [activeXml])
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Selection mode banner */}
       {isSelecting && (
-        <div className="flex items-center justify-between px-3 py-2 bg-blue-600 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <MousePointerClick size={13} className="text-blue-200" />
-            <span className="text-xs text-white font-medium">
-              Bir node'a tıklayarak XPath'i seçin
-            </span>
-          </div>
+        <div role="status" className="flex flex-none items-center justify-between gap-2 bg-ui-accent px-4 py-2 text-white">
+          <span className="flex items-center gap-2 text-[12px] font-medium">
+            <MousePointerClick size={13} aria-hidden="true" />
+            Bir öğeye tıklayarak XPath'i seçin
+          </span>
           <button
+            type="button"
             onClick={cancelXPathSelection}
-            className="flex items-center gap-1 text-xs text-blue-200 hover:text-white transition-colors"
+            style={{ '--xc-focus-ring': 'white' } as React.CSSProperties}
+            className="xc-focus flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] text-white/85 hover:bg-white/15 hover:text-white"
           >
-            <X size={12} />
+            <X size={12} aria-hidden="true" />
             İptal
           </button>
         </div>
       )}
 
-      {/* Search */}
-      <div className="px-2 py-2 border-b border-gray-100 flex-shrink-0">
-        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-md px-2 py-1.5">
-          <Search size={12} className="text-gray-400 flex-shrink-0" />
-          <input
-            type="text"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Node veya değer ara..."
-            className="flex-1 text-xs bg-transparent outline-none text-gray-700 placeholder-gray-400"
-          />
-          {filter && (
-            <button onClick={() => setFilter('')} className="text-gray-400 hover:text-gray-600">
-              <X size={11} />
-            </button>
+      <div className="flex flex-none flex-col gap-2.5 px-4 pb-2 pt-3.5">
+        {/* Dosya çipi + yükleme */}
+        <div className="flex items-center gap-2 rounded-md bg-ui-soft px-2.5 py-2 text-[12px] text-tx-2">
+          <FileCode size={14} strokeWidth={1.8} aria-hidden="true" className="flex-none text-ui-ink" />
+          {xmlFiles.length > 1 ? (
+            <>
+              <label htmlFor={`${baseId}-file`} className="sr-only">Etkin XML dosyası</label>
+              <select
+                id={`${baseId}-file`}
+                value={activeXmlId ?? ''}
+                onChange={(e) => setActiveXml(e.target.value)}
+                className="xc-focus min-w-0 flex-1 cursor-pointer truncate rounded bg-transparent font-medium text-tx outline-none"
+              >
+                {xmlFiles.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <span className="min-w-0 flex-1 truncate font-medium" title={activeXml?.name}>
+              {activeXml?.name ?? 'XML yüklenmedi'}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onUploadClick}
+            className="xc-focus flex flex-none items-center gap-1 rounded px-1.5 py-0.5 text-[11.5px] font-medium text-ui-ink hover:bg-ui-card"
+            title="XML dosyası yükle"
+          >
+            <Upload size={12} strokeWidth={2} aria-hidden="true" />
+            XML yükle
+          </button>
+        </div>
+
+        {uploadError && (
+          <p role="alert" className="m-0 flex items-start gap-1.5 rounded-md border border-fn-red-line bg-fn-red-tint px-2.5 py-1.5 text-[12px] text-fn-red-ink">
+            <TriangleAlert size={13} aria-hidden="true" className="mt-0.5 flex-none" />
+            {uploadError}
+          </p>
+        )}
+
+        {/* Search */}
+        {tree && (
+          <label
+            htmlFor={`${baseId}-search`}
+            className="flex h-[34px] items-center gap-2 rounded-md border border-field-line bg-ui-side px-2.5 text-tx-subtle focus-within:border-ui-accent"
+          >
+            <Search size={15} strokeWidth={1.8} aria-hidden="true" />
+            <span className="sr-only">Alan ara</span>
+            <input
+              id={`${baseId}-search`}
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Alan ara, ör. IssueDate"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-tx outline-none placeholder:text-tx-subtle"
+            />
+            {filter && (
+              <button
+                type="button"
+                onClick={() => setFilter('')}
+                aria-label="Aramayı temizle"
+                className="xc-focus rounded text-tx-subtle hover:text-tx"
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            )}
+          </label>
+        )}
+      </div>
+
+      {/* Tree / boş durumlar */}
+      {!activeXml ? (
+        <div className="flex flex-1 items-center justify-center p-6">
+          <p className="text-center text-[12px] leading-relaxed text-tx-subtle">
+            Bağlama ve önizleme için yukarıdaki <strong className="text-tx-muted">XML yükle</strong> ile bir belge XML'i seçin.
+          </p>
+        </div>
+      ) : !tree ? (
+        <div className="flex flex-1 items-center justify-center p-4">
+          <p className="text-center text-[12px] text-fn-red-ink">XML ayrıştırılamadı.</p>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+          <TreeNode node={tree} onSelect={applyXPathSelection} isSelecting={isSelecting} filter={filter} />
+          {!isSelecting && (
+            <p className="mx-1 mt-3 text-[12px] leading-normal text-tx-muted">
+              Sağ paneldeki bir XPath alanının yanındaki bağlantı düğmesine bastıktan sonra buradan bir öğe seçin.
+            </p>
           )}
         </div>
-      </div>
-
-      {/* File name */}
-      <div className="px-3 py-1 flex-shrink-0">
-        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">
-          {activeXml.name}
-        </span>
-      </div>
-
-      {/* Tree */}
-      <div className="flex-1 overflow-y-auto pb-4">
-        <TreeNode
-          node={tree}
-          onSelect={applyXPathSelection}
-          isSelecting={isSelecting}
-          filter={filter}
-        />
-      </div>
+      )}
     </div>
   )
 }

@@ -54,13 +54,13 @@ export default function ThemeUploadDecisionDialog({ request, busy, onDecide, onC
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="upload-decision-title">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[90vh] flex flex-col">
-        <h3 id="upload-decision-title" className="text-base font-semibold text-gray-900 px-6 pt-6 pb-2">Temadaki görseller</h3>
+      <div className="bg-ui-card border border-ui-line rounded-xl shadow-[var(--ui-shadow-pop)] max-w-lg w-full mx-4 max-h-[90vh] flex flex-col">
+        <h3 id="upload-decision-title" className="text-base font-semibold text-tx px-6 pt-6 pb-2">Temadaki görseller</h3>
 
         <div className="overflow-y-auto px-6 pb-2 flex flex-col gap-5">
           {images.length > 0 && (
             <section>
-              <p className="text-sm text-gray-600 mb-3">
+              <p className="text-sm text-tx-muted mb-3">
                 Firma logosu ya da imza/kaşe olarak işaretlediğiniz görselin yeri kullanıcıya konum olarak sunulur:
                 temayı kullanan kişi kendi görselini eklediğinde onun yerini alır, eklemezse temadaki görsel kalır.
                 Tasarımın parçası olan görsele dokunulmaz. "Temadan kaldır" görseli hiç göstermez: logo/imzanın yeri
@@ -68,12 +68,12 @@ export default function ThemeUploadDecisionDialog({ request, busy, onDecide, onC
               </p>
               <ul className="flex flex-col gap-2">
                 {images.map((img, i) => (
-                  <li key={img.index} className="flex items-center gap-3 border border-gray-100 rounded-lg p-2 bg-gray-50">
+                  <li key={img.index} className="flex items-center gap-3 border border-ui-line rounded-lg p-2 bg-ui-side">
                     {img.previewDataUrl
-                      ? <img src={img.previewDataUrl} alt="" className="h-12 w-20 object-contain bg-white border border-gray-100 rounded flex-shrink-0" />
-                      : <span className="h-12 w-20 flex items-center justify-center text-gray-300 flex-shrink-0"><ImageOff size={18} /></span>}
-                    <div className="text-xs text-gray-500 min-w-0 flex-1">
-                      <p className="text-gray-700">Öneri: {img.reason}</p>
+                      ? <img src={img.previewDataUrl} alt="" className="h-12 w-20 object-contain bg-white border border-ui-line rounded flex-shrink-0" />
+                      : <span className="h-12 w-20 flex items-center justify-center text-tx-subtle flex-shrink-0"><ImageOff size={18} /></span>}
+                    <div className="text-xs text-tx-muted min-w-0 flex-1">
+                      <p className="text-tx-2">Öneri: {img.reason}</p>
                       <p>satır {img.line}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -82,7 +82,7 @@ export default function ThemeUploadDecisionDialog({ request, busy, onDecide, onC
                         id={`${selectId}-${i}`}
                         value={decisions[i].role}
                         onChange={(e) => patch(i, { role: e.target.value as ImageRole })}
-                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="border border-field-line rounded-lg px-2 py-1.5 text-sm bg-ui-card text-tx focus:outline-none focus:border-ui-accent focus:ring-2 focus:ring-ui-soft-line"
                       >
                         {ROLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
@@ -91,8 +91,8 @@ export default function ThemeUploadDecisionDialog({ request, busy, onDecide, onC
                         id={`${selectId}-v${i}`}
                         value={decisions[i].visibility}
                         onChange={(e) => patch(i, { visibility: e.target.value as ImageVisibility })}
-                        className={`border rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          decisions[i].visibility === 'strip' ? 'border-red-300 text-red-700' : 'border-gray-200 text-gray-600'}`}
+                        className={`border rounded-lg px-2 py-1 text-xs bg-ui-card focus:outline-none focus:border-ui-accent focus:ring-2 focus:ring-ui-soft-line ${
+                          decisions[i].visibility === 'strip' ? 'border-fn-red-line text-fn-red-ink' : 'border-field-line text-tx-muted'}`}
                       >
                         {VISIBILITY_OPTIONS.filter((o) => o.designOk || decisions[i].role !== 'design')
                           .map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -106,8 +106,8 @@ export default function ThemeUploadDecisionDialog({ request, busy, onDecide, onC
 
           {overrides && (
             <section>
-              <h4 className="text-sm font-semibold text-gray-800 mb-1">Önceden eklenmiş görsel bloğu</h4>
-              <p className="text-sm text-gray-600 mb-3">
+              <h4 className="text-sm font-semibold text-tx mb-1">Önceden eklenmiş görsel bloğu</h4>
+              <p className="text-sm text-tx-muted mb-3">
                 Bu dosya daha önce Tema Kullan / Geliştirici Modu ile görsel eklenip indirilmiş bir şablon gibi görünüyor.
                 Görseller tasarımın parçasıysa koruyun; önceki bir kullanıcının logosu/imzasıysa kaldırın — aksi halde
                 temayı kullanan herkes bu görselleri görür.
@@ -116,25 +116,25 @@ export default function ThemeUploadDecisionDialog({ request, busy, onDecide, onC
               {overrides.images.length > 0 && (
                 <ul className="flex flex-col gap-2 mb-3">
                   {overrides.images.map((img, i) => (
-                    <li key={i} className="flex items-center gap-3 border border-gray-100 rounded-lg p-2 bg-gray-50">
+                    <li key={i} className="flex items-center gap-3 border border-ui-line rounded-lg p-2 bg-ui-side">
                       {img.dataUrl
-                        ? <img src={img.dataUrl} alt="" className="h-12 w-20 object-contain bg-white border border-gray-100 rounded" />
-                        : <span className="h-12 w-20 flex items-center justify-center text-gray-300"><ImageOff size={18} /></span>}
-                      <div className="text-xs text-gray-600 min-w-0">
-                        <p className="font-medium text-gray-800">{img.kind ? KIND_LABEL[img.kind] : 'Görsel'}</p>
+                        ? <img src={img.dataUrl} alt="" className="h-12 w-20 object-contain bg-white border border-ui-line rounded" />
+                        : <span className="h-12 w-20 flex items-center justify-center text-tx-subtle"><ImageOff size={18} /></span>}
+                      <div className="text-xs text-tx-muted min-w-0">
+                        <p className="font-medium text-tx">{img.kind ? KIND_LABEL[img.kind] : 'Görsel'}</p>
                         <p className="truncate">Alan: {img.targets.map((t) => `#${t}`).join(', ')}</p>
                         {(img.width || img.height) && <p>{img.width ?? 'oto'} × {img.height ?? 'oto'} px · {img.alignment}</p>}
-                        {img.problem && <p className="text-red-600">{img.problem}</p>}
+                        {img.problem && <p className="text-fn-red-ink">{img.problem}</p>}
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
               {overrides.bankRows > 0 && (
-                <p className="text-xs text-gray-500 mb-3">Blokta ayrıca {overrides.bankRows} satırlık bir banka/IBAN tablosu var.</p>
+                <p className="text-xs text-tx-muted mb-3">Blokta ayrıca {overrides.bankRows} satırlık bir banka/IBAN tablosu var.</p>
               )}
               {!overrides.keepable && (
-                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 flex gap-1.5">
+                <p className="text-xs text-fn-orange-ink bg-fn-orange-tint border border-fn-orange-line rounded-lg px-3 py-2 mb-3 flex gap-1.5">
                   <TriangleAlert size={14} className="flex-shrink-0 mt-px" />
                   <span>Korunamıyor: {overrides.reason ?? 'blok tanınmadı'}. Yalnız kaldırılabilir.</span>
                 </p>
@@ -156,16 +156,16 @@ export default function ThemeUploadDecisionDialog({ request, busy, onDecide, onC
           )}
         </div>
 
-        <div className="flex gap-3 justify-end flex-wrap px-6 py-4 border-t border-gray-100">
+        <div className="flex gap-3 justify-end flex-wrap px-6 py-4 border-t border-ui-line">
           <button
             type="button" onClick={onCancel} disabled={busy}
-            className="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition disabled:opacity-50"
+            className="xc-focus h-10 px-4 text-[13px] font-medium text-tx-2 border border-ui-line bg-ui-card hover:bg-ui-hover rounded-lg transition disabled:opacity-50"
           >
             İptal
           </button>
           <button
             type="button" onClick={submit} disabled={busy || !ready}
-            className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition disabled:opacity-40"
+            className="xc-focus h-10 px-4 text-[13.5px] font-semibold text-white bg-ui-accent hover:opacity-90 rounded-lg transition disabled:opacity-40"
           >
             Devam et
           </button>
