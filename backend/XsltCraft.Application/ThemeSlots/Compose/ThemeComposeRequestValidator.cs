@@ -72,8 +72,46 @@ public static class ThemeComposeRequestValidator
                 return Error("bankInfo", "Banka bilgisinde geçersiz karakter var.");
         }
 
+        return ValidateFixedNotes(r.FixedNotes);
+    }
+
+    private static ThemeComposeRequestError? ValidateFixedNotes(List<ThemeComposeFixedNoteDto>? notes)
+    {
+        const string field = "fixedNotes";
+        if (notes is null)
+            return null;
+        if (notes.Any(n => n?.Position is null || n.Text is null || n.Color is null || n.FontFamily is null || n.Align is null))
+            return new(field, "Sabit not listesi eksik ya da boş öğe içeriyor.");
+        if (notes.Count > FixedNoteStyles.MaxNotes || notes.Select(n => n.Position).Distinct().Count() != notes.Count)
+            return new(field, "En fazla iki sabit not eklenebilir (notların üstü ve altı birer kez).");
+        foreach (var n in notes)
+        {
+            if (!FixedNoteStyles.TryParsePosition(n.Position, out _))
+                return new(field, "Not konumu 'before' ya da 'after' olmalı.");
+            if (n.Text.Length > FixedNoteStyles.MaxTextLength)
+                return new(field, $"Not en fazla {FixedNoteStyles.MaxTextLength} karakter olabilir.");
+            if (n.Text.Replace("\r\n", "\n").Count(c => c is '\n' or '\r') >= FixedNoteStyles.MaxLines)
+                return new(field, $"Not en fazla {FixedNoteStyles.MaxLines} satır olabilir.");
+            if (n.Text.Any(c => (char.IsControl(c) && c is not ('\n' or '\r')) || IsInvisibleFormatChar(c)) || !IsXmlText(n.Text))
+                return new(field, "Not metninde geçersiz karakter var.");
+            if (!FixedNoteStyles.FontSizes.Contains(n.FontSize))
+                return new(field, "Geçersiz yazı boyutu.");
+            if (!FixedNoteStyles.ColorPattern.IsMatch(n.Color))
+                return new(field, "Renk #RRGGBB biçiminde olmalı.");
+            if (!FixedNoteStyles.FontFamilies.ContainsKey(n.FontFamily))
+                return new(field, "Geçersiz yazı tipi.");
+            if (!FixedNoteStyles.TryParseAlign(n.Align, out _))
+                return new(field, "Hizalama 'left', 'center' ya da 'right' olmalı.");
+        }
         return null;
     }
+
+    // Görünmez biçim karakterleri (bidi override U+202E, sıfır genişlikli boşluk U+200B) ve
+    // satır/paragraf ayırıcıları (U+2028/U+2029) faturada görsel yanıltmaya izin verirdi.
+    private static bool IsInvisibleFormatChar(char c) =>
+        char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format
+            or System.Globalization.UnicodeCategory.LineSeparator
+            or System.Globalization.UnicodeCategory.ParagraphSeparator;
 
     // XML 1.0 karakter kümesi: U+FFFE/U+FFFF ve eşsiz vekil (surrogate) yazılamaz — banka tablosunun
     // serileştirilmesi hata verirdi. Geçerli vekil çifti (ör. emoji) kabul edilir.

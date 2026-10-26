@@ -14,6 +14,7 @@ using XsltCraft.Application.ThemeSlots.Catalog;
 using XsltCraft.Application.ThemeSlots.Compose;
 using XsltCraft.Application.Xslt.Engines;
 using XsltCraft.Application.Xslt.Execution;
+using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
 
@@ -51,6 +52,7 @@ public class ThemeComposeController(
         string xslt;
         IReadOnlyDictionary<ThemeAssetKind, string>? defaults = null;
         IReadOnlySet<string>? conditional = null;
+        DocumentType documentType;
 
         if (request.ThemeId is { } themeId)
         {
@@ -72,10 +74,12 @@ public class ThemeComposeController(
             xslt = await reader.ReadToEndAsync(ct);
             defaults = projector.Defaults(theme.SlotCatalog);
             conditional = projector.ConditionalSlots(theme.SlotCatalog);
+            documentType = theme.DocumentType;
         }
         else
         {
             xslt = request.Xslt!;
+            documentType = xslt.Contains(DespatchNamespace, StringComparison.Ordinal) ? DocumentType.Despatch : DocumentType.Invoice;
         }
 
         var input = new ThemeComposeInput(
@@ -84,7 +88,9 @@ public class ThemeComposeController(
             request.BankInfo.Select(b => new BankInfoInput(b.BankName.Trim(), b.Iban.Trim())).ToList(),
             defaults,
             conditional,
-            request.HideThemeImages.Select(ParseKind).ToList());
+            request.HideThemeImages.Select(ParseKind).ToList(),
+            request.FixedNotes?.Select(ToFixedNote).ToList(),
+            documentType);
 
         var result = composer.Compose(xslt, input);
         if (!result.Success)
@@ -121,7 +127,18 @@ public class ThemeComposeController(
             html,
             sw.ElapsedMilliseconds,
             result.Warnings.Select(w => new ThemeComposeWarningDto(w.Code, w.Message, KindValue(w.Kind))).ToList(),
-            result.AppliedSlots.ToDictionary(kv => KindValue(kv.Key)!, kv => kv.Value)));
+            result.AppliedSlots.ToDictionary(kv => KindValue(kv.Key)!, kv => kv.Value),
+            result.FixedNotesSupported));
+    }
+
+    private const string DespatchNamespace = "urn:oasis:names:specification:ubl:schema:xsd:DespatchAdvice-2";
+
+    // Doğrulayıcıdan geçmiş değerler; ayrıştırma yalnız tür dönüşümü.
+    private static FixedNoteInput ToFixedNote(ThemeComposeFixedNoteDto n)
+    {
+        FixedNoteStyles.TryParsePosition(n.Position, out var position);
+        FixedNoteStyles.TryParseAlign(n.Align, out var align);
+        return new FixedNoteInput(position, n.Text, n.Bold, n.Italic, n.Underline, n.FontSize, n.Color, n.FontFamily, align);
     }
 
     private static ThemeAssetKind ParseKind(string kind) => kind == "logo" ? ThemeAssetKind.Logo : ThemeAssetKind.Signature;

@@ -84,6 +84,7 @@ public sealed class ThemeSaxonPipelineTests(ThemeSaxonPipelineTests.Engines engi
             XmlContent = Samples.Get(DocumentType.Invoice),
             Assets = [new ThemeComposeAssetDto { Kind = "logo", DataUrl = Png, Width = 120, Height = 60 }],
             BankInfo = [new BankInfoItem { BankName = "Test Bankası", Iban = "TR000000000000000000000001" }],
+            FixedNotes = [new ThemeComposeFixedNoteDto { Position = "after", Text = "Sabit {not} <b>", Bold = true, Color = "#336699" }],
             IncludeHtml = true,
             IncludeXslt = true,
         }, CancellationToken.None));
@@ -92,6 +93,8 @@ public sealed class ThemeSaxonPipelineTests(ThemeSaxonPipelineTests.Engines engi
         Assert.Contains("data-xc-overrides=\"2\"", response.Html);
         Assert.Contains(Png, response.Html);
         Assert.Contains("TR000000000000000000000001", response.Html);
+        Assert.True(response.FixedNotesSupported);
+        Assert.Contains("Sabit {not} &lt;b&gt;</div>", response.Html);
         Assert.Equal(XsltEngineKind.Saxon, (await RenderAsync(response.Xslt!)).Engine);
 
         // Galeri önizlemesi (anonim, yayınlanmış tema).

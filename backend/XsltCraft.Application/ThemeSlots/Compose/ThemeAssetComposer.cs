@@ -6,6 +6,7 @@ using System.Xml.Linq;
 using XsltCraft.Application.ThemeSlots.Analysis;
 using XsltCraft.Application.ThemeSlots.Overrides;
 using XsltCraft.Application.Validation;
+using XsltCraft.Domain.Entities;
 
 namespace XsltCraft.Application.ThemeSlots.Compose;
 
@@ -17,17 +18,23 @@ public sealed record BankInfoInput(string BankName, string Iban);
 /// <param name="ConditionalSlots">Her faturada çıkmayabilecek yuvalar (uyarı için).</param>
 /// <param name="HideThemeImages">Kullanıcının kendi görselini eklemeden kaldırdığı temadaki görsel türleri — yalnız
 /// admin'in "kullanıcı kaldırabilir" dediği görseller (<c>data-xc-removable</c>) gizlenir.</param>
+/// <param name="FixedNotes">Notlar alanına yazılacak sabit notlar; null → XSLT'deki notlara dokunulmaz, liste (boş da
+/// olsa) → önceki sabit notlar silinip yenileri yazılır.</param>
 public sealed record ThemeComposeInput(
     IReadOnlyList<ThemeAssetInput> Assets,
     IReadOnlyList<BankInfoInput> BankInfo,
     IReadOnlyDictionary<ThemeAssetKind, string>? CatalogDefaults = null,
     IReadOnlySet<string>? ConditionalSlots = null,
-    IReadOnlyCollection<ThemeAssetKind>? HideThemeImages = null);
+    IReadOnlyCollection<ThemeAssetKind>? HideThemeImages = null,
+    IReadOnlyList<FixedNoteInput>? FixedNotes = null,
+    DocumentType DocumentType = DocumentType.Invoice);
 
 public sealed record ThemeComposeWarning(string Code, string Message, ThemeAssetKind? Kind = null);
 
+/// <param name="FixedNotesSupported">Temada sabit not yazılabilecek Notlar alanı var mı (not istenmese de hesaplanır).</param>
 public sealed record ThemeComposeResult(bool Success, string Xslt, IReadOnlyList<ThemeComposeWarning> Warnings,
-    IReadOnlyDictionary<ThemeAssetKind, string?> AppliedSlots, int AddedImageBytes, string? Error);
+    IReadOnlyDictionary<ThemeAssetKind, string?> AppliedSlots, int AddedImageBytes, string? Error,
+    bool FixedNotesSupported = false);
 
 /// <summary>
 /// Kullanıcının logo/imza/IBAN bilgisini temaya ekleyen tek kaynak: önizleme, indirme ve kaydetme aynı metni
@@ -67,12 +74,34 @@ public sealed class ThemeAssetComposer(IThemeImageValidator images) : IThemeAsse
 
     public ThemeComposeResult Compose(string xslt, ThemeComposeInput input)
     {
+        var original = xslt;
         var warnings = new List<ThemeComposeWarning>();
         var applied = new Dictionary<ThemeAssetKind, string?>();
 
         var scan = OverridesBlockText.Scan(xslt);
         if (!scan.WellFormed)
             return Fail(xslt, "Şablondaki görsel bloğu işaretleri bozuk (eşleşmeyen ya da birden fazla blok). Lütfen düzeltin.");
+
+        // Sabit notlar: blok yerinde kalır (Upsert onu yerinde değiştirir), notlar Notlar alanına yazılır.
+        FixedNoteWriteResult notes;
+        try
+        {
+            notes = FixedNoteWriter.Apply(xslt, input.FixedNotes, input.DocumentType);
+        }
+        catch (ArgumentException)
+        {
+            return Fail(original, "Sabit not stili geçersiz.");
+        }
+        catch (InvalidOperationException)
+        {
+            return Fail(original, "Sabit not eklenemedi.");
+        }
+        if (notes.Error is not null)
+            return Fail(original, notes.Error);
+        if (notes.NotFound)
+            warnings.Add(new ThemeComposeWarning("notes-not-found", "Bu temada Notlar alanı bulunamadı; sabit not eklenmedi."));
+        xslt = notes.Xslt;
+        var supported = notes.Supported;
 
         // Yuva kümesi, eski blok hariç metinden.
         var withoutBlock = scan.Blocks.Count == 1 ? OverridesBlockText.RemoveAll(xslt) : xslt;
@@ -84,7 +113,7 @@ public sealed class ThemeAssetComposer(IThemeImageValidator images) : IThemeAsse
         {
             var check = images.Check(asset.DataUrl);
             if (!check.Valid)
-                return Fail(xslt, $"{KindLabel(asset.Kind)}: {check.Error}");
+                return Fail(original, $"{KindLabel(asset.Kind)}: {check.Error}");
             addedBytes += check.DecodedBytes;
 
             var slot = ResolveSlot(asset, slots, input, warnings);
@@ -110,14 +139,18 @@ public sealed class ThemeAssetComposer(IThemeImageValidator images) : IThemeAsse
 
         var banks = input.BankInfo.Where(b => !string.IsNullOrWhiteSpace(b.BankName) || !string.IsNullOrWhiteSpace(b.Iban)).ToList();
         if (items.Count == 0 && hide.Count == 0 && banks.Count == 0)
-            return Done(withoutBlock, warnings, applied, 0);
+        {
+            if (input.FixedNotes is not null && XsltSafety.FindThreat(withoutBlock) is { } noteThreat)
+                return Fail(original, noteThreat);
+            return Done(withoutBlock, warnings, applied, 0, supported);
+        }
 
         var parts = new List<string>();
         if (items.Count > 0 || hide.Count > 0)
         {
             var json = JsonSerializer.Serialize(new { v = 2, items, hide }, JsonOptions);
             if (json.IndexOfAny(['<', '>', '&']) >= 0)
-                return Fail(xslt, "Görsel verisi güvenli biçimde gömülemedi.");
+                return Fail(original, "Görsel verisi güvenli biçimde gömülemedi.");
             parts.Add($@"<script type=""application/json"" data-xc-overrides-data=""2"">{json}</script>");
             parts.Add($@"<script data-xc-overrides=""2"">{Runtime.Value}</script>");
         }
@@ -127,16 +160,16 @@ public sealed class ThemeAssetComposer(IThemeImageValidator images) : IThemeAsse
         var prefix = XslPrefix.Match(xslt) is { Success: true } m ? m.Groups[1].Value : "xsl";
         var composed = OverridesBlockText.Upsert(xslt, OverridesBlockText.Wrap(string.Join("\n", parts)), prefix);
         if (composed is null)
-            return Fail(xslt, "Görsel bloğu eklenemedi.");
+            return Fail(original, "Görsel bloğu eklenemedi.");
 
         if (XsltSafety.FindThreat(composed) is { } threat)
-            return Fail(xslt, threat);
+            return Fail(original, threat);
 
         if (addedBytes > LargeAssetsWarningBytes)
             warnings.Add(new ThemeComposeWarning("assets-large",
                 $"Eklenen görseller şablonu yaklaşık {addedBytes / 1024} KB büyütüyor; GİB için şablonun ~250 KB altında kalması önerilir."));
 
-        return Done(composed, warnings, applied, addedBytes);
+        return Done(composed, warnings, applied, addedBytes, supported);
     }
 
     private static string? ResolveSlot(ThemeAssetInput asset, IReadOnlyCollection<string> slots, ThemeComposeInput input,
@@ -186,7 +219,8 @@ public sealed class ThemeAssetComposer(IThemeImageValidator images) : IThemeAsse
     private static string KindLabel(ThemeAssetKind kind) => kind == ThemeAssetKind.Logo ? "Logo" : "İmza / Kaşe";
 
     private static ThemeComposeResult Done(string xslt, List<ThemeComposeWarning> warnings,
-        Dictionary<ThemeAssetKind, string?> applied, int bytes) => new(true, xslt, warnings, applied, bytes, null);
+        Dictionary<ThemeAssetKind, string?> applied, int bytes, bool fixedNotesSupported) =>
+        new(true, xslt, warnings, applied, bytes, null, fixedNotesSupported);
 
     private static ThemeComposeResult Fail(string xslt, string error) =>
         new(false, xslt, [], new Dictionary<ThemeAssetKind, string?>(), 0, error);
