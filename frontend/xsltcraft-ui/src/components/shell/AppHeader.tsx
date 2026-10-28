@@ -15,7 +15,7 @@ export default function AppHeader() {
     >
       <div className={`flex flex-none items-center ${sideW}`}>
         <Link to="/dashboard" aria-label="XsltCraft — Dashboard" className="xc-focus flex items-center gap-2.5 rounded-md text-ui-bar-fg no-underline">
-          <span aria-hidden="true" className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] bg-ui-accent text-[15px] font-bold text-white">
+          <span aria-hidden="true" className="flex h-[30px] w-[30px] items-center justify-center rounded-[7px] bg-ui-accent text-[15px] font-bold text-ui-accent-fg">
             X
           </span>
           {!collapsed && <span className="text-[15px] font-semibold">XsltCraft</span>}

@@ -5,11 +5,11 @@ import { fnStyle, type FnColor } from '../../theme/uiThemes'
 /* Admin sayfalarının ortak stil parçaları (yalnız token renkleri). */
 
 export const BTN_PRIMARY =
-  'xc-focus inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-accent px-4 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+  'xc-focus inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-ui-accent px-4 text-[13.5px] font-semibold text-ui-accent-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
 export const BTN_SECONDARY =
   'xc-focus inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-ui-line bg-ui-card px-3 text-[12.5px] font-medium text-tx-2 transition-colors hover:bg-ui-hover disabled:cursor-not-allowed disabled:opacity-50'
 export const BTN_DANGER =
-  'xc-focus inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-fn-red px-4 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+  'xc-focus inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-fn-red px-4 text-[13.5px] font-semibold text-on-fn transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
 export const BTN_DANGER_SOFT =
   'xc-focus inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-fn-red-line bg-fn-red-tint px-3 text-[12.5px] font-semibold text-fn-red-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
 export const BTN_ICON =

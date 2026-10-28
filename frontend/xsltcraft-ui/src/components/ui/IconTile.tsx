@@ -17,7 +17,7 @@ interface IconTileProps {
   color?: FnColor
   /** xs 22 · sm 26 · md 30 · lg 44 · xl 56 px. Varsayılan md. */
   size?: IconTileSize
-  /** true → her zaman dolu (renk zemin + beyaz ikon), ör. aktif menü öğesi. */
+  /** true → her zaman dolu (renk zemin + --fn-fg ikon), ör. aktif menü öğesi. */
   filled?: boolean
   /** true (varsayılan) → en yakın `group` üzerine gelinince dolar. */
   hoverFill?: boolean
@@ -38,8 +38,8 @@ export default function IconTile({
 }: IconTileProps) {
   const s = SIZES[size]
   const tone = filled
-    ? 'bg-(--fn) text-white'
-    : `bg-(--fn-tint) text-(--fn) ${hoverFill ? 'group-hover:bg-(--fn) group-hover:text-white group-focus-visible:bg-(--fn) group-focus-visible:text-white' : ''}`
+    ? 'bg-(--fn) text-(--fn-fg)'
+    : `bg-(--fn-tint) text-(--fn) ${hoverFill ? 'group-hover:bg-(--fn) group-hover:text-(--fn-fg) group-focus-visible:bg-(--fn) group-focus-visible:text-(--fn-fg)' : ''}`
   return (
     <span
       aria-hidden="true"

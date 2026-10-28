@@ -231,7 +231,7 @@ export function CheckMark({ checked }: { checked: boolean }) {
     <span
       aria-hidden="true"
       className={`inline-flex h-4 w-4 flex-none items-center justify-center rounded border-[1.5px] transition-colors ${
-        checked ? 'border-ui-accent bg-ui-accent text-white' : 'border-tx-subtle bg-ui-card text-transparent'
+        checked ? 'border-ui-accent bg-ui-accent text-ui-accent-fg' : 'border-tx-subtle bg-ui-card text-transparent'
       }`}
     >
       <Check size={11} strokeWidth={3} />

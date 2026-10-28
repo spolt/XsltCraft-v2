@@ -669,7 +669,7 @@ export default function AiAssistantPanel({
                   <button
                     type="button"
                     onClick={() => openApply(msg)}
-                    className="xc-focus flex h-[28px] items-center gap-1.5 rounded-md bg-ui-accent px-3 text-[12px] font-semibold text-white transition-[filter] hover:brightness-110"
+                    className="xc-focus flex h-[28px] items-center gap-1.5 rounded-md bg-ui-accent px-3 text-[12px] font-semibold text-ui-accent-fg transition-[filter] hover:brightness-110"
                     title="Önerilen değişikliği farkıyla göster, onaylayınca editöre uygula"
                   >
                     <Wand2 size={13} aria-hidden="true" /> {msg.applied ? 'Tekrar uygula' : 'Editöre uygula'}

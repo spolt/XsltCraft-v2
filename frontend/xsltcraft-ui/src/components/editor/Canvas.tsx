@@ -141,6 +141,7 @@ export default function Canvas() {
               setDropRef(node)
             }}
             onClick={(e) => e.stopPropagation()} // sayfa icini tiklamak deselect etmesin
+            className="xc-paper"
             style={{
               position: 'relative',
               width: pageWidthPx,

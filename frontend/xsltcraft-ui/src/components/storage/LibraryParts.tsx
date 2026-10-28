@@ -93,7 +93,7 @@ export function DeleteConfirm({ onYes, onNo }: { onYes: () => void; onNo: () => 
   return (
     <div role="group" aria-label="Silme onayı" className="flex items-center justify-end gap-1.5">
       <span className="text-xs font-medium text-fn-red-ink">Emin misin?</span>
-      <button type="button" onClick={onYes} className="xc-focus h-7 rounded-md bg-fn-red px-2.5 text-xs font-semibold text-white hover:bg-fn-red-ink">Evet</button>
+      <button type="button" onClick={onYes} className="xc-focus h-7 rounded-md bg-fn-red px-2.5 text-xs font-semibold text-on-fn hover:bg-fn-red-ink">Evet</button>
       <button type="button" onClick={onNo} className="xc-focus h-7 rounded-md border border-ui-line bg-ui-card px-2.5 text-xs text-tx-2 hover:bg-ui-hover">Hayır</button>
     </div>
   )
@@ -129,7 +129,7 @@ export function BulkDelete({ confirming, onAsk, onYes, onNo }: { confirming: boo
     <button
       type="button"
       onClick={onAsk}
-      className="xc-focus inline-flex h-8 items-center gap-1.5 rounded-md bg-fn-red px-3 text-[13px] font-semibold text-white transition-colors hover:bg-fn-red-ink"
+      className="xc-focus inline-flex h-8 items-center gap-1.5 rounded-md bg-fn-red px-3 text-[13px] font-semibold text-on-fn transition-colors hover:bg-fn-red-ink"
     >
       Seçilenleri Sil
     </button>
@@ -176,7 +176,7 @@ export function LibraryEmpty({ icon: Icon, title, hint, children }: { icon: Luci
 
 /** Birincil / ikincil sayfa bağlantı-buton sınıfları. */
 export const PRIMARY_LINK =
-  'xc-focus inline-flex h-9 items-center gap-1.5 rounded-lg bg-ui-accent px-4 text-[13px] font-semibold text-white no-underline transition-[filter] hover:brightness-110'
+  'xc-focus inline-flex h-9 items-center gap-1.5 rounded-lg bg-ui-accent px-4 text-[13px] font-semibold text-ui-accent-fg no-underline transition-[filter] hover:brightness-110'
 export const SECONDARY_LINK =
   'xc-focus inline-flex h-9 items-center gap-1.5 rounded-lg border border-ui-line bg-ui-card px-3.5 text-[13px] font-medium text-tx-2 no-underline transition-colors hover:bg-ui-hover'
 

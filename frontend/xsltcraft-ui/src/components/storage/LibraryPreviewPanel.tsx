@@ -25,7 +25,7 @@ export default function LibraryPreviewPanel({ name, html, loading, actionLabel, 
           type="button"
           onClick={onAction}
           disabled={loading}
-          className="xc-focus inline-flex h-[34px] flex-none items-center rounded-md bg-ui-accent px-4 text-[13px] font-semibold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          className="xc-focus inline-flex h-[34px] flex-none items-center rounded-md bg-ui-accent px-4 text-[13px] font-semibold text-ui-accent-fg transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {actionLabel}
         </button>

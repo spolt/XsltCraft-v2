@@ -166,7 +166,7 @@ export default function AiApplyDialog({ target, onAccept, onClose }: Props) {
             {noMatch ? (
               <button
                 onClick={copyBlock}
-                className="px-4 py-2 text-sm font-medium rounded bg-ui-accent hover:brightness-110 text-white flex items-center gap-1.5"
+                className="px-4 py-2 text-sm font-medium rounded bg-ui-accent hover:brightness-110 text-ui-accent-fg flex items-center gap-1.5"
               >
                 {copied ? <ClipboardCheck size={14} /> : <Copy size={14} />}
                 {copied ? 'Kopyalandı' : 'Panoya kopyala'}
@@ -174,7 +174,7 @@ export default function AiApplyDialog({ target, onAccept, onClose }: Props) {
             ) : validateError ? (
               <button
                 onClick={handleForceAccept}
-                className="px-3 py-1.5 text-xs rounded bg-fn-orange hover:brightness-110 text-white flex items-center gap-1"
+                className="px-3 py-1.5 text-xs rounded bg-fn-orange hover:brightness-110 text-on-fn flex items-center gap-1"
               >
                 Yine de uygula
               </button>
@@ -182,7 +182,7 @@ export default function AiApplyDialog({ target, onAccept, onClose }: Props) {
               <button
                 onClick={handleAccept}
                 disabled={validating}
-                className="px-3 py-1.5 text-xs rounded bg-fn-green hover:brightness-110 text-white flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 text-xs rounded bg-fn-green hover:brightness-110 text-on-fn flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {validating ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                 Uygula

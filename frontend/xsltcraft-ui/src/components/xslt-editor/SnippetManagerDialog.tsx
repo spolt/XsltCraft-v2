@@ -141,7 +141,7 @@ export default function SnippetManagerDialog({ onClose, onSnippetsChanged }: Pro
           <h2 className="text-sm font-semibold text-tx flex-1">Snippet Kütüphanesi</h2>
           <button
             onClick={openCreate}
-            className="flex items-center gap-1.5 h-7 px-3 rounded bg-ui-accent hover:brightness-110 text-white text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 h-7 px-3 rounded bg-ui-accent hover:brightness-110 text-ui-accent-fg text-xs font-medium transition-colors"
           >
             <Plus size={13} />
             Yeni Snippet
@@ -215,10 +215,10 @@ export default function SnippetManagerDialog({ onClose, onSnippetsChanged }: Pro
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="h-7 px-3 text-xs font-medium text-white bg-ui-accent hover:brightness-110 rounded disabled:opacity-40 flex items-center gap-1.5 transition-colors"
+                className="h-7 px-3 text-xs font-medium text-ui-accent-fg bg-ui-accent hover:brightness-110 rounded disabled:opacity-40 flex items-center gap-1.5 transition-colors"
               >
                 {saving
-                  ? <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ? <span className="inline-block w-3 h-3 border-2 border-ui-accent-fg border-t-transparent rounded-full animate-spin" />
                   : <Save size={12} />
                 }
                 Kaydet

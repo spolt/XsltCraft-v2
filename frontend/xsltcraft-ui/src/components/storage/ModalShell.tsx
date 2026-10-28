@@ -50,7 +50,7 @@ export default function ModalShell({ title, subtitle, onClose, width = 'max-w-md
 
 /** Diyalog butonları. */
 export const MODAL_PRIMARY =
-  'xc-focus inline-flex items-center gap-1.5 rounded-lg bg-ui-accent px-4 py-2 text-[13px] font-semibold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50'
+  'xc-focus inline-flex items-center gap-1.5 rounded-lg bg-ui-accent px-4 py-2 text-[13px] font-semibold text-ui-accent-fg transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50'
 export const MODAL_SECONDARY =
   'xc-focus rounded-lg px-4 py-2 text-[13px] font-medium text-tx-2 transition-colors hover:bg-ui-hover'
 export const MODAL_INPUT =

@@ -103,7 +103,7 @@ export default function ChatComposer({
           disabled={!canSend}
           aria-label="Gönder"
           title="Gönder (Enter)"
-          className="xc-focus flex h-7 w-7 flex-none items-center justify-center rounded-md bg-ui-accent text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
+          className="xc-focus flex h-7 w-7 flex-none items-center justify-center rounded-md bg-ui-accent text-ui-accent-fg transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
         >
           <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
         </button>

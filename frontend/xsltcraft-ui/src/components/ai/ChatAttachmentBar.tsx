@@ -27,7 +27,7 @@ export default function ChatAttachmentBar({ attachments, processing, onRemove, d
             disabled={disabled}
             aria-label={`Ekran görüntüsü ${i + 1}'i kaldır`}
             title="Kaldır"
-            className="absolute -top-1.5 -right-1.5 h-5 w-5 flex items-center justify-center rounded-full bg-ui-card border border-field-line text-tx-2 hover:text-white hover:bg-fn-red disabled:opacity-40 transition-colors"
+            className="absolute -top-1.5 -right-1.5 h-5 w-5 flex items-center justify-center rounded-full bg-ui-card border border-field-line text-tx-2 hover:text-on-fn hover:bg-fn-red disabled:opacity-40 transition-colors"
           >
             <X size={11} />
           </button>

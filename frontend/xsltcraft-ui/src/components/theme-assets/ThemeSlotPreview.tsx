@@ -112,7 +112,7 @@ function SlotTarget({ id, box, label, filledBy, dragging }: {
         </span>
       )}
       {!empty && !isOver && (
-        <span className="absolute -top-2 left-1 text-[10px] leading-none bg-ui-accent text-white rounded px-1 py-0.5">
+        <span className="absolute -top-2 left-1 text-[10px] leading-none bg-ui-accent text-ui-accent-fg rounded px-1 py-0.5">
           {label}
         </span>
       )}
@@ -146,7 +146,7 @@ function AssetHandle({ kind, box }: { kind: AssetKind; box: Box }) {
       title={`${ASSET_LABEL[kind]} — başka bir konuma sürükleyin`}
       aria-label={`${ASSET_LABEL[kind]} konumunu değiştir`}
     >
-      <span className="absolute -top-2 -left-2 hidden group-hover:flex group-focus-visible:flex items-center bg-ui-accent text-white rounded p-0.5 shadow">
+      <span className="absolute -top-2 -left-2 hidden group-hover:flex group-focus-visible:flex items-center bg-ui-accent text-ui-accent-fg rounded p-0.5 shadow">
         <GripVertical size={12} aria-hidden="true" />
       </span>
     </button>

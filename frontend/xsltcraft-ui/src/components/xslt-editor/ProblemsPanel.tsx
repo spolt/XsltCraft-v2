@@ -124,7 +124,7 @@ export default function ProblemsPanel({
                 <span>{TAB_LABELS[src]}</span>
                 {c.total > 0 && (
                   <span className={`inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded text-[10.5px] font-semibold ${
-                    hasError ? 'bg-fn-red text-white' : 'bg-ed-seg text-ed-text'
+                    hasError ? 'bg-fn-red text-on-fn' : 'bg-ed-seg text-ed-text'
                   }`}>
                     {c.total}
                   </span>
@@ -215,7 +215,7 @@ export default function ProblemsPanel({
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onAskAi(p) }}
-                        className="xc-focus flex-shrink-0 self-start ml-2 px-1.5 py-0.5 rounded text-[10.5px] flex items-center gap-1 border border-ed-border text-ed-text hover:bg-ui-accent hover:border-ui-accent hover:text-white transition-colors"
+                        className="xc-focus flex-shrink-0 self-start ml-2 px-1.5 py-0.5 rounded text-[10.5px] flex items-center gap-1 border border-ed-border text-ed-text hover:bg-ui-accent hover:border-ui-accent hover:text-ui-accent-fg transition-colors"
                         title="Bu hatayı AI'ya açıklattır"
                       >
                         <Sparkles size={10} />

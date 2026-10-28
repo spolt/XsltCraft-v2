@@ -85,7 +85,7 @@ export default function UpgradeModal() {
               ref={primaryRef}
               type="button"
               onClick={goPricing}
-              className="xc-focus w-full rounded-lg bg-fn-purple-ink py-2.5 text-sm font-semibold text-white transition-colors hover:bg-fn-purple"
+              className="xc-focus w-full rounded-lg bg-fn-purple-ink py-2.5 text-sm font-semibold text-on-fn transition-colors hover:bg-fn-purple"
             >
               Pro'ya Geç
             </button>

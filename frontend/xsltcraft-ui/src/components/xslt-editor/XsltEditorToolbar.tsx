@@ -53,7 +53,7 @@ function Badge({ tone, children }: { tone: 'error' | 'warn'; children: ReactNode
   return (
     <span
       className={`min-w-[18px] rounded-full px-1.5 text-center text-[11px] font-bold leading-[17px] ${
-        tone === 'error' ? 'bg-fn-red text-white' : 'bg-ed-warn text-ed-bg'
+        tone === 'error' ? 'bg-fn-red text-on-fn' : 'bg-ed-warn text-ed-bg'
       }`}
     >
       {children}
@@ -175,7 +175,7 @@ export default function XsltEditorToolbar({
           aria-pressed={aiOpen}
           className={`xc-focus ml-1 flex h-[26px] flex-none items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[12px] font-semibold transition-colors ${
             aiOpen
-              ? 'border-ui-accent bg-ui-accent text-white'
+              ? 'border-ui-accent bg-ui-accent text-ui-accent-fg'
               : 'border-ed-border text-ed-text hover:bg-ed-active'
           }`}
         >

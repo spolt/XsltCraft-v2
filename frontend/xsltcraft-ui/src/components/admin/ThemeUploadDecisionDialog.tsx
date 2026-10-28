@@ -165,7 +165,7 @@ export default function ThemeUploadDecisionDialog({ request, busy, onDecide, onC
           </button>
           <button
             type="button" onClick={submit} disabled={busy || !ready}
-            className="xc-focus h-10 px-4 text-[13.5px] font-semibold text-white bg-ui-accent hover:opacity-90 rounded-lg transition disabled:opacity-40"
+            className="xc-focus h-10 px-4 text-[13.5px] font-semibold text-ui-accent-fg bg-ui-accent hover:opacity-90 rounded-lg transition disabled:opacity-40"
           >
             Devam et
           </button>

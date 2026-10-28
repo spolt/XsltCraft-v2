@@ -147,7 +147,7 @@ export default function XmlTreeExplorer({ onUploadClick, uploadError }: XmlTreeE
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Selection mode banner */}
       {isSelecting && (
-        <div role="status" className="flex flex-none items-center justify-between gap-2 bg-ui-accent px-4 py-2 text-white">
+        <div role="status" className="flex flex-none items-center justify-between gap-2 bg-ui-accent px-4 py-2 text-ui-accent-fg">
           <span className="flex items-center gap-2 text-[12px] font-medium">
             <MousePointerClick size={13} aria-hidden="true" />
             Bir öğeye tıklayarak XPath'i seçin
@@ -156,7 +156,7 @@ export default function XmlTreeExplorer({ onUploadClick, uploadError }: XmlTreeE
             type="button"
             onClick={cancelXPathSelection}
             style={{ '--xc-focus-ring': 'white' } as React.CSSProperties}
-            className="xc-focus flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] text-white/85 hover:bg-white/15 hover:text-white"
+            className="xc-focus flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] text-ui-accent-fg/85 hover:bg-ui-accent-fg/15 hover:text-ui-accent-fg"
           >
             <X size={12} aria-hidden="true" />
             İptal

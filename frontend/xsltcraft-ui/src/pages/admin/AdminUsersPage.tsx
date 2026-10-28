@@ -305,7 +305,7 @@ export default function AdminUsersPage() {
                         aria-current={on ? 'page' : undefined}
                         onClick={() => setPage(p)}
                         className={`xc-focus h-8 min-w-8 rounded-lg px-2 text-[12.5px] transition-colors ${
-                          on ? 'bg-ui-accent font-semibold text-white' : 'border border-ui-line bg-ui-card text-tx-2 hover:bg-ui-hover'
+                          on ? 'bg-ui-accent font-semibold text-ui-accent-fg' : 'border border-ui-line bg-ui-card text-tx-2 hover:bg-ui-hover'
                         }`}
                       >
                         {p}

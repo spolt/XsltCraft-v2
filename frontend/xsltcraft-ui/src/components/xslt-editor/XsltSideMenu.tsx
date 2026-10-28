@@ -97,7 +97,7 @@ export default function XsltSideMenu({
           aria-label="XSLT yükle"
           title="XSLT YÜKLE"
           onClick={onUploadXslt}
-          className="xc-focus flex h-[38px] w-[38px] items-center justify-center rounded-lg bg-ui-accent text-white hover:brightness-110"
+          className="xc-focus flex h-[38px] w-[38px] items-center justify-center rounded-lg bg-ui-accent text-ui-accent-fg hover:brightness-110"
         >
           <Code2 size={18} strokeWidth={2} aria-hidden="true" />
         </button>
@@ -143,9 +143,9 @@ export default function XsltSideMenu({
         <button
           type="button"
           onClick={onUploadXslt}
-          className="xc-focus flex items-center gap-2.5 rounded-lg bg-ui-accent px-2.5 py-2 text-left text-white transition-[filter] hover:brightness-110"
+          className="xc-focus flex items-center gap-2.5 rounded-lg bg-ui-accent px-2.5 py-2 text-left text-ui-accent-fg transition-[filter] hover:brightness-110"
         >
-          <span aria-hidden="true" className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[6px] bg-white/15">
+          <span aria-hidden="true" className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[6px] bg-ui-accent-fg/15">
             <Code2 size={16} strokeWidth={2} />
           </span>
           <span className="flex flex-col">

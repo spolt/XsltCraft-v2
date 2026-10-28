@@ -1,7 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type UiThemeId = 'lacivert' | 'mor' | 'turuncu'
+export type UiThemeId = 'lacivert' | 'mor' | 'gece'
+
+const UI_THEME_IDS: readonly UiThemeId[] = ['lacivert', 'mor', 'gece']
+
+/** Kayıtlı tema kimliğini geçerli bir değere çevirir (v1'deki kaldırılan 'turuncu' → 'gece'). */
+const normalizeUiTheme = (t: unknown): UiThemeId =>
+  t === 'turuncu' ? 'gece' : UI_THEME_IDS.includes(t as UiThemeId) ? (t as UiThemeId) : 'lacivert'
 export type EditorThemeId = 'dark' | 'light' | 'contrast'
 export type EditorLayoutId = 'side' | 'half' | 'mini' | 'editorOnly'
 /** XSLT editör sağ paneli: Önizleme ve AI ayrı sütunlarda | tek sütunda sekmeli. */
@@ -116,7 +122,12 @@ export const useUiPrefsStore = create<UiPrefsState>()(
     }),
     {
       name: 'xsltcraft-ui-prefs',
-      version: 1,
+      // v2: 'turuncu' teması kaldırıldı → 'gece'.
+      version: 2,
+      migrate: (persisted) => {
+        const p = (persisted ?? {}) as Partial<PersistedPrefs>
+        return { ...p, uiTheme: normalizeUiTheme(p.uiTheme) } as PersistedPrefs
+      },
       partialize: (s): PersistedPrefs => ({
         uiTheme: s.uiTheme,
         navCollapsedOnStart: s.navCollapsedOnStart,
@@ -134,6 +145,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         const merged = { ...current, ...p }
         return {
           ...merged,
+          uiTheme: normalizeUiTheme(merged.uiTheme),
           editorFontSize: clampFont(merged.editorFontSize),
           // v1 kayıtlarında bu alanlar yoktur → varsayılan; bozuk değerler de aralığa çekilir.
           xsltRightPanelMode: merged.xsltRightPanelMode === 'tabs' ? 'tabs' : 'split',

@@ -178,7 +178,7 @@ export default function TemplatesPage() {
               type="button"
               onClick={handleUse}
               disabled={previewLoading}
-              className="xc-focus inline-flex h-[34px] flex-none items-center gap-1.5 rounded-md bg-ui-accent px-4 text-[13px] font-semibold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              className="xc-focus inline-flex h-[34px] flex-none items-center gap-1.5 rounded-md bg-ui-accent px-4 text-[13px] font-semibold text-ui-accent-fg transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {selectedTheme.isPremium && !canUsePremium ? (<><Lock size={13} aria-hidden="true" /> Pro ile aç</>) : 'Bu temayı kullan'}
             </button>
@@ -217,7 +217,7 @@ function DocTypeTabs({ value, onChange }: { value: DocType; onChange: (t: DocTyp
 
 function PlanBadge({ premium }: { premium: boolean }) {
   return premium ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-fn-purple-ink px-2 py-0.5 text-[11px] font-bold text-white">
+    <span className="inline-flex items-center gap-1 rounded-full bg-fn-purple-ink px-2 py-0.5 text-[11px] font-bold text-on-fn">
       <Crown size={11} aria-hidden="true" /> Pro
     </span>
   ) : (
@@ -231,7 +231,7 @@ function ThemeThumb({ docType }: { docType: string }) {
     <div
       aria-hidden="true"
       style={fnStyle(docType === 'Despatch' ? 'orange' : 'blue')}
-      className="flex aspect-[210/230] w-full flex-col overflow-hidden bg-white shadow-[var(--ui-shadow-rest)]"
+      className="xc-paper flex aspect-[210/230] w-full flex-col overflow-hidden bg-white shadow-[var(--ui-shadow-rest)]"
     >
       <div className="h-[18%] flex-none bg-(--fn)" />
       <div className="flex flex-1 flex-col gap-[5px] p-2.5">
@@ -289,8 +289,8 @@ function ThemeCard({
             onClick={onUse}
             className={`xc-focus inline-flex h-[34px] flex-1 items-center justify-center gap-1.5 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
               locked
-                ? 'bg-fn-purple-tint text-fn-purple-ink hover:bg-fn-purple-ink hover:text-white'
-                : 'bg-ui-accent text-white hover:brightness-110'
+                ? 'bg-fn-purple-tint text-fn-purple-ink hover:bg-fn-purple-ink hover:text-on-fn'
+                : 'bg-ui-accent text-ui-accent-fg hover:brightness-110'
             }`}
           >
             {locked && <Lock size={12} aria-hidden="true" />}
@@ -338,7 +338,7 @@ function CompactThemeRow({
       <button
         type="button"
         onClick={onUse}
-        className="xc-focus inline-flex h-[30px] flex-none items-center gap-1 rounded-md border border-ui-soft-line px-3 text-xs font-semibold text-ui-ink transition-colors hover:bg-ui-accent hover:text-white"
+        className="xc-focus inline-flex h-[30px] flex-none items-center gap-1 rounded-md border border-ui-soft-line px-3 text-xs font-semibold text-ui-ink transition-colors hover:bg-ui-accent hover:text-ui-accent-fg"
       >
         {locked && <Lock size={11} aria-hidden="true" />} Seç
       </button>

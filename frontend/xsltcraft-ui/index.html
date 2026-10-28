@@ -13,7 +13,8 @@
           if (!raw) return;
           var s = (JSON.parse(raw) || {}).state || {};
           var root = document.documentElement;
-          if (s.uiTheme === 'lacivert' || s.uiTheme === 'mor' || s.uiTheme === 'turuncu') root.setAttribute('data-ui-theme', s.uiTheme);
+          var ui = s.uiTheme === 'turuncu' ? 'gece' : s.uiTheme; // kaldırılan tema → gece (uiPrefsStore v2 göçü)
+          if (ui === 'lacivert' || ui === 'mor' || ui === 'gece') root.setAttribute('data-ui-theme', ui);
           if (s.editorTheme === 'dark' || s.editorTheme === 'light' || s.editorTheme === 'contrast') root.setAttribute('data-editor-theme', s.editorTheme);
         } catch (e) { /* yoksay */ }
       })();

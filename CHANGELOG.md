@@ -120,7 +120,7 @@ Kararlar: [ADR 007](./docs/ecc/decisions/007-xslt-engine-routing.md) (motor yön
 Plan: [UI 2.0 yeniden tasarımı](./docs/ecc/plans/ui-2-0-redesign.md). Yalnız görsel/yerleşim değişikliği — servis, store ve API davranışı aynı.
 
 #### Added
-- **3 arayüz teması**: Lacivert (varsayılan), Mor, Turuncu. Ayarlar'dan seçilir, tarayıcıda kalıcıdır (`xsltcraft-ui-prefs`); ilk boyamada tema uygulanır (titreme yok). Eski renk tokenları yeni temaya köprülendiği için dokunulmayan diyaloglar da temayı alır.
+- **3 arayüz teması**: Lacivert (varsayılan), Mor, Gece Mavisi (koyu; gece mavisi zemin, temaya yedirilmiş yumuşak camgöbeği vurgu — eski Beyaz–Turuncu temanın yerine, kayıtlı tercih otomatik taşınır). Ayarlar'dan seçilir, tarayıcıda kalıcıdır (`xsltcraft-ui-prefs`); ilk boyamada tema uygulanır (titreme yok). Eski renk tokenları yeni temaya köprülendiği için dokunulmayan diyaloglar da temayı alır.
 - **Yeni kabuk**: daraltılabilir sol menü (açılışta daraltılmış başlama tercihi), üst barda hızlı arama (`Ctrl+K` — sayfalar ve son çalışmalar), **Ayarlar** bölümü (arayüz rengi, menü tercihi), profil kartı ve Pro'ya geç çağrısı.
 - **Dashboard**: XSLT Editör kartı (seçilen dosya doğrudan editörde açılır), Şablonlarım kartı, kısayollar (yeni e-Fatura / e-İrsaliye şablonu, Tema Kütüphanesi, Taslaklarım) ve son çalışmalar tablosu (taslak + XSLT, kaynak etiketiyle).
 - **Tasarım Alanı** (eski grid editör): solda **Bloklar | XML Ağacı** sekmeleri (blok arama + gruplar, XML yükleme ve çoklu XML seçimi, XPath seçim bannerı), sağda seçili blok için **Veri | Konum** sekmeleri (konum mm cinsinden); kanvas araç çubuğu ve durum çubuğu (blok sayısı, seçili blok konumu/boyutu, 5 mm ızgara, kayıt durumu); başlıkta satır içi ad düzenleme, geri al/yinele, Önizle, Kaydet, XSLT İndir.
@@ -131,7 +131,7 @@ Plan: [UI 2.0 yeniden tasarımı](./docs/ecc/plans/ui-2-0-redesign.md). Yalnız 
 
 #### Changed
 - Tüm sayfalar (Tema Kütüphanesi, Taslaklarım, Şablonlarım, Profil, Planlar, Hakkında, UpgradeModal) yeni kart/başlık bileşenleri ve tema tokenlarıyla yeniden çizildi.
-- **Auth** (giriş/kayıt) sayfaları önceki düzenini koruyor; yalnız düğme, link ve odak renkleri seçili arayüz temasının vurgu rengini kullanıyor.
+- **Giriş/Kayıt yeniden tasarımı**: olgun cam (glassmorphism) kart, kurumsal gece mavisi palet ve derinlik; balon küreler yerine akışkan soyut 3B formlar (şerit, halka, damla). Sol üst XsltCraft logosu ve sol alt fatura görseli korundu (keskin, döndürmesiz, yumuşak maskeli). Form alanlarına `htmlFor`/aria bağları eklendi.
 - **Admin** sayfaları (Temalar, Snippet'ler, Kullanıcılar, AI, AI Geri Bildirim) yeni yönetim kabuğunda; Kullanıcılar'da istatistik kartları, filtreli tablo ve sağda detay paneli.
 - XSLT Editör'de **Problemler** paneli varsayılan kapalı; UBL-TR kontrolü ya da sayaç tıklanınca açılır.
 - Arayüz metinlerinde "grid canvas" yerine **Tasarım Alanı**.

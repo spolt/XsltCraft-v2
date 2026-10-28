@@ -516,12 +516,12 @@ export default function EditorPage() {
       {/* Kayıt / indirme bildirimleri */}
       <div aria-live="polite" className="pointer-events-none fixed bottom-10 left-1/2 z-[99999] -translate-x-1/2">
         {saveSuccess && (
-          <div className="flex items-center gap-2 whitespace-nowrap rounded-lg bg-fn-green-ink px-5 py-2.5 text-[13px] font-medium text-white shadow-[var(--ui-shadow-pop)]">
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-lg bg-fn-green-ink px-5 py-2.5 text-[13px] font-medium text-on-fn shadow-[var(--ui-shadow-pop)]">
             <Check size={15} strokeWidth={2.4} aria-hidden="true" /> Taslaklarım'a kaydedildi
           </div>
         )}
         {downloadSuccess && (
-          <div className="flex items-center gap-2 whitespace-nowrap rounded-lg bg-ui-accent px-5 py-2.5 text-[13px] font-medium text-white shadow-[var(--ui-shadow-pop)]">
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-lg bg-ui-accent px-5 py-2.5 text-[13px] font-medium text-ui-accent-fg shadow-[var(--ui-shadow-pop)]">
             <Download size={15} strokeWidth={2.2} aria-hidden="true" /> Şablon indirme başlatıldı
           </div>
         )}
@@ -594,7 +594,7 @@ function NamePromptModal({ initial, action, onConfirm, onClose }: {
             type="button"
             onClick={confirm}
             disabled={!name.trim()}
-            className="xc-focus rounded-lg bg-ui-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-40"
+            className="xc-focus rounded-lg bg-ui-accent px-4 py-2 text-sm font-semibold text-ui-accent-fg transition hover:brightness-110 disabled:opacity-40"
           >
             {action === 'save' ? 'Kaydet' : 'İndir'}
           </button>

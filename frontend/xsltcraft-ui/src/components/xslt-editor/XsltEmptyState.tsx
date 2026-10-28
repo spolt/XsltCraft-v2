@@ -104,7 +104,7 @@ function UploadCard({
       <span
         aria-hidden="true"
         className={`flex h-12 w-12 items-center justify-center rounded-full ${
-          loaded ? 'bg-fn-green-tint text-fn-green-ink' : primary ? 'bg-ui-accent text-white' : 'bg-ui-soft text-ui-ink'
+          loaded ? 'bg-fn-green-tint text-fn-green-ink' : primary ? 'bg-ui-accent text-ui-accent-fg' : 'bg-ui-soft text-ui-ink'
         }`}
       >
         {loaded ? <CheckCircle2 size={24} /> : <Icon size={24} />}

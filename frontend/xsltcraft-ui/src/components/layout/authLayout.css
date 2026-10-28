@@ -1,0 +1,249 @@
+/* Giriş / Kayıt düzeni — renkler yalnız --ui-auth-* / --ui-* tokenlarından (styles/theme.css). */
+
+/* ---------- Zemin ---------- */
+.xc-auth-backdrop {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 55% at 50% 46%, var(--ui-auth-bg-lift) 0%, transparent 70%),
+    radial-gradient(120% 90% at 18% 0%, color-mix(in srgb, var(--ui-auth-bg-lift) 55%, transparent) 0%, transparent 55%),
+    linear-gradient(160deg, var(--ui-auth-bg) 0%, var(--ui-auth-bg-deep) 100%);
+}
+
+.xc-auth-form {
+  position: absolute;
+  will-change: transform;
+}
+.xc-auth-form > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Ön plandaki formların arkasında zemine eriyen sis + kenar kararması */
+.xc-auth-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(42% 46% at 50% 50%, color-mix(in srgb, var(--ui-auth-bg) 45%, transparent) 0%, transparent 100%),
+    radial-gradient(140% 110% at 50% 45%, transparent 55%, color-mix(in srgb, var(--ui-auth-bg-deep) 85%, transparent) 100%);
+}
+
+.xc-auth-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-size: 220px 220px;
+}
+
+/* Fatura görseli: gri fotoğraf zemini hard-light ile nötrlenir (≈%50 gri → zemin
+   değişmez), kâğıt gölgesi zemini doğal biçimde koyulaştırır. Yalnız gri zemini nötrleyecek
+   kadar hafif parlatma (fazlası ince yazıyı soldururdu); kontrast + hafif opaklıkla kâğıt zemine yedirilir, kartla yarışmaz. */
+.xc-auth-invoice {
+  position: absolute;
+  user-select: none;
+  mix-blend-mode: hard-light;
+  filter: brightness(1.14) contrast(1.1) saturate(0.7);
+  opacity: 0.9;
+  -webkit-mask-image: radial-gradient(ellipse 62% 62% at 52% 48%, #000 54%, transparent 82%);
+  mask-image: radial-gradient(ellipse 62% 62% at 52% 48%, #000 54%, transparent 82%);
+}
+
+/* Çok yavaş, transform tabanlı süzülme (GPU katmanı; SVG yeniden çizilmez). */
+@keyframes xc-auth-drift-a {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50%  { transform: translate3d(1.6%, -2.2%, 0) rotate(1.6deg) scale(1.02); }
+  100% { transform: translate3d(-1.2%, 1.4%, 0) rotate(-1deg) scale(1); }
+}
+@keyframes xc-auth-drift-b {
+  0%   { transform: translate3d(0, 0, 0) rotate(-18deg); }
+  50%  { transform: translate3d(-2.5%, 3%, 0) rotate(-12deg); }
+  100% { transform: translate3d(1.5%, -1.5%, 0) rotate(-22deg); }
+}
+@keyframes xc-auth-drift-c {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-3%, -2%, 0) scale(1.05); }
+  100% { transform: translate3d(2%, 1%, 0) scale(0.98); }
+}
+.xc-auth-form--ribbon { animation: xc-auth-drift-a 48s ease-in-out infinite alternate; }
+.xc-auth-form--torus  { animation: xc-auth-drift-b 56s ease-in-out infinite alternate; }
+.xc-auth-form--drop   { animation: xc-auth-drift-c 40s ease-in-out infinite alternate; }
+
+@media (prefers-reduced-motion: reduce) {
+  .xc-auth-form { animation: none !important; will-change: auto; }
+}
+
+/* ---------- Cam kart ---------- */
+.xc-auth-card {
+  position: relative;
+  border-radius: 20px;
+  color: var(--ui-auth-fg);
+  background:
+    linear-gradient(165deg, var(--ui-auth-glass-sheen) 0%, transparent 45%),
+    var(--ui-auth-glass);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+  backdrop-filter: blur(22px) saturate(135%);
+  box-shadow: var(--ui-auth-shadow);
+}
+/* İnce kenar: ışık üstten-soldan gelir → üst kenar daha parlak. */
+.xc-auth-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, var(--ui-auth-glass-hi) 0%, var(--ui-auth-glass-line) 38%, var(--ui-auth-glass-line) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .xc-auth-card { background: var(--ui-auth-glass-solid); }
+}
+
+.xc-auth-title {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ui-auth-fg);
+}
+.xc-auth-sub {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--ui-auth-muted);
+}
+.xc-auth-link {
+  color: var(--ui-panel-link);
+  font-weight: 600;
+  border-radius: 4px;
+  text-underline-offset: 3px;
+}
+.xc-auth-link:hover { text-decoration: underline; }
+
+.xc-auth-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-auth-muted);
+}
+.xc-auth-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ui-auth-subtle);
+}
+
+.xc-auth-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  font-size: 14px;
+  color: var(--ui-auth-fg);
+  background: var(--ui-auth-field);
+  border: 1px solid var(--ui-auth-field-line);
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.xc-auth-input::placeholder { color: var(--ui-auth-subtle); opacity: 1; }
+.xc-auth-input:hover { border-color: var(--ui-auth-field-line-hover); }
+.xc-auth-input[aria-invalid='true'] { border-color: var(--ui-auth-error-line); }
+.xc-auth-input:focus {
+  border-color: var(--ui-auth-focus);
+  background: var(--ui-auth-field-solid);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-auth-focus) 38%, transparent);
+}
+.xc-auth-input:-webkit-autofill {
+  -webkit-text-fill-color: var(--ui-auth-fg);
+  -webkit-box-shadow: 0 0 0 1000px var(--ui-auth-field-solid) inset;
+  caret-color: var(--ui-auth-fg);
+  transition: background-color 9999s ease 0s;
+}
+
+.xc-auth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: filter 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.xc-auth-btn:focus-visible {
+  outline: 2px solid var(--ui-auth-focus);
+  outline-offset: 2px;
+}
+.xc-auth-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.xc-auth-btn--primary {
+  color: var(--ui-accent-fg);
+  background: var(--ui-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 24px -10px var(--ui-auth-glow);
+}
+.xc-auth-btn--primary:not(:disabled):hover { filter: brightness(1.08); }
+.xc-auth-btn--secondary {
+  color: var(--ui-auth-fg);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--ui-auth-field-line);
+}
+.xc-auth-btn--secondary:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--ui-auth-field-line-hover);
+}
+
+.xc-auth-link:focus-visible {
+  outline: 2px solid var(--ui-auth-focus);
+  outline-offset: 2px;
+}
+
+.xc-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0;
+  font-size: 12px;
+  color: var(--ui-auth-muted);
+}
+.xc-auth-divider::before,
+.xc-auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--ui-auth-glass-line);
+}
+
+.xc-auth-error {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ui-auth-error-fg);
+  background: var(--ui-auth-error-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-auth-error-line) 45%, transparent);
+  border-left-width: 3px;
+  border-left-color: var(--ui-auth-error-line);
+  border-radius: 10px;
+}
+
+/* ---------- Marka + alt yazı ---------- */
+.xc-auth-logo-badge {
+  background: linear-gradient(135deg, var(--ui-auth-logo-a) 0%, var(--ui-auth-logo-b) 50%, var(--ui-auth-logo-c) 100%);
+  box-shadow: 0 10px 28px var(--ui-auth-logo-glow), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.xc-auth-logo-word { color: var(--ui-auth-fg); }
+.xc-auth-logo-accent { color: var(--ui-auth-logo-a); }
+
+.xc-auth-footer {
+  font-size: 13px;
+  color: var(--ui-auth-muted);
+}
+.xc-auth-footer strong { color: var(--ui-auth-fg); font-weight: 600; }

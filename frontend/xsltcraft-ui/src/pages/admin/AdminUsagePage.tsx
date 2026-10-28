@@ -146,7 +146,7 @@ export default function AdminUsagePage() {
                     aria-pressed={on}
                     onClick={() => pickPreset(p)}
                     className={`xc-focus h-8 rounded-[7px] px-3.5 text-[12.5px] font-semibold transition-colors ${
-                      on ? 'bg-ui-accent text-white' : 'text-tx-2 hover:bg-ui-hover'
+                      on ? 'bg-ui-accent text-ui-accent-fg' : 'text-tx-2 hover:bg-ui-hover'
                     }`}
                   >
                     {p} gün
@@ -160,7 +160,7 @@ export default function AdminUsagePage() {
                 aria-controls="usage-custom-range"
                 onClick={() => setCustomOpen(true)}
                 className={`xc-focus h-8 rounded-[7px] px-3.5 text-[12.5px] font-semibold transition-colors ${
-                  isCustom ? 'bg-ui-accent text-white' : 'text-tx-2 hover:bg-ui-hover'
+                  isCustom ? 'bg-ui-accent text-ui-accent-fg' : 'text-tx-2 hover:bg-ui-hover'
                 }`}
               >
                 Özel

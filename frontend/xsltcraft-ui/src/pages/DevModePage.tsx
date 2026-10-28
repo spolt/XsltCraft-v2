@@ -475,7 +475,7 @@ export default function DevModePage() {
               <button
                 type="button"
                 onClick={() => setEditMode(true)}
-                className="xc-focus h-7 flex items-center gap-1 rounded-md bg-ui-accent px-2 font-semibold text-white hover:brightness-110 flex-shrink-0"
+                className="xc-focus h-7 flex items-center gap-1 rounded-md bg-ui-accent px-2 font-semibold text-ui-accent-fg hover:brightness-110 flex-shrink-0"
               >
                 <Settings2 size={12} aria-hidden="true" />Düzenle
               </button>
@@ -535,7 +535,7 @@ export default function DevModePage() {
                       <ShieldCheck size={12} aria-hidden="true" />
                       UBL-TR kontrol
                       {ublTrErrorCount != null && ublTrErrorCount > 0 && (
-                        <span className={`${badge} bg-fn-red text-white`}>{ublTrErrorCount}</span>
+                        <span className={`${badge} bg-fn-red text-on-fn`}>{ublTrErrorCount}</span>
                       )}
                     </button>
                     <button type="button" onClick={() => setShowSnippetManager(true)} className={edBtn} title="Snippet Kütüphanesi" aria-label="Snippet Kütüphanesi">
@@ -554,7 +554,7 @@ export default function DevModePage() {
                     >
                       <ListChecks size={12} aria-hidden="true" />
                       {totalErrorCount > 0 && (
-                        <span className={`${badge} bg-fn-red text-white`}>{totalErrorCount}</span>
+                        <span className={`${badge} bg-fn-red text-on-fn`}>{totalErrorCount}</span>
                       )}
                     </button>
                   </div>

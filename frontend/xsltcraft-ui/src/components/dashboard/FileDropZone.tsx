@@ -68,7 +68,7 @@ export default function FileDropZone({ files, onChange, onOpen }: Props) {
           <span
             aria-hidden="true"
             className={`flex h-16 w-16 items-center justify-center rounded-full border transition-colors ${
-              dragging ? 'border-ui-accent bg-ui-accent text-white' : 'border-ui-workspace-line bg-ui-workspace-raised text-ui-workspace-fg'
+              dragging ? 'border-ui-accent bg-ui-accent text-ui-accent-fg' : 'border-ui-workspace-line bg-ui-workspace-raised text-ui-workspace-fg'
             }`}
           >
             <Upload size={28} strokeWidth={1.6} />
@@ -109,7 +109,7 @@ export default function FileDropZone({ files, onChange, onOpen }: Props) {
               <button
                 type="button"
                 onClick={onOpen}
-                className="xc-focus inline-flex h-11 cursor-pointer items-center gap-2 rounded-lg bg-ui-accent px-6 text-[14px] font-semibold text-white shadow-[var(--ui-shadow-lift)] transition-[filter] hover:brightness-110"
+                className="xc-focus inline-flex h-11 cursor-pointer items-center gap-2 rounded-lg bg-ui-accent px-6 text-[14px] font-semibold text-ui-accent-fg shadow-[var(--ui-shadow-lift)] transition-[filter] hover:brightness-110"
               >
                 Editörü aç
                 <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />

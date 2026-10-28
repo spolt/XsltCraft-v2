@@ -45,7 +45,7 @@ export default function XsltWorkspace({ className = '' }: Props) {
         <button
           type="button"
           onClick={openEditor}
-          className="xc-focus inline-flex h-9 flex-none cursor-pointer items-center gap-2 rounded-lg bg-ui-accent px-4 text-sm font-semibold text-white transition-[filter] hover:brightness-110"
+          className="xc-focus inline-flex h-9 flex-none cursor-pointer items-center gap-2 rounded-lg bg-ui-accent px-4 text-sm font-semibold text-ui-accent-fg transition-[filter] hover:brightness-110"
         >
           {hasFiles ? 'Dosyalarla editörü aç' : 'Editörü aç'}
           <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />

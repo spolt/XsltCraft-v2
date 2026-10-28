@@ -49,7 +49,7 @@ const RELEASE_NOTES = [
   'XSLT 2.0 desteği — Saxon-HE motoru, izole çalışma alanında.',
   'XSLT editöründe 1.0 uyumluluk uyarıları.',
   'Temalarda XSLT 2.0 ile hazırlanmış şablonlar.',
-  'Yeni arayüz: Kurumsal Lacivert, Mor ve Beyaz-Turuncu renkleri.',
+  'Yeni arayüz: Kurumsal Lacivert, Mor ve Gece Mavisi renkleri.',
 ]
 
 export default function AboutPage() {
@@ -70,7 +70,7 @@ export default function AboutPage() {
       <Card as="section" aria-labelledby="about-title" padding="none" className="flex flex-wrap items-center gap-[22px] p-7">
         <span
           aria-hidden="true"
-          className="flex h-[72px] w-[72px] flex-none items-center justify-center rounded-2xl bg-ui-accent text-[34px] font-bold text-white"
+          className="flex h-[72px] w-[72px] flex-none items-center justify-center rounded-2xl bg-ui-accent text-[34px] font-bold text-ui-accent-fg"
         >
           X
         </span>

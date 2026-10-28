@@ -193,7 +193,7 @@ export default function AiRefactorDialog({
             {validateError ? (
               <button
                 onClick={handleForceAccept}
-                className="px-3 py-1.5 text-xs rounded bg-fn-orange hover:brightness-110 text-white flex items-center gap-1"
+                className="px-3 py-1.5 text-xs rounded bg-fn-orange hover:brightness-110 text-on-fn flex items-center gap-1"
               >
                 Yine de uygula
               </button>
@@ -201,7 +201,7 @@ export default function AiRefactorDialog({
               <button
                 onClick={handleAccept}
                 disabled={!refactored || streaming || validating}
-                className="px-3 py-1.5 text-xs rounded bg-fn-green hover:brightness-110 text-white flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 text-xs rounded bg-fn-green hover:brightness-110 text-on-fn flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {validating ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                 Kabul et ve uygula

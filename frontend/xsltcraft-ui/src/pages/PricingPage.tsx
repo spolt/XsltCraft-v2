@@ -31,7 +31,7 @@ function Cell({ value, pro = false }: { value: string | boolean; pro?: boolean }
 
 function CurrentBadge() {
   return (
-    <span className="absolute -top-3 right-[18px] rounded-full bg-fn-purple-ink px-2.5 py-[3px] text-[11.5px] font-bold text-white">
+    <span className="absolute -top-3 right-[18px] rounded-full bg-fn-purple-ink px-2.5 py-[3px] text-[11.5px] font-bold text-on-fn">
       Mevcut planın
     </span>
   )
@@ -98,7 +98,7 @@ export default function PricingPage() {
                 type="button"
                 onClick={handleCheckout}
                 disabled={loading}
-                className="xc-focus inline-flex h-10 items-center gap-2 rounded-lg bg-fn-purple-ink px-5 text-[13.5px] font-semibold text-white transition-colors hover:bg-fn-purple disabled:cursor-not-allowed disabled:opacity-50"
+                className="xc-focus inline-flex h-10 items-center gap-2 rounded-lg bg-fn-purple-ink px-5 text-[13.5px] font-semibold text-on-fn transition-colors hover:bg-fn-purple disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Crown size={16} aria-hidden="true" />
                 {loading ? 'İşleniyor…' : "Pro'ya Geç"}

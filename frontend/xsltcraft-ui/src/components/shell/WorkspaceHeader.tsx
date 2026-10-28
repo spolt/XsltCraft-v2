@@ -87,7 +87,7 @@ export default function WorkspaceHeader({ active = null, onNavigate, confirmLeav
         className="xc-focus flex items-center gap-2.5 rounded-md text-ui-bar-fg no-underline"
         aria-label="XsltCraft — Dashboard"
       >
-        <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-md bg-ui-accent text-[14px] font-bold text-white">
+        <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-md bg-ui-accent text-[14px] font-bold text-ui-accent-fg">
           X
         </span>
         <span className="text-[15px] font-semibold">XsltCraft</span>

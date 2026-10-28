@@ -141,7 +141,7 @@ export default function ProfilePage() {
           {/* Profil bilgileri */}
           <Card as="section" aria-labelledby="profile-info-title" padding="none" className="flex flex-col gap-4 p-[22px]">
             <div className="flex items-center gap-3.5">
-              <span aria-hidden="true" className="flex h-14 w-14 flex-none items-center justify-center rounded-full bg-ui-accent text-[19px] font-semibold text-white">
+              <span aria-hidden="true" className="flex h-14 w-14 flex-none items-center justify-center rounded-full bg-ui-accent text-[19px] font-semibold text-ui-accent-fg">
                 {userInitials(user)}
               </span>
               <div className="min-w-0">
@@ -297,7 +297,7 @@ export default function ProfilePage() {
                     setShowDeleteConfirm(true)
                     setTimeout(() => deleteInputRef.current?.focus(), 50)
                   }}
-                  className="xc-focus inline-flex h-[38px] items-center gap-1.5 self-start rounded-lg border border-fn-red bg-ui-card px-3.5 text-[13px] font-semibold text-fn-red-ink transition-colors hover:bg-fn-red hover:text-white"
+                  className="xc-focus inline-flex h-[38px] items-center gap-1.5 self-start rounded-lg border border-fn-red bg-ui-card px-3.5 text-[13px] font-semibold text-fn-red-ink transition-colors hover:bg-fn-red hover:text-on-fn"
                 >
                   <Trash2 size={14} aria-hidden="true" />
                   Hesabı Sil
@@ -323,7 +323,7 @@ export default function ProfilePage() {
                     type="button"
                     onClick={handleDeleteAccount}
                     disabled={deleteInput !== DELETE_PHRASE || deleting}
-                    className="xc-focus h-[38px] rounded-lg bg-fn-red px-4 text-[13px] font-semibold text-white transition-colors hover:bg-fn-red-ink disabled:cursor-not-allowed disabled:opacity-40"
+                    className="xc-focus h-[38px] rounded-lg bg-fn-red px-4 text-[13px] font-semibold text-on-fn transition-colors hover:bg-fn-red-ink disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {deleting ? 'Siliniyor…' : 'Hesabı Kalıcı Olarak Sil'}
                   </button>
@@ -352,7 +352,7 @@ export default function ProfilePage() {
 const INPUT =
   'h-10 rounded-lg border border-field-line bg-ui-card px-3 text-[13.5px] font-normal text-tx outline-none focus:border-ui-accent focus:ring-2 focus:ring-ui-soft-line'
 const PRIMARY_BTN =
-  'xc-focus h-10 rounded-lg bg-ui-accent px-[18px] text-[13.5px] font-semibold text-white transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50'
+  'xc-focus h-10 rounded-lg bg-ui-accent px-[18px] text-[13.5px] font-semibold text-ui-accent-fg transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50'
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
   return (
@@ -457,7 +457,7 @@ function PlanCard() {
       {meters.map((m) => <UsageMeter key={m.label} m={m} />)}
       <Link
         to="/pricing"
-        className="xc-focus flex h-10 items-center justify-center rounded-lg bg-(--fn-tint) text-[13.5px] font-semibold text-(--fn-ink) no-underline transition-colors hover:bg-(--fn) hover:text-white"
+        className="xc-focus flex h-10 items-center justify-center rounded-lg bg-(--fn-tint) text-[13.5px] font-semibold text-(--fn-ink) no-underline transition-colors hover:bg-(--fn) hover:text-(--fn-fg)"
       >
         {isPro || privileged ? 'Planları karşılaştır' : "Pro'ya geç"}
       </Link>

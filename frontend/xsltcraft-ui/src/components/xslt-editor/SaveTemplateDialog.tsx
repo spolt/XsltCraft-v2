@@ -52,7 +52,7 @@ export default function SaveTemplateDialog({ defaultName, isUpdate, saving, onSa
             <button
               type="submit"
               disabled={!name.trim() || saving}
-              className="px-4 py-2 text-sm font-medium text-white bg-ui-accent hover:brightness-110 rounded-lg disabled:opacity-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-ui-accent-fg bg-ui-accent hover:brightness-110 rounded-lg disabled:opacity-50 transition-colors"
             >
               {saving ? 'Kaydediliyor…' : isUpdate ? 'Güncelle' : 'Kaydet'}
             </button>

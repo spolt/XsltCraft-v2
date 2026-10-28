@@ -21,7 +21,7 @@ export const HeaderButton = forwardRef<HTMLButtonElement, HeaderButtonProps>(fun
     'xc-focus inline-flex h-[34px] items-center justify-center gap-1.5 rounded-md text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-45'
   const look =
     variant === 'primary'
-      ? 'px-3.5 bg-ui-accent text-white font-semibold hover:brightness-110'
+      ? 'px-3.5 bg-ui-accent text-ui-accent-fg font-semibold hover:brightness-110'
       : variant === 'icon'
         ? 'w-[34px] text-ui-bar-muted hover:text-ui-bar-fg hover:bg-ui-bar-line'
         : 'px-3 border border-ui-btn-line text-ui-bar-fg hover:bg-ui-bar-line'

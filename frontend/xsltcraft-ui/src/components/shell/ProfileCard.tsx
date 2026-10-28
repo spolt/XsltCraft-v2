@@ -58,7 +58,7 @@ export default function ProfileCard({ collapsed }: { collapsed: boolean }) {
           aria-label={`Profil ve plan: ${name}`}
           title="Profil ve plan"
           {...menuProps}
-          className="xc-focus flex h-10 w-10 items-center justify-center rounded-full bg-ui-accent text-[13px] font-semibold text-white"
+          className="xc-focus flex h-10 w-10 items-center justify-center rounded-full bg-ui-accent text-[13px] font-semibold text-ui-accent-fg"
         >
           {initials}
         </button>
@@ -86,7 +86,7 @@ export default function ProfileCard({ collapsed }: { collapsed: boolean }) {
       >
         <span
           aria-hidden="true"
-          className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-ui-accent text-[12.5px] font-semibold text-white"
+          className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-ui-accent text-[12.5px] font-semibold text-ui-accent-fg"
         >
           {initials}
         </span>
@@ -108,7 +108,7 @@ export default function ProfileCard({ collapsed }: { collapsed: boolean }) {
           <Link
             to="/pricing"
             title="XsltCraft Pro'ya geç"
-            className="xc-focus inline-flex items-center gap-1 rounded-full bg-ui-accent px-2 py-px text-[11px] font-bold text-white no-underline hover:brightness-110"
+            className="xc-focus inline-flex items-center gap-1 rounded-full bg-ui-accent px-2 py-px text-[11px] font-bold text-ui-accent-fg no-underline hover:brightness-110"
           >
             <Crown size={11} aria-hidden="true" /> Pro'ya geç
           </Link>
