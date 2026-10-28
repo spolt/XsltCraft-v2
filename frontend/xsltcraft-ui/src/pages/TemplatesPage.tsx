@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BookOpen, Crown, Eye, Lock, X } from 'lucide-react'
 import { getFreeThemes, type FreeTheme } from '../services/templateService'
-import { previewFromStoredXslt } from '../services/previewService'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
 import PageHeader from '../components/ui/PageHeader'
 import SegmentedTabs from '../components/ui/SegmentedTabs'
+import ThemeLiveThumb from '../components/theme-library/ThemeLiveThumb'
+import { loadThemePreview } from '../components/theme-library/themePreviewCache'
 import { fnStyle } from '../theme/uiThemes'
 import { DOC_TYPE_LABEL } from '../utils/workRoutes'
-import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 type DocType = 'Invoice' | 'Despatch'
 
@@ -67,8 +67,8 @@ export default function TemplatesPage() {
     let cancelled = false
     Promise.resolve()
       .then(() => { if (!cancelled) { setPreviewHtml(''); setPreviewLoading(true) } })
-      .then(() => previewFromStoredXslt(selectedTheme.id, defaultInvoiceXml))
-      .then((res) => { if (!cancelled) setPreviewHtml(res.html) })
+      .then(() => loadThemePreview(selectedTheme, true))
+      .then((html) => { if (!cancelled) setPreviewHtml(html) })
       .catch(() => { if (!cancelled) setPreviewHtml('<html><body style="display:flex;align-items:center;justify-content:center;height:100%;color:#ef4444;font-family:sans-serif;font-size:13px">Önizleme alınamadı.</body></html>') })
       .finally(() => { if (!cancelled) setPreviewLoading(false) })
     return () => { cancelled = true }
@@ -225,7 +225,7 @@ function PlanBadge({ premium }: { premium: boolean }) {
   )
 }
 
-/** Küçük resim yer tutucusu: temanın görseli sunulmadığı için stilize A4 sayfa (zemin her zaman beyaz). */
+/** Küçük resim yer tutucusu: canlı önizleme yüklenene kadar / alınamazsa stilize A4 sayfa (zemin her zaman beyaz). */
 function ThemeThumb({ docType }: { docType: string }) {
   return (
     <div
@@ -270,7 +270,7 @@ function ThemeCard({
       className="xc-lift flex flex-1 flex-col overflow-hidden rounded-xl border border-ui-line bg-ui-card"
     >
       <div className="relative flex justify-center bg-ui-hover px-[26px] pt-[18px]">
-        <ThemeThumb docType={theme.documentType} />
+        <ThemeLiveThumb theme={theme} fallback={<ThemeThumb docType={theme.documentType} />} />
         <span className="absolute top-2.5 right-2.5"><PlanBadge premium={theme.isPremium} /></span>
       </div>
       <div className="flex flex-col gap-2 border-t border-ui-line px-3.5 pt-3 pb-3.5">
