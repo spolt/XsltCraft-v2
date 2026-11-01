@@ -69,15 +69,21 @@ internal static class XPathLexer
     /// <paramref name="ambiguous"/>: içerik tırnak / <c>(:</c> taşıyor — "braced URI" ile "iç içe süslü
     /// parantez + literal/yorum" okumaları farklı <c>}</c> sınırı verir (ayrıştırıcı farkı).
     /// İçerik bunlardan arınmışsa iki okuma da aynı sınırı verir.
+    /// <paramref name="stopAtBrace"/>: ilk <c>{</c>'de durur (<paramref name="hasBrace"/> = true,
+    /// <paramref name="closed"/> = false). Adayı eleyip kaldığı yerden süren çağıran için tarama böyle doğrusal kalır.
     /// </summary>
-    public static int FindBracedUriEnd(string s, int i, out bool closed, out bool hasBrace, out bool ambiguous)
+    public static int FindBracedUriEnd(string s, int i, out bool closed, out bool hasBrace, out bool ambiguous, bool stopAtBrace = false)
     {
         int n = s.Length, k = i + 2;
         hasBrace = ambiguous = false;
         while (k < n && s[k] != '}')
         {
             char c = s[k];
-            if (c == '{') hasBrace = true;
+            if (c == '{')
+            {
+                hasBrace = true;
+                if (stopAtBrace) { closed = false; return k; }
+            }
             else if (c == '\'' || c == '"' || IsCommentStart(s, k)) ambiguous = true;
             k++;
         }
@@ -92,12 +98,25 @@ internal static class XPathLexer
     /// içindeki <c>}</c> ifadeyi bitirmez; ifade içi <c>{ }</c> (map / satır içi fonksiyon gövdesi)
     /// iç içe sayılır — XPath ayrıştırıcısının (Saxon) davranışıyla aynı.
     /// </summary>
-    public static int FindEnclosedExpressionEnd(string s, int start, out bool malformed)
+    public static int FindEnclosedExpressionEnd(string s, int start, out bool malformed) =>
+        FindEnclosedExpressionEnd(s, start, int.MaxValue, out malformed);
+
+    /// <summary>
+    /// <paramref name="maxLength"/> karakteri aşan ifadede kapanışı aramaz: <paramref name="malformed"/> = true ve dönen
+    /// değer <c>start + maxLength</c>'ten büyüktür; çağıran bunu uzun ifade sayıp reddeder.
+    /// </summary>
+    public static int FindEnclosedExpressionEnd(string s, int start, int maxLength, out bool malformed)
     {
         int n = s.Length, depth = 1, j = start;
         malformed = false;
         while (j < n)
         {
+            if (j - start > maxLength)
+            {
+                malformed = true;
+                return j;
+            }
+
             char c = s[j];
             if (c == '\'' || c == '"')
             {
@@ -113,7 +132,7 @@ internal static class XPathLexer
             }
             if (IsBracedUriStart(s, j))
             {
-                int close = FindBracedUriEnd(s, j, out var closed, out var hasBrace, out var ambiguous);
+                int close = FindBracedUriEnd(s, j, out var closed, out var hasBrace, out var ambiguous, stopAtBrace: true);
                 if (closed && !hasBrace)
                 {
                     malformed |= ambiguous; // tırnak / yorum içeren braced URI → belirsiz sınır

@@ -17,6 +17,8 @@ public sealed class XsltExecutionOptions
 
     public XsltUserGateOptions UserGate { get; set; } = new();
 
+    public XsltThemeComposeOptions ThemeCompose { get; set; } = new();
+
     /// <summary>Tutarsız ayarları döndürür (boş → geçerli).</summary>
     public IReadOnlyList<string> Validate()
     {
@@ -27,6 +29,7 @@ public sealed class XsltExecutionOptions
         Limits.CollectErrors(errors);
         Grid.CollectErrors(errors);
         UserGate.CollectErrors(errors);
+        ThemeCompose.CollectErrors(errors);
         return errors;
     }
 }
@@ -168,6 +171,19 @@ public sealed class XsltGridOptions
     {
         if (MaxConcurrent < 1 || RunawayMax < 1 || StuckRunawayMinutes < 1 || QueueWaitMs < 0)
             errors.Add("Grid ayarları geçersiz (MaxConcurrent/RunawayMax/StuckRunawayMinutes ≥ 1, QueueWaitMs ≥ 0).");
+    }
+}
+
+/// <summary>İstekle gelen <c>xslt</c> ile compose: API sürecinde çalışır (ADR 008 "Kalan riskler").</summary>
+public sealed class XsltThemeComposeOptions
+{
+    /// <summary>Süreç genelinde eşzamanlı birleştirme; dolu kapı beklemeden 429 verir.</summary>
+    public int MaxConcurrent { get; set; } = Math.Max(2, Environment.ProcessorCount / 2);
+
+    internal void CollectErrors(List<string> errors)
+    {
+        if (MaxConcurrent < 1)
+            errors.Add("ThemeCompose:MaxConcurrent ≥ 1 olmalı.");
     }
 }
 

@@ -11,7 +11,7 @@ namespace XsltCraft.Application.ThemeSlots.Compose;
 
 /// <param name="Supported">Temada sabit not yazılabilecek bir Notlar alanı var mı (iki konum da geçerli).</param>
 /// <param name="NotFound">Not istendi ama Notlar alanı yok → not uygulanmadı (uyarı).</param>
-/// <param name="Error">Kapalı başarısızlık (stil beyaz listesi dışı karakter).</param>
+/// <param name="Error">Kapalı başarısızlık (stil beyaz listesi dışı karakter, sabit not işareti tavanı).</param>
 internal sealed record FixedNoteWriteResult(string Xslt, bool Supported, bool Applied, bool NotFound, string? Error);
 
 /// <summary>
@@ -25,9 +25,16 @@ internal static class FixedNoteWriter
 {
     public const string MarkerAttribute = "data-xc-fixed-note";
 
+    // Yazıcı konum başına en fazla 1 not üretir (toplam MaxNotes); pay elle kopyalanmış notlar için. Metin kullanıcıdan
+    // gelir: tavan silme işini (ata taraması, kaynak düzenlemesi) saldırgan girdiden bağımsız küçük tutar.
+    private const int MaxExistingMarkers = FixedNoteStyles.MaxNotes * 4;
+
     public static FixedNoteWriteResult Apply(string xslt, IReadOnlyList<FixedNoteInput>? notes, DocumentType type)
     {
         var source = notes is null ? xslt : RemoveExisting(xslt);
+        if (source is null)
+            return new(xslt, false, false, false, "Sabit not eklenemedi: şablonda çok fazla sabit not işareti var.");
+
         var points = FindPoints(source, type);
         var supported = points is not null;
 
@@ -81,16 +88,22 @@ internal static class FixedNoteWriter
         return before is null || after is null ? null : (before.Offset, after.Offset);
     }
 
-    private static string RemoveExisting(string source)
+    /// <returns>Notları silinmiş metin; işaretli eleman sayısı tavanı aşıyorsa null.</returns>
+    private static string? RemoveExisting(string source)
     {
         if (!source.Contains(MarkerAttribute, StringComparison.Ordinal) || !XsltSourceMap.TryBuild(source, out var map, out _))
             return source;
 
         var marked = map.Document.Descendants()
             .Where(e => IsLiteral(e) && e.Attribute(MarkerAttribute) is not null)
+            .Take(MaxExistingMarkers + 1)
             .ToList();
+        if (marked.Count > MaxExistingMarkers)
+            return null;
+
+        var markedSet = new HashSet<XElement>(marked, ReferenceEqualityComparer.Instance);
         var edits = new SourceEdits();
-        foreach (var e in marked.Where(e => !e.Ancestors().Any(marked.Contains)))
+        foreach (var e in marked.Where(e => !e.Ancestors().Any(markedSet.Contains)))
         {
             var span = map.Span(e);
             edits.Replace(span.Start, span.End, string.Empty);

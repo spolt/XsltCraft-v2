@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 using XsltCraft.Application.DTO;
@@ -155,6 +157,45 @@ public class FixedNoteSecurityTests
 
         Assert.Equal(Theme.Value, Compose(once).Xslt);
     }
+
+    [Fact]
+    public void Nested_marker_flood_under_input_limits_fails_closed_in_bounded_time()
+    {
+        // Saldırı biçimi, yapısal ön denetimin altına indirilmiş: fixedNotes:[] ile M²×D ata taraması tetiklerdi.
+        const int depth = 200, markers = 10_000;
+        var xslt = string.Concat(Enumerable.Repeat("<b>", depth))
+            + string.Concat(Enumerable.Repeat("<a data-xc-fixed-note=\"1\"/>", markers))
+            + string.Concat(Enumerable.Repeat("</b>", depth));
+        Assert.Null(ThemeComposeXsltLimits.Check(xslt));
+
+        var sw = Stopwatch.StartNew();
+        var result = Compose(xslt);
+        sw.Stop();
+
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), $"Süre: {sw.Elapsed}");
+        Assert.False(result.Success);
+        Assert.Equal(xslt, result.Xslt);
+    }
+
+    [Fact]
+    public void Structural_limits_accept_largest_real_themes_and_leave_malformed_text_to_composer()
+    {
+        var themes = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "ThemeSlots", "Fixtures"), "*.xslt")
+            .Concat(Directory.GetFiles(Path.Combine(Path.GetDirectoryName(ThisFile())!, "..", "XsltImport", "Resources", "Tier_B_RealWorld"), "*.xslt"))
+            .ToList();
+        Assert.Equal(9, themes.Count);
+        Assert.All(themes, path => Assert.Null(ThemeComposeXsltLimits.Check(File.ReadAllText(path))));
+
+        Assert.Null(ThemeComposeXsltLimits.Check("<a><b></a>"));
+        Assert.Null(ThemeComposeXsltLimits.Check("bu xml degil"));
+
+        // Metin, tırnak içi, yorum, CDATA ve PI öznitelik sayılmaz.
+        var equalsSigns = string.Concat(Enumerable.Repeat("x=1 ", 5_000));
+        Assert.Null(ThemeComposeXsltLimits.Check(
+            $"<?pi {equalsSigns}?><r a='{equalsSigns}' b=\"> {equalsSigns}\">{equalsSigns}<!-- <a {equalsSigns}> --><![CDATA[<a {equalsSigns}>]]></r>"));
+    }
+
+    private static string ThisFile([CallerFilePath] string path = "") => path;
 
     private static ThemeComposeRequest Request() => new()
     {

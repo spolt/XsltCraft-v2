@@ -27,13 +27,13 @@ Saxon-HE **12.10** (`net.sf.saxon:Saxon-HE`, MPL-2.0) — `IKVM.Maven.Sdk 1.12.2
 
 | Rota | Uç | Yer | Motor modu |
 |---|---|---|---|
-| **Raw** | `POST /api/preview/raw`, `POST /api/preview/validate-xslt` (Validate işlemi) | Worker havuzu — 1.0 dahil | `Xslt:Engine:Raw` (`Auto`) |
+| **Raw** | `POST /api/preview/raw`, `POST /api/preview/compose` (`xslt` modu, `includeHtml`), `POST /api/preview/validate-xslt` (Validate işlemi) | Worker havuzu — 1.0 dahil | `Xslt:Engine:Raw` (`Auto`) |
 | **UserTemplate** | `POST /api/preview/user-template/{id}`; sahibin kendi saklı XSLT'li (ücretsiz tema olmayan) şablonu için `PreviewTheme` | Worker | `Xslt:Engine:Grid` (`DotNet`) |
 | **Grid** | `POST /api/preview` (generator çıktısı) | Api süreci içi, korumalı (ADR 008 §7); script bloklu ağaç (`IsUserAuthoredGrid`) → worker | `Xslt:Engine:Grid` (`DotNet`) |
-| **Theme** | `POST /api/preview/theme/{id}` (yayınlanmış hazır tema), `POST /api/preview/compose`, admin tema yükleme/analiz (`ThemeUploadProcessor`, `ThemeSlotAnalyzer`) | .NET → Api süreci içi; Saxon → worker (T-izi). Grid sınırları (derleme denetimi dahil) | `Xslt:Engine:Theme` (`Auto`: `version ≥ 2.0` **ve** 2.0 yapısı — `Xslt2FeatureDetector` — → Saxon; `version="2.0"` bildirip 1.0 kullanan GİB temaları .NET, çıktı bit-aynı; `DotNet` acil anahtar) |
+| **Theme** | `POST /api/preview/theme/{id}` (yayınlanmış hazır tema), `POST /api/preview/compose` (`themeId` modu), admin tema yükleme/analiz (`ThemeUploadProcessor`, `ThemeSlotAnalyzer`) | .NET → Api süreci içi; Saxon → worker (T-izi). Grid sınırları (derleme denetimi dahil) | `Xslt:Engine:Theme` (`Auto`: `version ≥ 2.0` **ve** 2.0 yapısı — `Xslt2FeatureDetector` — → Saxon; `version="2.0"` bildirip 1.0 kullanan GİB temaları .NET, çıktı bit-aynı; `DotNet` acil anahtar) |
 
 - Kullanıcının yazdığı XSLT (Raw, Validate, UserTemplate) **hiçbir zaman** Api sürecinde çalışmaz. İstisna: `XsltWorker:Enabled=false` (yerel geliştirme) → 1.0 süreç içi .NET, 2.0 ve script'li grid → 503 `EngineUnavailable` (`code: WorkerDisabled`).
-- Tema hattının tüm render/derleme noktaları (yükleme, yuva analizi, compose, galeri) `XsltRoute.Theme` ile servisten geçer (**T-izi**); `IXsltHtmlRenderer` üretim DI'ından çıktı (yalnız test referansı). Yuva analizindeki işaretsiz ≡ işaretli değişmezi iki render'ı aynı motorla karşılaştırır (motorlar farklıysa analiz başarısız).
+- Tema hattının tüm render/derleme noktaları (yükleme, yuva analizi, `themeId` modlu compose, galeri) `XsltRoute.Theme` ile servisten geçer (**T-izi**); `IXsltHtmlRenderer` üretim DI'ından çıktı (yalnız test referansı). Yuva analizindeki işaretsiz ≡ işaretli değişmezi iki render'ı aynı motorla karşılaştırır (motorlar farklıysa analiz başarısız).
 
 ### 3. Sürüm algılama ve modlar
 `XsltVersionSniffer` kök `xsl:stylesheet|transform/@version` veya LRE `@xsl:version`'ı okur (`null` = okunamaz); `> 2.0` → `Unsupported` (`VersionAbove20`, tarayıcıdan bağımsız ikinci savunma). `XsltEngineSelector`:

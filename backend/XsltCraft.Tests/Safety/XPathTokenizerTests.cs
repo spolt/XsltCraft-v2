@@ -1,3 +1,4 @@
+using XsltCraft.Application.Validation;
 using XsltCraft.Application.Validation.Safety;
 
 namespace XsltCraft.Tests.Safety;
@@ -106,6 +107,32 @@ public class XPathTokenizerTests
     {
         XPathLexer.FindEnclosedExpressionEnd(value, 1, out var malformed);
         Assert.True(malformed);
+    }
+
+    [Fact]
+    public async Task UnclosedBracedUriFlood_FinishesInLinearTime_AndBoundariesAreUnchanged()
+    {
+        // Eski tarama her Q{ için dize sonuna gidiyordu: 4 MB ≈ 25 dk. İzleyici thread testi takılmadan düşürür.
+        const int pairs = 2_000_000;
+        var flood = "{" + string.Concat(Enumerable.Repeat("Q{", pairs));
+        var stylesheet = "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'><a b='"
+            + flood + "'/></xsl:stylesheet>";
+
+        var lexer = Task.Run(() => (End: XPathLexer.FindEnclosedExpressionEnd(flood, 1, out var malformed), Malformed: malformed));
+        var scanner = Task.Run(() => XsltSafety.FindThreat(stylesheet));
+        var both = Task.WhenAll(lexer, scanner);
+        Assert.Same(both, await Task.WhenAny(both, Task.Delay(TimeSpan.FromSeconds(5))));
+
+        var (end, malformed) = await lexer;
+        Assert.Equal(flood.Length, end);
+        Assert.True(malformed);
+        Assert.NotNull(await scanner);
+
+        // Geçerli braced URI'ler atlanır; '{' içeren aday URI değildir, süslü parantezler iç içe sayılır.
+        Assert.Equal(21, XPathLexer.FindEnclosedExpressionEnd("{Q{a}f(),Q{b}g(),Q{}h}", 1, out var valid));
+        Assert.False(valid);
+        Assert.Equal(9, XPathLexer.FindEnclosedExpressionEnd("{Q{a{b}c}}", 1, out var nested));
+        Assert.False(nested);
     }
 
     [Fact]

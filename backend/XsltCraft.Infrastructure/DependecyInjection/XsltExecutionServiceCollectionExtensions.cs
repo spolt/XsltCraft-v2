@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using XsltCraft.Application.ThemeSlots.Compose;
 using XsltCraft.Application.Xslt.Execution;
 using XsltCraft.Infrastructure.Xslt;
 using XsltCraft.Infrastructure.Xslt.InProcess;
@@ -73,6 +74,10 @@ public static class XsltExecutionServiceCollectionExtensions
             sp.GetRequiredService<IXsltUserGate>(),
             sp.GetRequiredService<IXsltIsolatedHost>(),
             sp.GetRequiredService<IXsltInProcessHost>()));
+
+        // 5) İstekle gelen xslt'nin birleştirme kapısı (süreç geneli).
+        services.TryAddSingleton<IThemeComposeGate>(sp => new ThemeComposeGate(
+            sp.GetRequiredService<IOptions<XsltExecutionOptions>>().Value.ThemeCompose.MaxConcurrent));
 
         return services;
     }

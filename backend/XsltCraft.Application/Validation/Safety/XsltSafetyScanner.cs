@@ -253,7 +253,12 @@ public sealed class XsltSafetyScanner
             {
                 if (i + 1 < n && value[i + 1] == '{') { i += 2; continue; } // {{ kaçışı
                 // Kapanış '}' string literal / (iç içe) yorum / Q{…} içindeyse ifadeyi bitirmez.
-                int j = XPathLexer.FindEnclosedExpressionEnd(value, i + 1, out bool malformed);
+                int j = XPathLexer.FindEnclosedExpressionEnd(value, i + 1, XsltSafetyRules.MaxExpressionLength, out bool malformed);
+                if (j - (i + 1) > XsltSafetyRules.MaxExpressionLength)
+                {
+                    AddExpressionTooLong(findings, lineInfo);
+                    return;
+                }
                 if (malformed)
                     Add(findings, "MalformedAvt", XsltSafetySeverity.Security,
                         "AVT ifadesi kapanmıyor ya da sınırı belirsiz (kapanmamış '{', string literal veya yorum) — fail-closed.",
@@ -280,8 +285,10 @@ public sealed class XsltSafetyScanner
             return;
 
         if (expr.Length > XsltSafetyRules.MaxExpressionLength)
-            Add(findings, "ExpressionOver8KB", XsltSafetySeverity.Security,
-                $"Tek XPath ifadesi çok uzun (>{XsltSafetyRules.MaxExpressionLength} bayt).", lineInfo);
+        {
+            AddExpressionTooLong(findings, lineInfo);
+            return; // Security bulgusu reddi kesinleştirir; ifade jetonlara ayrılmaz.
+        }
 
         var tokens = XPathTokenizer.Tokenize(expr, out bool malformed);
         if (malformed)
@@ -550,6 +557,10 @@ public sealed class XsltSafetyScanner
                || v.Equals("false", StringComparison.OrdinalIgnoreCase)
                || v == "0";
     }
+
+    private static void AddExpressionTooLong(List<XsltSafetyFinding> findings, IXmlLineInfo? lineInfo) =>
+        Add(findings, "ExpressionOver8KB", XsltSafetySeverity.Security,
+            $"Tek XPath ifadesi çok uzun (>{XsltSafetyRules.MaxExpressionLength} bayt).", lineInfo);
 
     private static XPathToken Next(List<XPathToken> tokens, int k) =>
         k + 1 < tokens.Count ? tokens[k + 1] : default;

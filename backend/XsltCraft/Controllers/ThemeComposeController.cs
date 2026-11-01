@@ -22,8 +22,9 @@ namespace XsltCraft.Api.Controllers;
 
 /// <summary>
 /// Hazır temaya kullanıcı logo/imza/IBAN bilgisini ekler. Önizleme (html) ve indirme/kaydetme (xslt) aynı
-/// birleştirme kodundan geçer; html, dönen xslt'den <see cref="XsltRoute.Theme"/> ile render edilir (1.0 tema .NET
-/// süreç içi, 2.0 tema Saxon izole worker; kullanıcı kapısı, grid girdi sınırları).
+/// birleştirme kodundan geçer. Html rotası: <c>themeId</c> → <see cref="XsltRoute.Theme"/> (1.0 tema .NET süreç içi,
+/// 2.0 tema Saxon izole worker; grid girdi sınırları); istekle gelen <c>xslt</c> kullanıcı kodudur →
+/// <see cref="XsltRoute.Raw"/> (izole worker, ham XSLT sınırları).
 /// </summary>
 [ApiController]
 [Route("api/preview/compose")]
@@ -36,9 +37,11 @@ public class ThemeComposeController(
     IThemeAssetComposer composer,
     IThemeSlotProjector projector,
     IXsltExecutionService xsltExecution,
+    IThemeComposeGate composeGate,
     ILogger<ThemeComposeController> logger) : ControllerBase
 {
     private const int MaxBodyBytes = 6 * 1024 * 1024;
+    private const string ComposeBusyRetryAfterSeconds = "2";
 
     [HttpPost]
     [RequestSizeLimit(MaxBodyBytes)]
@@ -79,6 +82,10 @@ public class ThemeComposeController(
         else
         {
             xslt = request.Xslt!;
+            // Birleştirme bu metni API sürecinde iptalsiz işler; yapısal sınırlar ağaç kurulmadan önce denetlenir.
+            if (ThemeComposeXsltLimits.Check(xslt) is { } overLimit)
+                return BadRequest(new { error = overLimit.Message, field = overLimit.Field });
+
             documentType = xslt.Contains(DespatchNamespace, StringComparison.Ordinal) ? DocumentType.Despatch : DocumentType.Invoice;
         }
 
@@ -92,18 +99,31 @@ public class ThemeComposeController(
             request.FixedNotes?.Select(ToFixedNote).ToList(),
             documentType);
 
-        var result = composer.Compose(xslt, input);
+        // İstekle gelen xslt birleştirmesi senkron ve iptalsizdir: süreç genelinde sınırlı, kuyruksuz. Hazır tema kapıya girmez.
+        IDisposable? composeSlot = null;
+        if (request.ThemeId is null && (composeSlot = composeGate.TryEnter()) is null)
+        {
+            Response.Headers.RetryAfter = ComposeBusyRetryAfterSeconds;
+            return StatusCode(StatusCodes.Status429TooManyRequests, new { error = "Sunucu şu anda çok fazla şablon işliyor, birazdan tekrar deneyin." });
+        }
+
+        ThemeComposeResult result;
+        using (composeSlot)
+            result = composer.Compose(xslt, input);
+
         if (!result.Success)
             return BadRequest(new { error = result.Error });
 
         string? html = null;
         if (request.IncludeHtml)
         {
+            // Süreç içi Theme yolu yalnız sunucudaki hazır tema için; istekle gelen xslt API sürecinde çalışmamalı (ADR 008).
+            var route = request.ThemeId is null ? XsltRoute.Raw : XsltRoute.Theme;
             XsltRunResult run;
             try
             {
                 run = await xsltExecution.ExecuteAsync(
-                    new XsltRunRequest(XsltRoute.Theme, result.Xslt, request.XmlContent!, XsltOperation.Render, userId), ct);
+                    new XsltRunRequest(route, result.Xslt, request.XmlContent!, XsltOperation.Render, userId), ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

@@ -1,7 +1,9 @@
+using System.Text;
+
 namespace XsltCraft.Application.ThemeSlots.Source;
 
-/// <summary>Kaynak metne ofset tabanlı düzenlemeler. Düzenlemeler azalan ofsetle uygulanır (ofset kayması
-/// olmaz); çakışan aralıklar hata verir.</summary>
+/// <summary>Kaynak metne ofset tabanlı düzenlemeler. Ofsetler özgün metne göredir (ofset kayması olmaz);
+/// çakışan aralıklar hata verir.</summary>
 internal sealed class SourceEdits
 {
     private readonly List<(int Start, int End, string Text, int Seq)> _edits = [];
@@ -30,13 +32,17 @@ internal sealed class SourceEdits
                 throw new InvalidOperationException("Çakışan kaynak düzenlemesi.");
         }
 
-        var result = source;
-        foreach (var (start, end, text, _) in ordered)
+        // Çakışma kontrolünden sonra aralıklar sıralı ve ayrık: artan sırada tek geçişte doğrusal kopya.
+        var result = new StringBuilder(source.Length);
+        var cursor = 0;
+        for (var i = ordered.Count - 1; i >= 0; i--)
         {
-            if (end > result.Length)
+            var (start, end, text, _) = ordered[i];
+            if (end > source.Length)
                 throw new InvalidOperationException("Düzenleme kaynak sınırını aşıyor.");
-            result = string.Concat(result.AsSpan(0, start), text, result.AsSpan(end));
+            result.Append(source, cursor, start - cursor).Append(text);
+            cursor = end;
         }
-        return result;
+        return result.Append(source, cursor, source.Length - cursor).ToString();
     }
 }

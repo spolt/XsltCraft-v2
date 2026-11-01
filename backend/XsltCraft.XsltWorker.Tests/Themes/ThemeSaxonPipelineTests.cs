@@ -166,7 +166,7 @@ public sealed class ThemeSaxonPipelineTests(ThemeSaxonPipelineTests.Engines engi
     private ThemeComposeController ComposeController(Guid user)
     {
         var controller = new ThemeComposeController(null!, null!, null!, new ThemeAssetComposer(new ThemeImageValidator()),
-            new ThemeSlotProjector(), Xslt, NullLogger<ThemeComposeController>.Instance);
+            new ThemeSlotProjector(), Xslt, new ThemeComposeGate(2), NullLogger<ThemeComposeController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
