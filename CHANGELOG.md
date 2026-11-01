@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docker / işletme**: backend publish RID'i `linux-x64`; imaj Saxon/IKVM worker'ı ile ~626 MB. Prod compose sertleştirildi (`cap_drop`, `pids_limit: 512`, `mem_limit: 5g`). **İşletme notu:** `update.sh` VPS'teki eski compose yedeğini geri yüklediği için compose değişiklikleri VPS'e **elle** işlenmelidir; aksi halde sertleştirme ve bellek sınırı devreye girmez. Aynı nedenle (`update.sh` `appsettings.Production.json` yedeğini de geri yükler) VPS'teki `appsettings.Production.json`'a `"Security": { "NonDumpable": true }` elle eklenmelidir; yoksa Api süreç belleği koruması (`PR_SET_DUMPABLE=0`) kapalı kalır.
 
 ### Security
+- **Hesap silme tema dosyasını silebiliyordu**: klon, temanın XSLT dosyasını referans aldığı için `DELETE /api/auth/account` temanın dosyasını storage'dan siliyor, tema herkes için bozuluyordu. Artık yalnız şablonun kendi üretilmiş önbelleği silinir (`GeneratedXsltCache.IsOwn`).
 - **`POST /api/preview/compose` `xslt` modu sertleştirildi**: önizleme artık izole worker yolunda (`XsltRoute.Raw`) çalışır; birleştirme öncesi derinlik, eleman, öznitelik ve ad tavanları (`ThemeComposeXsltLimits`), `xsl:` ad izin listesi ve küresel eşzamanlılık kapısı (`Xslt:ThemeCompose:MaxConcurrent`, dolunca 429) uygulanır. `XPathLexer`'daki karesel `Q{` taraması doğrusala indi. Birleştirme hâlâ Api sürecindedir; kalan risk ADR-008'de.
 
 ### Fixed
