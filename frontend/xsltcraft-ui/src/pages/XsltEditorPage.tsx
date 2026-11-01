@@ -6,7 +6,6 @@ import { useAiStore } from '../store/aiStore'
 import AiAssistantPanel, { type AiPrompt } from '../components/ai/AiAssistantPanel'
 import AiRefactorDialog from '../components/ai/AiRefactorDialog'
 import type { ProblemItem } from '../components/xslt-editor/ProblemsPanel'
-import xmlFormatter from 'xml-formatter'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
 import XsltEditorToolbar from '../components/xslt-editor/XsltEditorToolbar'
@@ -15,21 +14,38 @@ import PreviewDock, { type DockTab } from '../components/xslt-editor/PreviewDock
 import XsltSideMenu, { type SideMenuFile } from '../components/xslt-editor/XsltSideMenu'
 import XsltStatusBar from '../components/xslt-editor/XsltStatusBar'
 import XsltEmptyState from '../components/xslt-editor/XsltEmptyState'
-import { layoutName } from '../components/xslt-editor/editorLayouts'
+import {
+  layoutName,
+  MAIN_PANE,
+  RIGHT_PANE,
+  EDITOR_PANE,
+  PREVIEW_PANE,
+  SPLIT_LAYOUTS,
+  separatorCls,
+} from '../components/xslt-editor/editorLayouts'
+import {
+  aiPromptForProblem,
+  LEAVE_CONFIRM,
+  looksMinified,
+  formatXmlForDisplay,
+  stylesheetVersion,
+  formatSize,
+  replaceSelectionText,
+  snippetPlainText,
+} from '../components/xslt-editor/xsltText'
 import { printActivePreview } from '../components/xslt-editor/previewFrame'
 import { useEditorMaximize } from '../hooks/useEditorMaximize'
 import SaveTemplateDialog from '../components/xslt-editor/SaveTemplateDialog'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
-import { useXslt1CompatWarnings } from '../hooks/useXslt1CompatWarnings'
+import { useRawPreview } from '../hooks/useRawPreview'
+import { useXsltDiagnostics } from '../hooks/useXsltDiagnostics'
 import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
 import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
 import WorkspaceHeader from '../components/shell/WorkspaceHeader'
 import { HeaderButton, HeaderChip, HeaderStatus } from '../components/shell/headerParts'
 import SegmentedTabs from '../components/ui/SegmentedTabs'
 import { listSnippets, type UserSnippet } from '../services/snippetService'
-import { previewFromRawXslt, type PreviewTimings, type XsltEngineName } from '../services/previewService'
 import { reportDownload } from '../services/activityService'
-import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import {
   getUserXsltTemplate,
   createUserXsltTemplate,
@@ -42,26 +58,9 @@ import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
 import { useUiPrefsStore, type EditorLayoutId } from '../store/uiPrefsStore'
-import api from '../services/apiService'
-import { toXsltError } from '../services/xsltErrors'
 
 const LOCK_HEARTBEAT_MS = 30_000
 
-const PREVIEW_DEBOUNCE_MS = 1000
-const XSLT_VALIDATION_DEBOUNCE_MS = 1500
-const XML_VALIDATION_DEBOUNCE_MS = 500
-
-// Panel kimlikleri: useGroupRef().setLayout bu anahtarlarla yüzde alır.
-// Dış grup: [çalışma alanı | sağ sütun (AI; sekmeli modda Önizleme | AI)].
-// İç grup (data-testid="xslt-editor-panels"): [editör | önizleme].
-const MAIN_PANE = 'xslt-main-pane'
-const RIGHT_PANE = 'xslt-right-pane'
-const EDITOR_PANE = 'xslt-editor-pane'
-const PREVIEW_PANE = 'xslt-preview-pane'
-const SPLIT_LAYOUTS: Record<'side' | 'half', Record<string, number>> = {
-  side: { [EDITOR_PANE]: 65, [PREVIEW_PANE]: 35 },
-  half: { [EDITOR_PANE]: 50, [PREVIEW_PANE]: 50 },
-}
 /** Sekmeli sağ sütunda "yarı yarıya" düzeninin genişliği (%). */
 const TABS_HALF_SIZE = 50
 
@@ -69,105 +68,6 @@ const RIGHT_TABS = [
   { id: 'preview', label: 'Önizleme', icon: Eye },
   { id: 'ai', label: 'AI Asistan', icon: Sparkles },
 ] as const
-
-// Ayırıcı: 1px çizgi, sürükleme/odakta accent. role="separator" + ok tuşlarıyla boyutlandırma kütüphaneden.
-const separatorCls =
-  'relative z-10 flex-none bg-ui-line outline-none transition-colors data-[separator=hover]:bg-ui-accent data-[separator=active]:bg-ui-accent focus-visible:bg-ui-accent focus-visible:shadow-[0_0_0_2px_var(--ui-accent)]'
-
-const LEAVE_CONFIRM = 'Kaydedilmemiş değişiklikler var. Sayfadan ayrılmak istediğinize emin misiniz?'
-
-/** DOMParser parsererror çıktısından satır/kolon çıkarır. */
-function extractXmlParseErrors(xml: string): { message: string; line: number | null; column: number | null }[] {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(xml, 'text/xml')
-  const err = doc.querySelector('parsererror')
-  if (!err) return []
-  const raw = (err.textContent ?? 'XML ayrıştırma hatası').replace(/\s+/g, ' ').trim()
-  const lineMatch = /line\s*(?:number)?\s*[:\s]\s*(\d+)/i.exec(raw)
-  const colMatch = /column\s*(\d+)/i.exec(raw)
-  return [{
-    message: raw,
-    line: lineMatch ? Number(lineMatch[1]) : null,
-    column: colMatch ? Number(colMatch[1]) : null,
-  }]
-}
-
-// İlk satırda XML bildirimi (`<?xml version="1.0" encoding="UTF-8"?>`) var mı?
-// Eksikse problem panelinde gösterilecek hata öğesini döndürür.
-const XML_DECL_FIX = '<?xml version="1.0" encoding="UTF-8"?>'
-
-// UBL faturaları genelde tek satıra minify edilmiş gelir; Monaco bunu tek dev satır
-// olarak sarmalayınca okunamaz hâle gelir. "Minify edilmiş" sayılma ölçütü: kayda değer
-// boyutta olup ya birkaç satırdan ibaret ya da satır başına ortalama çok uzun olması.
-function looksMinified(xml: string): boolean {
-  if (xml.length < 2_000) return false
-  const lineCount = xml.split('\n').length
-  return lineCount <= 3 || xml.length / lineCount > 400
-}
-
-// Görüntüleme için pretty-print eder. HAM `xmlContent`'e DOKUNMAZ: ham metin dönüşümün
-// (ve XAdES imza sindirimlerinin) tek doğru kaynağıdır — girinti eklemek boşluk metin
-// düğümleri yaratıp önizleme çıktısını değiştirebilirdi. Geçersiz XML'de ham metne düşer.
-function formatXmlForDisplay(xml: string): string {
-  try {
-    return xmlFormatter(xml, {
-      indentation: '  ',
-      collapseContent: true,
-      lineSeparator: '\n',
-    })
-  } catch {
-    return xml
-  }
-}
-
-// Hata satırının çevresindeki pencereyi SATIR NUMARALARIYLA çıkarır. Modeller ham metinde
-// "836. satır"ı sayarak bulamaz; hatalı bölgeyi numaralı ve etiketli vererek AI'nın doğru
-// yeri görmesini garanti eder — bağlam özetleme/kırpma ne yaparsa yapsın bu blok korunur.
-function buildErrorRegion(content: string, errorLine: number, radius = 18): string {
-  const lines = content.split('\n')
-  const start = Math.max(1, errorLine - radius)
-  const end = Math.min(lines.length, errorLine + radius)
-  const width = String(end).length
-  const out: string[] = []
-  for (let ln = start; ln <= end; ln++) {
-    const marker = ln === errorLine ? '>>' : '  '
-    out.push(`${marker} ${String(ln).padStart(width, ' ')} | ${lines[ln - 1] ?? ''}`)
-  }
-  return out.join('\n')
-}
-
-function xmlDeclarationProblem(xslt: string): ProblemItem | null {
-  if (!xslt.trim()) return null
-  const noBom = xslt.charCodeAt(0) === 0xfeff ? xslt.slice(1) : xslt
-  const firstLine = noBom.split('\n', 1)[0]
-  const hasDecl = /^\s*<\?xml\s+version\s*=\s*["'][^"']*["']/i.test(firstLine)
-  if (hasDecl) return null
-  return {
-    source: 'xslt',
-    ruleId: 'XML_DECL_MISSING',
-    severity: 'error',
-    ruleName: 'XML Bildirimi Eksik',
-    message: `XSLT dosyasının ilk satırında XML bildirimi bulunmuyor. İlk satıra \`${XML_DECL_FIX}\` eklenmelidir.`,
-    line: 1,
-    column: 1,
-  }
-}
-
-/** xsl:stylesheet / xsl:transform kök öğesinin version özniteliği (başlık çipi için). */
-function stylesheetVersion(xslt: string): string | null {
-  const m = /<xsl:(?:stylesheet|transform)\b[^>]*?\bversion\s*=\s*["']([^"']+)["']/.exec(xslt.slice(0, 20_000))
-  return m ? m[1] : null
-}
-
-function formatSize(text: string): string {
-  const bytes = new Blob([text]).size
-  return bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`
-}
-
-// Snippet gövdesindeki Monaco yer tutucularını (${1:ad}, $1, $0) düz metne indirger.
-function snippetPlainText(body: string): string {
-  return body.replace(/\$\{\d+:([^}]*)\}/g, '$1').replace(/\$\{\d+\}|\$\d+/g, '')
-}
 
 export default function XsltEditorPage() {
   const { templateId: routeTemplateId } = useParams<{ templateId: string }>()
@@ -190,29 +90,14 @@ export default function XsltEditorPage() {
   const loadedUpdatedAtRef = useRef<string | null>(null)
   const wasLockedRef = useRef(false)
 
-  // Validation
-  const [xsltErrors, setXsltErrors] = useState<{ message: string; line: number; column: number }[]>([])
-  const [xmlValid, setXmlValid] = useState<boolean | null>(null)
-  const [xmlErrors, setXmlErrors] = useState<{ message: string; line: number | null; column: number | null }[]>([])
-
-  // Preview
-  const [previewHtml, setPreviewHtml] = useState('')
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewError, setPreviewError] = useState<string | null>(null)
-  const [lastMs, setLastMs] = useState<number | null>(null)
-  const [lastTimings, setLastTimings] = useState<PreviewTimings | null>(null)
-  const [lastEngine, setLastEngine] = useState<XsltEngineName | null>(null)
+  // Doğrulama + problemler ve önizleme (Geliştirici Modu ile ortak hook'lar)
+  const diag = useXsltDiagnostics({ xslt: xsltContent, xml: xmlContent })
+  const { validateXmlNow, setShowProblems } = diag
+  const preview = useRawPreview({ xslt: xsltContent, xml: xmlContent, onLineError: diag.reportXsltError })
 
   // Save dialog
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saving, setSaving] = useState(false)
-
-  // UBL-TR business rule validation
-  const [ublTrResults, setUblTrResults] = useState<BusinessRuleResult[] | null>(null)
-  const [ublTrLoading, setUblTrLoading] = useState(false)
-  const [ublTrError, setUblTrError] = useState<string | null>(null)
-  // Problemler paneli varsayılan kapalı; UBL-TR kontrolü onu açar.
-  const [showProblems, setShowProblems] = useState(false)
 
   // Snippets
   const [userSnippets, setUserSnippets] = useState<UserSnippet[]>([])
@@ -248,7 +133,7 @@ export default function XsltEditorPage() {
   const [aiOpen, setAiOpen] = useState(false)
   const [refactorState, setRefactorState] = useState<{
     selection: string
-    range: { startLine: number; endLine: number }
+    range: { startLine: number; endLine: number; startColumn: number }
   } | null>(null)
 
   // Tam ekran editör: editör bölmesi panel grubunu kaplar, önizleme kodun üzerinde
@@ -369,19 +254,20 @@ export default function XsltEditorPage() {
 
   useEffect(() => { refreshAi() }, [refreshAi])
 
-  function handleAiRefactor(selection: string, range: { startLine: number; endLine: number }) {
+  function handleAiRefactor(selection: string, range: { startLine: number; endLine: number; startColumn: number }) {
     setRefactorState({ selection, range })
   }
 
   function applyRefactor(newText: string) {
     if (!refactorState) return
-    const lines = xsltContent.split('\n')
-    const before = lines.slice(0, refactorState.range.startLine - 1).join('\n')
-    const after = lines.slice(refactorState.range.endLine).join('\n')
-    const next = [before, newText, after].filter(Boolean).join('\n')
+    const next = replaceSelectionText(xsltContent, refactorState.selection, refactorState.range, newText)
+    setRefactorState(null)
+    if (next === null) {
+      toast.warning('Seçili bölge bu arada değişti; öneri uygulanmadı. Bölgeyi yeniden seçip deneyin.', { title: 'AI refactor' })
+      return
+    }
     setXsltContent(next)
     setIsDirty(true)
-    setRefactorState(null)
   }
 
   // AI sohbetinden gelen değişikliği uygula: hesaplanmış TAM doküman doğrudan yazılır.
@@ -404,30 +290,7 @@ export default function XsltEditorPage() {
   }
 
   function openAiForProblem(problem: ProblemItem) {
-    // XML bildirimi eksik hatası: tüm şablonu tekrar yazdırmadan, kısa ve hedefli yanıt iste
-    if (problem.ruleId === 'XML_DECL_MISSING') {
-      askAi(
-        `XSLT'nin ilk satırında XML bildirimi (\`${XML_DECL_FIX}\`) eksik. ` +
-        'Çok kısa açıkla (1-2 cümle) ve yalnızca eklenecek satırı, ardından dosyanın ilk 3-4 satırını içeren küçük bir kod bloğu göster. ' +
-        'Tüm şablonu tekrar yazma.'
-      )
-      return
-    }
-    let errMsg = `${problem.ruleName ?? 'Hata'}: ${problem.message}` +
-      (problem.line != null ? ` (satır ${problem.line}${problem.column ? `:${problem.column}` : ''})` : '')
-
-    // Hatalı satırın çevresini numaralı olarak göm. XSLT hataları xsltContent'e,
-    // XML/UBL-TR hataları xmlContent'e karşılık gelir. Bu blok, modele bağlamdaki
-    // (kırpılmış olabilen) tam dosyadan bağımsız olarak asıl hatalı kodu gösterir.
-    const sourceContent = problem.source === 'xslt' ? xsltContent : (xmlContent ?? '')
-    if (problem.line != null && sourceContent) {
-      const region = buildErrorRegion(sourceContent, problem.line)
-      errMsg +=
-        `\n\nHatanın bulunduğu bölge (">>" ile işaretli satır sorunlu; numaralar dosyadaki gerçek satırlardır):\n` +
-        '```xml\n' + region + '\n```'
-    }
-
-    askAi(errMsg)
+    askAi(aiPromptForProblem(problem, xsltContent, xmlContent))
   }
 
   // Düz AI açılışı: yalnızca paneli göster, soru gönderme; mevcut sohbet korunur.
@@ -565,15 +428,14 @@ export default function XsltEditorPage() {
   const loadXmlFile = useCallback(async (file: File) => {
     try {
       const content = await readUploadFile(file, 'xml')
-      const errs = extractXmlParseErrors(content)
-      setXmlErrors(errs)
-      setXmlValid(errs.length === 0)
+      // Debounce'u beklemez: minify XML'in biçimli görünümü xmlValid'e bağlı, gecikmesin.
+      validateXmlNow(content)
       setXmlContent(content)
       setXmlFileName(file.name)
     } catch (err) {
       toast.error((err as Error).message, { title: 'XML yüklenemedi' })
     }
-  }, [])
+  }, [validateXmlNow])
 
   async function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -597,66 +459,6 @@ export default function XsltEditorPage() {
     // State temizlenir: yenilemede / geri gelişte dosya ikinci kez yüklenmesin.
     navigate(location.pathname, { replace: true, state: null })
   }, [pendingXsltFile, pendingXmlFile, loadXsltFile, loadXmlFile, navigate, location.pathname])
-
-  // ─── Debounced preview ──────────────────────────────────────────────────────
-  const runPreview = useCallback(async (currentXslt: string, currentXml: string) => {
-    setPreviewLoading(true)
-    setPreviewError(null)
-    try {
-      const result = await previewFromRawXslt(currentXslt, currentXml)
-      setPreviewHtml(result.html)
-      setLastMs(result.generationTimeMs)
-      setLastTimings(result.timings ?? null)
-      setLastEngine(result.engine ?? null)
-    } catch (e: unknown) {
-      const err = toXsltError(e)
-      setPreviewError(err.message)
-      if (err.line) {
-        setXsltErrors([{ message: err.message, line: err.line, column: err.column || 1 }])
-      }
-    } finally {
-      setPreviewLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!xsltContent || !xmlContent) return
-    const t = setTimeout(() => runPreview(xsltContent, xmlContent), PREVIEW_DEBOUNCE_MS)
-    return () => clearTimeout(t)
-  }, [xsltContent, xmlContent, runPreview])
-
-  // ─── Debounced XSLT validation ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!xsltContent) { setXsltErrors([]); return }
-    const t = setTimeout(async () => {
-      try {
-        const { data } = await api.post<{ valid: boolean; error?: string; line?: number; column?: number }>(
-          '/api/preview/validate-xslt',
-          { xslt: xsltContent },
-        )
-        if (data.valid) {
-          setXsltErrors([])
-        } else {
-          const err = toXsltError(data, 'XSLT hatası')
-          setXsltErrors([{ message: err.message, line: err.line || 1, column: err.column || 1 }])
-        }
-      } catch {
-        // silently fail validation
-      }
-    }, XSLT_VALIDATION_DEBOUNCE_MS)
-    return () => clearTimeout(t)
-  }, [xsltContent])
-
-  // ─── Debounced XML validation ───────────────────────────────────────────────
-  useEffect(() => {
-    if (!xmlContent) { setXmlValid(null); setXmlErrors([]); return }
-    const t = setTimeout(() => {
-      const errs = extractXmlParseErrors(xmlContent)
-      setXmlErrors(errs)
-      setXmlValid(errs.length === 0)
-    }, XML_VALIDATION_DEBOUNCE_MS)
-    return () => clearTimeout(t)
-  }, [xmlContent])
 
   // ─── Image insert ───────────────────────────────────────────────────────────
   function handleRequestImageInsert(lineNumber: number) {
@@ -799,70 +601,6 @@ export default function XsltEditorPage() {
     goToRef.current(searchTerm)
   }, [])
 
-  // ─── UBL-TR iş kuralı doğrulaması ───────────────────────────────────────────
-  async function handleValidateUblTr() {
-    if (!xmlContent) return
-    setUblTrLoading(true)
-    setUblTrError(null)
-    setShowProblems(true)
-    try {
-      const res = await validateBusinessRules(xmlContent)
-      setUblTrResults(res.results)
-    } catch (e: unknown) {
-      const msg = e && typeof e === 'object' && 'response' in e
-        ? (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Doğrulama yapılamadı.'
-        : 'Doğrulama yapılamadı.'
-      setUblTrError(msg)
-      setUblTrResults(null)
-    } finally {
-      setUblTrLoading(false)
-    }
-  }
-
-  // İlk satırdaki XML bildirimi eksikse XSLT problemleri arasına ekle
-  const declProblem = useMemo(() => xmlDeclarationProblem(xsltContent), [xsltContent])
-
-  // XSLT 1.0 uyumluluk uyarıları (2.0'a özgü fonksiyon/yapı) — yalnız uyarı, hiçbir akışı engellemez
-  const compat = useXslt1CompatWarnings(xsltContent)
-  const editorMarkers = useMemo(() => [...xsltErrors, ...compat.markers], [xsltErrors, compat.markers])
-
-  const xsltProblems = useMemo<ProblemItem[]>(() => [
-    ...(declProblem ? [declProblem] : []),
-    ...xsltErrors.map(e => ({
-      source: 'xslt' as const,
-      severity: 'error' as const,
-      ruleName: 'XSLT Sözdizimi',
-      message: e.message,
-      line: e.line,
-      column: e.column,
-    })),
-    ...compat.problems,
-  ], [declProblem, xsltErrors, compat.problems])
-
-  const xmlProblems = useMemo<ProblemItem[]>(() => xmlErrors.map(e => ({
-    source: 'xml' as const,
-    severity: 'error' as const,
-    ruleName: 'XML Ayrıştırma',
-    message: e.message,
-    line: e.line,
-    column: e.column,
-  })), [xmlErrors])
-
-  const ublTrProblems = useMemo<ProblemItem[] | null>(() => ublTrResults?.map(r => ({
-    source: 'ubl-tr' as const,
-    ruleId: r.ruleId,
-    ruleName: r.ruleName,
-    severity: r.severity,
-    message: r.message,
-    line: r.line,
-    column: r.column,
-  })) ?? null, [ublTrResults])
-
-  const allProblems = [...xsltProblems, ...xmlProblems, ...(ublTrProblems ?? [])]
-  const errorCount = allProblems.filter(p => p.severity === 'error').length
-  const warningCount = allProblems.filter(p => p.severity === 'warning').length
-  const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null
-
   // XML Kaynak sekmesinde gösterilecek metin. Yalnızca minify edilmiş belgeler
   // biçimlendirilir: zaten satırlara yayılmış bir XML'e dokunmayınca problem panelinden
   // "satıra git" ve AI'ya giden imleç-penceresi ham metinle birebir hizalı kalır.
@@ -871,9 +609,9 @@ export default function XsltEditorPage() {
   // olmayan içerik göstermek, tam da XML'i incelemeye çalışırken yanıltıcı olurdu.
   const xmlDisplay = useMemo(() => {
     if (!xmlContent) return ''
-    if (!xmlPretty || xmlValid !== true || !looksMinified(xmlContent)) return xmlContent
+    if (!xmlPretty || diag.xmlValid !== true || !looksMinified(xmlContent)) return xmlContent
     return formatXmlForDisplay(xmlContent)
-  }, [xmlContent, xmlPretty, xmlValid])
+  }, [xmlContent, xmlPretty, diag.xmlValid])
 
   // Görüntülenen metin ham metinden farklıysa satır numaraları da kayar; kullanıcıyı uyar.
   const xmlDisplayReformatted = xmlContent != null && xmlDisplay !== xmlContent
@@ -1016,10 +754,10 @@ export default function XsltEditorPage() {
             </div>
           )}
 
-          {previewError && (
+          {preview.error && (
             <div role="alert" className="flex flex-none items-start gap-2 border-b border-fn-red-line bg-fn-red-tint px-4 py-2 text-xs text-fn-red-ink">
               <TriangleAlert size={13} aria-hidden="true" className="mt-0.5 flex-none" />
-              <span className="whitespace-pre-wrap break-all font-mono">{previewError}</span>
+              <span className="whitespace-pre-wrap break-all font-mono">{preview.error}</span>
             </div>
           )}
 
@@ -1044,13 +782,13 @@ export default function XsltEditorPage() {
                 <XsltEditorToolbar
                   onFormat={() => formatDocumentRef.current?.()}
                   onToggleComment={() => toggleCommentRef.current?.()}
-                  showProblems={showProblems}
+                  showProblems={diag.showProblems}
                   onToggleProblems={() => setShowProblems(s => !s)}
-                  errorCount={errorCount}
-                  warningCount={warningCount}
-                  onValidateUblTr={handleValidateUblTr}
-                  ublTrDisabled={!xmlContent || ublTrLoading}
-                  ublTrErrorCount={ublTrErrorCount}
+                  errorCount={diag.errorCount}
+                  warningCount={diag.warningCount}
+                  onValidateUblTr={diag.validateUblTr}
+                  ublTrDisabled={!xmlContent || diag.ublTrLoading}
+                  ublTrErrorCount={diag.ublTrErrorCount}
                   layout={layoutMode}
                   onLayoutChange={applyLayout}
                   maximized={max.maximized}
@@ -1077,7 +815,7 @@ export default function XsltEditorPage() {
                       focusEditorRef.current = focus
                     }}
                     onRequestImageInsert={handleRequestImageInsert}
-                    errors={editorMarkers}
+                    errors={diag.editorMarkers}
                     aiEnabled={aiEnabled}
                     onAiRefactor={handleAiRefactor}
                     onCursorLineChange={(line, column) => { setXsltCursorLine(line); setXsltCursorCol(column) }}
@@ -1086,8 +824,8 @@ export default function XsltEditorPage() {
                   {max.showMini && (
                     <FloatingPreviewWindow
                       containerRef={editorHostRef}
-                      html={previewHtml}
-                      status={previewError ? 'error' : previewLoading ? 'loading' : 'idle'}
+                      html={preview.html}
+                      status={preview.error ? 'error' : preview.loading ? 'loading' : 'idle'}
                       initialRect={max.miniRect}
                       onRectCommit={max.commitMiniRect}
                       onElementClick={handlePreviewClick}
@@ -1096,13 +834,13 @@ export default function XsltEditorPage() {
                     />
                   )}
                 </div>
-                {showProblems && (
+                {diag.showProblems && (
                   <ProblemsPanel
-                    xsltProblems={xsltProblems}
-                    xmlProblems={xmlProblems}
-                    ublTrProblems={ublTrProblems}
-                    ublTrLoading={ublTrLoading}
-                    ublTrError={ublTrError}
+                    xsltProblems={diag.xsltProblems}
+                    xmlProblems={diag.xmlProblems}
+                    ublTrProblems={diag.ublTrProblems}
+                    ublTrLoading={diag.ublTrLoading}
+                    ublTrError={diag.ublTrError}
                     onLocateXslt={(line, column) => revealLineRef.current?.(line, column ?? undefined)}
                     onLocateXml={handleLocateXmlLine}
                     onAskAi={openAiForProblem}
@@ -1136,12 +874,12 @@ export default function XsltEditorPage() {
                     tab={rightTab}
                     onTabChange={setRightTab}
                     showFrame={!max.maximized}
-                    html={previewHtml}
+                    html={preview.html}
                     onElementClick={handlePreviewClick}
-                    previewLoading={previewLoading}
-                    lastMs={lastMs}
-                    engine={lastEngine}
-                    onRefresh={() => { if (xmlContent) void runPreview(xsltContent, xmlContent) }}
+                    previewLoading={preview.loading}
+                    lastMs={preview.lastMs}
+                    engine={preview.engine}
+                    onRefresh={() => { if (xmlContent) preview.refresh() }}
                     onPopOut={() => applyLayout('mini')}
                     hasXml={!!xmlContent}
                     xmlDisplay={xmlDisplay}
@@ -1193,12 +931,12 @@ export default function XsltEditorPage() {
                       tab={rightTab}
                       onTabChange={setRightTab}
                       showFrame
-                      html={previewHtml}
+                      html={preview.html}
                       onElementClick={handlePreviewClick}
-                      previewLoading={previewLoading}
-                      lastMs={lastMs}
-                      engine={lastEngine}
-                      onRefresh={() => { if (xmlContent) void runPreview(xsltContent, xmlContent) }}
+                      previewLoading={preview.loading}
+                      lastMs={preview.lastMs}
+                      engine={preview.engine}
+                      onRefresh={() => { if (xmlContent) preview.refresh() }}
                       onPopOut={() => applyLayout('mini')}
                       hasXml={!!xmlContent}
                       xmlDisplay={xmlDisplay}
@@ -1227,7 +965,7 @@ export default function XsltEditorPage() {
                       xsltCursorLine={xsltCursorLine}
                       xsltSelection={xsltSelection}
                       prompt={aiPrompt}
-                      xmlDeclarationMissing={declProblem != null}
+                      xmlDeclarationMissing={diag.declProblem != null}
                       onApplyXslt={applyAiChange}
                       onClose={() => setAiOpen(false)}
                     />
@@ -1249,12 +987,12 @@ export default function XsltEditorPage() {
 
       {workspaceReady && !loadingTemplate && (
         <XsltStatusBar
-          previewLoading={previewLoading}
-          lastMs={lastMs}
-          lastTimings={lastTimings}
-          engine={lastEngine}
-          errorCount={errorCount}
-          warningCount={warningCount}
+          previewLoading={preview.loading}
+          lastMs={preview.lastMs}
+          lastTimings={preview.timings}
+          engine={preview.engine}
+          errorCount={diag.errorCount}
+          warningCount={diag.warningCount}
           onToggleProblems={() => setShowProblems(s => !s)}
           cursorLine={xsltCursorLine}
           cursorColumn={xsltCursorCol}

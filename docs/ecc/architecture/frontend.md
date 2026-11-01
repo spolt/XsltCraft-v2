@@ -6,7 +6,7 @@
 React 19 · TypeScript 5.9 · Vite 8 · Zustand · TailwindCSS 4 · @dnd-kit (sürükle-bırak) · React Router 7 · Monaco Editor · lucide-react. SSR yok (SPA).
 
 ## Klasör yapısı (`src/`)
-- **`store/`** — Zustand store'ları: `authStore`, `editorStore` (V2 grid canvas durumu), `xmlStore` (yüklü XML + ağaç), `xsltEditorStore` (dev mode ham XSLT), `aiStore` (flag + panel), `toastStore`.
+- **`store/`** — Zustand store'ları: `authStore`, `editorStore` (V2 grid canvas durumu), `xmlStore` (yüklü XML + ağaç), `themeDraftStore` (Tema Kullan ↔ Geliştirici Modu bellek içi taslağı; yaşam döngüsü `ThemeDraftScope` layout route'unda), `aiStore` (flag + panel), `toastStore`.
 - **`services/`** — API katmanı (Axios). `apiService` (base client + interceptors; Bearer + otomatik refresh — önizleme/doğrulama ve AI "Uygula"/"Refactor" doğrulaması dahil tüm çağrılar bunun üzerinden, ham `fetch` yalnız NDJSON akışında), alan servisleri: `templateService`, `previewService`, `xsltErrors` (önizleme/doğrulama hata adaptörü, aşağıda), `ublTrService`, `xpathService`, `assetService`, `snippetService`, `userXsltService`, `profileService`, `adminService`, `adminUserService`, `aiAssistantService` (**NDJSON streaming + AbortController**).
 - **`components/`** — `editor/` (V2 canvas), `xslt-editor/` (dev mode), `ai/`, `layout/`, `ui/`, route guard'ları.
 - **`pages/`** — route seviyesi.

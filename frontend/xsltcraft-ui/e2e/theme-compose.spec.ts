@@ -138,7 +138,7 @@ test('temadaki logo görseli kullanıcının logosuyla yerinde değişir; başka
 
   const stamp = page.locator('img[data-xc-slot="existing-signature"]')
   await expect(stamp).toHaveAttribute('src', THEME_IMG)
-  await expect(stamp).toHaveCSS('visibility', 'hidden') // yeri korunur, tasarım kaymaz
+  await expect(stamp).toHaveCSS('display', 'none') // çıktıdan çıkar, yer tutmaz
   await expect(page.locator('[data-xc-slot="totals-left"] [data-xc-asset="signature"] img')).toHaveAttribute('src', PNG)
 })
 
@@ -173,7 +173,7 @@ test('görsel eklemeden kaldırma yalnız admin izin verdiyse uygulanır', async
   expect(res.status()).toBe(200)
   await page.setContent((await res.json()).html)
 
-  await expect(page.locator('img[data-xc-slot="existing-logo"]')).toHaveCSS('visibility', 'hidden') // izinli
+  await expect(page.locator('img[data-xc-slot="existing-logo"]')).toHaveCSS('display', 'none') // izinli
   await expect(page.locator('img[data-xc-slot="existing-signature"]')).toHaveCSS('visibility', 'visible') // izinsiz
 })
 

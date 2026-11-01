@@ -29,33 +29,32 @@ import {
 } from 'lucide-react'
 import { getTemplate, type ThemeSlotOption } from '../services/templateService'
 import { reportDownload } from '../services/activityService'
-import type { BankInfoItem } from '../services/previewService'
 import type { AssetKind } from '../services/themeComposeService'
-import { createUserXsltTemplate } from '../services/userXsltService'
+import { createUserXsltTemplate, updateUserXsltTemplate } from '../services/userXsltService'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
+import { runDraftSave, useDraftField, useThemeDraftStore } from '../store/themeDraftStore'
 import { parseGateError } from '../services/entitlementService'
 import { toast } from '../store/toastStore'
 import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import { printActivePreview } from '../components/xslt-editor/previewFrame'
+import { extractXmlParseErrors, LEAVE_CONFIRM, SAVE_CONFLICT_MESSAGE } from '../components/xslt-editor/xsltText'
+import { documentTypeFromXslt } from '../components/dev-mode/draftCompose'
 import { useThemeCompose } from '../hooks/useThemeCompose'
 import ImagePanel from '../components/theme-assets/ImagePanel'
 import BankInfoPanel from '../components/theme-assets/BankInfoPanel'
 import FixedNotesPanel from '../components/theme-assets/FixedNotesPanel'
 import {
   countNotes,
-  defaultFixedNotes,
   noteHasText,
   toComposeNotes,
   type FixedNoteState,
-  type FixedNotesState,
 } from '../components/theme-assets/fixedNoteState'
 import type { FixedNotePosition } from '../services/themeComposeService'
 import ThemeSlotPreview from '../components/theme-assets/ThemeSlotPreview'
 import DraggableAssetChip, { AssetDragPreview } from '../components/theme-assets/DraggableAssetChip'
 import { announcements, kindFromDragId, screenReaderInstructions, slotFromDropId } from '../components/theme-assets/slotDnd'
 import {
-  defaultImg,
   effectiveSlot,
   filledBankRows,
   readAsDataUrl,
@@ -63,7 +62,6 @@ import {
   hiddenThemeImages,
   themeImageRemovable,
   validateImageFile,
-  type ImgState,
 } from '../components/theme-assets/imageState'
 import WorkspaceHeader from '../components/shell/WorkspaceHeader'
 import { HeaderButton } from '../components/shell/headerParts'
@@ -73,50 +71,89 @@ import { buildChecklist } from '../components/theme-use/themeChecklist'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 import defaultDespatchXml from '../assets/default-despatch.xml?raw'
 
+const NO_SLOTS: ThemeSlotOption[] = []
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function ThemeUsePage() {
   const { templateId } = useParams<{ templateId: string }>()
   const navigate = useNavigate()
 
-  const [templateName, setTemplateName] = useState('Hazır Tema')
-  const [slots, setSlots] = useState<ThemeSlotOption[]>([])
-  const [xmlContent, setXmlContent] = useState<string>(defaultInvoiceXml)
-  const [docType, setDocType] = useState<'Invoice' | 'Despatch' | null>(null)
+  const [meta, setMeta] = useDraftField('meta')
+  const templateName = meta?.name ?? 'Hazır Tema'
+  const slots = meta?.slots ?? NO_SLOTS
+  // Geliştirici Modu'nda elle düzenlenen metin varsa önizleme ve indirme onun üzerinden yürür.
+  const workingXslt = useThemeDraftStore((s) => s.workingXslt)
+  const docType = meta?.documentType ?? (workingXslt !== null ? documentTypeFromXslt(workingXslt) : null)
+  const [xml, setXml] = useDraftField('xml')
+  const xmlContent = xml?.content ?? (docType === 'Despatch' ? defaultDespatchXml : defaultInvoiceXml)
   /** Yalnız görüntüleme: kullanıcının yüklediği XML'in adı (null → örnek XML). */
-  const [xmlFileName, setXmlFileName] = useState<string | null>(null)
+  const xmlFileName = xml?.fileName ?? null
   /** Önizlemede yerleşim alanlarını (yuvaları) göster. */
   const [showFields, setShowFields] = useState(true)
   const [openSections, setOpenSections] = useState({ logo: true, signature: false, bank: false, notes: false })
   const xmlInputRef = useRef<HTMLInputElement>(null)
 
-  const [logo, setLogo] = useState<ImgState>(defaultImg())
-  const [signature, setSignature] = useState<ImgState>(defaultImg())
-  const [bankInfo, setBankInfo] = useState<BankInfoItem[]>([{ bankName: '', iban: '' }])
-  const [fixedNotes, setFixedNotes] = useState<FixedNotesState>(defaultFixedNotes)
+  const [logo, setLogo] = useDraftField('logo')
+  const [signature, setSignature] = useDraftField('signature')
+  const [bankInfo, setBankInfo] = useDraftField('bankInfo')
+  const [fixedNotes, setFixedNotes] = useDraftField('fixedNotes')
+  const notesTouched = useThemeDraftStore((s) => s.notesTouched)
+  const [fixedNotesSupported, setFixedNotesSupported] = useDraftField('fixedNotesSupported')
   const [uploading, setUploading] = useState<AssetKind | null>(null)
 
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [dragKind, setDragKind] = useState<AssetKind | null>(null)
+  const mountedRef = useRef(true)
+  const saveRedirectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Tema adı, belge türü ve konum kataloğu
   useEffect(() => {
-    if (!templateId) return
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (saveRedirectRef.current !== null) clearTimeout(saveRedirectRef.current)
+    }
+  }, [])
+
+  // Tema adı, belge türü ve konum kataloğu (Geliştirici Modu'ndan dönüşte taslakta hazırdır)
+  useEffect(() => {
+    if (!templateId || useThemeDraftStore.getState().meta) return
     getTemplate(templateId)
-      .then((t) => {
-        setTemplateName(t.name)
-        setSlots(t.slots ?? [])
-        setDocType(t.documentType)
-        if (t.documentType === 'Despatch') setXmlContent(defaultDespatchXml)
-      })
+      .then((t) => setMeta({ name: t.name, slots: t.slots ?? [], documentType: t.documentType }))
       .catch(() => {})
-  }, [templateId])
+  }, [templateId, setMeta])
+
+  const baselineXslt = useThemeDraftStore((s) => s.baselineXslt)
+  const xsltEdited = useThemeDraftStore((s) => s.xsltEdited)
+  const editedXslt = xsltEdited ? workingXslt : null
+  const editedXsltBroken = useMemo(
+    () => editedXslt !== null && extractXmlParseErrors(editedXslt).length > 0,
+    [editedXslt],
+  )
 
   const assets = useMemo(() => toComposeAssets(logo, signature, slots), [logo, signature, slots])
   const banks = useMemo(() => filledBankRows(bankInfo), [bankInfo])
-  const composeNotes = useMemo(() => toComposeNotes(fixedNotes), [fixedNotes])
+  // Düzenlenmiş metinde: dokunulmadıysa null (nota dokunma), boşaltıldıysa [] (eski notları sil).
+  const composeNotes = useMemo(() => {
+    if (editedXslt === null) return toComposeNotes(fixedNotes)
+    return notesTouched ? (toComposeNotes(fixedNotes) ?? []) : null
+  }, [editedXslt, fixedNotes, notesTouched])
   const noteCount = countNotes(fixedNotes)
+
+  // Yalnız varlık girilmişse sormaz: bunlar temadan yeniden birleştirilebilir, elle düzenleme birleştirilemez.
+  const hasUnsavedXslt = xsltEdited && workingXslt !== baselineXslt
+  const confirmLeave = useCallback(() => !hasUnsavedXslt || window.confirm(LEAVE_CONFIRM), [hasUnsavedXslt])
+  const guardedNavigate = useCallback((path: string) => {
+    if (confirmLeave()) navigate(path)
+  }, [confirmLeave, navigate])
+
+  useEffect(() => {
+    if (!hasUnsavedXslt) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedXslt])
 
   const handleComposeError = useCallback(async (err: unknown) => {
     // Ücretli tema doğrudan URL ile açıldıysa backend 402 döner → Pro'ya yönlendir.
@@ -131,7 +168,21 @@ export default function ThemeUsePage() {
   }, [navigate])
 
   const hideThemeImages = useMemo(() => hiddenThemeImages(logo, signature, slots), [logo, signature, slots])
-  const compose = useThemeCompose({ themeId: templateId, xmlContent, assets, bankInfo: banks, hideThemeImages, fixedNotes: composeNotes, onError: handleComposeError })
+  const compose = useThemeCompose({
+    themeId: editedXslt === null ? templateId : undefined,
+    xslt: editedXslt !== null && !editedXsltBroken ? editedXslt : undefined,
+    xmlContent,
+    assets,
+    bankInfo: banks,
+    hideThemeImages,
+    fixedNotes: composeNotes,
+    onError: handleComposeError,
+  })
+
+  // Bozuk metinde istek gitmez: değer son geçerli yanıttan kalır.
+  useEffect(() => {
+    if (compose.fixedNotesSupported !== null) setFixedNotesSupported(compose.fixedNotesSupported)
+  }, [compose.fixedNotesSupported, setFixedNotesSupported])
 
   const placements = useMemo(() => ({
     logo: logo.dataUrl ? effectiveSlot('logo', logo, slots) : null,
@@ -197,23 +248,41 @@ export default function ThemeUsePage() {
       openUpgradeModal({
         title: 'Kaydetme Pro üyelik gerektirir',
         message: "Şablonu indirebilirsin, ancak 'Şablonlarım'da saklamak XsltCraft Pro’ya dahildir.",
+        confirmLeave,
       })
       return
     }
 
+    const { session, markSaved } = useThemeDraftStore.getState()
     setIsSaving(true)
     try {
-      const xslt = await compose.exportXslt()
-      await createUserXsltTemplate({ name: templateName, xsltContent: xslt, xmlContent })
-      setSaveSuccess(true)
-      setTimeout(() => { navigate('/my-xslt-templates') }, 800)
+      // Kayıt hedefi hat alındığında, `await`'ten önce okunur: ekrandan çıkılırsa taslak silinir, `update` yerine `create` çalışmasın.
+      await runDraftSave(async (saved) => {
+        const xslt = await compose.exportXslt()
+        if (!mountedRef.current || useThemeDraftStore.getState().session !== session) return
+        // Ad gönderilmez: kullanıcının kayıtta verdiği ad temanın adıyla ezilmesin.
+        const result = saved
+          ? await updateUserXsltTemplate(saved.id, { xsltContent: xslt, xmlContent, expectedUpdatedAt: saved.updatedAt })
+          : await createUserXsltTemplate({ name: templateName, xsltContent: xslt, xmlContent })
+        markSaved(session, { id: result.id, updatedAt: result.updatedAt, name: result.name }, workingXslt)
+        if (!mountedRef.current) return
+        setSaveSuccess(true)
+        saveRedirectRef.current = setTimeout(() => { navigate('/my-xslt-templates') }, 800)
+      })
     } catch (err) {
       const gate = await parseGateError(err)
       if (gate.status === 402) {
         openUpgradeModal({
           title: 'Kaydetme Pro üyelik gerektirir',
           message: gate.message ?? "'Şablonlarım'da saklama XsltCraft Pro’ya dahildir.",
+          confirmLeave: mountedRef.current ? confirmLeave : undefined,
         })
+      } else if (gate.status === 423) {
+        toast.error('Bu şablonu şu an başka bir kullanıcı düzenliyor. Kaydedilemedi.', {
+          title: 'Şablon kilitli', durationMs: null,
+        })
+      } else if (gate.status === 409) {
+        toast.error(SAVE_CONFLICT_MESSAGE, { title: 'Çakışma', durationMs: null })
       } else {
         toast.error('Kaydetme başarısız.')
       }
@@ -225,8 +294,7 @@ export default function ThemeUsePage() {
     e.target.value = ''
     if (!file) return
     try {
-      setXmlContent(await readUploadFile(file, 'xml'))
-      setXmlFileName(file.name)
+      setXml({ content: await readUploadFile(file, 'xml'), fileName: file.name })
     } catch (err) {
       toast.error((err as Error).message, { title: 'XML yüklenemedi' })
     }
@@ -264,10 +332,20 @@ export default function ThemeUsePage() {
     hasSignature: !!signature.dataUrl,
     bankCount: banks.length,
     noteCount,
-    notesSupported: compose.fixedNotesSupported,
+    notesSupported: fixedNotesSupported,
     customXml: xmlFileName !== null,
     preview: { loading: compose.loading, error: compose.error, ready: !!compose.html, warningCount: compose.warnings.length },
   })
+
+  const backToDevModeButton = (
+    <button
+      type="button"
+      onClick={() => navigate(`/dev-mode/${templateId}`)}
+      className="xc-focus ml-auto flex-none rounded-md px-2 py-0.5 font-semibold underline hover:no-underline"
+    >
+      Geliştirici Modu'na dön
+    </button>
+  )
 
   const renderImagePanel = (kind: AssetKind) => {
     const state = kind === 'logo' ? logo : signature
@@ -294,6 +372,8 @@ export default function ThemeUsePage() {
     <div className="flex h-screen flex-col overflow-hidden bg-ui-bg font-sans text-[13px] text-tx">
       <WorkspaceHeader
         active="themes"
+        onNavigate={guardedNavigate}
+        confirmLeave={confirmLeave}
         actions={
           <>
             <HeaderButton
@@ -304,7 +384,12 @@ export default function ThemeUsePage() {
               onClick={() => printActivePreview()}
               disabled={!compose.html}
             />
-            <HeaderButton icon={Code2} onClick={() => navigate(`/dev-mode/${templateId}`)} title="Geliştirici modunda XSLT'yi düzenle">
+            <HeaderButton
+              icon={Code2}
+              onClick={() => navigate(`/dev-mode/${templateId}`)}
+              disabled={isSaving || saveSuccess}
+              title="Geliştirici modunda XSLT'yi düzenle"
+            >
               XSLT editörünü aç
             </HeaderButton>
             <HeaderButton
@@ -346,7 +431,15 @@ export default function ThemeUsePage() {
               <nav aria-label="Konum">
                 <ol className="m-0 flex list-none gap-1.5 p-0 text-[12px] text-tx-muted">
                   <li>
-                    <Link to={`/templates?type=${docType ?? 'Invoice'}`} className="xc-focus rounded text-ui-ink no-underline hover:underline">
+                    <Link
+                      to={`/templates?type=${docType ?? 'Invoice'}`}
+                      onClick={(e) => {
+                        // Ctrl/⌘/orta tık yeni sekme açar; bu sayfadan ayrılınmaz.
+                        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+                        if (!confirmLeave()) e.preventDefault()
+                      }}
+                      className="xc-focus rounded text-ui-ink no-underline hover:underline"
+                    >
                       Tema Kütüphanesi
                     </Link>
                   </li>
@@ -398,15 +491,15 @@ export default function ThemeUsePage() {
             <AssetAccordionSection
               title="Sabit notlar"
               icon={StickyNote}
-              status={compose.fixedNotesSupported === false ? 'Uygun değil' : noteCount > 0 ? `${noteCount} not` : 'Boş'}
-              done={compose.fixedNotesSupported !== false && noteCount > 0}
+              status={fixedNotesSupported === false ? 'Uygun değil' : noteCount > 0 ? `${noteCount} not` : 'Boş'}
+              done={fixedNotesSupported !== false && noteCount > 0}
               open={openSections.notes}
               onToggle={() => toggleSection('notes')}
             >
               <FixedNotesPanel
                 notes={fixedNotes}
                 onChange={handleNoteChange}
-                supported={compose.fixedNotesSupported}
+                supported={fixedNotesSupported}
                 error={compose.errorField === 'fixedNotes' ? compose.error : null}
               />
             </AssetAccordionSection>
@@ -455,10 +548,24 @@ export default function ThemeUsePage() {
               )}
             </div>
 
+            {xsltEdited && !editedXsltBroken && (
+              <div role="status" className="flex items-center gap-1.5 border-b border-ui-soft-line bg-ui-soft px-4 py-2 text-[12px] text-tx-2">
+                <Code2 size={13} aria-hidden="true" className="flex-none" />
+                Geliştirici Modu'ndaki XSLT düzenlemeleri uygulanıyor.
+              </div>
+            )}
+            {editedXsltBroken && (
+              <div role="alert" className="flex items-center gap-1.5 border-b border-fn-red-line bg-fn-red-tint px-4 py-2 text-[12px] text-fn-red-ink">
+                <CircleX size={13} aria-hidden="true" className="flex-none" />
+                Geliştirici Modu'ndaki XSLT'de sözdizimi hatası var; düzeltilene kadar önizleme, indirme ve kaydetme kapalı.
+                {backToDevModeButton}
+              </div>
+            )}
             {compose.error && (
               <div role="alert" className="flex items-center gap-1.5 border-b border-fn-red-line bg-fn-red-tint px-4 py-2 text-[12px] text-fn-red-ink">
                 <CircleX size={13} aria-hidden="true" className="flex-none" />
                 {compose.error}
+                {xsltEdited && backToDevModeButton}
               </div>
             )}
             {compose.warnings.length > 0 && (

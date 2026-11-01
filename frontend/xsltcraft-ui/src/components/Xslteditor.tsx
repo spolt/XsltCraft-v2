@@ -1,7 +1,8 @@
 import Editor, { type Monaco } from "@monaco-editor/react"
 import type { editor as MonacoEditor, languages as MonacoLanguages, IDisposable } from "monaco-editor"
-import { useRef, useEffect } from "react"
+import { useRef, useEffect, useLayoutEffect, useState } from "react"
 import xmlFormatter from 'xml-formatter'
+import { writeExternalValue } from './xslt-editor/externalEdit'
 import { buildXmlIndex, getXmlPathSuggestions, type XmlIndex } from './xslt-editor/xpathXmlIndex'
 import type { UserSnippet } from '../services/snippetService'
 import { useUiPrefsStore } from '../store/uiPrefsStore'
@@ -21,7 +22,7 @@ export type XsltError = {
   code?: string
 }
 
-type EditorFns = {
+export type EditorFns = {
   goTo: (term: string) => void
   revealLine: (lineNumber: number, column?: number) => void
   insertTextAtLine: (lineNumber: number, text: string) => void
@@ -41,11 +42,16 @@ type Props = {
   options?: MonacoEditor.IStandaloneEditorConstructionOptions
   // ── AI ──────────────────────────────────────
   aiEnabled?: boolean
-  onAiRefactor?: (selection: string, range: { startLine: number; endLine: number }) => void
+  onAiRefactor?: (selection: string, range: { startLine: number; endLine: number; startColumn: number }) => void
   /** AI bağlamı + durum çubuğu: imlecin satırı ve sütunu (1-tabanlı) her değiştiğinde çağrılır. */
   onCursorLineChange?: (line: number, column: number) => void
   /** AI bağlamı için: seçili metin (boşsa undefined) her değiştiğinde çağrılır. */
   onSelectionChange?: (text: string | undefined) => void
+  /**
+   * Dışarıdan gelen `value` yalnız değişen aralığa yazılır: imleç, seçim ve kaydırma korunur, `onChange` çağrılmaz.
+   * Mount sonrası değişmez. Verilmezse metni @monaco-editor/react tüm belgeyi değiştirerek yazar.
+   */
+  preserveCursorOnExternalChange?: boolean
 }
 
 /* ── XSLT 1.0 element definitions ── */
@@ -436,6 +442,7 @@ function registerXsltCompletions(monaco: Monaco) {
 export default function XsltEditor({
   value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, errors, options,
   aiEnabled = false, onAiRefactor, onCursorLineChange, onSelectionChange,
+  preserveCursorOnExternalChange = false,
 }: Props) {
 
   // Görünüm tercihleri (Ayarlar): tema, yazı boyutu, satır kaydırma. Değişimleri Monaco'yu
@@ -446,10 +453,22 @@ export default function XsltEditor({
 
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  // Monaco asenkron mount olur: `aiEnabled` baştan açıksa aksiyon kaydı editörü beklemeli.
+  const [editorReady, setEditorReady] = useState(false)
   const onAiRefactorRef = useRef(onAiRefactor)
   const onCursorLineChangeRef = useRef(onCursorLineChange)
   const onSelectionChangeRef = useRef(onSelectionChange)
   const aiActionDisposablesRef = useRef<IDisposable[]>([])
+  const latestValueRef = useRef(value)
+  /** Dışarıdan gelen metin yazılırken açık: yazım kullanıcı düzenlemesi sayılmaz. */
+  const externalWriteRef = useRef(false)
+
+  useLayoutEffect(() => {
+    latestValueRef.current = value
+    if (preserveCursorOnExternalChange && editorRef.current) {
+      writeExternalValue(editorRef.current, value, externalWriteRef)
+    }
+  }, [value, preserveCursorOnExternalChange])
 
   useEffect(() => { onAiRefactorRef.current = onAiRefactor }, [onAiRefactor])
   useEffect(() => { onCursorLineChangeRef.current = onCursorLineChange }, [onCursorLineChange])
@@ -482,7 +501,7 @@ export default function XsltEditor({
         if (!sel || !model || sel.isEmpty()) return
         const text = model.getValueInRange(sel)
         if (text.trim() && onAiRefactorRef.current) {
-          onAiRefactorRef.current(text, { startLine: sel.startLineNumber, endLine: sel.endLineNumber })
+          onAiRefactorRef.current(text, { startLine: sel.startLineNumber, endLine: sel.endLineNumber, startColumn: sel.startColumn })
         }
       },
     })
@@ -491,7 +510,7 @@ export default function XsltEditor({
       aiActionDisposablesRef.current.forEach(d => d.dispose())
       aiActionDisposablesRef.current = []
     }
-  }, [aiEnabled])
+  }, [aiEnabled, editorReady])
 
   function handleBeforeMount(monaco: Monaco) {
     monacoRef.current = monaco
@@ -501,6 +520,9 @@ export default function XsltEditor({
 
   function handleMount(editor: MonacoEditor.IStandaloneCodeEditor) {
     editorRef.current = editor
+    setEditorReady(true)
+    // Editör oluşturulurken gelen metin (mount gecikmeli çalışır, layout effect o sırada editörü görmez).
+    if (preserveCursorOnExternalChange) writeExternalValue(editor, latestValueRef.current, externalWriteRef)
 
     // AI bağlamı: imleç satırı + seçim değişimlerini üst bileşene bildir.
     editor.onDidChangeCursorPosition(e => {
@@ -533,7 +555,7 @@ export default function XsltEditor({
 
     editor.onDidChangeModelContent((event: MonacoEditor.IModelContentChangedEvent) => {
       const change = event.changes[0]
-      if (!change || change.text !== '>') return
+      if (externalWriteRef.current || !change || change.text !== '>') return
 
       const monaco = monacoRef.current
       const model = editor.getModel()
@@ -765,8 +787,10 @@ export default function XsltEditor({
       height="100%"
       language="xml"
       theme={monacoThemeId(editorTheme)}
-      value={value}
-      onChange={(v) => onChange(v || "")}
+      // `value` verilseydi kütüphane, model satır sonlarını normalleştirdiğinde metni farklı görüp tüm belgeyi yazardı.
+      value={preserveCursorOnExternalChange ? undefined : value}
+      defaultValue={preserveCursorOnExternalChange ? value : undefined}
+      onChange={(v) => { if (!externalWriteRef.current) onChange(v || "") }}
       beforeMount={handleBeforeMount}
       onMount={handleMount}
       options={{

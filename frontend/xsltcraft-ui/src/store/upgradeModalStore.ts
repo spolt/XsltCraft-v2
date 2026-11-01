@@ -5,6 +5,8 @@ export interface UpgradeContext {
   title?: string
   /** Bağlama özel açıklama (ör. indirme / kaydetme / AI limiti). */
   message?: string
+  /** "Pro'ya Geç" sayfadan çıkarır; kaydedilmemiş iş varsa çağıran sorar, false ise gidilmez. */
+  confirmLeave?: () => boolean
 }
 
 interface UpgradeModalState {

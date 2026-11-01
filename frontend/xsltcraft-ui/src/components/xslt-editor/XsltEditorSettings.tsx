@@ -17,11 +17,16 @@ const optionBtn = (on: boolean) =>
     on ? 'border-ui-soft-line bg-ui-soft font-semibold text-ui-ink' : 'border-field-line bg-ui-card text-tx-2 hover:bg-ui-hover'
   }`
 
+interface Props {
+  /** Sağ panel düzeni seçimini gizle (ayrı AI sütunu olmayan ekranlar için). */
+  hideRightPanelMode?: boolean
+}
+
 /**
  * XSLT editör sol menüsündeki saf görünüm tercihleri (uiPrefsStore). İşlevi olmayan
  * seçenekler (otomatik önizleme, kaydederken biçimlendir, problemleri otomatik aç) gösterilmez.
  */
-export default function XsltEditorSettings() {
+export default function XsltEditorSettings({ hideRightPanelMode = false }: Props) {
   const editorTheme = useUiPrefsStore(s => s.editorTheme)
   const setEditorTheme = useUiPrefsStore(s => s.setEditorTheme)
   const defaultLayout = useUiPrefsStore(s => s.editorDefaultLayout)
@@ -89,21 +94,23 @@ export default function XsltEditorSettings() {
         </div>
       </div>
 
-      <div role="group" aria-labelledby="xs-set-right" className="flex flex-col gap-1.5">
-        <span id="xs-set-right" className={groupTitle}>Sağ panel (Önizleme + AI)</span>
-        <div className="grid grid-cols-2 gap-1.5">
-          {RIGHT_PANEL_MODES.map(m => {
-            const on = m.id === rightMode
-            const Icon = m.icon
-            return (
-              <button key={m.id} type="button" aria-pressed={on} title={m.hint} onClick={() => setRightMode(m.id)} className={optionBtn(on)}>
-                <Icon size={14} aria-hidden="true" className="flex-none" />
-                <span className="truncate">{m.label}</span>
-              </button>
-            )
-          })}
+      {!hideRightPanelMode && (
+        <div role="group" aria-labelledby="xs-set-right" className="flex flex-col gap-1.5">
+          <span id="xs-set-right" className={groupTitle}>Sağ panel (Önizleme + AI)</span>
+          <div className="grid grid-cols-2 gap-1.5">
+            {RIGHT_PANEL_MODES.map(m => {
+              const on = m.id === rightMode
+              const Icon = m.icon
+              return (
+                <button key={m.id} type="button" aria-pressed={on} title={m.hint} onClick={() => setRightMode(m.id)} className={optionBtn(on)}>
+                  <Icon size={14} aria-hidden="true" className="flex-none" />
+                  <span className="truncate">{m.label}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex items-center justify-between text-[12px]">
         <span id="xs-set-font" className="font-semibold text-tx-2">Yazı boyutu</span>

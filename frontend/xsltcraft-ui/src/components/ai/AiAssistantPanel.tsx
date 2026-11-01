@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   Sparkles, X, StopCircle, Loader2, ChevronDown,
   RotateCcw, AlertTriangle, ThumbsUp, ThumbsDown, Wand2, RefreshCcw, PencilLine, ImagePlus,
@@ -42,6 +42,8 @@ interface Props {
   xmlDeclarationMissing?: boolean
   /** AI önerisini editördeki XSLT'ye uygular (TAM doküman). Yoksa "Uygula" gösterilmez. */
   onApplyXslt?: (newDoc: string) => void
+  /** Yükseltme modalındaki "Pro'ya Geç" sayfadan çıkarır; kaydedilmemiş iş varsa çağıran sorar. */
+  confirmLeave?: () => boolean
   onClose: () => void
 }
 
@@ -143,14 +145,20 @@ export default function AiAssistantPanel({
   prompt,
   xmlDeclarationMissing,
   onApplyXslt,
+  confirmLeave,
   onClose,
 }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [lastMeta, setLastMeta] = useState<{ provider?: string; model?: string; ms?: number } | null>(null)
-  // Açık "Uygula" diyaloğu (hangi mesaj + hesaplanmış hedef).
-  const [applyState, setApplyState] = useState<{ messageId: number; target: ApplyTarget } | null>(null)
+  // Açık "Uygula" diyaloğu (hangi mesaj + uygulanacak blok).
+  const [applyState, setApplyState] = useState<{ messageId: number; block: string } | null>(null)
+  // Hedef güncel metinden hesaplanır: diyalog açıkken metin değişirse (compose) kabul eski metni geri yazmaz.
+  const applyTarget = useMemo<ApplyTarget | null>(
+    () => (applyState ? computeApplyTarget(xslt, applyState.block, xsltSelection) : null),
+    [applyState, xslt, xsltSelection],
+  )
   const [showJump, setShowJump] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
@@ -179,6 +187,10 @@ export default function AiAssistantPanel({
   // Mesajlara devredilen görsel URL'leri — yeni sohbette/unmount'ta revoke edilir.
   const messagesRef = useRef<ChatMessage[]>([])
   messagesRef.current = messages
+  // Akış başladıktan sonra metin kirlenmiş olabilir: modal son durumu sorar.
+  const confirmLeaveRef = useRef(confirmLeave)
+  confirmLeaveRef.current = confirmLeave
+  const guardedLeave = () => confirmLeaveRef.current?.() ?? true
 
   useEffect(() => () => revokeMessageImages(messagesRef.current), [])
 
@@ -206,8 +218,7 @@ export default function AiAssistantPanel({
   function openApply(msg: ChatMessage) {
     const block = extractApplicableBlock(msg.content)
     if (!block) return
-    const target = computeApplyTarget(xslt, block, xsltSelection)
-    setApplyState({ messageId: msg.id, target })
+    setApplyState({ messageId: msg.id, block })
   }
 
   function handleApplyAccept(newDoc: string) {
@@ -399,10 +410,10 @@ export default function AiAssistantPanel({
             ))
             if (chunk.code === 'http_402' && chunk.reason === 'image_count') {
               // Free: mesaj başına 1 ekran görüntüsü → Pro'ya yönlendir.
-              openUpgradeModal({ title: 'Ekran görüntüsü limiti', message: msg })
+              openUpgradeModal({ title: 'Ekran görüntüsü limiti', message: msg, confirmLeave: guardedLeave })
             } else if (chunk.code === 'http_402') {
               // Free kullanıcı günlük 1 soru hakkını doldurdu → Pro'ya yönlendir.
-              openUpgradeModal({ title: 'AI soru hakkınız doldu', message: msg })
+              openUpgradeModal({ title: 'AI soru hakkınız doldu', message: msg, confirmLeave: guardedLeave })
             } else if (chunk.code === 'http_429' && chunk.reason === 'vision_rate_limited') {
               toast.warning(msg, { title: 'Ekran görüntüsü' })
             } else if (chunk.code === 'http_429') {
@@ -777,9 +788,9 @@ export default function AiAssistantPanel({
         onRemoveAttachment={attach.remove}
       />
 
-      {applyState && (
+      {applyTarget && (
         <AiApplyDialog
-          target={applyState.target}
+          target={applyTarget}
           onAccept={handleApplyAccept}
           onClose={() => setApplyState(null)}
         />

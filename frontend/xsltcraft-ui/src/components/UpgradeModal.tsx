@@ -38,6 +38,7 @@ export default function UpgradeModal() {
   if (!isOpen) return null
 
   const goPricing = () => {
+    if (context?.confirmLeave && !context.confirmLeave()) return
     close()
     navigate('/pricing')
   }

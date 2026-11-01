@@ -20,6 +20,7 @@ import AboutPage from './pages/AboutPage'
 import PricingPage from './pages/PricingPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
+import ThemeDraftScope from './components/dev-mode/ThemeDraftScope'
 import AppLayout from './components/layout/AppLayout'
 import AdminLayout from './components/layout/AdminLayout'
 import ToastContainer from './components/ui/ToastContainer'
@@ -51,8 +52,10 @@ export default function App() {
           {/* Editor ve ThemeUse kendi layout'larını yönetir */}
           <Route path="/editor/new" element={<EditorPage />} />
           <Route path="/editor/:templateId" element={<EditorPage />} />
-          <Route path="/theme-use/:templateId" element={<ThemeUsePage />} />
-          <Route path="/dev-mode/:templateId" element={<DevModePage />} />
+          <Route element={<ThemeDraftScope />}>
+            <Route path="/theme-use/:templateId" element={<ThemeUsePage />} />
+            <Route path="/dev-mode/:templateId" element={<DevModePage />} />
+          </Route>
           <Route path="/xslt-editor" element={<XsltEditorPage />} />
           <Route path="/xslt-editor/:templateId" element={<XsltEditorPage />} />
         </Route>

@@ -7,13 +7,15 @@ const DEBOUNCE_MS = 1200
 
 interface Options {
   themeId: string | undefined
+  /** Elle düzenlenmiş XSLT; verilirse istekte `themeId`'nin yerine geçer. */
+  xslt?: string
   xmlContent: string
   assets: ComposeAsset[]
   bankInfo: BankInfoItem[]
   /** Kendi görseli eklenmeden kaldırılan temadaki görseller. */
   hideThemeImages?: AssetKind[]
   /** Sabit notlar — önizleme ve indir/kaydet aynı değeri gönderir. */
-  fixedNotes?: ComposeFixedNote[]
+  fixedNotes?: ComposeFixedNote[] | null
   /** Hata yanıtı (402 vb.) — çağıran yükseltme penceresi/yönlendirme yapar. */
   onError: (err: unknown) => void
 }
@@ -35,11 +37,14 @@ export interface ThemeCompose {
   exportXslt: () => Promise<string>
 }
 
+/** Kaynak alanı: gövdede `themeId` ve `xslt`'den yalnız biri bulunur. */
+const composeSource = (themeId: string | undefined, xslt: string | undefined) => (xslt ? { xslt } : { themeId })
+
 /**
  * Tema Kullan önizlemesi: logo/imza/IBAN değiştikçe sunucuda birleştirip HTML'i alır. Her yeni istek bir
  * öncekini iptal eder; yalnız son isteğin sonucu uygulanır.
  */
-export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, onError }: Options): ThemeCompose {
+export function useThemeCompose({ themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, onError }: Options): ThemeCompose {
   const [html, setHtml] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,15 +61,15 @@ export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThe
 
   // İstek gövdesi değişmedikçe yeniden istek atma (dizi kimlikleri her render'da değişebilir).
   const requestKey = useMemo(
-    () => JSON.stringify({ themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes }),
-    [themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes],
+    () => JSON.stringify({ themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes }),
+    [themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes],
   )
-  const latestRef = useRef({ themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes })
-  useEffect(() => { latestRef.current = { themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes } },
-    [themeId, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes])
+  const latestRef = useRef({ themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes })
+  useEffect(() => { latestRef.current = { themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes } },
+    [themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes])
 
   useEffect(() => {
-    if (!themeId || !xmlContent) return
+    if ((!themeId && !xslt) || !xmlContent) return
     const controller = new AbortController()
     const delay = immediateRef.current ? 0 : DEBOUNCE_MS
     immediateRef.current = false
@@ -74,9 +79,9 @@ export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThe
       setError(null)
       setErrorField(null)
       try {
-        const { themeId: id, xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n } = latestRef.current
+        const { themeId: id, xslt: x, xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n } = latestRef.current
         const result = await composeTheme(
-          { themeId: id, xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: true, includeXslt: false },
+          { ...composeSource(id, x), xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: true, includeXslt: false },
           controller.signal,
         )
         // İptalden hemen önce çözülen eski yanıt yenisinin yerine yazılmasın.
@@ -104,7 +109,7 @@ export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThe
       // sonsuz yükleniyor kalmasın. Yeni istek başlarken yeniden açılır.
       setLoading(false)
     }
-  }, [requestKey, nonce, themeId, xmlContent])
+  }, [requestKey, nonce, themeId, xslt, xmlContent])
 
   const composeNow = useCallback(() => {
     immediateRef.current = true
@@ -112,8 +117,8 @@ export function useThemeCompose({ themeId, xmlContent, assets, bankInfo, hideThe
   }, [])
 
   const exportXslt = useCallback(async () => {
-    const { themeId: id, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n } = latestRef.current
-    const result = await composeTheme({ themeId: id, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: false, includeXslt: true })
+    const { themeId: id, xslt: x, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n } = latestRef.current
+    const result = await composeTheme({ ...composeSource(id, x), assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: false, includeXslt: true })
     return result.xslt ?? ''
   }, [])
 
