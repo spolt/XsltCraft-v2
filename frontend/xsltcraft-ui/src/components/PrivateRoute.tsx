@@ -22,7 +22,7 @@ export default function PrivateRoute() {
 
   if (restoring) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
+      <div className="h-screen flex items-center justify-center bg-ui-bg text-tx-muted text-sm">
         Oturum doğrulanıyor…
       </div>
     )

@@ -21,12 +21,12 @@ export default function ChatImageGrid({ images, onReattach }: Props) {
             type="button"
             onClick={() => setOpen(img)}
             aria-label={`Ekran görüntüsü ${i + 1}'i büyüt`}
-            className="rounded overflow-hidden border border-violet-400/40 hover:border-violet-200 transition-colors"
+            className="rounded overflow-hidden border border-ui-soft-line hover:border-ui-accent transition-colors"
           >
             <img
               src={img.previewUrl}
               alt={`Ekran görüntüsü ${i + 1}`}
-              className="h-20 max-w-[10rem] object-cover bg-gray-800"
+              className="h-20 max-w-[10rem] object-cover bg-ui-side"
             />
           </button>
         ))}
@@ -35,7 +35,7 @@ export default function ChatImageGrid({ images, onReattach }: Props) {
         <button
           type="button"
           onClick={onReattach}
-          className="mt-1 ml-auto flex items-center gap-1 text-[10px] text-violet-200/80 hover:text-white"
+          className="mt-1 ml-auto flex items-center gap-1 text-[10px] text-tx-muted hover:text-tx"
           title="Görseller yalnız bu mesajla modele gönderildi; yeniden sormak için tekrar ekleyin"
         >
           <ImagePlus size={10} /> Tekrar ekle
@@ -73,7 +73,7 @@ function Lightbox({ image, onClose }: { image: PreparedImage; onClose: () => voi
         type="button"
         onClick={onClose}
         aria-label="Kapat"
-        className="absolute top-4 right-4 h-8 w-8 flex items-center justify-center rounded-full bg-gray-800 text-gray-200 hover:bg-gray-700"
+        className="absolute top-4 right-4 h-8 w-8 flex items-center justify-center rounded-full bg-ui-side text-tx hover:bg-ui-hover"
       >
         <X size={16} />
       </button>

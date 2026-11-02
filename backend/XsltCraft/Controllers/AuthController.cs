@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
+using XsltCraft.Api.Preview;
 using XsltCraft.Application.DTO;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Domain.Entities;
@@ -277,13 +278,14 @@ public class AuthController(
                 await storageService.DeleteAsync(asset.FilePath);
         }
 
-        // Kullanıcının template XSLT cache dosyalarını storage'dan sil, template'leri DB'den sil
+        // Kullanıcının kendi XSLT önbelleğini storage'dan sil (klonun referansladığı tema dosyası temaya aittir), template'leri DB'den sil
         var templates = await db.Templates
             .Where(t => t.OwnerId == userId && !t.IsFreeTheme)
             .ToListAsync();
         foreach (var tpl in templates)
         {
             if (!string.IsNullOrEmpty(tpl.XsltStoragePath)
+                && GeneratedXsltCache.IsOwn(tpl.XsltStoragePath, tpl.Id)
                 && await storageService.ExistsAsync(tpl.XsltStoragePath))
                 await storageService.DeleteAsync(tpl.XsltStoragePath);
         }

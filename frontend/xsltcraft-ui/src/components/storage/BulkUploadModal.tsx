@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { X, Upload, FolderUp, FileCode2, Trash2, AlertCircle, Loader2 } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { Upload, FolderUp, FileCode2, Trash2, AlertCircle, Loader2 } from 'lucide-react'
 
 import { createFolder, type Folder } from '../../services/folderService'
 import { bulkUploadUserXslt, type BulkUploadItem } from '../../services/userXsltService'
-import { FOLDER_COLORS, folderDot } from './folderColors'
+import { FOLDER_COLORS, FOLDER_COLOR_NAME, folderDot } from './folderColors'
+import ModalShell, { MODAL_INPUT, MODAL_PRIMARY, MODAL_SECONDARY } from './ModalShell'
 import { toast } from '../../store/toastStore'
 import { validateUploadContent } from '../../utils/uploadValidation'
 
@@ -72,6 +73,8 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
   const [existingId, setExistingId] = useState<string>(defaultFolderId ?? folders[0]?.id ?? '')
 
   const dirRef = useRef<HTMLInputElement>(null)
+  const targetName = useId()
+
 
   // webkitdirectory React tiplerinde yok; ref ile attribute ekle.
   useEffect(() => {
@@ -171,113 +174,117 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
     }
   }
 
+  const pickerCls =
+    'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-field-line py-3 text-[13px] text-tx-2 transition-colors hover:border-ui-accent hover:bg-ui-hover focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ui-accent'
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-semibold text-gray-800">Klasör olarak toplu yükle</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 mb-4">Birden çok <code>.xslt</code> dosyasını tek seferde bir klasöre aktar.</p>
+    <ModalShell
+      title="Klasör olarak toplu yükle"
+      subtitle={<>Birden çok <code className="font-mono">.xslt</code> dosyasını tek seferde bir klasöre aktar.</>}
+      onClose={onClose}
+      width="max-w-lg"
+    >
+      {/* Dosya / klasör seçiciler */}
+      <div className="mb-4 flex gap-2">
+        <label className={pickerCls}>
+          <FileCode2 size={16} aria-hidden="true" className="text-ui-accent" /> Dosya seç
+          <input type="file" multiple accept=".xsl,.xslt" className="sr-only" onChange={(e) => { ingest(e.target.files); e.target.value = '' }} />
+        </label>
+        <label className={pickerCls}>
+          <FolderUp size={16} aria-hidden="true" className="text-ui-accent" /> Klasör seç
+          <input ref={dirRef} type="file" className="sr-only" onChange={(e) => { ingest(e.target.files); e.target.value = '' }} />
+        </label>
+      </div>
 
-        {/* Dosya / klasör seçiciler */}
-        <div className="flex gap-2 mb-4">
-          <label className="flex-1 flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-400 cursor-pointer transition-colors">
-            <FileCode2 size={16} className="text-blue-600" /> Dosya seç
-            <input type="file" multiple accept=".xsl,.xslt" className="hidden" onChange={(e) => { ingest(e.target.files); e.target.value = '' }} />
-          </label>
-          <label className="flex-1 flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-lg py-3 text-sm text-gray-600 hover:bg-gray-50 hover:border-blue-400 cursor-pointer transition-colors">
-            <FolderUp size={16} className="text-blue-600" /> Klasör seç
-            <input ref={dirRef} type="file" className="hidden" onChange={(e) => { ingest(e.target.files); e.target.value = '' }} />
-          </label>
-        </div>
-
-        {/* Hedef klasör */}
-        <div className="mb-4 space-y-2">
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-            <input type="radio" checked={target === 'new'} onChange={() => setTarget('new')} className="accent-blue-600" />
-            Yeni klasör
-          </label>
-          {target === 'new' && (
-            <div className="flex items-center gap-2 pl-6">
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Klasör adı"
-                maxLength={60}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <div className="flex items-center gap-1.5">
-                {FOLDER_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setNewColor(c)}
-                    className={`w-5 h-5 rounded-full ${folderDot(c)} ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
-                    title={c}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          <label className={`flex items-center gap-2 text-sm cursor-pointer ${folders.length === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-700'}`}>
-            <input type="radio" checked={target === 'existing'} disabled={folders.length === 0} onChange={() => setTarget('existing')} className="accent-blue-600" />
-            Mevcut klasör
-          </label>
-          {target === 'existing' && (
-            <div className="pl-6">
-              <select
-                value={existingId}
-                onChange={(e) => setExistingId(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {folders.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        {/* Dosya listesi */}
-        {files.length > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-              <span className="font-medium uppercase tracking-wide">Yüklenecekler</span>
-              <span>{validFiles.length} geçerli{files.length !== validFiles.length ? ` · ${files.length - validFiles.length} hatalı` : ''}</span>
-            </div>
-            <div className="border border-gray-100 rounded-lg max-h-44 overflow-y-auto divide-y divide-gray-50">
-              {files.map((f) => (
-                <div key={f.name} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-                  {f.valid
-                    ? <FileCode2 size={14} className="text-gray-400 shrink-0" />
-                    : <AlertCircle size={14} className="text-amber-500 shrink-0" />}
-                  <span className={`flex-1 truncate ${f.valid ? 'text-gray-700' : 'text-gray-400'}`}>{f.name}</span>
-                  {f.error && <span className="text-xs text-amber-600 shrink-0">{f.error}</span>}
-                  <button onClick={() => removeFile(f.name)} className="text-gray-300 hover:text-red-500 transition-colors p-0.5">
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+      {/* Hedef klasör */}
+      <fieldset className="m-0 mb-4 flex flex-col gap-2 border-0 p-0">
+        <legend className="sr-only">Hedef klasör</legend>
+        <label className="flex cursor-pointer items-center gap-2 text-[13px] text-tx-2">
+          <input type="radio" name={targetName} checked={target === 'new'} onChange={() => setTarget('new')} className="accent-(--ui-accent)" />
+          Yeni klasör
+        </label>
+        {target === 'new' && (
+          <div className="flex items-center gap-2 pl-6">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Klasör adı"
+              aria-label="Yeni klasör adı"
+              maxLength={60}
+              className={`${MODAL_INPUT} flex-1 py-1.5`}
+            />
+            <div role="group" aria-label="Klasör rengi" className="flex items-center gap-1.5">
+              {FOLDER_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setNewColor(c)}
+                  aria-label={FOLDER_COLOR_NAME[c]}
+                  aria-pressed={newColor === c}
+                  title={FOLDER_COLOR_NAME[c]}
+                  className={`xc-focus h-5 w-5 rounded-full ${folderDot(c)} ${newColor === c ? 'ring-2 ring-tx-muted ring-offset-1 ring-offset-ui-card' : ''}`}
+                />
               ))}
             </div>
           </div>
         )}
+        <label className={`flex items-center gap-2 text-[13px] ${folders.length === 0 ? 'cursor-not-allowed text-tx-subtle opacity-60' : 'cursor-pointer text-tx-2'}`}>
+          <input type="radio" name={targetName} checked={target === 'existing'} disabled={folders.length === 0} onChange={() => setTarget('existing')} className="accent-(--ui-accent)" />
+          Mevcut klasör
+        </label>
+        {target === 'existing' && (
+          <div className="pl-6">
+            <select
+              value={existingId}
+              onChange={(e) => setExistingId(e.target.value)}
+              aria-label="Mevcut klasör"
+              className={`${MODAL_INPUT} py-1.5`}
+            >
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </fieldset>
 
-        <div className="flex justify-end gap-2 mt-6">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">İptal</button>
-          <button
-            onClick={handleUpload}
-            disabled={!canUpload}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-            {uploading ? `Yükleniyor…${progress ? ` ${progress}` : ''}` : `Yükle${validFiles.length ? ` (${validFiles.length})` : ''}`}
-          </button>
+      {/* Dosya listesi */}
+      {files.length > 0 && (
+        <div className="mb-4">
+          <div className="mb-1.5 flex items-center justify-between text-xs text-tx-muted">
+            <span className="font-semibold uppercase tracking-[.07em]">Yüklenecekler</span>
+            <span>{validFiles.length} geçerli{files.length !== validFiles.length ? ` · ${files.length - validFiles.length} hatalı` : ''}</span>
+          </div>
+          <ul className="m-0 max-h-44 list-none divide-y divide-ui-line overflow-y-auto rounded-lg border border-ui-line p-0">
+            {files.map((f) => (
+              <li key={f.name} className="flex items-center gap-2 px-3 py-1.5 text-[13px]">
+                {f.valid
+                  ? <FileCode2 size={14} aria-hidden="true" className="shrink-0 text-tx-subtle" />
+                  : <AlertCircle size={14} aria-hidden="true" className="shrink-0 text-fn-orange" />}
+                <span className={`flex-1 truncate font-mono text-[12.5px] ${f.valid ? 'text-tx-2' : 'text-tx-subtle'}`}>{f.name}</span>
+                {f.error && <span className="shrink-0 text-xs text-fn-orange-ink">{f.error}</span>}
+                <button
+                  type="button"
+                  onClick={() => removeFile(f.name)}
+                  aria-label={`${f.name} listeden çıkar`}
+                  className="xc-focus rounded p-0.5 text-tx-subtle transition-colors hover:text-fn-red-ink"
+                >
+                  <Trash2 size={13} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
+      )}
+
+      <div className="mt-6 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className={MODAL_SECONDARY}>İptal</button>
+        <button type="button" onClick={handleUpload} disabled={!canUpload} className={MODAL_PRIMARY}>
+          {uploading ? <Loader2 size={15} aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : <Upload size={15} aria-hidden="true" />}
+          {uploading ? `Yükleniyor…${progress ? ` ${progress}` : ''}` : `Yükle${validFiles.length ? ` (${validFiles.length})` : ''}`}
+        </button>
       </div>
-    </div>
+    </ModalShell>
   )
 }

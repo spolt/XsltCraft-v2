@@ -30,9 +30,9 @@ interface Props {
 }
 
 const SEVERITY_CONFIG: Record<ProblemSeverity, { color: string; Icon: typeof AlertCircle }> = {
-  error: { color: 'text-red-400', Icon: AlertCircle },
-  warning: { color: 'text-amber-400', Icon: AlertTriangle },
-  info: { color: 'text-blue-400', Icon: Info },
+  error: { color: 'text-fn-red', Icon: AlertCircle },
+  warning: { color: 'text-ed-warn', Icon: AlertTriangle },
+  info: { color: 'text-fn-blue', Icon: Info },
 }
 
 const TAB_LABELS: Record<ProblemSource, string> = {
@@ -89,12 +89,14 @@ export default function ProblemsPanel({
       ((item.source === 'xml' || item.source === 'ubl-tr') && !!onLocateXml))
 
   return (
-    <div className="border-t border-gray-700 bg-gray-900 flex flex-col flex-shrink-0">
+    <section aria-label="Problemler" className="border-t border-ed-border bg-ed-panel text-ed-text flex flex-col flex-shrink-0">
       {/* Header */}
-      <div className="h-9 px-3 flex items-center gap-2 border-b border-gray-700 bg-gray-800">
+      <div className="h-[34px] px-3 flex items-center gap-2 border-b border-ed-border">
         <button
+          type="button"
           onClick={() => setCollapsed(c => !c)}
-          className="flex items-center gap-1 text-xs font-medium text-gray-300 hover:text-white uppercase tracking-wide mr-1"
+          aria-expanded={!collapsed}
+          className="xc-focus rounded flex items-center gap-1 text-[12px] font-semibold text-ed-text mr-1"
           title={collapsed ? 'Genişlet' : 'Daralt'}
         >
           {collapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -102,25 +104,27 @@ export default function ProblemsPanel({
         </button>
 
         {/* Source tabs */}
-        <div className="flex items-center gap-0.5 text-xs">
+        <div className="flex items-center gap-0.5 text-[12px]">
           {(['xslt', 'xml', 'ubl-tr'] as const).map(src => {
             const c = counts[src]
             const isActive = activeTab === src
             const hasError = c.error > 0
             return (
               <button
+                type="button"
                 key={src}
+                aria-pressed={isActive}
                 onClick={() => { setActiveTab(src); setFilter('all') }}
-                className={`px-2.5 py-1 rounded flex items-center gap-1.5 transition-colors ${
+                className={`xc-focus px-2.5 py-1 rounded flex items-center gap-1.5 border transition-colors ${
                   isActive
-                    ? 'bg-gray-900 text-white border border-gray-600'
-                    : 'text-gray-400 hover:bg-gray-700'
+                    ? 'bg-ed-active text-ed-text border-ed-border'
+                    : 'text-ed-muted border-transparent hover:bg-ed-active hover:text-ed-text'
                 }`}
               >
                 <span>{TAB_LABELS[src]}</span>
                 {c.total > 0 && (
-                  <span className={`inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded text-[10px] font-semibold ${
-                    hasError ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-200'
+                  <span className={`inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded text-[10.5px] font-semibold ${
+                    hasError ? 'bg-fn-red text-on-fn' : 'bg-ed-seg text-ed-text'
                   }`}>
                     {c.total}
                   </span>
@@ -132,19 +136,19 @@ export default function ProblemsPanel({
 
         {/* Severity filters (scoped to active tab) */}
         {!collapsed && activeCounts.total > 0 && (
-          <div className="flex items-center gap-0.5 text-xs ml-2 border-l border-gray-700 pl-2">
+          <div className="flex items-center gap-0.5 text-[12px] ml-2 border-l border-ed-border pl-2">
             <FilterPill active={filter === 'all'} onClick={() => setFilter('all')} label={`Tümü ${activeCounts.total}`} />
             {activeCounts.error > 0 && (
               <FilterPill active={filter === 'error'} onClick={() => setFilter('error')}
-                color="text-red-400" label={`${activeCounts.error}`} icon={<AlertCircle size={11} />} />
+                color="text-fn-red" label={`${activeCounts.error}`} icon={<AlertCircle size={11} />} />
             )}
             {activeCounts.warning > 0 && (
               <FilterPill active={filter === 'warning'} onClick={() => setFilter('warning')}
-                color="text-amber-400" label={`${activeCounts.warning}`} icon={<AlertTriangle size={11} />} />
+                color="text-ed-warn" label={`${activeCounts.warning}`} icon={<AlertTriangle size={11} />} />
             )}
             {activeCounts.info > 0 && (
               <FilterPill active={filter === 'info'} onClick={() => setFilter('info')}
-                color="text-blue-400" label={`${activeCounts.info}`} icon={<Info size={11} />} />
+                color="text-fn-blue" label={`${activeCounts.info}`} icon={<Info size={11} />} />
             )}
           </div>
         )}
@@ -152,10 +156,10 @@ export default function ProblemsPanel({
         <div className="flex-1" />
 
         {activeTab === 'ubl-tr' && ublTrLoading && (
-          <span className="text-xs text-blue-400">Doğrulanıyor…</span>
+          <span role="status" className="text-[12px] text-ed-muted">Doğrulanıyor…</span>
         )}
 
-        <button onClick={onClose} className="text-gray-400 hover:text-white" title="Paneli kapat">
+        <button type="button" onClick={onClose} className="xc-focus rounded p-1 text-ed-muted hover:text-ed-text hover:bg-ed-active" title="Paneli kapat" aria-label="Problemler panelini kapat">
           <X size={14} />
         </button>
       </div>
@@ -164,25 +168,25 @@ export default function ProblemsPanel({
       {!collapsed && (
         <div className="max-h-56 overflow-y-auto">
           {activeTab === 'ubl-tr' && ublTrError && (
-            <div className="px-4 py-3 text-xs text-red-400 font-mono">{ublTrError}</div>
+            <div className="px-4 py-3 text-[12px] text-fn-red font-mono">{ublTrError}</div>
           )}
 
           {activeTab === 'ubl-tr' && !ublTrError && ublTrProblems === null && !ublTrLoading && (
-            <div className="px-4 py-4 text-xs text-gray-400 flex items-center gap-2">
-              <Info size={14} />
-              UBL-TR iş kurallarını çalıştırmak için toolbar'daki "UBL-TR" butonuna tıklayın.
+            <div className="px-4 py-4 text-[12px] text-ed-muted flex items-center gap-2">
+              <Info size={14} aria-hidden="true" />
+              UBL-TR iş kurallarını çalıştırmak için editör araç çubuğundaki "UBL-TR kontrol" butonuna tıklayın.
             </div>
           )}
 
           {!ublTrError && activeCounts.total === 0 && !(activeTab === 'ubl-tr' && ublTrProblems === null) && (
-            <div className="px-4 py-4 text-xs text-green-400 flex items-center gap-2">
-              <Info size={14} />
+            <div className="px-4 py-4 text-[12px] text-ed-muted flex items-center gap-2">
+              <Info size={14} aria-hidden="true" />
               {emptyMessage(activeTab)}
             </div>
           )}
 
           {filtered.length > 0 && (
-            <ul className="divide-y divide-gray-800">
+            <ul className="divide-y divide-ed-border">
               {filtered.map((p, i) => {
                 const cfg = SEVERITY_CONFIG[p.severity]
                 const clickable = canLocate(p)
@@ -190,27 +194,28 @@ export default function ProblemsPanel({
                   <li
                     key={`${p.source}-${p.ruleId ?? 'x'}-${i}`}
                     onClick={() => clickable && handleLocate(p)}
-                    className={`px-4 py-2 flex items-start gap-3 text-xs ${
-                      clickable ? 'cursor-pointer hover:bg-gray-800' : ''
+                    className={`px-4 py-2 flex items-start gap-3 text-[12px] ${
+                      clickable ? 'cursor-pointer hover:bg-ed-active' : ''
                     }`}
                   >
                     <cfg.Icon size={14} className={`flex-shrink-0 mt-0.5 ${cfg.color}`} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {p.ruleId && <span className="font-mono text-gray-500">{p.ruleId}</span>}
-                        {p.ruleName && <span className="font-medium text-gray-200">{p.ruleName}</span>}
+                        {p.ruleId && <span className="font-mono text-ed-muted">{p.ruleId}</span>}
+                        {p.ruleName && <span className="font-medium text-ed-text">{p.ruleName}</span>}
                         {p.line != null && (
-                          <span className="text-gray-500">
+                          <span className="text-ed-muted">
                             · satır {p.line}{p.column ? `:${p.column}` : ''}
                           </span>
                         )}
                       </div>
-                      <div className="text-gray-300 mt-0.5 break-words">{p.message}</div>
+                      <div className="text-ed-text/90 mt-0.5 break-words">{p.message}</div>
                     </div>
                     {aiEnabled && onAskAi && (
                       <button
+                        type="button"
                         onClick={(e) => { e.stopPropagation(); onAskAi(p) }}
-                        className="flex-shrink-0 self-start ml-2 px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 bg-violet-700/30 text-violet-300 hover:bg-violet-700/60 hover:text-white border border-violet-700/50 transition-colors"
+                        className="xc-focus flex-shrink-0 self-start ml-2 px-1.5 py-0.5 rounded text-[10.5px] flex items-center gap-1 border border-ed-border text-ed-text hover:bg-ui-accent hover:border-ui-accent hover:text-ui-accent-fg transition-colors"
                         title="Bu hatayı AI'ya açıklattır"
                       >
                         <Sparkles size={10} />
@@ -224,7 +229,7 @@ export default function ProblemsPanel({
           )}
         </div>
       )}
-    </div>
+    </section>
   )
 }
 
@@ -241,11 +246,13 @@ function FilterPill({
 }: { active: boolean; onClick: () => void; label: string; color?: string; icon?: React.ReactNode }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors ${
+      aria-pressed={active}
+      className={`xc-focus px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors ${
         active
-          ? 'bg-gray-700 text-white'
-          : `bg-transparent ${color ?? 'text-gray-400'} hover:bg-gray-700`
+          ? 'bg-ed-active text-ed-text'
+          : `bg-transparent ${color ?? 'text-ed-muted'} hover:bg-ed-active`
       }`}
     >
       {icon}

@@ -8,16 +8,16 @@ Türk e-Fatura / e-İrsaliye (UBL-TR 2.1) için **low-code XSLT şablon tasarım
 
 ## Tech stack (kod-gerçeği)
 - **Frontend:** React 19, TypeScript 5.9, Vite 8, Zustand, TailwindCSS 4, @dnd-kit, React Router 7, Monaco Editor, lucide-react.
-- **Backend:** .NET 10, ASP.NET Core Web API, **Clean Architecture** — `XsltCraft.Api` / `XsltCraft.Application` / `XsltCraft.Domain` / `XsltCraft.Infrastructure`. XSLT üretimi XSLT 2.0 hedefler; önizleme **Saxon HE 10.9** ile render edilir.
+- **Backend:** .NET 10, ASP.NET Core Web API, **Clean Architecture** — `XsltCraft.Api` / `XsltCraft.Application` / `XsltCraft.Domain` / `XsltCraft.Infrastructure` + `XsltCraft.Xslt.Saxon` / `XsltCraft.XsltWorker(.Contracts)`. XSLT 2.0 tavanı; iki motor (ADR 007/008): **Saxon-HE 12.10** (IKVM) ham 2.0 XSLT için, .NET `XslCompiledTransform` 1.0 + grid (`Xslt:Engine:Grid=DotNet`) + tema için. Kullanıcı XSLT'si izole worker havuzunda; grid süreç içi korumalı.
 - **AI:** Birincil **Ollama `qwen2.5-coder:3b`**; yedek **Gemini `gemini-2.5-flash`** (`Ai:Gemini:Enabled`). NDJSON streaming, embedded markdown prompt'lar. **Anthropic sağlayıcısı YOKTUR** — kodda yalnız `OllamaAssistantProvider` + `GeminiAssistantProvider` kayıtlı (`AiProviderOrchestrator`).
 - **DB:** PostgreSQL 16, EF Core, Npgsql. **Storage:** `IStorageService` soyutlaması — `LocalStorageService` (dev), `S3StorageService`/MinIO (prod).
 - **Auth:** JWT (15 dk, yalnız bellekte) + HttpOnly refresh-token rotation (`Path=/api/auth`, DB'de SHA-256 özeti; 2 sa hareketsizlik / 12 sa mutlak oturum — `Session` ayarları) + Google OAuth 2.0.
-- **Test:** xUnit 2.9, Verify.Xunit golden snapshot. `XsltCraft.Tests` → generator testleri; `XsltCraft.Application.Tests` → AI pipeline + golden.
+- **Test:** xUnit 2.9, Verify.Xunit golden snapshot. `XsltCraft.Tests` → generator testleri; `XsltCraft.Application.Tests` → AI pipeline + golden; `XsltCraft.{Infrastructure,Xslt.Saxon,XsltWorker}.Tests` → motor/worker/parite.
 
 ## Kritik kısıtlar
 - UBL-TR 2.1 namespace'lerini **asla bozma** (`n1`/`cbc`/`cac`/`ext`, `urn:oasis:names:specification:...`). Üretilen stylesheet `version="2.0"`.
-- GİB: çıktı UTF-8, makul boyut (~250KB hedef), QR/ETTN bütünlüğü.
-- **XXE/XSLT-injection guard zorunlu** her XML/XSLT okuma noktasında (`DtdProcessing.Prohibit`, `XmlResolver=null`, `XsltSettings(enableDocumentFunction:false, enableScript:false)`). XSLT derlemenin tek yolu `SecureXslt.Compile` (stylesheet resolver `null`) — `new XmlUrlResolver()` ile `Load` etmek yerel dosya okuma/SSRF açar. Detay: `docs/ecc/context/constraints.md`.
+- GİB: çıktı UTF-8, makul boyut (~250KB hedef), QR/ETTN bütünlüğü. **Görseller her zaman base64 gömülü; üretilen çıktıya açıklama yorumu yazılmaz.**
+- **XXE/XSLT-injection guard zorunlu** her XML/XSLT okuma noktasında (`DtdProcessing.Prohibit`, `XmlResolver=null`, `XsltSettings(enableDocumentFunction:false, enableScript:false)`). XSLT derlemenin tek yolu `SecureXslt.Compile` (stylesheet resolver `null`) — `new XmlUrlResolver()` ile `Load` etmek yerel dosya okuma/SSRF açar. Saxon yolunda sandbox'ın tek kaynağı `SaxonProcessorFactory` (fırlatan resolver'lar, `ALLOWED_PROTOCOLS`, `RestrictedCollationResolver`, stylesheet DTD ön okuma) — `Processor`'ı elle kurma. Detay: `docs/ecc/context/constraints.md`.
 
 ## Standartlar (özet)
 Application katmanı Infrastructure'a **bağımlı olmaz**; interface tercih et; static service'ten kaçın; feature-based klasör; dosyaları küçük tut. Tamamı: `docs/ecc/standards.md`.

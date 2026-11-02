@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+using XsltCraft.Api.Preview;
 using XsltCraft.Application.DTO;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
+using XsltCraft.Application.ThemeSlots.Catalog;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
@@ -15,7 +17,7 @@ namespace XsltCraft.Api.Controllers;
 
 [ApiController]
 [Route("api/templates")]
-public class TemplateController(AppDbContext db, IStorageService storage, IXsltGeneratorService generator, IUserActivityRecorder activity, IUsageQuotaService quota, IEntitlementService entitlements) : ControllerBase
+public class TemplateController(AppDbContext db, IStorageService storage, IXsltGeneratorService generator, IUserActivityRecorder activity, IUsageQuotaService quota, IEntitlementService entitlements, IThemeSlotProjector slotProjector, PreviewAssetEmbedder assets) : ControllerBase
 {
     // GET /api/templates  — tüm free theme'leri listele (public, auth gerektirmez)
     [HttpGet]
@@ -102,13 +104,16 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
         var exportGate = await GateExportAsync(userId);
         if (exportGate is not null) return exportGate;
 
-        // Yeniden indirme: daha önce üretildiyse storage'dan oku
-        if (!string.IsNullOrEmpty(template.XsltStoragePath)
-            && await storage.ExistsAsync(template.XsltStoragePath))
+        // Yeniden indirme: güncel sürümde üretilmiş önbellek ya da klonun referansladığı tema XSLT'si.
+        // Eski sürüm önbellek (asset URL'li olabilir) okunmaz; aşağıda yeniden üretilir.
+        var storagePath = GeneratedXsltCache.PathFor(template.Id);
+        var cacheUsable = template.XsltStoragePath == storagePath
+                          || (!string.IsNullOrEmpty(template.XsltStoragePath) && !GeneratedXsltCache.IsOwn(template.XsltStoragePath, template.Id));
+        if (cacheUsable && await storage.ExistsAsync(template.XsltStoragePath!))
         {
             await activity.RecordAsync(userId, UserActivityType.Download, template.Id, "Template");
             await quota.IncrementTemplateExportAsync(userId);
-            var cachedStream = await storage.ReadAsync(template.XsltStoragePath);
+            var cachedStream = await storage.ReadAsync(template.XsltStoragePath!);
             return File(cachedStream, "application/xslt+xml", fileName);
         }
 
@@ -117,12 +122,16 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
             return BadRequest(new { message = "Bu şablonda henüz block eklenmemiş." });
 
         // Block tree → XSLT üret (V1/V2 otomatik dispatch)
-        var (xslt, genError) = generator.GenerateFromJson(template.BlockTree);
+        var assetBase64 = await assets.BuildFromJsonAsync(template.BlockTree, userId, HttpContext.RequestAborted);
+        var (xslt, genError) = generator.GenerateFromJson(template.BlockTree, assetBase64);
         if (xslt is null)
             return BadRequest(new { message = genError ?? "XSLT üretilemedi." });
 
+        if (GeneratedXsltCache.IsOwn(template.XsltStoragePath, template.Id) && template.XsltStoragePath != storagePath
+            && await storage.ExistsAsync(template.XsltStoragePath!))
+            await storage.DeleteAsync(template.XsltStoragePath!);
+
         // Storage'a yaz
-        var storagePath = $"templates/{template.Id}.xslt";
         await using (var ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(xslt)))
             await storage.WriteAsync(ms, storagePath, "application/xslt+xml");
 
@@ -181,7 +190,8 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
             FolderId = template.FolderId,
             IsFavorite = template.IsFavorite,
             CreatedAt = template.CreatedAt,
-            UpdatedAt = template.UpdatedAt
+            UpdatedAt = template.UpdatedAt,
+            Slots = template.IsFreeTheme ? slotProjector.ForUser(template.SlotCatalog, template.DocumentType) : [],
         });
     }
 
@@ -242,10 +252,11 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
         if (request.BlockTree is not null)
         {
             template.BlockTree = request.BlockTree;
-            // Block tree değişti → eski XSLT cache'i geçersiz
+            // Block tree değişti → eski XSLT cache'i geçersiz. Yalnız şablonun kendi önbelleği silinir;
+            // klonun referansladığı tema XSLT'si temaya aittir, dokunulmaz.
             if (!string.IsNullOrEmpty(template.XsltStoragePath))
             {
-                if (await storage.ExistsAsync(template.XsltStoragePath))
+                if (GeneratedXsltCache.IsOwn(template.XsltStoragePath, template.Id) && await storage.ExistsAsync(template.XsltStoragePath))
                     await storage.DeleteAsync(template.XsltStoragePath);
                 template.XsltStoragePath = null;
             }
@@ -397,7 +408,10 @@ public class TemplateController(AppDbContext db, IStorageService storage, IXsltG
         if (template.OwnerId != userId && role != "Admin")
             return Forbid();
 
-        if (!string.IsNullOrEmpty(template.XsltStoragePath) && await storage.ExistsAsync(template.XsltStoragePath))
+        // Klonun referansladığı tema XSLT'si silinmez (temaya ait); temanın kendisi silinirken dosyası silinir.
+        if (!string.IsNullOrEmpty(template.XsltStoragePath)
+            && (template.IsFreeTheme || GeneratedXsltCache.IsOwn(template.XsltStoragePath, template.Id))
+            && await storage.ExistsAsync(template.XsltStoragePath))
             await storage.DeleteAsync(template.XsltStoragePath);
 
         db.Templates.Remove(template);

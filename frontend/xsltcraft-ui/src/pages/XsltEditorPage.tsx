@@ -1,44 +1,51 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
-import {
-  LayoutDashboard,
-  BookOpen,
-  FilePlus,
-  FolderOpen,
-  Shield,
-  Code2,
-  FileCode2,
-  Upload,
-  TriangleAlert,
-  WandSparkles,
-  ShieldCheck,
-  ListChecks,
-  Terminal,
-  BookMarked,
-  Library,
-  Sparkles,
-  Rows2,
-} from 'lucide-react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle, useGroupRef, usePanelRef, type Layout } from 'react-resizable-panels'
+import { TriangleAlert, Save, Download, Sparkles, Eye } from 'lucide-react'
 import { useAiStore } from '../store/aiStore'
 import AiAssistantPanel, { type AiPrompt } from '../components/ai/AiAssistantPanel'
 import AiRefactorDialog from '../components/ai/AiRefactorDialog'
 import type { ProblemItem } from '../components/xslt-editor/ProblemsPanel'
-import Editor from '@monaco-editor/react'
-import xmlFormatter from 'xml-formatter'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import XsltEditor from '../components/Xslteditor'
 import XsltEditorToolbar from '../components/xslt-editor/XsltEditorToolbar'
-import XsltEditorPreview from '../components/xslt-editor/XsltEditorPreview'
+import FloatingPreviewWindow from '../components/xslt-editor/FloatingPreviewWindow'
+import PreviewDock, { type DockTab } from '../components/xslt-editor/PreviewDock'
+import XsltSideMenu, { type SideMenuFile } from '../components/xslt-editor/XsltSideMenu'
+import XsltStatusBar from '../components/xslt-editor/XsltStatusBar'
+import XsltEmptyState from '../components/xslt-editor/XsltEmptyState'
+import {
+  layoutName,
+  MAIN_PANE,
+  RIGHT_PANE,
+  EDITOR_PANE,
+  PREVIEW_PANE,
+  SPLIT_LAYOUTS,
+  separatorCls,
+} from '../components/xslt-editor/editorLayouts'
+import {
+  aiPromptForProblem,
+  LEAVE_CONFIRM,
+  looksMinified,
+  formatXmlForDisplay,
+  stylesheetVersion,
+  formatSize,
+  replaceSelectionText,
+  snippetPlainText,
+} from '../components/xslt-editor/xsltText'
+import { printActivePreview } from '../components/xslt-editor/previewFrame'
+import { useEditorMaximize } from '../hooks/useEditorMaximize'
 import SaveTemplateDialog from '../components/xslt-editor/SaveTemplateDialog'
 import ProblemsPanel from '../components/xslt-editor/ProblemsPanel'
-import XPathConsolePanel from '../components/xslt-editor/XPathConsolePanel'
+import { useRawPreview } from '../hooks/useRawPreview'
+import { useXsltDiagnostics } from '../hooks/useXsltDiagnostics'
 import SnippetManagerDialog from '../components/xslt-editor/SnippetManagerDialog'
 import ShortcutsDialog from '../components/xslt-editor/ShortcutsDialog'
+import WorkspaceHeader from '../components/shell/WorkspaceHeader'
+import { HeaderButton, HeaderChip, HeaderStatus } from '../components/shell/headerParts'
+import SegmentedTabs from '../components/ui/SegmentedTabs'
 import { listSnippets, type UserSnippet } from '../services/snippetService'
-import { previewFromRawXslt, type PreviewTimings } from '../services/previewService'
 import { reportDownload } from '../services/activityService'
-import { validateBusinessRules, type BusinessRuleResult } from '../services/ublTrService'
 import {
   getUserXsltTemplate,
   createUserXsltTemplate,
@@ -46,126 +53,26 @@ import {
   acquireEditingLock,
   releaseEditingLock,
 } from '../services/userXsltService'
-import { useAuthStore } from '../store/authStore'
 import { toast } from '../store/toastStore'
 import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
-import api from '../services/apiService'
+import { useUiPrefsStore, type EditorLayoutId } from '../store/uiPrefsStore'
 
 const LOCK_HEARTBEAT_MS = 30_000
 
-const PREVIEW_DEBOUNCE_MS = 1000
-const XSLT_VALIDATION_DEBOUNCE_MS = 1500
-const XML_VALIDATION_DEBOUNCE_MS = 500
+/** Sekmeli sağ sütunda "yarı yarıya" düzeninin genişliği (%). */
+const TABS_HALF_SIZE = 50
 
-/** DOMParser parsererror çıktısından satır/kolon çıkarır. */
-function extractXmlParseErrors(xml: string): { message: string; line: number | null; column: number | null }[] {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(xml, 'text/xml')
-  const err = doc.querySelector('parsererror')
-  if (!err) return []
-  const raw = (err.textContent ?? 'XML ayrıştırma hatası').replace(/\s+/g, ' ').trim()
-  const lineMatch = /line\s*(?:number)?\s*[:\s]\s*(\d+)/i.exec(raw)
-  const colMatch = /column\s*(\d+)/i.exec(raw)
-  return [{
-    message: raw,
-    line: lineMatch ? Number(lineMatch[1]) : null,
-    column: colMatch ? Number(colMatch[1]) : null,
-  }]
-}
+const RIGHT_TABS = [
+  { id: 'preview', label: 'Önizleme', icon: Eye },
+  { id: 'ai', label: 'AI Asistan', icon: Sparkles },
+] as const
 
-// İlk satırda XML bildirimi (`<?xml version="1.0" encoding="UTF-8"?>`) var mı?
-// Eksikse problem panelinde gösterilecek hata öğesini döndürür.
-const XML_DECL_FIX = '<?xml version="1.0" encoding="UTF-8"?>'
-
-// UBL faturaları genelde tek satıra minify edilmiş gelir; Monaco bunu tek dev satır
-// olarak sarmalayınca okunamaz hâle gelir. "Minify edilmiş" sayılma ölçütü: kayda değer
-// boyutta olup ya birkaç satırdan ibaret ya da satır başına ortalama çok uzun olması.
-function looksMinified(xml: string): boolean {
-  if (xml.length < 2_000) return false
-  const lineCount = xml.split('\n').length
-  return lineCount <= 3 || xml.length / lineCount > 400
-}
-
-// Görüntüleme için pretty-print eder. HAM `xmlContent`'e DOKUNMAZ: ham metin dönüşümün
-// (ve XAdES imza sindirimlerinin) tek doğru kaynağıdır — girinti eklemek boşluk metin
-// düğümleri yaratıp önizleme çıktısını değiştirebilirdi. Geçersiz XML'de ham metne düşer.
-function formatXmlForDisplay(xml: string): string {
-  try {
-    return xmlFormatter(xml, {
-      indentation: '  ',
-      collapseContent: true,
-      lineSeparator: '\n',
-    })
-  } catch {
-    return xml
-  }
-}
-
-// Hata satırının çevresindeki pencereyi SATIR NUMARALARIYLA çıkarır. Modeller ham metinde
-// "836. satır"ı sayarak bulamaz; hatalı bölgeyi numaralı ve etiketli vererek AI'nın doğru
-// yeri görmesini garanti eder — bağlam özetleme/kırpma ne yaparsa yapsın bu blok korunur.
-function buildErrorRegion(content: string, errorLine: number, radius = 18): string {
-  const lines = content.split('\n')
-  const start = Math.max(1, errorLine - radius)
-  const end = Math.min(lines.length, errorLine + radius)
-  const width = String(end).length
-  const out: string[] = []
-  for (let ln = start; ln <= end; ln++) {
-    const marker = ln === errorLine ? '>>' : '  '
-    out.push(`${marker} ${String(ln).padStart(width, ' ')} | ${lines[ln - 1] ?? ''}`)
-  }
-  return out.join('\n')
-}
-
-function xmlDeclarationProblem(xslt: string): ProblemItem | null {
-  if (!xslt.trim()) return null
-  const noBom = xslt.charCodeAt(0) === 0xfeff ? xslt.slice(1) : xslt
-  const firstLine = noBom.split('\n', 1)[0]
-  const hasDecl = /^\s*<\?xml\s+version\s*=\s*["'][^"']*["']/i.test(firstLine)
-  if (hasDecl) return null
-  return {
-    source: 'xslt',
-    ruleId: 'XML_DECL_MISSING',
-    severity: 'error',
-    ruleName: 'XML Bildirimi Eksik',
-    message: `XSLT dosyasının ilk satırında XML bildirimi bulunmuyor. İlk satıra \`${XML_DECL_FIX}\` eklenmelidir.`,
-    line: 1,
-    column: 1,
-  }
-}
-
-// ─── Compact Sidebar ─────────────────────────────────────────────────────────
-function EditorSidebar() {
-  const { user } = useAuthStore()
-  const location = useLocation()
-  const isActive = (path: string) => location.pathname.startsWith(path)
-  const base = 'flex items-center justify-center w-9 h-9 rounded-lg transition-colors'
-  const active = 'bg-blue-50 text-blue-700'
-  const inactive = 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-  return (
-    <div className="w-12 border-r border-gray-200 bg-white py-2 flex flex-col gap-1 items-center flex-shrink-0">
-      <Link to="/dashboard" className={`${base} ${isActive('/dashboard') ? active : inactive}`} title="Dashboard"><LayoutDashboard size={18} /></Link>
-      <Link to="/templates" className={`${base} ${isActive('/templates') ? active : inactive}`} title="Tema Kütüphanesi"><BookOpen size={18} /></Link>
-      <Link to="/editor/new" className={`${base} ${isActive('/editor/new') ? active : inactive}`} title="Yeni Şablon"><FilePlus size={18} /></Link>
-      <Link to="/drafts" className={`${base} ${isActive('/drafts') ? active : inactive}`} title="Taslaklarım"><FolderOpen size={18} /></Link>
-      <Link to="/xslt-editor" className={`${base} ${isActive('/xslt-editor') ? active : inactive}`} title="XSLT Editör"><Code2 size={18} /></Link>
-      <Link to="/my-xslt-templates" className={`${base} ${isActive('/my-xslt-templates') ? active : inactive}`} title="Şablonlarım"><FileCode2 size={18} /></Link>
-      {user?.role === 'Admin' && (
-        <>
-          <Link to="/admin/themes" className={`${base} ${isActive('/admin/themes') ? active : inactive}`} title="Admin — Temalar"><Shield size={18} /></Link>
-          <Link to="/admin/snippets" className={`${base} ${isActive('/admin/snippets') ? active : inactive}`} title="Admin — Snippet Kütüphanesi"><Library size={18} /></Link>
-        </>
-      )}
-    </div>
-  )
-}
-
-// ─── Main page ───────────────────────────────────────────────────────────────
 export default function XsltEditorPage() {
   const { templateId: routeTemplateId } = useParams<{ templateId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Core state
   const [templateId, setTemplateId] = useState<string | null>(routeTemplateId ?? null)
@@ -173,6 +80,9 @@ export default function XsltEditorPage() {
   const [xsltContent, setXsltContent] = useState('')
   const [xmlContent, setXmlContent] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
+  // Yalnız görüntüleme (sol menü / başlık): yüklenen dosyaların adları.
+  const [xsltFileName, setXsltFileName] = useState<string | null>(null)
+  const [xmlFileName, setXmlFileName] = useState<string | null>(null)
 
   // Eşzamanlı düzenleme kilidi
   const [lockedByOther, setLockedByOther] = useState(false)
@@ -180,32 +90,14 @@ export default function XsltEditorPage() {
   const loadedUpdatedAtRef = useRef<string | null>(null)
   const wasLockedRef = useRef(false)
 
-  // Validation
-  const [xsltValid, setXsltValid] = useState<boolean | null>(null)
-  const [xsltErrors, setXsltErrors] = useState<{ message: string; line: number; column: number }[]>([])
-  const [xmlValid, setXmlValid] = useState<boolean | null>(null)
-  const [xmlErrors, setXmlErrors] = useState<{ message: string; line: number | null; column: number | null }[]>([])
-
-  // Preview
-  const [previewHtml, setPreviewHtml] = useState('')
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewError, setPreviewError] = useState<string | null>(null)
-  const [lastMs, setLastMs] = useState<number | null>(null)
-  const [lastTimings, setLastTimings] = useState<PreviewTimings | null>(null)
+  // Doğrulama + problemler ve önizleme (Geliştirici Modu ile ortak hook'lar)
+  const diag = useXsltDiagnostics({ xslt: xsltContent, xml: xmlContent })
+  const { validateXmlNow, setShowProblems } = diag
+  const preview = useRawPreview({ xslt: xsltContent, xml: xmlContent, onLineError: diag.reportXsltError })
 
   // Save dialog
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saving, setSaving] = useState(false)
-
-  // UBL-TR business rule validation
-  const [ublTrResults, setUblTrResults] = useState<BusinessRuleResult[] | null>(null)
-  const [ublTrLoading, setUblTrLoading] = useState(false)
-  const [ublTrError, setUblTrError] = useState<string | null>(null)
-  const [showProblems, setShowProblems] = useState(false)
-
-  // XPath console
-  const [showXPathConsole, setShowXPathConsole] = useState(false)
-  const [xpathInitialExpr, setXpathInitialExpr] = useState('')
 
   // Snippets
   const [userSnippets, setUserSnippets] = useState<UserSnippet[]>([])
@@ -214,17 +106,11 @@ export default function XsltEditorPage() {
   // Shortcuts dialog
   const [showShortcuts, setShowShortcuts] = useState(false)
 
-  // Right panel tab: preview | xml | ai
-  const [rightTab, setRightTab] = useState<'preview' | 'xml' | 'ai'>('preview')
+  // Önizleme paneli sekmesi: Önizleme | XML Kaynak
+  const [rightTab, setRightTab] = useState<DockTab>('preview')
   // XML Kaynak görünümü biçimlendirilsin mi? Varsayılan açık; kullanıcı ham baytları
   // (ör. imza sindirimlerini birebir) görmek isterse kapatabilir.
   const [xmlPretty, setXmlPretty] = useState(true)
-  // AI sekmesinde bölünmüş görünüm: üstte önizleme, altta sohbet.
-  // Üst önizlemenin yüzdesel yüksekliği; tutamaç sürüklenerek ayarlanır (varsayılan 50/50).
-  const [aiSplit, setAiSplit] = useState(false)
-  const [aiSplitTopPct, setAiSplitTopPct] = useState(50)
-  const [aiDragging, setAiDragging] = useState(false)
-  const aiSplitContainerRef = useRef<HTMLDivElement>(null)
 
   // XML editor cursor / selection — AI bağlam kırpma için
   const [xmlCursorLine, setXmlCursorLine] = useState<number | undefined>()
@@ -232,62 +118,156 @@ export default function XsltEditorPage() {
 
   // XSLT editor cursor / selection — AI template alaka skoru için
   const [xsltCursorLine, setXsltCursorLine] = useState<number | undefined>()
+  const [xsltCursorCol, setXsltCursorCol] = useState<number | undefined>()
   const [xsltSelection, setXsltSelection] = useState<string | undefined>()
 
-  // AI panel
+  // AI paneli (sağda ayrı sütun)
   const aiEnabled = useAiStore(s => s.enabled === true)
   const refreshAi = useAiStore(s => s.refresh)
   // Dışarıdan tetiklenen AI sorusu. Panel remount EDİLMEZ — bkz. askAi().
   const [aiPrompt, setAiPrompt] = useState<AiPrompt | null>(null)
   const aiNonceRef = useRef(0)
-  // AI paneli ilk açılışta mount olur; sonrasında hep mount kalır (gizlense de),
-  // böylece sekme değiştirince sohbet yok olmaz.
+  // AI paneli ilk açılışta mount olur; sonrasında hep mount kalır (kapatılsa da yalnız
+  // gizlenir), böylece düzen/sekme değişince sohbet yok olmaz.
   const [aiMounted, setAiMounted] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
   const [refactorState, setRefactorState] = useState<{
     selection: string
-    range: { startLine: number; endLine: number }
+    range: { startLine: number; endLine: number; startColumn: number }
   } | null>(null)
+
+  // Tam ekran editör: editör bölmesi panel grubunu kaplar, önizleme kodun üzerinde
+  // yüzen mini pencereye taşınır. Önizleme paneli mount kalır (yalnız görünmez olur).
+  // Kısayol yalnız editör ekrandayken ve üzerinde diyalog yokken etkindir.
+  const max = useEditorMaximize({
+    shortcutEnabled: !!xsltContent && !!xmlContent
+      && !showSaveDialog && !showShortcuts && !showSnippetManager && !refactorState,
+  })
+  const { enter: maxEnter, exit: maxExit, setMiniOpen } = max
+  const editorHostRef = useRef<HTMLDivElement>(null)
+  const focusEditorRef = useRef<(() => void) | null>(null)
+
+  // ─── Düzen modları ──────────────────────────────────────────────────────────
+  // Mod, tam ekran durumundan türetilir: tam ekran + mini → 'mini', tam ekran → 'editorOnly',
+  // değilse yan panel / yarı yarıya. Monaco düğümü hiçbir modda ağaçta yer değiştirmez.
+  const [splitMode, setSplitMode] = useState<'side' | 'half'>(
+    () => (useUiPrefsStore.getState().editorDefaultLayout === 'half' ? 'half' : 'side'),
+  )
+  const groupRef = useGroupRef()
+  const layoutMode: EditorLayoutId = max.maximized ? (max.miniOpen ? 'mini' : 'editorOnly') : splitMode
+
+  // ─── Sağ panel modu (Ayarlar): yan yana | sekmeli ───────────────────────────
+  // Sekmeli modda Önizleme ve AI aynı sağ sütunda sekmedir; iç gruptaki önizleme bölmesi
+  // daralır (0). AI kapalıyken (veya AI özelliği yoksa) yan yana davranışı geçerlidir.
+  const rightMode = useUiPrefsStore(s => s.xsltRightPanelMode)
+  const tabsActive = rightMode === 'tabs' && aiEnabled
+  const previewPanelRef = usePanelRef()
+  const rightPanelRef = usePanelRef()
+  // Sağ sütun genişliği: yan yana → AI açıksa; sekmeli → tam ekran dışında hep (önizleme
+  // sekmesi), tam ekranda yalnız AI açıksa (önizleme o sırada mini penceredir).
+  const rightExpanded = tabsActive ? (!max.maximized || aiOpen) : (aiEnabled && aiOpen)
+  // Sekmeli sütunda o an görünen içerik.
+  const rightShowsPreview = tabsActive && !max.maximized && !aiOpen
+
+  const applyLayout = useCallback((mode: EditorLayoutId) => {
+    if (mode === 'side' || mode === 'half') {
+      maxExit()
+      setSplitMode(mode)
+      // Sekmeli modda iç gruptaki önizleme bölmesi kapalıdır; genişliği sağ sütun efekti uygular.
+      if (!tabsActive) groupRef.current?.setLayout(SPLIT_LAYOUTS[mode])
+    } else if (mode === 'mini') {
+      maxEnter({ withMini: true })
+    } else {
+      maxEnter()
+      setMiniOpen(false)
+    }
+  }, [maxEnter, maxExit, setMiniOpen, groupRef, tabsActive])
+
+  // Varsayılan düzen, iki dosya ilk kez birlikte yüklendiğinde BİR KEZ uygulanır.
+  const workspaceReady = !!xsltContent && !!xmlContent
+  const defaultLayoutAppliedRef = useRef(false)
+  useEffect(() => {
+    if (!workspaceReady || defaultLayoutAppliedRef.current) return
+    defaultLayoutAppliedRef.current = true
+    applyLayout(useUiPrefsStore.getState().editorDefaultLayout)
+  }, [workspaceReady, applyLayout])
+
+  // İç gruptaki önizleme bölmesi: sekmeli modda daralır, yan yana modda düzen moduna döner.
+  // Emperatif çağrılar bir kare ertelenir: panel kısıtları (collapsible) kütüphane deposuna
+  // render sonrası işlenir; aynı karede çağrılırsa eski kısıtlarla doğrulanıp yok sayılır.
+  const prevTabsActiveRef = useRef(tabsActive)
+  useEffect(() => {
+    if (!workspaceReady) return
+    const leavingTabs = prevTabsActiveRef.current && !tabsActive
+    prevTabsActiveRef.current = tabsActive
+    const raf = requestAnimationFrame(() => {
+      const panel = previewPanelRef.current
+      if (!panel) return
+      if (tabsActive) {
+        if (!panel.isCollapsed()) panel.collapse()
+      } else if (leavingTabs || panel.getSize().asPercentage < 1) {
+        groupRef.current?.setLayout(SPLIT_LAYOUTS[splitMode])
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [tabsActive, workspaceReady, splitMode, previewPanelRef, groupRef])
+
+  // Sağ sütun: açılınca kullanıcının son ayarladığı genişliğe (uiPrefsStore) gelir, kapanınca 0.
+  useEffect(() => {
+    if (!workspaceReady) return
+    const raf = requestAnimationFrame(() => {
+      const panel = rightPanelRef.current
+      if (!panel) return
+      if (rightExpanded) {
+        const prefs = useUiPrefsStore.getState()
+        const size = tabsActive
+          ? (splitMode === 'half' ? TABS_HALF_SIZE : prefs.xsltTabsPanelSize)
+          : prefs.xsltAiPanelSize
+        panel.resize(`${size}%`)
+      } else if (!panel.isCollapsed()) {
+        panel.collapse()
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [rightExpanded, tabsActive, splitMode, workspaceReady, rightPanelRef])
+
+  // Kullanıcı ayırıcıyı bırakınca (fare ya da klavye) sağ sütun genişliği kalıcı tercihe yazılır.
+  // Programatik değişiklikler (açılış, kapanış, mod geçişi, kısıt kırpması) yazılmaz — yalnız
+  // ayırıcı odaktayken gelen düzen değişikliği kullanıcınındır.
+  const rightSeparatorRef = useRef<HTMLDivElement>(null)
+  const handleOuterLayoutChanged = useCallback((layout: Layout) => {
+    if (!rightSeparatorRef.current || document.activeElement !== rightSeparatorRef.current) return
+    const size = layout[RIGHT_PANE]
+    if (!size || size < 1) return
+    const prefs = useUiPrefsStore.getState()
+    if (tabsActive) {
+      if (splitMode !== 'half') prefs.setXsltTabsPanelSize(size)
+    } else if (aiOpen) {
+      prefs.setXsltAiPanelSize(size)
+    }
+  }, [tabsActive, splitMode, aiOpen])
+
+  // Moda girince odağı editöre al (örtülen önizleme panelinde ya da tıklanan butonda kalmasın).
+  useEffect(() => {
+    if (max.maximized) focusEditorRef.current?.()
+  }, [max.maximized])
 
   useEffect(() => { refreshAi() }, [refreshAi])
 
-  // AI bölme tutamacı sürükleme: üst önizleme yüksekliğini (%) fare Y'sine göre ayarla.
-  // Sürükleme boyunca `aiDragging` ile önizleme iframe'i ve sohbet Monaco editörleri
-  // pointer-events:none yapılır; aksi halde fare iframe üzerine gelince window
-  // pointermove olayları kesilir ve sürükleme takılır.
-  function handleAiSplitDrag(e: React.PointerEvent) {
-    e.preventDefault()
-    const container = aiSplitContainerRef.current
-    if (!container) return
-    setAiDragging(true)
-    function onMove(ev: PointerEvent) {
-      const rect = container!.getBoundingClientRect()
-      const pct = ((ev.clientY - rect.top) / rect.height) * 100
-      setAiSplitTopPct(Math.min(85, Math.max(15, pct)))
-    }
-    function onUp() {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      document.body.style.userSelect = ''
-      setAiDragging(false)
-    }
-    document.body.style.userSelect = 'none'
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
-
-  function handleAiRefactor(selection: string, range: { startLine: number; endLine: number }) {
+  function handleAiRefactor(selection: string, range: { startLine: number; endLine: number; startColumn: number }) {
     setRefactorState({ selection, range })
   }
 
   function applyRefactor(newText: string) {
     if (!refactorState) return
-    const lines = xsltContent.split('\n')
-    const before = lines.slice(0, refactorState.range.startLine - 1).join('\n')
-    const after = lines.slice(refactorState.range.endLine).join('\n')
-    const next = [before, newText, after].filter(Boolean).join('\n')
+    const next = replaceSelectionText(xsltContent, refactorState.selection, refactorState.range, newText)
+    setRefactorState(null)
+    if (next === null) {
+      toast.warning('Seçili bölge bu arada değişti; öneri uygulanmadı. Bölgeyi yeniden seçip deneyin.', { title: 'AI refactor' })
+      return
+    }
     setXsltContent(next)
     setIsDirty(true)
-    setRefactorState(null)
   }
 
   // AI sohbetinden gelen değişikliği uygula: hesaplanmış TAM doküman doğrudan yazılır.
@@ -299,48 +279,30 @@ export default function XsltEditorPage() {
 
   /**
    * AI panelini açar ve soruyu kuyruğa koyar. Panel REMOUNT EDİLMEZ — mevcut sohbet
-   * korunur. (Önceden `key` artırılıyordu ve konuşma uyarısız siliniyordu.)
+   * korunur. AI ayrı sütunda olduğundan tam ekran/mini düzeninde de görünür kalır.
    * Nonce sayacı ref: aynı soru iki kez sorulursa metin özdeş olur, artan sayaç
    * ikinci tetiklemeyi garantiler.
    */
   function askAi(text: string) {
     setAiPrompt({ nonce: ++aiNonceRef.current, text })
     setAiMounted(true)
-    setRightTab('ai')
+    setAiOpen(true)
   }
 
   function openAiForProblem(problem: ProblemItem) {
-    // XML bildirimi eksik hatası: tüm şablonu tekrar yazdırmadan, kısa ve hedefli yanıt iste
-    if (problem.ruleId === 'XML_DECL_MISSING') {
-      askAi(
-        `XSLT'nin ilk satırında XML bildirimi (\`${XML_DECL_FIX}\`) eksik. ` +
-        'Çok kısa açıkla (1-2 cümle) ve yalnızca eklenecek satırı, ardından dosyanın ilk 3-4 satırını içeren küçük bir kod bloğu göster. ' +
-        'Tüm şablonu tekrar yazma.'
-      )
-      return
-    }
-    let errMsg = `${problem.ruleName ?? 'Hata'}: ${problem.message}` +
-      (problem.line != null ? ` (satır ${problem.line}${problem.column ? `:${problem.column}` : ''})` : '')
-
-    // Hatalı satırın çevresini numaralı olarak göm. XSLT hataları xsltContent'e,
-    // XML/UBL-TR hataları xmlContent'e karşılık gelir. Bu blok, modele bağlamdaki
-    // (kırpılmış olabilen) tam dosyadan bağımsız olarak asıl hatalı kodu gösterir.
-    const sourceContent = problem.source === 'xslt' ? xsltContent : (xmlContent ?? '')
-    if (problem.line != null && sourceContent) {
-      const region = buildErrorRegion(sourceContent, problem.line)
-      errMsg +=
-        `\n\nHatanın bulunduğu bölge (">>" ile işaretli satır sorunlu; numaralar dosyadaki gerçek satırlardır):\n` +
-        '```xml\n' + region + '\n```'
-    }
-
-    askAi(errMsg)
+    askAi(aiPromptForProblem(problem, xsltContent, xmlContent))
   }
 
   // Düz AI açılışı: yalnızca paneli göster, soru gönderme; mevcut sohbet korunur.
-  // Sohbeti kullanıcı "Yeni sohbet" (↺) düğmesiyle kendisi sıfırlar.
+  // Sohbeti kullanıcı "Yeni sohbet" düğmesiyle kendisi sıfırlar.
   function openAiBlank() {
     setAiMounted(true)
-    setRightTab('ai')
+    setAiOpen(true)
+  }
+
+  function toggleAi() {
+    if (aiOpen) setAiOpen(false)
+    else openAiBlank()
   }
 
   // Loading from saved template
@@ -352,6 +314,9 @@ export default function XsltEditorPage() {
   const insertTextAtLineRef = useRef<((lineNumber: number, text: string) => void) | null>(null)
   const toggleCommentRef = useRef<(() => void) | null>(null)
   const formatDocumentRef = useRef<(() => void) | null>(null)
+  // Sayfada TEK XSLT ve TEK XML gizli input'u vardır; tüm yükleme butonları bunları tetikler.
+  const xsltInputRef = useRef<HTMLInputElement>(null)
+  const xmlInputRef = useRef<HTMLInputElement>(null)
   const imageFileInputRef = useRef<HTMLInputElement>(null)
   const pendingInsertLineRef = useRef<number | null>(null)
   const xmlEditorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
@@ -439,100 +404,61 @@ export default function XsltEditorPage() {
   }, [templateId])
 
   // ─── File upload handlers ───────────────────────────────────────────────────
-  async function handleXsltFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
+  /** XSLT dosyasını doğrulayıp editöre yükler (input ve Dashboard'dan gelen dosya ortak yolu). */
+  const loadXsltFile = useCallback(async (file: File) => {
     try {
       const content = await readUploadFile(file, 'xslt')
       setXsltContent(content)
       setIsDirty(true)
-      if (!templateName) setTemplateName(file.name.replace(/\.(xsl|xslt)$/i, ''))
+      setXsltFileName(file.name)
+      setTemplateName(name => name || file.name.replace(/\.(xsl|xslt)$/i, ''))
     } catch (err) {
       toast.error((err as Error).message, { title: 'XSLT yüklenemedi' })
     }
+  }, [])
+
+  async function handleXsltFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    await loadXsltFile(file)
   }
+
+  /** XML dosyasını doğrulayıp editöre yükler (input ve Dashboard'dan gelen dosya ortak yolu). */
+  const loadXmlFile = useCallback(async (file: File) => {
+    try {
+      const content = await readUploadFile(file, 'xml')
+      // Debounce'u beklemez: minify XML'in biçimli görünümü xmlValid'e bağlı, gecikmesin.
+      validateXmlNow(content)
+      setXmlContent(content)
+      setXmlFileName(file.name)
+    } catch (err) {
+      toast.error((err as Error).message, { title: 'XML yüklenemedi' })
+    }
+  }, [validateXmlNow])
 
   async function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    try {
-      const content = await readUploadFile(file, 'xml')
-      const errs = extractXmlParseErrors(content)
-      setXmlErrors(errs)
-      setXmlValid(errs.length === 0)
-      setXmlContent(content)
-    } catch (err) {
-      toast.error((err as Error).message, { title: 'XML yüklenemedi' })
-    }
+    await loadXmlFile(file)
   }
 
-  // ─── Debounced preview ──────────────────────────────────────────────────────
-  const runPreview = useCallback(async (currentXslt: string, currentXml: string) => {
-    setPreviewLoading(true)
-    setPreviewError(null)
-    try {
-      const result = await previewFromRawXslt(currentXslt, currentXml)
-      setPreviewHtml(result.html)
-      setLastMs(result.generationTimeMs)
-      setLastTimings(result.timings ?? null)
-    } catch (e: unknown) {
-      if (e && typeof e === 'object' && 'response' in e) {
-        const data = (e as { response?: { data?: { error?: string; line?: number; column?: number } } }).response?.data
-        const msg = data?.error ?? 'Önizleme alınamadı.'
-        setPreviewError(msg)
-        if (data?.line) {
-          setXsltErrors([{ message: msg, line: data.line, column: data.column ?? 1 }])
-          setXsltValid(false)
-        }
-      } else {
-        setPreviewError('Önizleme alınamadı.')
-      }
-    } finally {
-      setPreviewLoading(false)
-    }
-  }, [])
-
+  // ─── Dashboard'dan gelen dosyalar (location.state.pendingXsltFile / pendingXmlFile) ─
+  const pendingState = location.state as { pendingXsltFile?: unknown; pendingXmlFile?: unknown } | null
+  const pendingXsltFile = pendingState?.pendingXsltFile instanceof File ? pendingState.pendingXsltFile : null
+  const pendingXmlFile = pendingState?.pendingXmlFile instanceof File ? pendingState.pendingXmlFile : null
+  const handledPendingFilesRef = useRef<Set<File>>(new Set())
   useEffect(() => {
-    if (!xsltContent || !xmlContent) return
-    const t = setTimeout(() => runPreview(xsltContent, xmlContent), PREVIEW_DEBOUNCE_MS)
-    return () => clearTimeout(t)
-  }, [xsltContent, xmlContent, runPreview])
-
-  // ─── Debounced XSLT validation ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!xsltContent) { setXsltValid(null); setXsltErrors([]); return }
-    const t = setTimeout(async () => {
-      try {
-        const { data } = await api.post<{ valid: boolean; error?: string; line?: number; column?: number }>(
-          '/api/preview/validate-xslt',
-          { xslt: xsltContent },
-        )
-        if (data.valid) {
-          setXsltValid(true)
-          setXsltErrors([])
-        } else {
-          setXsltValid(false)
-          setXsltErrors([{ message: data.error ?? 'XSLT hatası', line: data.line ?? 1, column: data.column ?? 1 }])
-        }
-      } catch {
-        // silently fail validation
-      }
-    }, XSLT_VALIDATION_DEBOUNCE_MS)
-    return () => clearTimeout(t)
-  }, [xsltContent])
-
-  // ─── Debounced XML validation ───────────────────────────────────────────────
-  useEffect(() => {
-    if (!xmlContent) { setXmlValid(null); setXmlErrors([]); return }
-    const t = setTimeout(() => {
-      const errs = extractXmlParseErrors(xmlContent)
-      setXmlErrors(errs)
-      setXmlValid(errs.length === 0)
-    }, XML_VALIDATION_DEBOUNCE_MS)
-    return () => clearTimeout(t)
-  }, [xmlContent])
+    const handled = handledPendingFilesRef.current
+    const fresh = [pendingXsltFile, pendingXmlFile].filter((f): f is File => f !== null && !handled.has(f))
+    if (fresh.length === 0) return
+    fresh.forEach(f => handled.add(f))
+    if (pendingXsltFile && fresh.includes(pendingXsltFile)) void loadXsltFile(pendingXsltFile)
+    if (pendingXmlFile && fresh.includes(pendingXmlFile)) void loadXmlFile(pendingXmlFile)
+    // State temizlenir: yenilemede / geri gelişte dosya ikinci kez yüklenmesin.
+    navigate(location.pathname, { replace: true, state: null })
+  }, [pendingXsltFile, pendingXmlFile, loadXsltFile, loadXmlFile, navigate, location.pathname])
 
   // ─── Image insert ───────────────────────────────────────────────────────────
   function handleRequestImageInsert(lineNumber: number) {
@@ -552,6 +478,15 @@ export default function XsltEditorPage() {
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  // ─── Snippet ekleme (sol menü) ──────────────────────────────────────────────
+  function handleInsertSnippet(snippet: UserSnippet) {
+    if (lockedByOther) {
+      toast.warning('Salt-okunur moddasınız; snippet eklenemez.', { title: 'Şablon kilitli' })
+      return
+    }
+    insertTextAtLineRef.current?.(xsltCursorLine ?? 1, snippetPlainText(snippet.body))
   }
 
   // ─── Download ───────────────────────────────────────────────────────────────
@@ -645,6 +580,14 @@ export default function XsltEditorPage() {
     setShowSaveDialog(true)
   }
 
+  // ─── Gezinme koruması (header sekmeleri, logo, avatar menüsü, boş durum linki) ─
+  const confirmLeave = useCallback(() => !isDirty || window.confirm(LEAVE_CONFIRM), [isDirty])
+
+  const guardedNavigate = useCallback((path: string) => {
+    if (!confirmLeave()) return
+    navigate(path)
+  }, [confirmLeave, navigate])
+
   // ─── Preview → Editor navigation ───────────────────────────────────────────
   const handlePreviewClick = useCallback((text: string, opts?: { exact?: boolean }) => {
     if (!goToRef.current) return
@@ -658,29 +601,6 @@ export default function XsltEditorPage() {
     goToRef.current(searchTerm)
   }, [])
 
-  // ─── UBL-TR iş kuralı doğrulaması ───────────────────────────────────────────
-  async function handleValidateUblTr() {
-    if (!xmlContent) return
-    setUblTrLoading(true)
-    setUblTrError(null)
-    setShowProblems(true)
-    try {
-      const res = await validateBusinessRules(xmlContent)
-      setUblTrResults(res.results)
-    } catch (e: unknown) {
-      const msg = e && typeof e === 'object' && 'response' in e
-        ? (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Doğrulama yapılamadı.'
-        : 'Doğrulama yapılamadı.'
-      setUblTrError(msg)
-      setUblTrResults(null)
-    } finally {
-      setUblTrLoading(false)
-    }
-  }
-
-  // İlk satırdaki XML bildirimi eksikse XSLT problemleri arasına ekle
-  const declProblem = useMemo(() => xmlDeclarationProblem(xsltContent), [xsltContent])
-
   // XML Kaynak sekmesinde gösterilecek metin. Yalnızca minify edilmiş belgeler
   // biçimlendirilir: zaten satırlara yayılmış bir XML'e dokunmayınca problem panelinden
   // "satıra git" ve AI'ya giden imleç-penceresi ham metinle birebir hizalı kalır.
@@ -689,9 +609,9 @@ export default function XsltEditorPage() {
   // olmayan içerik göstermek, tam da XML'i incelemeye çalışırken yanıltıcı olurdu.
   const xmlDisplay = useMemo(() => {
     if (!xmlContent) return ''
-    if (!xmlPretty || xmlValid !== true || !looksMinified(xmlContent)) return xmlContent
+    if (!xmlPretty || diag.xmlValid !== true || !looksMinified(xmlContent)) return xmlContent
     return formatXmlForDisplay(xmlContent)
-  }, [xmlContent, xmlPretty, xmlValid])
+  }, [xmlContent, xmlPretty, diag.xmlValid])
 
   // Görüntülenen metin ham metinden farklıysa satır numaraları da kayar; kullanıcıyı uyar.
   const xmlDisplayReformatted = xmlContent != null && xmlDisplay !== xmlContent
@@ -700,18 +620,17 @@ export default function XsltEditorPage() {
   // ham metni bu satıra göre pencerelediğinden yanlış (hatta boş) pencere üretirdi.
   const aiXmlCursorLine = xmlDisplayReformatted ? undefined : xmlCursorLine
 
-  const ublTrErrorCount = ublTrResults?.filter(r => r.severity === 'error').length ?? null
-  const totalErrorCount =
-    xsltErrors.length + (declProblem ? 1 : 0) + xmlErrors.length + (ublTrErrorCount ?? 0)
-
-  // XPath console — seçili ifadeyi konsola gönder, konsolu aç
-  function handleEvaluateXPath(expression: string) {
-    setXpathInitialExpr(expression)
-    setShowXPathConsole(true)
+  // Önizleme panelini görünür yapar: tam ekrandan çıkar; sekmeli modda Önizleme sekmesine geçer
+  // (AI yalnız gizlenir, sohbet korunur).
+  function showPreviewPane() {
+    maxExit()
+    if (tabsActive) setAiOpen(false)
   }
 
-  // XML editor'da ilgili satıra git (sekmeyi XML'e çevir + reveal)
+  // XML Kaynak'ta ilgili satıra git (UBL-TR / XML problemi). Önizleme paneli tam ekranda
+  // örtülü olduğundan önce yan düzene dönülür.
   function handleLocateXmlLine(line: number, column?: number | null) {
+    showPreviewPane()
     setRightTab('xml')
     // Problem satır/kolon numaraları HAM xmlContent üzerinden hesaplanır. Biçimlendirilmiş
     // görünümde satırlar kaydığı için hedefi ıskalardık — ham görünüme dönerek konumun
@@ -726,484 +645,369 @@ export default function XsltEditorPage() {
     }, 100)
   }
 
+  function handleXmlEditorMount(editor: MonacoEditor.IStandaloneCodeEditor) {
+    xmlEditorRef.current = editor
+    editor.onDidChangeCursorPosition(e => {
+      setXmlCursorLine(e.position.lineNumber)
+    })
+    editor.onDidChangeCursorSelection(e => {
+      const sel = editor.getModel()?.getValueInRange(e.selection) ?? ''
+      setXmlSelection(sel.trim() || undefined)
+    })
+  }
+
+  function openXmlSource() {
+    showPreviewPane()
+    setRightTab('xml')
+  }
+
   // ─── Print ──────────────────────────────────────────────────────────────────
   function handlePrint() {
-    const iframe = document.querySelector<HTMLIFrameElement>('iframe[title="Canlı Önizleme"]')
-    iframe?.contentWindow?.print()
+    if (!printActivePreview()) {
+      toast.warning('Yazdırmak için önizleme açık olmalı (Önizleme sekmesi veya mini pencere).', { title: 'Önizleme kapalı' })
+    }
   }
 
-  // ─── Loading state ─────────────────────────────────────────────────────────
+  // ─── Kabuk parçaları ────────────────────────────────────────────────────────
+  const version = useMemo(() => stylesheetVersion(xsltContent), [xsltContent])
+  const xsltDisplayName = xsltFileName ?? (templateName ? `${templateName}.xslt` : 'şablon.xslt')
+  const xmlDisplayName = xmlFileName ?? 'belge.xml'
+  const xsltSize = useMemo(() => (xsltContent ? formatSize(xsltContent) : ''), [xsltContent])
+  const xmlSize = useMemo(() => (xmlContent ? formatSize(xmlContent) : ''), [xmlContent])
+  const sideXslt: SideMenuFile | null = xsltContent ? { name: xsltDisplayName, size: xsltSize, dirty: isDirty } : null
+  const sideXml: SideMenuFile | null = xmlContent ? { name: xmlDisplayName, size: xmlSize } : null
+  const xsltEol = useMemo(() => (xsltContent.includes('\r\n') ? 'CRLF' : 'LF'), [xsltContent])
+
+  const header = (
+    <WorkspaceHeader
+      active="xslt"
+      onNavigate={guardedNavigate}
+      confirmLeave={confirmLeave}
+      center={xsltContent ? (
+        <>
+          <span className="max-w-[260px] truncate font-mono font-medium">{templateName || xsltDisplayName}</span>
+          {version && <HeaderChip>XSLT {version}</HeaderChip>}
+          {lockedByOther && <HeaderChip>Salt-okunur</HeaderChip>}
+          {isDirty && <HeaderStatus>Kaydedilmemiş değişiklik</HeaderStatus>}
+        </>
+      ) : null}
+      actions={(
+        <>
+          <HeaderButton icon={Save} onClick={requestSave} disabled={!xsltContent}>Şablonlarıma kaydet</HeaderButton>
+          <HeaderButton variant="primary" icon={Download} onClick={handleDownload} disabled={!xsltContent}>İndir</HeaderButton>
+        </>
+      )}
+    />
+  )
+
+  const sideMenu = (
+    <XsltSideMenu
+      xsltFile={sideXslt}
+      xmlFile={sideXml}
+      onUploadXslt={() => xsltInputRef.current?.click()}
+      onUploadXml={() => xmlInputRef.current?.click()}
+      onOpenXslt={workspaceReady ? () => focusEditorRef.current?.() : undefined}
+      onOpenXml={workspaceReady ? openXmlSource : undefined}
+      snippets={userSnippets}
+      onInsertSnippet={workspaceReady ? handleInsertSnippet : undefined}
+      onManageSnippets={() => setShowSnippetManager(true)}
+    />
+  )
+
+  let body
   if (loadingTemplate) {
-    return (
-      <div className="h-screen flex overflow-hidden bg-gray-900">
-        <EditorSidebar />
-        <div className="flex-1 flex items-center justify-center">
-          <span className="text-sm text-gray-400">Şablon yükleniyor…</span>
-        </div>
-      </div>
+    body = (
+      <main className="flex flex-1 items-center justify-center">
+        <span role="status" className="text-sm text-tx-muted">Şablon yükleniyor…</span>
+      </main>
     )
-  }
-
-  // ─── Phase 1: Upload screen ─────────────────────────────────────────────────
-  if (!xsltContent && !xmlContent) {
-    return (
-      <div className="h-screen flex overflow-hidden bg-gray-50">
-        <EditorSidebar />
-        <div className="flex-1 flex flex-col items-center justify-center gap-8 px-4">
-          <div className="text-center">
-            <h1 className="text-xl font-semibold text-gray-800 mb-1">XSLT Editör</h1>
-            <p className="text-sm text-gray-500">XSLT ve XML dosyalarınızı yükleyerek düzenlemeye başlayın.</p>
-          </div>
-
-          <div className="flex gap-6">
-            {/* XSLT Upload */}
-            <label className="cursor-pointer flex flex-col items-center gap-3 border-2 border-dashed border-blue-300 rounded-xl px-10 py-8 bg-white hover:border-blue-400 hover:bg-blue-50 transition-colors">
-              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <Code2 size={24} className="text-blue-600" />
-              </div>
-              <span className="text-sm font-medium text-blue-600">XSLT Dosyası Yükle</span>
-              <span className="text-xs text-gray-400">.xsl, .xslt</span>
-              <input type="file" accept={UPLOAD_ACCEPT.xslt} className="hidden" onChange={handleXsltFile} />
-            </label>
-
-            {/* XML Upload */}
-            <label className="cursor-pointer flex flex-col items-center gap-3 border-2 border-dashed border-green-300 rounded-xl px-10 py-8 bg-white hover:border-green-400 hover:bg-green-50 transition-colors">
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                <Upload size={24} className="text-green-600" />
-              </div>
-              <span className="text-sm font-medium text-green-600">XML Dosyası Yükle</span>
-              <span className="text-xs text-gray-400">.xml — fatura veya irsaliye</span>
-              <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
-            </label>
-          </div>
-
-          {/* Saved templates link */}
-          <Link to="/my-xslt-templates" className="text-xs text-gray-400 hover:text-blue-600 transition-colors">
-            veya kayıtlı şablonlarınızdan birini açın →
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  // ─── Phase 1b: Only one file loaded ─────────────────────────────────────────
-  if (!xsltContent || !xmlContent) {
-    return (
-      <div className="h-screen flex overflow-hidden bg-gray-50">
-        <EditorSidebar />
-        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-4">
-          <div className="text-center">
-            <h1 className="text-xl font-semibold text-gray-800 mb-1">XSLT Editör</h1>
-            <p className="text-sm text-gray-500">
-              {xsltContent ? 'XML dosyası yükleyerek devam edin.' : 'XSLT dosyası yükleyerek devam edin.'}
-            </p>
-          </div>
-
-          {xsltContent && (
-            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-4 py-3">
-              <Code2 size={15} className="flex-shrink-0" />
-              XSLT dosyası yüklendi — XML seçmeye hazır.
-            </div>
-          )}
-
-          {xmlContent && (
-            <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-4 py-3">
-              <Upload size={15} className="flex-shrink-0" />
-              XML dosyası yüklendi — XSLT seçmeye hazır.
-            </div>
-          )}
-
-          <label className="cursor-pointer flex flex-col items-center gap-3 border-2 border-dashed border-blue-300 rounded-xl px-14 py-10 bg-white hover:border-blue-400 hover:bg-blue-50 transition-colors">
-            <svg className="w-10 h-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-            <span className="text-sm font-medium text-blue-600">
-              {xsltContent ? 'XML Dosyası Yükle' : 'XSLT Dosyası Yükle'}
-            </span>
-            <input
-              type="file"
-              accept={xsltContent ? UPLOAD_ACCEPT.xml : UPLOAD_ACCEPT.xslt}
-              className="hidden"
-              onChange={xsltContent ? handleXmlFile : handleXsltFile}
-            />
-          </label>
-        </div>
-      </div>
-    )
-  }
-
-  // ─── Phase 2: Editor + Preview ──────────────────────────────────────────────
-  return (
-    <div className="h-screen flex overflow-hidden bg-gray-900">
-      <EditorSidebar />
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <XsltEditorToolbar
-          templateName={templateName}
-          xsltValid={xsltValid}
-          xmlValid={xmlValid}
-          previewLoading={previewLoading}
-          lastMs={lastMs}
-          lastTimings={lastTimings}
+  } else if (!workspaceReady) {
+    // ─── Faz 1 / 1b: yükleme ekranı ──────────────────────────────────────────
+    body = (
+      <>
+        {sideMenu}
+        <XsltEmptyState
           hasXslt={!!xsltContent}
           hasXml={!!xmlContent}
-          isDirty={isDirty}
-          onBack={() => navigate('/dashboard')}
-          onUploadXslt={handleXsltFile}
-          onUploadXml={handleXmlFile}
-          onDownload={handleDownload}
-          onSave={requestSave}
-          onPrint={handlePrint}
-          onShowShortcuts={() => setShowShortcuts(true)}
+          xsltName={xsltDisplayName}
+          xmlName={xmlDisplayName}
+          onUploadXslt={() => xsltInputRef.current?.click()}
+          onUploadXml={() => xmlInputRef.current?.click()}
+          onOpenSaved={() => guardedNavigate('/my-xslt-templates')}
         />
+      </>
+    )
+  } else {
+    // ─── Faz 2: editör + önizleme (+ AI) ─────────────────────────────────────
+    body = (
+      <>
+        {sideMenu}
 
-        {lockedByOther && (
-          <div className="px-4 py-2 text-xs text-amber-300 bg-amber-950 border-b border-amber-900 flex-shrink-0 flex items-center gap-2">
-            <TriangleAlert size={13} className="flex-shrink-0" />
-            <span>
-              Şu an <strong>{lockOwnerName ?? 'başka bir kullanıcı'}</strong> bu şablonu düzenliyor —
-              salt-okunur moddasınız, değişiklikleriniz kaydedilemez.
-            </span>
-          </div>
-        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {lockedByOther && (
+            <div role="status" className="flex flex-none items-center gap-2 border-b border-fn-orange-line bg-fn-orange-tint px-4 py-2 text-xs text-fn-orange-ink">
+              <TriangleAlert size={13} aria-hidden="true" className="flex-none" />
+              <span>
+                Şu an <strong>{lockOwnerName ?? 'başka bir kullanıcı'}</strong> bu şablonu düzenliyor —
+                salt-okunur moddasınız, değişiklikleriniz kaydedilemez.
+              </span>
+            </div>
+          )}
 
-        {previewError && (
-          <div className="px-4 py-2 text-xs text-red-400 bg-red-950 border-b border-red-900 flex-shrink-0 flex items-start gap-2">
-            <TriangleAlert size={13} className="flex-shrink-0 mt-0.5" />
-            <span className="font-mono whitespace-pre-wrap break-all">{previewError}</span>
-          </div>
-        )}
+          {preview.error && (
+            <div role="alert" className="flex flex-none items-start gap-2 border-b border-fn-red-line bg-fn-red-tint px-4 py-2 text-xs text-fn-red-ink">
+              <TriangleAlert size={13} aria-hidden="true" className="mt-0.5 flex-none" />
+              <span className="whitespace-pre-wrap break-all font-mono">{preview.error}</span>
+            </div>
+          )}
 
-        <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
-          <Panel defaultSize={50} minSize={20}>
-            <div className="h-full flex flex-col">
-              <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between gap-2">
-                <span className="text-xs text-gray-400 font-mono uppercase tracking-wide whitespace-nowrap">XSLT Editörü</span>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {/* Yorum Satırı */}
-                  <button
-                    onClick={() => toggleCommentRef.current?.()}
-                    className="h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors"
-                    title="Açıklama Satırı Yap / Kaldır (Ctrl + Shift + C)"
-                  >
-                    <span className="font-mono text-[11px]">{'<!--'}</span>
-                    <span className="hidden 2xl:inline">Açıklama</span>
-                  </button>
-
-                  {/* Biçimlendir */}
-                  <button
-                    onClick={() => formatDocumentRef.current?.()}
-                    disabled={!xsltContent}
-                    className="h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors disabled:opacity-30"
-                    title="Belgeyi Biçimlendir (Shift+Alt+F)"
-                  >
-                    <WandSparkles size={13} />
-                    <span className="hidden 2xl:inline">Biçimlendir</span>
-                  </button>
-
-                  {/* UBL-TR */}
-                  <button
-                    onClick={handleValidateUblTr}
-                    disabled={!xmlContent || ublTrLoading}
-                    className="h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors disabled:opacity-30"
-                    title="UBL-TR iş kurallarını kontrol et"
-                  >
-                    <ShieldCheck size={13} />
-                    <span className="hidden 2xl:inline">UBL-TR</span>
-                    {ublTrErrorCount != null && ublTrErrorCount > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold">
-                        {ublTrErrorCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Problemler */}
-                  <button
-                    onClick={() => setShowProblems(s => !s)}
-                    className={`h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-xs transition-colors ${
-                      showProblems ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
-                    }`}
-                    title="Problemler panelini aç/kapat"
-                  >
-                    <ListChecks size={13} />
-                    <span className="hidden 2xl:inline">Problemler</span>
-                    {totalErrorCount > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold">
-                        {totalErrorCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {/* XPath Konsolu */}
-                  <button
-                    onClick={() => setShowXPathConsole(s => !s)}
-                    disabled={!xmlContent}
-                    className={`h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-xs transition-colors disabled:opacity-30 ${
-                      showXPathConsole ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700'
-                    }`}
-                    title="XPath Konsolu"
-                  >
-                    <Terminal size={13} />
-                    <span className="hidden 2xl:inline">XPath</span>
-                  </button>
-
-                  {/* Snippet Kütüphanesi */}
-                  <button
-                    onClick={() => setShowSnippetManager(true)}
-                    className="h-7 px-2 flex items-center gap-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 text-xs transition-colors"
-                    title="Snippet Kütüphanesi"
-                  >
-                    <BookMarked size={13} />
-                    <span className="hidden 2xl:inline">Kütüphane</span>
-                    {userSnippets.length > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-gray-600 text-gray-300 text-[10px] font-medium">
-                        {userSnippets.length}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 overflow-hidden relative">
-                <XsltEditor
-                  value={xsltContent}
-                  onChange={(v) => { setXsltContent(v); setIsDirty(true) }}
-                  options={{ readOnly: lockedByOther }}
-                  xmlContent={xmlContent}
-                  userSnippets={userSnippets}
-                  onEvaluateXPath={handleEvaluateXPath}
-                  onEditorReady={({ goTo, revealLine, insertTextAtLine, toggleComment, formatDocument }) => {
-                    goToRef.current = goTo
-                    revealLineRef.current = revealLine
-                    insertTextAtLineRef.current = insertTextAtLine
-                    toggleCommentRef.current = toggleComment
-                    formatDocumentRef.current = formatDocument
-                  }}
-                  onRequestImageInsert={handleRequestImageInsert}
-                  errors={xsltErrors}
-                  aiEnabled={aiEnabled}
-                  onAiRefactor={handleAiRefactor}
-                  onCursorLineChange={setXsltCursorLine}
-                  onSelectionChange={setXsltSelection}
+          <PanelGroup
+            id="xslt-workspace-panels"
+            orientation="horizontal"
+            onLayoutChanged={handleOuterLayoutChanged}
+            className="flex-1 overflow-hidden"
+          >
+            <Panel id={MAIN_PANE} minSize="30%">
+          <PanelGroup
+            id="xslt-editor-panels"
+            groupRef={groupRef}
+            orientation="horizontal"
+            className="relative h-full overflow-hidden"
+          >
+            <Panel id={EDITOR_PANE} defaultSize={tabsActive ? '100%' : splitMode === 'half' ? '50%' : '65%'} minSize="25%">
+              {/* Tam ekranda bu bölme panel grubunu kaplayan katmana dönüşür (grup `relative`).
+                  Yalnız sınıf değişir: düğüm koşullu sarmalanır ya da farklı bir ağaca
+                  çevrilirse Monaco remount olur (geri-al geçmişi, imleç, kaydırma kaybolur). */}
+              <div className={max.maximized ? 'absolute inset-0 z-20 flex flex-col bg-ed-bg' : 'flex h-full flex-col bg-ed-bg'}>
+                <XsltEditorToolbar
+                  onFormat={() => formatDocumentRef.current?.()}
+                  onToggleComment={() => toggleCommentRef.current?.()}
+                  showProblems={diag.showProblems}
+                  onToggleProblems={() => setShowProblems(s => !s)}
+                  errorCount={diag.errorCount}
+                  warningCount={diag.warningCount}
+                  onValidateUblTr={diag.validateUblTr}
+                  ublTrDisabled={!xmlContent || diag.ublTrLoading}
+                  ublTrErrorCount={diag.ublTrErrorCount}
+                  layout={layoutMode}
+                  onLayoutChange={applyLayout}
+                  maximized={max.maximized}
+                  onToggleMaximize={max.toggle}
+                  onShowMini={layoutMode === 'editorOnly' ? () => setMiniOpen(true) : undefined}
+                  onPrint={handlePrint}
+                  onShowShortcuts={() => setShowShortcuts(true)}
+                  aiOpen={aiOpen}
+                  onToggleAi={aiEnabled ? toggleAi : undefined}
                 />
-              </div>
-            </div>
-          </Panel>
-
-          <PanelResizeHandle className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors cursor-col-resize flex-shrink-0" />
-
-          <Panel defaultSize={50} minSize={20}>
-            <div className="h-full flex flex-col">
-              {/* Sağ panel sekme başlıkları */}
-              <div className="h-9 flex items-center border-b border-gray-700 bg-gray-800 px-2 gap-0.5 flex-shrink-0">
-                <button
-                  onClick={() => setRightTab('preview')}
-                  className={`px-3 py-1 rounded text-xs transition-colors ${
-                    rightTab === 'preview' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
-                  }`}
-                >
-                  Önizleme
-                </button>
-                <button
-                  onClick={() => setRightTab('xml')}
-                  disabled={!xmlContent}
-                  className={`px-3 py-1 rounded text-xs transition-colors disabled:opacity-30 ${
-                    rightTab === 'xml' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-700'
-                  }`}
-                >
-                  XML Kaynak
-                </button>
-                {rightTab === 'xml' && xmlContent && (
-                  <button
-                    onClick={() => setXmlPretty(p => !p)}
-                    className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition-colors ${
-                      xmlPretty
-                        ? 'bg-blue-600/30 text-blue-300 border border-blue-600/50 hover:bg-blue-600/50'
-                        : 'text-gray-400 border border-transparent hover:bg-gray-700'
-                    }`}
-                    title={xmlPretty
-                      ? 'Biçimlendirme açık — ham baytları görmek için kapatın'
-                      : 'Ham görünüm — okunabilir girintileme için açın'}
-                  >
-                    <WandSparkles size={11} />
-                    {xmlPretty ? 'Biçimli' : 'Ham'}
-                  </button>
-                )}
-                {aiEnabled && (
-                  <button
-                    onClick={() => { if (rightTab !== 'ai') openAiBlank(); else setRightTab('preview') }}
-                    className={`px-3 py-1 rounded text-xs transition-colors flex items-center gap-1 ${
-                      rightTab === 'ai' ? 'bg-violet-700 text-white' : 'text-violet-300 hover:bg-gray-700'
-                    }`}
-                    title="AI Asistan"
-                  >
-                    <Sparkles size={12} /> AI
-                  </button>
-                )}
-                {aiEnabled && rightTab === 'ai' && (
-                  <button
-                    onClick={() => setAiSplit(s => !s)}
-                    className={`ml-auto px-3 py-1.5 rounded-md text-xs font-semibold border flex items-center gap-1.5 transition-colors ${
-                      aiSplit
-                        ? 'bg-violet-600 border-violet-500 text-white hover:bg-violet-500'
-                        : 'bg-gray-700 border-gray-500 text-gray-100 hover:bg-gray-600 hover:border-gray-400'
-                    }`}
-                    title={aiSplit
-                      ? 'Bölünmüş görünümü kapat (yalnızca sohbet)'
-                      : 'Önizleme ile böl — üstte önizleme, altta sohbet'}
-                  >
-                    <Rows2 size={14} />
-                    {aiSplit ? 'Bölmeyi Kapat' : 'Önizlemeyle Böl'}
-                  </button>
+                <div ref={editorHostRef} className="relative flex-1 overflow-hidden">
+                  <XsltEditor
+                    value={xsltContent}
+                    onChange={(v) => { setXsltContent(v); setIsDirty(true) }}
+                    options={{ readOnly: lockedByOther }}
+                    xmlContent={xmlContent}
+                    userSnippets={userSnippets}
+                    onEditorReady={({ goTo, revealLine, insertTextAtLine, toggleComment, formatDocument, focus }) => {
+                      goToRef.current = goTo
+                      revealLineRef.current = revealLine
+                      insertTextAtLineRef.current = insertTextAtLine
+                      toggleCommentRef.current = toggleComment
+                      formatDocumentRef.current = formatDocument
+                      focusEditorRef.current = focus
+                    }}
+                    onRequestImageInsert={handleRequestImageInsert}
+                    errors={diag.editorMarkers}
+                    aiEnabled={aiEnabled}
+                    onAiRefactor={handleAiRefactor}
+                    onCursorLineChange={(line, column) => { setXsltCursorLine(line); setXsltCursorCol(column) }}
+                    onSelectionChange={setXsltSelection}
+                  />
+                  {max.showMini && (
+                    <FloatingPreviewWindow
+                      containerRef={editorHostRef}
+                      html={preview.html}
+                      status={preview.error ? 'error' : preview.loading ? 'loading' : 'idle'}
+                      initialRect={max.miniRect}
+                      onRectCommit={max.commitMiniRect}
+                      onElementClick={handlePreviewClick}
+                      onDock={() => { applyLayout('side'); showPreviewPane(); setRightTab('preview'); focusEditorRef.current?.() }}
+                      onClose={() => { setMiniOpen(false); focusEditorRef.current?.() }}
+                    />
+                  )}
+                </div>
+                {diag.showProblems && (
+                  <ProblemsPanel
+                    xsltProblems={diag.xsltProblems}
+                    xmlProblems={diag.xmlProblems}
+                    ublTrProblems={diag.ublTrProblems}
+                    ublTrLoading={diag.ublTrLoading}
+                    ublTrError={diag.ublTrError}
+                    onLocateXslt={(line, column) => revealLineRef.current?.(line, column ?? undefined)}
+                    onLocateXml={handleLocateXmlLine}
+                    onAskAi={openAiForProblem}
+                    onClose={() => setShowProblems(false)}
+                  />
                 )}
               </div>
+            </Panel>
 
-              {/* Sağ panel içerik */}
-              <div className="flex-1 overflow-hidden">
-                {rightTab !== 'ai' && (rightTab === 'preview' ? (
-                  <XsltEditorPreview
-                    html={previewHtml}
+            <PanelResizeHandle
+              aria-label="Editör ile önizleme arasını boyutlandır"
+              disabled={max.maximized || tabsActive}
+              className={`${separatorCls} ${tabsActive ? 'w-0' : 'w-px'}`}
+            />
+
+            <Panel
+              id={PREVIEW_PANE}
+              panelRef={previewPanelRef}
+              defaultSize={tabsActive ? '0%' : splitMode === 'half' ? '50%' : '35%'}
+              minSize="20%"
+              collapsible={tabsActive}
+              collapsedSize="0%"
+            >
+              {/* Tam ekranda editör katmanının altında kalır: görünmez ve odaklanamaz, ama mount.
+                  Sayfada aynı anda en fazla bir önizleme iframe'i bulunur (yazdırma onu hedefler):
+                  buradaki yalnız yan yana modda ve tam ekran dışında, sekmeli sütundaki yalnız
+                  Önizleme sekmesinde, mini pencere yalnız tam ekranda mount edilir. */}
+              <div className={`h-full ${max.maximized ? 'invisible' : ''}`}>
+                {!tabsActive && (
+                  <PreviewDock
+                    tab={rightTab}
+                    onTabChange={setRightTab}
+                    showFrame={!max.maximized}
+                    html={preview.html}
                     onElementClick={handlePreviewClick}
+                    previewLoading={preview.loading}
+                    lastMs={preview.lastMs}
+                    engine={preview.engine}
+                    onRefresh={() => { if (xmlContent) preview.refresh() }}
+                    onPopOut={() => applyLayout('mini')}
+                    hasXml={!!xmlContent}
+                    xmlDisplay={xmlDisplay}
+                    xmlPretty={xmlPretty}
+                    onToggleXmlPretty={() => setXmlPretty(p => !p)}
+                    xmlDisplayReformatted={xmlDisplayReformatted}
+                    onXmlEditorMount={handleXmlEditorMount}
                   />
-                ) : (
-                  <div className="h-full flex flex-col">
-                    {xmlDisplayReformatted && (
-                      <div className="px-3 py-1 text-[11px] text-blue-300/80 bg-blue-950/30 border-b border-blue-900/40 flex-shrink-0">
-                        Okunabilirlik için biçimlendirildi — satır numaraları kaynak dosyayla birebir örtüşmez.
-                      </div>
-                    )}
-                    <div className="flex-1 min-h-0">
-                  <Editor
-                    height="100%"
-                    language="xml"
-                    theme="vs-dark"
-                    value={xmlDisplay}
-                    onMount={(editor) => {
-                      xmlEditorRef.current = editor
-                      editor.onDidChangeCursorPosition(e => {
-                        setXmlCursorLine(e.position.lineNumber)
-                      })
-                      editor.onDidChangeCursorSelection(e => {
-                        const sel = editor.getModel()?.getValueInRange(e.selection) ?? ''
-                        setXmlSelection(sel.trim() || undefined)
-                      })
-                    }}
-                    options={{
-                      readOnly: true,
-                      minimap: { enabled: false },
-                      fontSize: 13,
-                      wordWrap: 'on',
-                      lineNumbers: 'on',
-                      scrollBeyondLastLine: false,
-                      folding: true,
-                    }}
-                  />
-                    </div>
-                  </div>
-                ))}
-                {/* AI paneli bir kez açıldıktan sonra mount'ta kalır; sekme aktif
-                    değilken CSS ile gizlenir, böylece sohbet korunur.
-                    Bölünmüş görünümde (aiSplit) üstte önizleme, altta sohbet gösterilir
-                    ve aradaki tutamaç ile dikey olarak yeniden boyutlandırılabilir.
-                    Panellere sabit `key`/`id` verilir; böylece "Böl" açılıp kapanınca
-                    sohbet paneli (key="ai-chat") remount olmaz ve konuşma korunur.
-                    Bölünmüş önizleme yalnızca AI sekmesi aktifken mount edilir; aksi
-                    halde ana önizleme ile iki ayrı tıklama dinleyicisi çakışırdı. */}
-                {aiEnabled && aiMounted && (
-                  <div
-                    ref={aiSplitContainerRef}
-                    className={rightTab === 'ai' ? 'h-full flex flex-col min-h-0' : 'hidden'}
-                  >
-                    {aiSplit && rightTab === 'ai' && (
-                      <div
-                        key="ai-preview"
-                        className={`min-h-0 flex-shrink-0 ${aiDragging ? 'pointer-events-none' : ''}`}
-                        style={{ height: `${aiSplitTopPct}%` }}
-                      >
-                        <XsltEditorPreview
-                          html={previewHtml}
-                          onElementClick={handlePreviewClick}
-                        />
-                      </div>
-                    )}
-                    {aiSplit && rightTab === 'ai' && (
-                      <div
-                        key="ai-divider"
-                        onPointerDown={handleAiSplitDrag}
-                        className={`h-1.5 flex-shrink-0 cursor-row-resize transition-colors ${
-                          aiDragging ? 'bg-blue-500' : 'bg-gray-700 hover:bg-blue-500'
-                        }`}
-                        title="Sürükleyerek yeniden boyutlandır"
-                      />
-                    )}
-                    <div key="ai-chat" className={`flex-1 min-h-0 ${aiDragging ? 'pointer-events-none' : ''}`}>
-                      <AiAssistantPanel
-                        xslt={xsltContent}
-                        xml={xmlContent}
-                        xmlCursorLine={aiXmlCursorLine}
-                        xmlSelection={xmlSelection}
-                        xsltCursorLine={xsltCursorLine}
-                        xsltSelection={xsltSelection}
-                        prompt={aiPrompt}
-                        xmlDeclarationMissing={declProblem != null}
-                        onApplyXslt={applyAiChange}
-                        onClose={() => setRightTab('preview')}
-                      />
-                    </div>
-                  </div>
                 )}
               </div>
-            </div>
-          </Panel>
+            </Panel>
+          </PanelGroup>
+            </Panel>
 
-        </PanelGroup>
+            <PanelResizeHandle
+              elementRef={rightSeparatorRef}
+              aria-label={tabsActive ? 'Sağ paneli boyutlandır' : 'AI panelini boyutlandır'}
+              disabled={!rightExpanded}
+              className={`${separatorCls} ${rightExpanded ? 'w-px' : 'w-0'}`}
+            />
 
-        {showProblems && (
-          <ProblemsPanel
-            xsltProblems={[
-              ...(declProblem ? [declProblem] : []),
-              ...xsltErrors.map(e => ({
-                source: 'xslt' as const,
-                severity: 'error' as const,
-                ruleName: 'XSLT Sözdizimi',
-                message: e.message,
-                line: e.line,
-                column: e.column,
-              })),
-            ]}
-            xmlProblems={xmlErrors.map(e => ({
-              source: 'xml' as const,
-              severity: 'error' as const,
-              ruleName: 'XML Ayrıştırma',
-              message: e.message,
-              line: e.line,
-              column: e.column,
-            }))}
-            ublTrProblems={ublTrResults?.map(r => ({
-              source: 'ubl-tr' as const,
-              ruleId: r.ruleId,
-              ruleName: r.ruleName,
-              severity: r.severity,
-              message: r.message,
-              line: r.line,
-              column: r.column,
-            })) ?? null}
-            ublTrLoading={ublTrLoading}
-            ublTrError={ublTrError}
-            onLocateXslt={(line, column) => revealLineRef.current?.(line, column ?? undefined)}
-            onAskAi={openAiForProblem}
-            onClose={() => setShowProblems(false)}
-          />
-        )}
+            {/* Sağ sütun: AI (yan yana) ya da Önizleme | AI sekmeleri (sekmeli). Kapalıyken 0'a
+                daralır ama içerik mount kalır. AI paneli bu sütunda HEP aynı ağaç konumundadır
+                (önündeki koşullu kardeşler yer tutar) — mod/sekme/boyut değişiminde sohbet kaybolmaz. */}
+            <Panel
+              id={RIGHT_PANE}
+              panelRef={rightPanelRef}
+              defaultSize={rightExpanded ? `${tabsActive ? useUiPrefsStore.getState().xsltTabsPanelSize : useUiPrefsStore.getState().xsltAiPanelSize}%` : '0%'}
+              minSize="340px"
+              maxSize="55%"
+              collapsible={!rightExpanded}
+              collapsedSize="0%"
+            >
+              <div className="flex h-full min-w-0 flex-col bg-ui-card">
+                {tabsActive && !max.maximized && (
+                  <SegmentedTabs
+                    items={RIGHT_TABS}
+                    value={aiOpen ? 'ai' : 'preview'}
+                    onChange={(id) => (id === 'ai' ? openAiBlank() : setAiOpen(false))}
+                    ariaLabel="Sağ panel"
+                    variant="underline"
+                    idPrefix="xslt-right"
+                    className="h-[37px] flex-none gap-4 bg-ui-card px-3 [&_[role=tab]]:h-[36px] [&_[role=tab]]:text-[12.5px]"
+                  />
+                )}
+                {rightShowsPreview && (
+                  <div role="tabpanel" id="xslt-right-panel-preview" aria-labelledby="xslt-right-tab-preview" className="min-h-0 flex-1">
+                    <PreviewDock
+                      tab={rightTab}
+                      onTabChange={setRightTab}
+                      showFrame
+                      html={preview.html}
+                      onElementClick={handlePreviewClick}
+                      previewLoading={preview.loading}
+                      lastMs={preview.lastMs}
+                      engine={preview.engine}
+                      onRefresh={() => { if (xmlContent) preview.refresh() }}
+                      onPopOut={() => applyLayout('mini')}
+                      hasXml={!!xmlContent}
+                      xmlDisplay={xmlDisplay}
+                      xmlPretty={xmlPretty}
+                      onToggleXmlPretty={() => setXmlPretty(p => !p)}
+                      xmlDisplayReformatted={xmlDisplayReformatted}
+                      onXmlEditorMount={handleXmlEditorMount}
+                      hideTitle
+                    />
+                  </div>
+                )}
+                {/* AI Asistan: ilk açılışta mount olur, sonra kapatılsa da yalnız gizlenir. */}
+                {aiEnabled && aiMounted && (
+                  <aside
+                    aria-label="AI Asistan"
+                    role={tabsActive && !max.maximized ? 'tabpanel' : undefined}
+                    id={tabsActive ? 'xslt-right-panel-ai' : undefined}
+                    aria-labelledby={tabsActive && !max.maximized ? 'xslt-right-tab-ai' : undefined}
+                    className={aiOpen ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}
+                  >
+                    <AiAssistantPanel
+                      xslt={xsltContent}
+                      xml={xmlContent}
+                      xmlCursorLine={aiXmlCursorLine}
+                      xmlSelection={xmlSelection}
+                      xsltCursorLine={xsltCursorLine}
+                      xsltSelection={xsltSelection}
+                      prompt={aiPrompt}
+                      xmlDeclarationMissing={diag.declProblem != null}
+                      onApplyXslt={applyAiChange}
+                      onClose={() => setAiOpen(false)}
+                    />
+                  </aside>
+                )}
+              </div>
+            </Panel>
+          </PanelGroup>
+        </div>
+      </>
+    )
+  }
 
-        {showXPathConsole && (
-          <XPathConsolePanel
-            xmlContent={xmlContent}
-            initialExpression={xpathInitialExpr}
-            onLocateLine={handleLocateXmlLine}
-            onClose={() => setShowXPathConsole(false)}
-          />
-        )}
-      </div>
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-ui-bg text-tx">
+      {header}
+
+      <div className="flex min-h-0 flex-1">{body}</div>
+
+      {workspaceReady && !loadingTemplate && (
+        <XsltStatusBar
+          previewLoading={preview.loading}
+          lastMs={preview.lastMs}
+          lastTimings={preview.timings}
+          engine={preview.engine}
+          errorCount={diag.errorCount}
+          warningCount={diag.warningCount}
+          onToggleProblems={() => setShowProblems(s => !s)}
+          cursorLine={xsltCursorLine}
+          cursorColumn={xsltCursorCol}
+          xsltVersion={version}
+          eol={xsltEol}
+          layoutLabel={tabsActive ? `${layoutName(layoutMode)} · sekmeli sağ panel` : layoutName(layoutMode)}
+        />
+      )}
+
+      {/* Sayfadaki TEK XSLT ve TEK XML dosya girişi — tüm yükleme butonları bunları tetikler
+          (aynı accept'li ikinci input Playwright strict mode'u bozar). */}
+      <input ref={xsltInputRef} type="file" accept={UPLOAD_ACCEPT.xslt} className="hidden" onChange={handleXsltFile} />
+      <input ref={xmlInputRef} type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
+      {/* Gizli görsel girişi — "Resim Ekle" bağlam menüsü için */}
+      <input ref={imageFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageFileSelect} />
 
       {showSnippetManager && (
         <SnippetManagerDialog
@@ -1211,15 +1015,6 @@ export default function XsltEditorPage() {
           onSnippetsChanged={setUserSnippets}
         />
       )}
-
-      {/* Gizli image file input — Resim Ekle context menu için */}
-      <input
-        ref={imageFileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleImageFileSelect}
-      />
 
       {showSaveDialog && (
         <SaveTemplateDialog
@@ -1232,7 +1027,7 @@ export default function XsltEditorPage() {
       )}
 
       {showShortcuts && (
-        <ShortcutsDialog onClose={() => setShowShortcuts(false)} />
+        <ShortcutsDialog onClose={() => setShowShortcuts(false)} showMaximize />
       )}
 
       {refactorState && (

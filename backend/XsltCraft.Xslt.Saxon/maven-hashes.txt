@@ -1,0 +1,8 @@
+# XsltCraft.Xslt.Saxon — Maven artefakt bütünlüğü (ADR 008 §9).
+# Biçim: <sha256> <jar dosya adı> <maven koordinatı>
+# Değerler Maven Central .sha256 dosyalarıyla karşılaştırıldı (2026-10-24);
+# Saxon-HE-12.10.jar sha1 = 1d6492dbfa32ddb2cd432fa3fbb940bf8137a5d2 (Central .sha1 ile aynı).
+# Sürüm yükseltmesinde: yeni jar'ın SHA-256'sını Central'dan bağımsız doğrulayıp burayı güncelleyin.
+b571af282f25d7301059f788b9a149aab8b5cdc14ef3d212dc5425d3dcbb9a97 Saxon-HE-12.10.jar net.sf.saxon:Saxon-HE:12.10
+1fe4d5b92f708dcdb82dbce12919e0171e6b5ca62c6dca6220483625098feb5f xmlresolver-5.3.3.jar org.xmlresolver:xmlresolver:5.3.3
+b0c487ad2f3e558be8d829c916d2458d10aca6a5bafa7a4d0524b70845e48a5c xmlresolver-5.3.3-data.jar org.xmlresolver:xmlresolver:data:5.3.3

@@ -1,3 +1,5 @@
+using XsltCraft.Application.ThemeSlots.Catalog;
+
 namespace XsltCraft.Application.DTO;
 
 public sealed class TemplateDetailResponse
@@ -13,4 +15,6 @@ public sealed class TemplateDetailResponse
     public bool IsFavorite { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    /// <summary>Hazır tema için logo/imza konumları (analiz edilmemiş temada boş).</summary>
+    public IReadOnlyList<ThemeSlotOptionDto> Slots { get; set; } = [];
 }

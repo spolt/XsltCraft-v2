@@ -1,0 +1,71 @@
+{
+  "version": 2,
+  "documentType": "Invoice",
+  "blocks": {
+    "l01-overlay-watermark": {
+      "id": "l01-overlay-watermark",
+      "type": "Text",
+      "config": { "isStatic": true, "content": "TASLAK", "fontWeight": "bold", "fontSize": "28px", "color": "#EF4444" },
+      "gridLayout": { "x": 60, "y": 100, "width": 90, "height": 20, "zIndex": 5, "autoHeight": false }
+    },
+    "l02-left-col-top": {
+      "id": "l02-left-col-top",
+      "type": "Text",
+      "config": { "isStatic": true, "content": "Sol sütun — üst" },
+      "gridLayout": { "x": 14, "y": 10, "width": 88, "height": 10, "autoHeight": true }
+    },
+    "l03-right-col-top": {
+      "id": "l03-right-col-top",
+      "type": "Text",
+      "config": { "isStatic": false, "binding": { "xpath": "/n1:Invoice/cbc:ID" } },
+      "gridLayout": { "x": 108, "y": 12, "width": 88, "height": 10, "autoHeight": true }
+    },
+    "l04-left-col-bottom": {
+      "id": "l04-left-col-bottom",
+      "type": "Text",
+      "config": { "isStatic": true, "content": "Sol sütun — alt (aynı sütunda yığılır)" },
+      "gridLayout": { "x": 14, "y": 24, "width": 88, "height": 10, "autoHeight": true }
+    },
+    "l05-right-col-bottom-indented": {
+      "id": "l05-right-col-bottom-indented",
+      "type": "Text",
+      "config": { "isStatic": false, "binding": { "xpath": "//cbc:IssueDate" } },
+      "gridLayout": { "x": 112, "y": 30, "width": 84, "height": 10, "autoHeight": true }
+    },
+    "l06-divider-band-break": {
+      "id": "l06-divider-band-break",
+      "type": "Divider",
+      "config": { "style": "solid", "color": "#CCCCCC", "thickness": "1px" },
+      "gridLayout": { "x": 30, "y": 44, "width": 100, "height": 4, "autoHeight": false }
+    },
+    "l07-fixed-height-with-margins": {
+      "id": "l07-fixed-height-with-margins",
+      "type": "Text",
+      "config": { "isStatic": true, "content": "Sabit yükseklik (autoHeight=false) + kullanıcı kenar boşlukları" },
+      "gridLayout": { "x": 14, "y": 52, "width": 182, "height": 15.25, "autoHeight": false, "marginTop": 2, "marginLeft": 3.5, "marginRight": -1 }
+    },
+    "l08-auto-height-zero-z": {
+      "id": "l08-auto-height-zero-z",
+      "type": "Text",
+      "config": { "isStatic": true, "content": "autoHeight=true, zIndex=0 akışta kalır" },
+      "gridLayout": { "x": 14, "y": 70, "width": 182, "height": 40, "zIndex": 0, "autoHeight": true }
+    },
+    "l09-negative-z-in-flow": {
+      "id": "l09-negative-z-in-flow",
+      "type": "Text",
+      "config": { "isStatic": true, "content": "zIndex<0 akışta kalır" },
+      "gridLayout": { "x": 14, "y": 114, "width": 60, "height": 8, "zIndex": -1, "autoHeight": true }
+    },
+    "l10-overlay-image": {
+      "id": "l10-overlay-image",
+      "type": "Image",
+      "config": { "assetId": "bbbbbbbb-0000-4000-8000-000000000002", "assetType": "signature", "alignment": "left", "editableOnFreeTheme": false },
+      "gridLayout": { "x": 150, "y": 5, "width": 40, "height": 30, "zIndex": 2, "autoHeight": true }
+    },
+    "l11-no-gridlayout": {
+      "id": "l11-no-gridlayout",
+      "type": "Text",
+      "config": { "isStatic": true, "content": "gridLayout yok — V2 çıktısına girmez" }
+    }
+  }
+}

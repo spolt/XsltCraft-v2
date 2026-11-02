@@ -1,22 +1,34 @@
 import Editor, { type Monaco } from "@monaco-editor/react"
 import type { editor as MonacoEditor, languages as MonacoLanguages, IDisposable } from "monaco-editor"
-import { useRef, useEffect } from "react"
+import { useRef, useEffect, useLayoutEffect, useState } from "react"
 import xmlFormatter from 'xml-formatter'
+import { writeExternalValue } from './xslt-editor/externalEdit'
 import { buildXmlIndex, getXmlPathSuggestions, type XmlIndex } from './xslt-editor/xpathXmlIndex'
 import type { UserSnippet } from '../services/snippetService'
+import { useUiPrefsStore } from '../store/uiPrefsStore'
+import { defineMonacoThemes, monacoThemeId } from '../theme/monacoThemes'
+
+/** Tasarımın kod yazı tipi; yüklenmemişse sistem monospace'ine düşer. */
+const EDITOR_FONT_FAMILY = "'IBM Plex Mono', Consolas, 'Courier New', monospace"
 
 export type XsltError = {
   message: string
   line: number
   column: number
+  /** Varsayılan 'error'. 'warning' marker'ları kaydetme/önizlemeyi etkilemez. */
+  severity?: 'error' | 'warning'
+  /** İşaretlenecek metnin uzunluğu (varsayılan 20 karakter). */
+  length?: number
+  code?: string
 }
 
-type EditorFns = {
+export type EditorFns = {
   goTo: (term: string) => void
   revealLine: (lineNumber: number, column?: number) => void
   insertTextAtLine: (lineNumber: number, text: string) => void
   toggleComment: () => void
   formatDocument: () => void
+  focus: () => void
 }
 
 type Props = {
@@ -26,16 +38,20 @@ type Props = {
   userSnippets?: UserSnippet[]
   onEditorReady?: (fns: EditorFns) => void
   onRequestImageInsert?: (lineNumber: number) => void
-  onEvaluateXPath?: (expression: string) => void
   errors?: XsltError[]
   options?: MonacoEditor.IStandaloneEditorConstructionOptions
   // ── AI ──────────────────────────────────────
   aiEnabled?: boolean
-  onAiRefactor?: (selection: string, range: { startLine: number; endLine: number }) => void
-  /** AI bağlamı için: imlecin bulunduğu satır (1-tabanlı) her değiştiğinde çağrılır. */
-  onCursorLineChange?: (line: number) => void
+  onAiRefactor?: (selection: string, range: { startLine: number; endLine: number; startColumn: number }) => void
+  /** AI bağlamı + durum çubuğu: imlecin satırı ve sütunu (1-tabanlı) her değiştiğinde çağrılır. */
+  onCursorLineChange?: (line: number, column: number) => void
   /** AI bağlamı için: seçili metin (boşsa undefined) her değiştiğinde çağrılır. */
   onSelectionChange?: (text: string | undefined) => void
+  /**
+   * Dışarıdan gelen `value` yalnız değişen aralığa yazılır: imleç, seçim ve kaydırma korunur, `onChange` çağrılmaz.
+   * Mount sonrası değişmez. Verilmezse metni @monaco-editor/react tüm belgeyi değiştirerek yazar.
+   */
+  preserveCursorOnExternalChange?: boolean
 }
 
 /* ── XSLT 1.0 element definitions ── */
@@ -424,16 +440,35 @@ function registerXsltCompletions(monaco: Monaco) {
 }
 
 export default function XsltEditor({
-  value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, onEvaluateXPath, errors, options,
+  value, onChange, xmlContent, userSnippets, onEditorReady, onRequestImageInsert, errors, options,
   aiEnabled = false, onAiRefactor, onCursorLineChange, onSelectionChange,
+  preserveCursorOnExternalChange = false,
 }: Props) {
+
+  // Görünüm tercihleri (Ayarlar): tema, yazı boyutu, satır kaydırma. Değişimleri Monaco'yu
+  // remount etmez — @monaco-editor/react setTheme/updateOptions ile uygular.
+  const editorTheme = useUiPrefsStore(s => s.editorTheme)
+  const fontSize = useUiPrefsStore(s => s.editorFontSize)
+  const wordWrap = useUiPrefsStore(s => s.editorWordWrap)
 
   const monacoRef = useRef<Monaco | null>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  // Monaco asenkron mount olur: `aiEnabled` baştan açıksa aksiyon kaydı editörü beklemeli.
+  const [editorReady, setEditorReady] = useState(false)
   const onAiRefactorRef = useRef(onAiRefactor)
   const onCursorLineChangeRef = useRef(onCursorLineChange)
   const onSelectionChangeRef = useRef(onSelectionChange)
   const aiActionDisposablesRef = useRef<IDisposable[]>([])
+  const latestValueRef = useRef(value)
+  /** Dışarıdan gelen metin yazılırken açık: yazım kullanıcı düzenlemesi sayılmaz. */
+  const externalWriteRef = useRef(false)
+
+  useLayoutEffect(() => {
+    latestValueRef.current = value
+    if (preserveCursorOnExternalChange && editorRef.current) {
+      writeExternalValue(editorRef.current, value, externalWriteRef)
+    }
+  }, [value, preserveCursorOnExternalChange])
 
   useEffect(() => { onAiRefactorRef.current = onAiRefactor }, [onAiRefactor])
   useEffect(() => { onCursorLineChangeRef.current = onCursorLineChange }, [onCursorLineChange])
@@ -466,7 +501,7 @@ export default function XsltEditor({
         if (!sel || !model || sel.isEmpty()) return
         const text = model.getValueInRange(sel)
         if (text.trim() && onAiRefactorRef.current) {
-          onAiRefactorRef.current(text, { startLine: sel.startLineNumber, endLine: sel.endLineNumber })
+          onAiRefactorRef.current(text, { startLine: sel.startLineNumber, endLine: sel.endLineNumber, startColumn: sel.startColumn })
         }
       },
     })
@@ -475,19 +510,23 @@ export default function XsltEditor({
       aiActionDisposablesRef.current.forEach(d => d.dispose())
       aiActionDisposablesRef.current = []
     }
-  }, [aiEnabled])
+  }, [aiEnabled, editorReady])
 
   function handleBeforeMount(monaco: Monaco) {
     monacoRef.current = monaco
+    defineMonacoThemes(monaco)
     registerXsltCompletions(monaco)
   }
 
   function handleMount(editor: MonacoEditor.IStandaloneCodeEditor) {
     editorRef.current = editor
+    setEditorReady(true)
+    // Editör oluşturulurken gelen metin (mount gecikmeli çalışır, layout effect o sırada editörü görmez).
+    if (preserveCursorOnExternalChange) writeExternalValue(editor, latestValueRef.current, externalWriteRef)
 
     // AI bağlamı: imleç satırı + seçim değişimlerini üst bileşene bildir.
     editor.onDidChangeCursorPosition(e => {
-      onCursorLineChangeRef.current?.(e.position.lineNumber)
+      onCursorLineChangeRef.current?.(e.position.lineNumber, e.position.column)
     })
     editor.onDidChangeCursorSelection(e => {
       const text = editor.getModel()?.getValueInRange(e.selection) ?? ''
@@ -516,7 +555,7 @@ export default function XsltEditor({
 
     editor.onDidChangeModelContent((event: MonacoEditor.IModelContentChangedEvent) => {
       const change = event.changes[0]
-      if (!change || change.text !== '>') return
+      if (externalWriteRef.current || !change || change.text !== '>') return
 
       const monaco = monacoRef.current
       const model = editor.getModel()
@@ -586,19 +625,6 @@ export default function XsltEditor({
       run: toggleComment,
     })
 
-    editor.addAction({
-      id: 'xslt-evaluate-xpath',
-      label: "Seçili XPath'i Test Et",
-      contextMenuGroupId: 'modification',
-      contextMenuOrder: 4,
-      run(ed) {
-        const sel = ed.getSelection()
-        const model = ed.getModel()
-        if (!sel || !model) return
-        const text = model.getValueInRange(sel).trim()
-        if (text && onEvaluateXPath) onEvaluateXPath(text)
-      },
-    })
 
     editor.addAction({
       id: 'xslt-format-document',
@@ -724,6 +750,7 @@ export default function XsltEditor({
         formatDocument: () => {
           editor.getAction('xslt-format-document')?.run()
         },
+        focus: () => editor.focus(),
       })
     }
   }
@@ -743,12 +770,13 @@ export default function XsltEditor({
     }
 
     const markers = errors.map((err) => ({
-      severity: monaco.MarkerSeverity.Error,
+      severity: err.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error,
       message: err.message,
+      code: err.code,
       startLineNumber: err.line || 1,
       startColumn: err.column || 1,
       endLineNumber: err.line || 1,
-      endColumn: (err.column || 1) + 20,
+      endColumn: (err.column || 1) + (err.length ?? 20),
     }))
 
     monaco.editor.setModelMarkers(model, "xslt", markers)
@@ -758,9 +786,11 @@ export default function XsltEditor({
     <Editor
       height="100%"
       language="xml"
-      theme="vs-dark"
-      value={value}
-      onChange={(v) => onChange(v || "")}
+      theme={monacoThemeId(editorTheme)}
+      // `value` verilseydi kütüphane, model satır sonlarını normalleştirdiğinde metni farklı görüp tüm belgeyi yazardı.
+      value={preserveCursorOnExternalChange ? undefined : value}
+      defaultValue={preserveCursorOnExternalChange ? value : undefined}
+      onChange={(v) => { if (!externalWriteRef.current) onChange(v || "") }}
       beforeMount={handleBeforeMount}
       onMount={handleMount}
       options={{
@@ -769,7 +799,11 @@ export default function XsltEditor({
         wordBasedSuggestions: "currentDocument",
         snippetSuggestions: "top",
         minimap: { enabled: false },
-        fontSize: 14,
+        fontSize,
+        fontFamily: EDITOR_FONT_FAMILY,
+        lineHeight: Math.round(fontSize * 1.6),
+        padding: { top: 8, bottom: 8 },
+        wordWrap: wordWrap ? 'on' : 'off',
         tabSize: 2,
         formatOnPaste: false,
         autoClosingBrackets: "never",

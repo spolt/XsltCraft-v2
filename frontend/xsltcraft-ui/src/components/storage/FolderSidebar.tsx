@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { Folder as FolderIcon, FolderPlus, MoreVertical, Check, X, Trash2, Pencil } from 'lucide-react'
-import { FOLDER_COLORS, folderDot, folderText } from './folderColors'
+import { Folder as FolderIcon, Plus, MoreVertical, Check, X, Trash2, Pencil } from 'lucide-react'
+import { FOLDER_COLORS, FOLDER_COLOR_NAME, folderDot, folderText } from './folderColors'
 
 export interface SpecialEntry {
   key: string
@@ -29,20 +29,29 @@ interface FolderSidebarProps {
 
 function ColorRow({ value, onPick }: { value: string | null; onPick: (c: string) => void }) {
   return (
-    <div className="flex items-center gap-1.5 px-1 py-1">
+    <div role="group" aria-label="Klasör rengi" className="flex items-center gap-1.5 px-1 py-1">
       {FOLDER_COLORS.map((c) => (
         <button
           key={c}
           type="button"
           onClick={() => onPick(c)}
-          className={`w-4 h-4 rounded-full ${folderDot(c)} transition-transform hover:scale-110 ${value === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
-          title={c}
+          aria-label={FOLDER_COLOR_NAME[c]}
+          aria-pressed={value === c}
+          title={FOLDER_COLOR_NAME[c]}
+          className={`xc-focus h-4 w-4 rounded-full ${folderDot(c)} transition-transform hover:scale-110 motion-reduce:transition-none ${value === c ? 'ring-2 ring-tx-muted ring-offset-1 ring-offset-ui-card' : ''}`}
         />
       ))}
     </div>
   )
 }
 
+const ROW = 'xc-focus flex h-9 w-full items-center gap-2 rounded-[7px] px-2 text-left text-[13px] transition-colors'
+const ROW_ON = 'bg-ui-soft font-semibold text-ui-ink'
+const ROW_OFF = 'font-normal text-tx hover:bg-ui-hover'
+const MINI_BTN = 'xc-focus inline-flex h-6 w-6 flex-none items-center justify-center rounded'
+const INPUT = 'min-w-0 flex-1 rounded-md border border-ui-soft-line bg-ui-card px-2 py-0.5 text-[13px] text-tx outline-none focus:ring-2 focus:ring-ui-soft-line'
+
+/** Klasörler kartı: Tümü / Favoriler / (Paylaşılan) + kullanıcı klasörleri ve klasör işlemleri. */
 export default function FolderSidebar({
   specials, folders, activeKey, onSelect, onCreate, onRename, onRecolor, onDelete,
 }: FolderSidebarProps) {
@@ -68,141 +77,161 @@ export default function FolderSidebar({
     setEditingId(null)
   }
 
+  function closeMenu() {
+    setMenuId(null)
+    setConfirmId(null)
+  }
+
   return (
-    <aside className="w-52 flex-shrink-0 border-r border-gray-200 bg-gray-50/60 overflow-y-auto hidden md:flex md:flex-col">
-      <p className="px-4 pt-5 pb-2 text-[11px] font-semibold tracking-wider text-gray-400">KLASÖRLER</p>
+    <aside
+      aria-label="Klasörler"
+      className="flex w-full flex-col gap-0.5 self-start rounded-xl border border-ui-line bg-ui-card px-2 py-3 shadow-[var(--ui-shadow-rest)] md:w-[214px] md:flex-none"
+    >
+      <div className="flex items-center justify-between px-2 pb-1.5">
+        <h2 className="m-0 text-[11px] font-semibold tracking-[.07em] text-tx-muted">KLASÖRLER</h2>
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          aria-label="Yeni klasör"
+          title="Yeni klasör"
+          className={`${MINI_BTN} h-[26px] w-[26px] rounded-md text-tx-2 hover:bg-ui-hover`}
+        >
+          <Plus size={16} aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Yeni klasör formu */}
+      {creating && (
+        <div className="px-1 py-1">
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Klasör adı"
+              aria-label="Yeni klasör adı"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitCreate()
+                if (e.key === 'Escape') { setCreating(false); setNewName('') }
+              }}
+              className={INPUT}
+            />
+            <button type="button" onClick={commitCreate} aria-label="Oluştur" className={`${MINI_BTN} text-fn-green-ink hover:bg-fn-green-tint`}><Check size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={() => { setCreating(false); setNewName('') }} aria-label="Vazgeç" className={`${MINI_BTN} text-tx-subtle hover:bg-ui-hover`}><X size={14} aria-hidden="true" /></button>
+          </div>
+          <ColorRow value={newColor} onPick={setNewColor} />
+        </div>
+      )}
 
       {/* Sözde-klasörler: Tümü / Favoriler / (Paylaşılan) */}
-      <div className="px-2 flex flex-col gap-0.5">
-        {specials.map((s) => {
-          const active = activeKey === s.key
-          return (
-            <button
-              key={s.key}
-              onClick={() => onSelect(s.key)}
-              className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors ${
-                active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className={active ? 'text-blue-600' : 'text-gray-400'}>{s.icon}</span>
-              <span className="flex-1 text-left truncate">{s.label}</span>
-              <span className="text-xs text-gray-400">{s.count}</span>
-            </button>
-          )
-        })}
-      </div>
+      {specials.map((s) => {
+        const active = activeKey === s.key
+        return (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => onSelect(s.key)}
+            aria-current={active ? 'true' : undefined}
+            className={`${ROW} ${active ? ROW_ON : ROW_OFF}`}
+          >
+            <span aria-hidden="true" className={`flex flex-none ${active ? 'text-ui-accent' : 'text-tx-subtle'}`}>{s.icon}</span>
+            <span className="flex-1 truncate">{s.label}</span>
+            <span className="text-[11.5px] font-normal text-tx-subtle">{s.count}</span>
+          </button>
+        )
+      })}
 
-      <div className="mx-4 my-2 border-t border-gray-200" />
+      {folders.length > 0 && <div className="mx-2 my-1.5 border-t border-ui-line" />}
 
       {/* Kullanıcı klasörleri */}
-      <div className="px-2 flex flex-col gap-0.5">
-        {folders.map((f) => {
-          const active = activeKey === f.id
-          if (editingId === f.id) {
-            return (
-              <div key={f.id} className="flex items-center gap-1 px-2 py-1">
-                <input
-                  autoFocus
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitRename(f.id)
-                    if (e.key === 'Escape') setEditingId(null)
-                  }}
-                  className="flex-1 min-w-0 text-sm border border-blue-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-200"
-                />
-                <button onClick={() => commitRename(f.id)} className="text-green-600 hover:text-green-700"><Check size={14} /></button>
-                <button onClick={() => setEditingId(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
-              </div>
-            )
-          }
+      {folders.map((f) => {
+        const active = activeKey === f.id
+        if (editingId === f.id) {
           return (
-            <div key={f.id} className="relative">
-              <button
-                onClick={() => onSelect(f.id)}
-                className={`group w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors ${
-                  active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                <FolderIcon size={15} className={folderText(f.color)} />
-                <span className="flex-1 text-left truncate">{f.name}</span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => { e.stopPropagation(); setMenuId(menuId === f.id ? null : f.id); setConfirmId(null) }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-700 transition-opacity"
-                >
-                  <MoreVertical size={14} />
-                </span>
-                <span className="text-xs text-gray-400 group-hover:hidden">{f.count}</span>
-              </button>
-
-              {menuId === f.id && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => { setMenuId(null); setConfirmId(null) }} />
-                  <div className="absolute right-2 top-9 z-50 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
-                    <button
-                      onClick={() => { setEditingId(f.id); setEditName(f.name); setMenuId(null) }}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 text-left"
-                    >
-                      <Pencil size={13} className="text-gray-400" /> Yeniden adlandır
-                    </button>
-                    <div className="px-2 py-1">
-                      <ColorRow value={f.color} onPick={(c) => { onRecolor(f.id, c); setMenuId(null) }} />
-                    </div>
-                    <div className="my-1 border-t border-gray-100" />
-                    {confirmId === f.id ? (
-                      <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
-                        <span className="text-red-600 flex-1">Silinsin mi?</span>
-                        <button onClick={() => { onDelete(f.id); setMenuId(null); setConfirmId(null) }} className="font-medium text-red-600 hover:text-red-700">Evet</button>
-                        <button onClick={() => setConfirmId(null)} className="text-gray-500 hover:text-gray-700">Hayır</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmId(f.id)}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 text-left"
-                      >
-                        <Trash2 size={13} /> Sil
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Yeni klasör */}
-      <div className="px-2 mt-1 mb-4">
-        {creating ? (
-          <div className="px-1 py-1">
-            <div className="flex items-center gap-1">
+            <div key={f.id} className="flex items-center gap-1 px-1 py-1">
               <input
                 autoFocus
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Klasör adı"
+                value={editName}
+                aria-label="Klasör adı"
+                onChange={(e) => setEditName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitCreate()
-                  if (e.key === 'Escape') { setCreating(false); setNewName('') }
+                  if (e.key === 'Enter') commitRename(f.id)
+                  if (e.key === 'Escape') setEditingId(null)
                 }}
-                className="flex-1 min-w-0 text-sm border border-blue-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-200"
+                className={INPUT}
               />
-              <button onClick={commitCreate} className="text-green-600 hover:text-green-700"><Check size={14} /></button>
-              <button onClick={() => { setCreating(false); setNewName('') }} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+              <button type="button" onClick={() => commitRename(f.id)} aria-label="Kaydet" className={`${MINI_BTN} text-fn-green-ink hover:bg-fn-green-tint`}><Check size={14} aria-hidden="true" /></button>
+              <button type="button" onClick={() => setEditingId(null)} aria-label="Vazgeç" className={`${MINI_BTN} text-tx-subtle hover:bg-ui-hover`}><X size={14} aria-hidden="true" /></button>
             </div>
-            <ColorRow value={newColor} onPick={setNewColor} />
+          )
+        }
+        const menuOpen = menuId === f.id
+        return (
+          <div key={f.id} className="group relative flex items-center">
+            <button
+              type="button"
+              onClick={() => onSelect(f.id)}
+              aria-current={active ? 'true' : undefined}
+              className={`${ROW} pr-9 ${active ? ROW_ON : ROW_OFF}`}
+            >
+              <FolderIcon size={15} aria-hidden="true" className={`flex-none ${folderText(f.color)}`} />
+              <span className="flex-1 truncate">{f.name}</span>
+              <span className="text-[11.5px] font-normal text-tx-subtle">{f.count}</span>
+            </button>
+            <button
+              type="button"
+              aria-label={`${f.name} klasörü seçenekleri`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => { setMenuId(menuOpen ? null : f.id); setConfirmId(null) }}
+              className={`${MINI_BTN} absolute right-1 text-tx-subtle opacity-0 hover:bg-ui-hover hover:text-tx group-hover:opacity-100 focus-visible:opacity-100 ${menuOpen ? 'opacity-100' : ''}`}
+            >
+              <MoreVertical size={14} aria-hidden="true" />
+            </button>
+
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={closeMenu} />
+                <div
+                  role="menu"
+                  aria-label={`${f.name} klasörü`}
+                  onKeyDown={(e) => { if (e.key === 'Escape') closeMenu() }}
+                  className="absolute top-9 right-1 z-50 w-48 rounded-xl border border-ui-line bg-ui-card py-1 shadow-[var(--ui-shadow-pop)]"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setEditingId(f.id); setEditName(f.name); setMenuId(null) }}
+                    className="xc-focus flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-tx-2 hover:bg-ui-hover"
+                  >
+                    <Pencil size={13} aria-hidden="true" className="text-tx-subtle" /> Yeniden adlandır
+                  </button>
+                  <div className="px-2 py-1">
+                    <ColorRow value={f.color} onPick={(c) => { onRecolor(f.id, c); setMenuId(null) }} />
+                  </div>
+                  <div className="my-1 border-t border-ui-line" />
+                  {confirmId === f.id ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 text-[13px]">
+                      <span className="flex-1 font-medium text-fn-red-ink">Silinsin mi?</span>
+                      <button type="button" onClick={() => { onDelete(f.id); closeMenu() }} className="xc-focus rounded font-semibold text-fn-red-ink hover:underline">Evet</button>
+                      <button type="button" onClick={() => setConfirmId(null)} className="xc-focus rounded text-tx-muted hover:text-tx">Hayır</button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => setConfirmId(f.id)}
+                      className="xc-focus flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-fn-red-ink hover:bg-fn-red-tint"
+                    >
+                      <Trash2 size={13} aria-hidden="true" /> Sil
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-        ) : (
-          <button
-            onClick={() => setCreating(true)}
-            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-          >
-            <FolderPlus size={15} /> Yeni klasör
-          </button>
-        )}
-      </div>
+        )
+      })}
     </aside>
   )
 }

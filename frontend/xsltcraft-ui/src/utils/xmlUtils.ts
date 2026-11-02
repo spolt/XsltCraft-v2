@@ -98,3 +98,14 @@ export function evaluateXPathValue(xmlContent: string, xpath: string): string {
     return ''
   }
 }
+
+/** Metni XML olarak ayrıştırır; well-formed değilse null döner. */
+export function parseXmlDocument(content: string): Document | null {
+  try {
+    const doc = new DOMParser().parseFromString(content, 'application/xml')
+    if (!doc.documentElement || doc.getElementsByTagName('parsererror').length > 0) return null
+    return doc
+  } catch {
+    return null
+  }
+}

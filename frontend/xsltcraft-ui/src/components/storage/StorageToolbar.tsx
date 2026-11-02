@@ -1,3 +1,4 @@
+import { useId, type ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import type { SortKey } from './useTemplateLibrary'
 
@@ -13,33 +14,41 @@ interface StorageToolbarProps {
   sort: SortKey
   onSort: (sort: SortKey) => void
   placeholder?: string
+  /** Sağa hizalanan ek eylemler (ör. Toplu yükle). */
+  children?: ReactNode
 }
 
-export default function StorageToolbar({ search, onSearch, sort, onSort, placeholder }: StorageToolbarProps) {
+/** Liste kartının üst şeridi: arama + sıralama (+ sağda eylemler). */
+export default function StorageToolbar({ search, onSearch, sort, onSort, placeholder, children }: StorageToolbarProps) {
+  const sortId = useId()
+  const label = placeholder ?? 'Şablonlarda ara…'
   return (
-    <div className="flex items-center gap-3 mb-4">
-      <div className="relative flex-1">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+    <div className="flex flex-wrap items-center gap-2 border-b border-ui-line px-3.5 py-3">
+      <label className="flex h-9 min-w-0 flex-[0_1_300px] items-center gap-2 rounded-[7px] border border-field-line bg-ui-card px-2.5 text-tx-subtle focus-within:border-ui-accent focus-within:ring-2 focus-within:ring-ui-soft-line">
+        <Search size={15} strokeWidth={1.8} aria-hidden="true" className="flex-none" />
+        <span className="sr-only">{label.replace(/…$/, '')}</span>
         <input
-          type="text"
+          type="search"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder={placeholder ?? 'Şablonlarda ara…'}
-          className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          placeholder={label}
+          className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-tx outline-none placeholder:text-tx-subtle"
         />
-      </div>
-      <label className="flex items-center gap-1.5 text-xs text-gray-400 flex-shrink-0">
-        <span className="hidden sm:inline">Sırala</span>
+      </label>
+      <div className="flex items-center gap-1.5">
+        <label htmlFor={sortId} className="text-[12.5px] text-tx-muted">Sırala</label>
         <select
+          id={sortId}
           value={sort}
           onChange={(e) => onSort(e.target.value as SortKey)}
-          className="border border-gray-300 rounded-lg px-2 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+          className="xc-focus h-9 cursor-pointer rounded-[7px] border border-ui-line bg-ui-card px-2 text-[12.5px] text-tx-2"
         >
           {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
             <option key={key} value={key}>{SORT_LABELS[key]}</option>
           ))}
         </select>
-      </label>
+      </div>
+      {children && <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>}
     </div>
   )
 }

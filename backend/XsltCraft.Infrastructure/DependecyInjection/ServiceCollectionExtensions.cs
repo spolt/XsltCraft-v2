@@ -8,7 +8,12 @@ using XsltCraft.Application.Auth;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Membership;
 using XsltCraft.Application.Preview;
-using XsltCraft.Application.Services;
+using XsltCraft.Application.ThemeSlots;
+using XsltCraft.Application.ThemeSlots.Analysis;
+using XsltCraft.Application.ThemeSlots.Catalog;
+using XsltCraft.Application.ThemeSlots.Compose;
+using XsltCraft.Application.ThemeSlots.Overrides;
+using XsltCraft.Application.Themes;
 using XsltCraft.Application.Validation;
 using XsltCraft.Application.XPath;
 using XsltCraft.Application.Xslt;
@@ -19,10 +24,8 @@ using XsltCraft.Application.Ai.Vision;
 using XsltCraft.Infrastructure.Ai;
 using XsltCraft.Infrastructure.Auth;
 using XsltCraft.Infrastructure.Persistence;
-using XsltCraft.Infrastructure.Repositories;
 using XsltCraft.Infrastructure.Services;
 using XsltCraft.Infrastructure.Storage;
-using XsltCraft.Infrastructure.Templates;
 using XsltCraft.Infrastructure.Xslt;
 
 namespace XsltCraft.Infrastructure.DependencyInjection;
@@ -60,45 +63,31 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
         // -------------------------------------------------
-        // Template Discovery
-        // -------------------------------------------------
-
-        services.AddSingleton<ITemplateDiscovery, TemplateDiscoveryEngine>();
-        services.AddSingleton<XsltTemplateAnalyzer>();
-        services.AddSingleton<TemplateDependencyGraph>();
-        services.AddSingleton<TemplateHotReloadService>();
-
-        // -------------------------------------------------
         // XSLT Engine
         // -------------------------------------------------
 
-        services.AddSingleton<XsltCompiler>();
-        services.AddScoped<IXsltTemplateRenderer, XsltTemplateRenderer>();
-
-        // -------------------------------------------------
-        // Template Core
-        // -------------------------------------------------
-
-        services.AddSingleton<ITemplateCache, TemplateCache>();
-        services.AddSingleton<TemplateRegistry>();
-        services.AddSingleton<ITemplateRegistry, TemplateRegistry>();
+        // XSLT yürütme hattı: kullanıcı kapısı (havuzdan önce) + worker havuzu + süreç içi host + IXsltExecutionService.
+        services.AddXsltExecution(configuration);
 
         // -------------------------------------------------
         // Application Services
         // -------------------------------------------------
 
-        services.AddScoped<RenderService>();
-        services.AddScoped<ITemplateService, TemplateService>();
         services.AddScoped<IXsltGeneratorService, XsltGeneratorService>();
         services.AddSingleton<IUblTrBusinessRuleService, UblTrBusinessRuleService>();
-        services.AddSingleton<IXPathEvaluator, XPathEvaluator>();
+        // Kendi guard'ı (grid slotlarından ayrı); fabrika: DI, grid XsltExecutionGuard'lı ctor'u seçmesin.
+        services.AddSingleton<IXPathEvaluator>(_ => new XPathEvaluator());
         services.AddSingleton<IFixedNoteInjector, FixedNoteInjector>();
 
-        // -------------------------------------------------
-        // Repositories
-        // -------------------------------------------------
-
-        services.AddScoped<ITemplateRepository, FileTemplateRepository>();
+        // Hazır tema logo/imza yuvaları: yüklemede analiz + kullanıcı görsellerinin tek kaynaktan eklenmesi.
+        services.AddSingleton<IThemeSampleXmlProvider, ThemeSampleXmlProvider>();
+        services.AddSingleton<IThemeImageValidator, ThemeImageValidator>();
+        services.AddSingleton<IThemeOverridesProcessor, ThemeOverridesProcessor>();
+        services.AddSingleton<IThemeSlotAnalyzer, ThemeSlotAnalyzer>();
+        services.AddSingleton<IThemeUploadProcessor, ThemeUploadProcessor>();
+        services.AddSingleton<IThemeSlotProjector, ThemeSlotProjector>();
+        services.AddSingleton<IThemeAssetComposer, ThemeAssetComposer>();
+        services.AddScoped<IThemeAccessGuard, ThemeAccessGuard>();
 
         // -------------------------------------------------
         // User Management

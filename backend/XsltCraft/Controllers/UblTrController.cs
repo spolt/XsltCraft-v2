@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using XsltCraft.Application.Validation;
@@ -6,6 +7,7 @@ namespace XsltCraft.Api.Controllers;
 
 [ApiController]
 [Route("api/ubl-tr")]
+[Authorize] // G4: editör çağrıları bearer'lı (apiService); anonim XML ayrıştırma yüzeyi kapatıldı
 public class UblTrController(IUblTrBusinessRuleService service) : ControllerBase
 {
     private const int MaxXmlBytes = 2 * 1024 * 1024; // 2 MB

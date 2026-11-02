@@ -4,11 +4,16 @@ using System.Xml;
 using System.Xml.Xsl;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using XsltCraft.Api.Preview;
+using XsltCraft.Api.Xslt;
 using XsltCraft.Application.DTO;
-using XsltCraft.Application.Imaging;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Preview;
+using XsltCraft.Application.Themes;
+using XsltCraft.Application.Xslt.Engines;
+using XsltCraft.Application.Xslt.Execution;
 using XsltCraft.Domain.Entities;
 using XsltCraft.Infrastructure.Persistence;
 using XsltCraft.Infrastructure.Storage;
@@ -20,50 +25,61 @@ namespace XsltCraft.Api.Controllers;
 [Route("api/[controller]")]
 public class PreviewController : ControllerBase
 {
-    private const int MaxRawBodyBytes = 10 * 1024 * 1024;   // 10 MB — XSLT + XML toplamı
-    private const int MaxXsltBodyBytes = 1024 * 1024;        // 1 MB — validate-xslt için
+    // Gövde sınırları: içerik sınırları XsltExecutionService'tedir (Raw XSLT 5 MB + XML 5 MB, Validate 1 MB);
+    // gövde sınırı JSON kaçışı (\" \n \uXXXX) için pay bırakır.
+    private const int MaxRawBodyBytes = 12 * 1024 * 1024;    // 12 MB — raw + user-template
+    private const int MaxGridBodyBytes = 10 * 1024 * 1024;   // 10 MB — grid blok ağacı + XML
+    private const int MaxXsltBodyBytes = 1024 * 1024;         // 1 MB — validate-xslt
+    private const int MaxThemeBodyBytes = 6 * 1024 * 1024;    // 6 MB — tema önizleme (XML 5 MB + JSON kaçış payı)
 
     private readonly IXsltGeneratorService _generator;
     private readonly IStorageService _storage;
     private readonly AppDbContext _db;
-    private readonly IWebHostEnvironment _env;
     private readonly IUsageQuotaService _quota;
-    private readonly IEntitlementService _entitlements;
     private readonly IUserActivityRecorder _activity;
+    private readonly IXsltExecutionService _xslt;
+    private readonly PreviewAssetEmbedder _assets;
+    private readonly IThemeAccessGuard _themeAccess;
     private readonly ILogger<PreviewController> _logger;
 
     public PreviewController(
         IXsltGeneratorService generator,
         IStorageService storage,
         AppDbContext db,
-        IWebHostEnvironment env,
         IUsageQuotaService quota,
-        IEntitlementService entitlements,
         IUserActivityRecorder activity,
+        IXsltExecutionService xslt,
+        PreviewAssetEmbedder assets,
+        IThemeAccessGuard themeAccess,
         ILogger<PreviewController> logger)
     {
         _generator = generator;
         _storage = storage;
         _db = db;
-        _env = env;
         _quota = quota;
-        _entitlements = entitlements;
         _activity = activity;
+        _xslt = xslt;
+        _assets = assets;
+        _themeAccess = themeAccess;
         _logger = logger;
     }
 
     /// <summary>
-    /// Block tree'den XSLT üretir, XML'e uygular, HTML döndürür.
+    /// Block tree'den XSLT üretir, XML'e uygular, HTML döndürür (grid canlı önizleme → <see cref="XsltRoute.Grid"/>).
     /// Request: { sections, blocks, xmlContent, assets }
-    /// Response: { html, generationTimeMs }
+    /// Response: { html, generationTimeMs, timings, engine, cacheHit } · hata { error, line, column, kind, engine }
     /// </summary>
-    [HttpPost]
+    [HttpPost, Authorize]
+    [EnableRateLimiting(RateLimitPolicies.XsltPreview)]
+    [RequestSizeLimit(MaxGridBodyBytes)]
     public async Task<IActionResult> Preview([FromBody] PreviewRequest request)
     {
+        var ct = HttpContext.RequestAborted;
         var sw = Stopwatch.StartNew();
         try
         {
-            var assetBase64 = await BuildAssetBase64Async(request.Blocks);
+            var userId = CurrentUserId();
+            var assetBase64 = await _assets.BuildAsync(request.Blocks, userId, ct);
             string? xslt;
             string? genError;
 
@@ -81,78 +97,105 @@ public class PreviewController : ControllerBase
             if (xslt is null)
                 return BadRequest(new { error = genError });
 
-            var html = ApplyXslt(xslt, request.XmlContent);
-            sw.Stop();
-            return Ok(new { html, generationTimeMs = sw.ElapsedMilliseconds });
+            var warnings = _generator.Warnings.ToArray();
+            var result = await _xslt.ExecuteAsync(
+                new XsltRunRequest(XsltRoute.Grid, xslt, request.XmlContent, XsltOperation.Render, userId), ct);
+            return XsltProblemResults.Render(result, sw.ElapsedMilliseconds, Response, warnings);
         }
-        catch (XsltException ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            var (message, line, column) = DescribeXsltError(ex);
-            return BadRequest(new { error = message, line, column });
-        }
-        catch (XmlException ex)
-        {
-            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            return new EmptyResult();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Önizleme sırasında beklenmeyen hata.");
-            return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
+            return XsltProblemResults.Unexpected();
         }
     }
 
     /// <summary>
-    /// Free theme'i storage'dan okur, verilen XML'e uygular, HTML döndürür.
-    /// Request: { xmlContent, logoUrl?, signatureUrl?, bankInfo? }
-    /// Response: { html, generationTimeMs }
+    /// Hazır temayı storage'dan okur, verilen XML'e uygular, HTML döndürür (galeri önizlemesi; anonim olabilir).
+    /// Kullanıcı logo/imza/IBAN eklenmiş önizleme: POST /api/preview/compose.
+    /// <para>G3: yalnız <see cref="IThemeAccessGuard"/>'ın izin verdiği yayınlanmış tema → <see cref="XsltRoute.Theme"/>
+    /// (1.0 tema süreç içi .NET, 2.0 yapısı kullanan tema Saxon izole worker — T-izi; grid girdi sınırları, kullanıcı
+    /// kapısı — anonimde IP anahtarı). İstisna: oturum sahibinin KENDİ
+    /// saklı XSLT'li şablonu (editörde tema klonu önizlemesi) → <see cref="XsltRoute.UserTemplate"/> (izole worker).
+    /// Başkasının şablonu / yayınlanmamış tema → 404.</para>
+    /// Request: { xmlContent } · Response: { html, generationTimeMs, timings, engine, cacheHit, warnings }
     /// </summary>
     [HttpPost("theme/{themeId:guid}")]
+    [EnableRateLimiting(RateLimitPolicies.ThemePreview)]
+    [RequestSizeLimit(MaxThemeBodyBytes)]
     public async Task<IActionResult> PreviewTheme(Guid themeId, [FromBody] ThemePreviewRequest request)
     {
+        var ct = HttpContext.RequestAborted;
         var sw = Stopwatch.StartNew();
         try
         {
-            var template = await _db.Templates
-                .FirstOrDefaultAsync(t => t.Id == themeId);
-
+            var template = await _db.Templates.FirstOrDefaultAsync(t => t.Id == themeId, ct);
             if (template is null)
                 return NotFound(new { error = "Şablon bulunamadı." });
 
-            if (string.IsNullOrEmpty(template.XsltStoragePath))
-                return BadRequest(new { error = "Bu tema için XSLT dosyası tanımlı değil." });
+            Guid? userId = User.Identity?.IsAuthenticated == true ? CurrentUserId() : null;
+            XsltRoute route;
+            if (userId is { } owner && template.OwnerId == owner && !template.IsFreeTheme
+                && !string.IsNullOrEmpty(template.XsltStoragePath))
+            {
+                route = XsltRoute.UserTemplate;
+            }
+            else
+            {
+                // Ücretli tema galeride herkese ÖNİZLENİR (yalnız HTML; ham XSLT xslt-content'te Pro ister) —
+                // UpgradeRequired burada engel değildir, NotFound (yayınlanmamış / kullanıcı şablonu) engeldir.
+                if (await _themeAccess.CheckAsync(template, userId, ct) == ThemeAccessDecision.NotFound)
+                    return NotFound(new { error = "Şablon bulunamadı." });
+                route = XsltRoute.Theme;
+            }
 
-            await using var stream = await _storage.ReadAsync(template.XsltStoragePath);
-            using var reader = new StreamReader(stream);
-            var xslt = await reader.ReadToEndAsync();
+            string xslt;
+            if (route == XsltRoute.UserTemplate && GeneratedXsltCache.IsStale(template.XsltStoragePath, template.Id)
+                && !string.IsNullOrWhiteSpace(template.BlockTree))
+            {
+                // Eski sürüm önbellek asset URL'li olabilir — okunmaz; görseller gömülü olarak yeniden üretilir.
+                var assetBase64 = await _assets.BuildFromJsonAsync(template.BlockTree, userId!.Value, ct);
+                var (generated, genError) = _generator.GenerateFromJson(template.BlockTree, assetBase64);
+                if (generated is null)
+                    return BadRequest(new { error = genError });
+                xslt = generated;
+            }
+            else
+            {
+                await using var stream = await _storage.ReadAsync(template.XsltStoragePath!);
+                using var reader = new StreamReader(stream);
+                xslt = await reader.ReadToEndAsync(ct);
+            }
 
-            var html = ApplyXsltWithParams(xslt, request.XmlContent, request.LogoUrl, request.SignatureUrl);
+            var result = await _xslt.ExecuteAsync(
+                new XsltRunRequest(route, xslt, request.XmlContent ?? "", XsltOperation.Render, userId ?? AnonymousGateKey()), ct);
 
-            // Override logo/signature divs populated by the XSLT's JavaScript
-            if (!string.IsNullOrEmpty(request.LogoUrl) || !string.IsNullOrEmpty(request.SignatureUrl))
-                html = InjectAssetOverrides(html,
-                    request.LogoUrl, request.LogoWidth, request.LogoHeight, request.LogoAlignment,
-                    request.SignatureUrl, request.SignatureWidth, request.SignatureHeight, request.SignatureAlignment);
+            // XML ayrıştırma hatasında motorun ham XmlException metni yerine sabit mesaj (konum korunur).
+            if (result.Diagnostic is { Kind: XsltFailureKind.Xml } xmlError)
+                result = result with { Diagnostic = xmlError with { Message = "XML içeriği okunamadı (geçerli bir XML değil)." } };
 
-            if (request.BankInfo?.Count > 0)
-                html = InjectBankInfo(html, request.BankInfo);
-
-            sw.Stop();
-            return Ok(new { html, generationTimeMs = sw.ElapsedMilliseconds });
+            return XsltProblemResults.Render(result, sw.ElapsedMilliseconds, Response);
         }
-        catch (XsltException ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            var (message, line, column) = DescribeXsltError(ex);
-            return BadRequest(new { error = message, line, column });
-        }
-        catch (XmlException ex)
-        {
-            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            return new EmptyResult();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Önizleme sırasında beklenmeyen hata.");
-            return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
+            _logger.LogError(ex, "Tema önizlemesi sırasında beklenmeyen hata.");
+            return XsltProblemResults.Unexpected();
         }
+    }
+
+    /// <summary>Anonim kullanıcı kapısı bölümü: istemci IP'sinden türetilmiş kararlı anahtar (IP'nin kendisi değil).</summary>
+    private Guid AnonymousGateKey()
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "anon";
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("theme-preview:" + ip));
+        return new Guid(hash.AsSpan(0, 16));
     }
 
     /// <summary>
@@ -162,9 +205,12 @@ public class PreviewController : ControllerBase
     /// Response: { html, generationTimeMs }
     /// </summary>
     [HttpPost("user-template/{id:guid}"), Authorize]
+    [EnableRateLimiting(RateLimitPolicies.XsltPreview)]
+    [RequestSizeLimit(MaxRawBodyBytes)]
     public async Task<IActionResult> PreviewUserTemplate(Guid id, [FromBody] UserTemplatePreviewRequest req)
     {
-        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var ct = HttpContext.RequestAborted;
+        var userId = CurrentUserId();
         var template = await _db.Templates.FirstOrDefaultAsync(t => t.Id == id && t.OwnerId == userId);
         if (template is null) return NotFound(new { error = "Şablon bulunamadı." });
 
@@ -199,26 +245,23 @@ public class PreviewController : ControllerBase
         var sw = Stopwatch.StartNew();
         try
         {
-            var (xslt, genError) = _generator.GenerateFromJson(template.BlockTree);
+            var assetBase64 = await _assets.BuildFromJsonAsync(template.BlockTree, userId, ct);
+            var (xslt, genError) = _generator.GenerateFromJson(template.BlockTree, assetBase64);
             if (xslt is null) return BadRequest(new { error = genError });
 
-            var html = ApplyXslt(xslt, req.XmlContent);
-            sw.Stop();
-            return Ok(new { html, generationTimeMs = sw.ElapsedMilliseconds });
+            var warnings = _generator.Warnings.ToArray();
+            var result = await _xslt.ExecuteAsync(
+                new XsltRunRequest(XsltRoute.UserTemplate, xslt, req.XmlContent, XsltOperation.Render, userId), ct);
+            return XsltProblemResults.Render(result, sw.ElapsedMilliseconds, Response, warnings);
         }
-        catch (XsltException ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            var (message, line, column) = DescribeXsltError(ex);
-            return BadRequest(new { error = message, line, column });
-        }
-        catch (XmlException ex)
-        {
-            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            return new EmptyResult();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Kullanıcı şablon önizlemesi sırasında beklenmeyen hata.");
-            return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
+            return XsltProblemResults.Unexpected();
         }
     }
 
@@ -232,75 +275,54 @@ public class PreviewController : ControllerBase
         var template = await _db.Templates.FirstOrDefaultAsync(t => t.Id == themeId);
         if (template is null)
             return NotFound(new { error = "Şablon bulunamadı." });
-        if (string.IsNullOrEmpty(template.XsltStoragePath))
-            return BadRequest(new { error = "Bu tema için XSLT dosyası tanımlı değil." });
 
-        // Ücretli temanın ham XSLT'si (geliştirici modu) yalnız Pro/Editör/Admin'e açıktır.
-        if (template.IsPremium)
+        // Yalnız yayınlanmış hazır temalar (kullanıcı şablonlarının saklı XSLT'si bu yoldan okunamaz);
+        // ücretli temanın ham XSLT'si (geliştirici modu) yalnız Pro/Editör/Admin'e açıktır.
+        Guid? userId = User.Identity?.IsAuthenticated == true
+            ? Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)
+            : null;
+        switch (await _themeAccess.CheckAsync(template, userId))
         {
-            if (User.Identity?.IsAuthenticated != true)
+            case ThemeAccessDecision.NotFound:
+                return NotFound(new { error = "Şablon bulunamadı." });
+            case ThemeAccessDecision.UpgradeRequired:
                 return StatusCode(StatusCodes.Status402PaymentRequired,
-                    new { error = "upgrade_required", upgrade = true, message = "Bu ücretli tema XsltCraft Pro üyeliği gerektirir." });
-
-            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var ent = await _entitlements.GetAsync(userId);
-            if (!ent.CanUsePremiumThemes)
-                return StatusCode(StatusCodes.Status402PaymentRequired,
-                    new { error = "upgrade_required", upgrade = true, message = "Bu ücretli tema XsltCraft Pro üyeliği gerektirir." });
+                    new { error = "upgrade_required", upgrade = true, message = ThemeAccessGuard.UpgradeMessage });
         }
 
-        await using var stream = await _storage.ReadAsync(template.XsltStoragePath);
+        await using var stream = await _storage.ReadAsync(template.XsltStoragePath!);
         using var reader = new StreamReader(stream);
         var xslt = await reader.ReadToEndAsync();
         return Content(xslt, "application/xslt+xml");
     }
 
     /// <summary>
-    /// Ham XSLT + XML ile anlık önizleme — geliştirici mod için.
+    /// Ham XSLT + XML ile anlık önizleme — geliştirici mod / XSLT editörü (<see cref="XsltRoute.Raw"/>: 1.0 → .NET,
+    /// 2.0 → Saxon, izole worker). İçerik sınırları serviste (XSLT 5 MB + XML 5 MB); gövde sınırı JSON kaçış payıyla 12 MB.
     /// Request: { xslt, xmlContent }
-    /// Response: { html, generationTimeMs, timings: { parseMs, compileMs, transformMs, serializeMs } }
+    /// Response: { html, generationTimeMs, timings: { parseMs, compileMs, transformMs, serializeMs }, engine, cacheHit }
     /// </summary>
-    [HttpPost("raw")]
+    [HttpPost("raw"), Authorize]
+    [EnableRateLimiting(RateLimitPolicies.XsltPreview)]
     [RequestSizeLimit(MaxRawBodyBytes)]
-    public IActionResult PreviewRaw([FromBody] RawPreviewRequest request)
+    public async Task<IActionResult> PreviewRaw([FromBody] RawPreviewRequest request)
     {
-        if (System.Text.Encoding.UTF8.GetByteCount(request.Xslt) > MaxRawBodyBytes / 2)
-            return BadRequest(new { error = "XSLT içeriği çok büyük (maks. 512 KB)." });
-        if (System.Text.Encoding.UTF8.GetByteCount(request.XmlContent) > MaxRawBodyBytes / 2)
-            return BadRequest(new { error = "XML içeriği çok büyük (maks. 512 KB)." });
-
+        var ct = HttpContext.RequestAborted;
+        var sw = Stopwatch.StartNew();
         try
         {
-            var (html, timings) = ApplyXsltWithTimings(request.Xslt, request.XmlContent, request.LogoUrl, request.SignatureUrl);
-
-            if (!string.IsNullOrEmpty(request.LogoUrl) || !string.IsNullOrEmpty(request.SignatureUrl))
-                html = InjectAssetOverrides(html,
-                    request.LogoUrl, request.LogoWidth, request.LogoHeight, request.LogoAlignment,
-                    request.SignatureUrl, request.SignatureWidth, request.SignatureHeight, request.SignatureAlignment);
-
-            if (request.BankInfo?.Count > 0)
-                html = InjectBankInfo(html, request.BankInfo);
-
-            return Ok(new
-            {
-                html,
-                generationTimeMs = timings.ParseMs + timings.CompileMs + timings.TransformMs + timings.SerializeMs,
-                timings = new { timings.ParseMs, timings.CompileMs, timings.TransformMs, timings.SerializeMs },
-            });
+            var result = await _xslt.ExecuteAsync(
+                new XsltRunRequest(XsltRoute.Raw, request.Xslt ?? "", request.XmlContent ?? "", XsltOperation.Render, CurrentUserId()), ct);
+            return XsltProblemResults.Render(result, sw.ElapsedMilliseconds, Response);
         }
-        catch (XsltException ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            var (message, line, column) = DescribeXsltError(ex);
-            return BadRequest(new { error = message, line, column });
-        }
-        catch (XmlException ex)
-        {
-            return BadRequest(new { error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            return new EmptyResult();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Önizleme sırasında beklenmeyen hata.");
-            return BadRequest(new { error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu." });
+            return XsltProblemResults.Unexpected();
         }
     }
 
@@ -310,6 +332,8 @@ public class PreviewController : ControllerBase
     /// Standart indiremez (402), Pro günde 3 (4.'te 429), Editör/Admin sınırsız.
     /// </summary>
     [HttpPost("xslt"), Authorize]
+    [EnableRateLimiting(RateLimitPolicies.XsltPreview)]
+    [RequestSizeLimit(MaxGridBodyBytes)]
     public async Task<IActionResult> GenerateXslt([FromBody] PreviewRequest request)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -321,7 +345,7 @@ public class PreviewController : ControllerBase
                 : StatusCode(StatusCodes.Status402PaymentRequired,
                     new { error = "upgrade_required", upgrade = true, message = "Şablon indirme XsltCraft Pro üyeliği gerektirir." });
 
-        var assetBase64 = await BuildAssetBase64Async(request.Blocks);
+        var assetBase64 = await _assets.BuildAsync(request.Blocks, userId, HttpContext.RequestAborted);
         string? xslt;
         string? error;
 
@@ -345,224 +369,43 @@ public class PreviewController : ControllerBase
     }
 
     /// <summary>
-    /// XslCompiledTransform.Load derleme hatalarında dıştaki XsltException'ın mesajı her zaman
-    /// jenerik "XSLT compile error."tır; asıl neden (geçersiz XPath, yanlış konumlanmış eleman vb.)
-    /// InnerException zincirinde saklıdır. Zincirdeki tüm anlamlı mesajları birleştirir ve
-    /// dıştaki satır/kolon 0 ise inner XsltException'dan doldurur.
+    /// XsltException zincirini tek mesaj + satır/kolona indirger — mantık
+    /// <see cref="XsltCraft.Application.Xslt.Engines.XsltDiagnostics.FromXsltException"/>'dadır.
     /// </summary>
-    private static (string Message, int Line, int Column) DescribeXsltError(XsltException ex)
+    internal static (string Message, int Line, int Column) DescribeXsltError(XsltException ex)
     {
-        int line = ex.LineNumber;
-        int column = ex.LinePosition;
-
-        var messages = new List<string>();
-        for (Exception? cur = ex; cur != null; cur = cur.InnerException)
-        {
-            if (!string.IsNullOrWhiteSpace(cur.Message))
-                messages.Add(cur.Message.Trim());
-            if ((line == 0 || column == 0) && cur is XsltException xe && xe.LineNumber != 0)
-            {
-                line = xe.LineNumber;
-                column = xe.LinePosition;
-            }
-        }
-
-        var message = string.Join(" → ", messages.Distinct());
-        return (message, line, column);
+        var d = XsltCraft.Application.Xslt.Engines.XsltDiagnostics.FromXsltException(ex);
+        return (d.Message, d.Line, d.Column);
     }
 
-    /// <summary>XSLT sözdizimini doğrular — geliştirici aracı.</summary>
-    [HttpPost("validate-xslt")]
+    /// <summary>
+    /// XSLT'yi derleyerek doğrular — geliştirici aracı (<see cref="XsltRoute.Raw"/> + <see cref="XsltOperation.Validate"/>).
+    /// İçerik hatası → <c>200 { valid:false, error, line, column, kind, engine }</c>; operasyonel hata 429/503/500.
+    /// </summary>
+    [HttpPost("validate-xslt"), Authorize]
+    [EnableRateLimiting(RateLimitPolicies.XsltValidate)]
     [RequestSizeLimit(MaxXsltBodyBytes)]
-    public IActionResult ValidateXslt([FromBody] ValidateXsltRequest request)
+    public async Task<IActionResult> ValidateXslt([FromBody] ValidateXsltRequest request)
     {
+        var ct = HttpContext.RequestAborted;
         try
         {
-            SecureXslt.Compile(request.Xslt);
-            return Ok(new { valid = true });
+            var result = await _xslt.ExecuteAsync(
+                new XsltRunRequest(XsltRoute.Raw, request.Xslt ?? "", null, XsltOperation.Validate, CurrentUserId()), ct);
+            return XsltProblemResults.Validate(result, Response);
         }
-        catch (XsltException ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            var (message, line, column) = DescribeXsltError(ex);
-            return Ok(new { valid = false, error = message, line, column });
-        }
-        catch (XmlException ex)
-        {
-            return Ok(new { valid = false, error = ex.Message, line = ex.LineNumber, column = ex.LinePosition });
+            return new EmptyResult();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "XSLT doğrulama sırasında beklenmeyen hata.");
-            return Ok(new { valid = false, error = _env.IsDevelopment() ? ex.Message : "Sunucu hatası oluştu.", line = 0, column = 0 });
+            return XsltProblemResults.Unexpected();
         }
     }
 
-    /// <summary>
-    /// Image bloklarındaki assetId'leri storage'dan okuyup base64 data URI'ya çevirir.
-    /// Bulunamayan veya hata veren asset'ler atlanır (URL fallback).
-    /// </summary>
-    private async Task<Dictionary<string, string>> BuildAssetBase64Async(Dictionary<string, BlockDto> blocks)
-    {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var assetIds = blocks.Values
-            .Where(b => b.Type == "Image" && b.Config.ValueKind == System.Text.Json.JsonValueKind.Object)
-            .Select(b =>
-            {
-                try
-                {
-                    var cfg = System.Text.Json.JsonSerializer.Deserialize<ImageAssetIdOnly>(
-                        b.Config.GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    return cfg?.AssetId;
-                }
-                catch { return null; }
-            })
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Distinct()
-            .ToList();
-
-        foreach (var id in assetIds)
-        {
-            if (!Guid.TryParse(id, out var guid)) continue;
-            try
-            {
-                var asset = await _db.Assets.FindAsync(guid);
-                if (asset is null || !await _storage.ExistsAsync(asset.FilePath)) continue;
-
-                await using var stream = await _storage.ReadAsync(asset.FilePath);
-                using var ms = new MemoryStream();
-                await stream.CopyToAsync(ms);
-                var b64 = Convert.ToBase64String(ms.ToArray());
-                result[id!] = $"data:{ImageUpload.ServeMimeType(asset.FilePath)};base64,{b64}";
-            }
-            catch { /* skip — GenerateImage will fall back to URL */ }
-        }
-
-        return result;
-    }
-
-    private static string ApplyXslt(string xslt, string xmlContent)
-        => ApplyXsltWithParams(xslt, xmlContent, null, null);
-
-    private static string ApplyXsltWithParams(string xslt, string xmlContent, string? logoUrl, string? signatureUrl)
-        => ApplyXsltWithTimings(xslt, xmlContent, logoUrl, signatureUrl).Html;
-
-    private sealed record PreviewTimings(long ParseMs, long CompileMs, long TransformMs, long SerializeMs);
-
-    private static (string Html, PreviewTimings Timings) ApplyXsltWithTimings(
-        string xslt, string xmlContent, string? logoUrl, string? signatureUrl)
-    {
-        var sw = Stopwatch.StartNew();
-        var transform = SecureXslt.Compile(xslt);
-        var compileMs = sw.ElapsedMilliseconds;
-
-        sw.Restart();
-        var xmlReaderSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-        var xmlDoc = new XmlDocument { XmlResolver = null };
-        using var xmlReader = XmlReader.Create(new StringReader(xmlContent), xmlReaderSettings);
-        xmlDoc.Load(xmlReader);
-        var parseMs = sw.ElapsedMilliseconds;
-
-        var args = new XsltArgumentList();
-        if (!string.IsNullOrEmpty(logoUrl))
-            args.AddParam("logo-url", "", logoUrl);
-        if (!string.IsNullOrEmpty(signatureUrl))
-            args.AddParam("signature-url", "", signatureUrl);
-
-        sw.Restart();
-        using var writer = new StringWriter();
-        transform.Transform(xmlDoc, args, writer);
-        var transformMs = sw.ElapsedMilliseconds;
-
-        sw.Restart();
-        var html = writer.ToString();
-        var serializeMs = sw.ElapsedMilliseconds;
-
-        return (html, new PreviewTimings(parseMs, compileMs, transformMs, serializeMs));
-    }
-
-    /// <summary>
-    /// Injects a script that overrides logo / signature elements after the XSLT's own JS has run.
-    /// Targets all known ID conventions:
-    ///   Logo  → company_logo, companyLogo
-    ///   İmza  → imza, companyKase
-    /// </summary>
-    private static string InjectAssetOverrides(
-        string html,
-        string? logoUrl, int? logoWidth, int? logoHeight, string? logoAlignment,
-        string? signatureUrl, int? sigWidth, int? sigHeight, string? sigAlignment)
-    {
-        // justify-content values for flex container
-        static string JustifyContent(string? align) => align switch
-        {
-            "center" => "center",
-            "right" => "flex-end",
-            _ => "flex-start",
-        };
-
-        // Img inline style: explicit px if provided, otherwise auto; always max-width:100%
-        static string ImgStyle(int? w, int? h) =>
-            $"{(w.HasValue ? $"width:{w}px;" : "width:auto;")}" +
-            $"{(h.HasValue ? $"height:{h}px;" : "height:auto;")}" +
-            "max-width:100%;object-fit:contain;display:block;";
-
-        static string BuildSetCall(string[] ids, string url, int? w, int? h, string? align)
-        {
-            var jc = JustifyContent(align);
-            var style = ImgStyle(w, h);
-            // Use flexbox on the container so alignment works regardless of img display type
-            var fn = $"function(el){{" +
-                     $"el.style.cssText='display:flex;justify-content:{jc};align-items:center;';" +
-                     $"el.innerHTML='<img src=\"{url}\" style=\"{style}\">';}}";
-            var idList = string.Join(",", ids.Select(id => $"'{id}'"));
-            return $"setEl([{idList}],{fn});";
-        }
-
-        var sb = new System.Text.StringBuilder();
-        sb.Append("<script>(function(){");
-        sb.Append("function setEl(ids,fn){ids.forEach(function(id){var el=document.getElementById(id);if(el)fn(el);});}");
-        sb.Append("function applyOverrides(){");
-
-        if (!string.IsNullOrEmpty(logoUrl))
-        {
-            var safe = logoUrl.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            sb.Append(BuildSetCall(["company_logo", "companyLogo"], safe, logoWidth, logoHeight, logoAlignment));
-        }
-
-        if (!string.IsNullOrEmpty(signatureUrl))
-        {
-            var safe = signatureUrl.Replace("\\", "\\\\").Replace("\"", "\\\"");
-            sb.Append(BuildSetCall(["imza", "companyKase"], safe, sigWidth, sigHeight, sigAlignment));
-        }
-
-        sb.Append("}window.addEventListener('load',applyOverrides);})();</script>");
-
-        var insertIdx = html.IndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-        return insertIdx >= 0 ? html.Insert(insertIdx, sb.ToString()) : html + sb.ToString();
-    }
-
-    private static string InjectBankInfo(string html, List<BankInfoItem> bankInfo)
-    {
-        var sb = new System.Text.StringBuilder();
-        sb.Append("<div style=\"font-family:Arial,sans-serif;font-size:12px;margin:16px 0;page-break-inside:avoid\">");
-        sb.Append("<table style=\"width:100%;border-collapse:collapse\">");
-        sb.Append("<thead><tr>");
-        sb.Append("<th style=\"text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd\">Banka Adı</th>");
-        sb.Append("<th style=\"text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd\">IBAN</th>");
-        sb.Append("</tr></thead><tbody>");
-        foreach (var item in bankInfo)
-        {
-            sb.Append("<tr>");
-            sb.Append($"<td style=\"padding:6px 10px;border:1px solid #ddd\">{System.Net.WebUtility.HtmlEncode(item.BankName)}</td>");
-            sb.Append($"<td style=\"padding:6px 10px;border:1px solid #ddd;font-family:monospace\">{System.Net.WebUtility.HtmlEncode(item.Iban)}</td>");
-            sb.Append("</tr>");
-        }
-        sb.Append("</tbody></table></div>");
-
-        var bankHtml = sb.ToString();
-        var insertIdx = html.IndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-        return insertIdx >= 0 ? html.Insert(insertIdx, bankHtml) : html + bankHtml;
-    }
+    private Guid CurrentUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 }
 
 public class ValidateXsltRequest
@@ -571,9 +414,3 @@ public class ValidateXsltRequest
 }
 
 public record UserTemplatePreviewRequest(string XmlContent);
-
-file sealed class ImageAssetIdOnly
-{
-    [System.Text.Json.Serialization.JsonPropertyName("assetId")]
-    public string? AssetId { get; set; }
-}

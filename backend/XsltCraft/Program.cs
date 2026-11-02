@@ -6,10 +6,16 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
+using XsltCraft.Api.Preview;
+using XsltCraft.Api.Xslt;
 using XsltCraft.Infrastructure.DependencyInjection;
 using XsltCraft.Infrastructure.Persistence;
+using XsltCraft.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Çekirdek dökümü / ptrace ile bellekteki sırların (JWT anahtarı, DB parolası) okunmasını engelle (Linux; Production).
+ProcessHardening.Apply(builder.Configuration);
 
 builder.Services.AddControllers();
 // Docker HEALTHCHECK (`curl /health`) için liveness — süreç ayakta ve istek işliyor mu.
@@ -17,28 +23,21 @@ builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddXsltCraft(builder.Configuration);
+builder.Services.AddScoped<PreviewAssetEmbedder>();
 
 builder.Services.AddRateLimiter(opts =>
 {
     opts.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    opts.OnRejected = RateLimitPolicies.OnRejectedAsync;
 
-    // Login / refresh / google: 10 istek / dakika / IP
-    opts.AddFixedWindowLimiter("auth-sensitive", o =>
-    {
-        o.PermitLimit = 10;
-        o.Window = TimeSpan.FromMinutes(1);
-        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        o.QueueLimit = 0;
-    });
+    // XSLT önizleme (xslt-preview) + doğrulama (xslt-validate): 120 req/dk/user.
+    opts.AddXsltPolicies();
+
+    // Login / refresh / google: 10 istek / dakika / IP (G3: önceden tek global kova — bir saldırgan herkesi kilitliyordu)
+    opts.AddPolicy("auth-sensitive", httpContext => RateLimitPolicies.PerIp(httpContext, 10, TimeSpan.FromMinutes(1)));
 
     // Register: 5 istek / 10 dakika / IP
-    opts.AddFixedWindowLimiter("auth-register", o =>
-    {
-        o.PermitLimit = 5;
-        o.Window = TimeSpan.FromMinutes(10);
-        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        o.QueueLimit = 0;
-    });
+    opts.AddPolicy("auth-register", httpContext => RateLimitPolicies.PerIp(httpContext, 5, TimeSpan.FromMinutes(10)));
 
     // AI panel istekleri: 30 req/dk/user
     opts.AddPolicy("ai-assistant", httpContext =>
@@ -56,16 +55,22 @@ builder.Services.AddRateLimiter(opts =>
 
     // Refresh: IP başına 30 istek/dk. Login ile ortak global limiti paylaşmaz — aksi halde
     // yoğun anda kullanıcıların sessiz yenilemesi 429 alıp oturumdan düşerdi.
-    opts.AddPolicy("auth-refresh", httpContext =>
+    // Tema logo/imza birleştirme (önizleme + indirme): sürükle-bırak art arda istek üretir.
+    opts.AddPolicy("theme-compose", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anon",
+            partitionKey: httpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                          ?? "anon",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 30,
+                PermitLimit = 60,
                 Window = TimeSpan.FromMinutes(1),
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0,
             }));
+
+    opts.AddPolicy("auth-refresh", httpContext =>
+        RateLimitPolicies.PerRefreshTokenOrIp(httpContext, "refreshToken", 30, TimeSpan.FromMinutes(1)));
 
     // İstemci tarafı indirme bildirimleri: 60 req/dk/user
     opts.AddPolicy("activity", httpContext =>
@@ -166,8 +171,10 @@ if (app.Environment.IsDevelopment())
 
 // UseCors MUST come before UseRouting when using named policies with endpoint routing
 app.UseCors(app.Environment.IsDevelopment() ? "dev" : "prod");
-app.UseRateLimiter();
+// Kimlik doğrulamadan SONRA: kullanıcı bölümlü politikalar (ai-assistant, xslt-preview, ...) claim'i görebilsin
+// (önceden User boştu → hepsi IP'ye düşüyordu). IP bölümlü auth politikaları etkilenmez.
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");

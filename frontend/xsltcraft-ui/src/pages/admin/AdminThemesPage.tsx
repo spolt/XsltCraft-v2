@@ -1,245 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Fragment, useEffect, useState } from 'react'
+import { FileCode2, Loader2, Pencil, ScanSearch, Trash2 } from 'lucide-react'
 import {
   getAdminThemes,
-  createTheme,
-  updateTheme,
+  getAdminTheme,
   deleteTheme,
+  type AdminTheme,
 } from '../../services/adminService'
 import type { FreeTheme } from '../../services/templateService'
+import PageHeader from '../../components/ui/PageHeader'
+import Card from '../../components/ui/Card'
+import IconTile from '../../components/ui/IconTile'
+import ThemeSlotReport from '../../components/admin/ThemeSlotReport'
+import { UpdateRow, UploadForm } from '../../components/admin/themes/ThemeForms'
+import {
+  AdminPage, Banner, BTN_DANGER, BTN_ICON, BTN_ICON_DANGER, BTN_SECONDARY, Modal, Pill, SectionHeader, TABLE, TD, TH, TR,
+} from '../../components/admin/adminUi'
 
 const DOC_TYPE_LABEL: Record<string, string> = {
   Invoice: 'e-Fatura',
   Despatch: 'İrsaliye',
 }
 
-// ---- Yeni tema yükleme formu ----
-function UploadForm({ onCreated }: { onCreated: (t: FreeTheme) => void }) {
-  const [name, setName] = useState('')
-  const [docType, setDocType] = useState('Invoice')
-  const [file, setFile] = useState<File | null>(null)
-  const [isPremium, setIsPremium] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!file) return
-    setLoading(true)
-    setError(null)
-    try {
-      const created = await createTheme({ name, documentType: docType, file, isPremium })
-      onCreated(created)
-      setName('')
-      setDocType('Invoice')
-      setFile(null)
-      setIsPremium(false)
-      if (fileRef.current) fileRef.current.value = ''
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? 'Yükleme başarısız.'
-      setError(msg)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <form
-      onSubmit={submit}
-      className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm mb-8"
-    >
-      <h2 className="text-base font-semibold text-gray-800 mb-4">Yeni Tema Yükle</h2>
-
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
-          {error}
-        </p>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-gray-600">Tema Adı</label>
-          <input
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="UBL e-Fatura Teması"
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-gray-600">Döküman Tipi</label>
-          <select
-            value={docType}
-            onChange={(e) => setDocType(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value="Invoice">e-Fatura</option>
-            <option value="Despatch">İrsaliye</option>
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-gray-600">.xslt Dosyası</label>
-          <input
-            ref={fileRef}
-            required
-            type="file"
-            accept=".xslt"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-2 file:border-0 file:bg-blue-50 file:text-blue-700 file:rounded file:px-2 file:py-1 file:text-xs"
-          />
-        </div>
-      </div>
-
-      <label className="flex items-center gap-2 mb-4 text-sm text-gray-700 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={isPremium}
-          onChange={(e) => setIsPremium(e.target.checked)}
-          className="w-4 h-4 rounded border-gray-300 text-amber-600 accent-amber-600"
-        />
-        Ücretli tema (yalnız Pro/Editör/Admin kullanabilir; herkes önizleyebilir)
-      </label>
-
-      <button
-        type="submit"
-        disabled={loading || !file}
-        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition block"
-      >
-        {loading ? 'Yükleniyor…' : 'Yükle'}
-      </button>
-    </form>
-  )
-}
-
-// ---- Güncelle satır inline formu ----
-function UpdateRow({
-  theme,
-  onUpdated,
-}: {
-  theme: FreeTheme
-  onUpdated: (t: FreeTheme) => void
-}) {
-  const [name, setName] = useState(theme.name)
-  const [docType, setDocType] = useState<string>(theme.documentType)
-  const [file, setFile] = useState<File | null>(null)
-  const [isPremium, setIsPremium] = useState(theme.isPremium)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    try {
-      const updated = await updateTheme(theme.id, {
-        name,
-        documentType: docType,
-        file: file ?? undefined,
-        isPremium,
-      })
-      onUpdated(updated)
-      setFile(null)
-      if (fileRef.current) fileRef.current.value = ''
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? 'Güncelleme başarısız.'
-      setError(msg)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-2">
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <div className="flex gap-2 flex-wrap">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-44"
-        />
-        <select
-          value={docType}
-          onChange={(e) => setDocType(e.target.value)}
-          className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        >
-          <option value="Invoice">e-Fatura</option>
-          <option value="Despatch">İrsaliye</option>
-        </select>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".xslt"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="text-xs border border-gray-300 rounded-lg px-2 py-1.5"
-        />
-        <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={isPremium}
-            onChange={(e) => setIsPremium(e.target.checked)}
-            className="w-3.5 h-3.5 rounded border-gray-300 text-amber-600 accent-amber-600"
-          />
-          Ücretli
-        </label>
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition"
-        >
-          {loading ? '…' : 'Kaydet'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
-// ---- Silme onay modal'ı ----
-function DeleteModal({
-  theme,
-  onConfirm,
-  onCancel,
-}: {
-  theme: FreeTheme
-  onConfirm: () => void
-  onCancel: () => void
-}) {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
-        <h3 className="text-base font-semibold text-gray-900 mb-2">Temayı Sil</h3>
-        <p className="text-sm text-gray-600 mb-6">
-          <span className="font-medium text-gray-900">{theme.name}</span> teması kalıcı olarak
-          silinecek. Bu işlem geri alınamaz.
-        </p>
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition"
-          >
-            İptal
-          </button>
-          <button
-            onClick={onConfirm}
-            className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 rounded-lg transition"
-          >
-            Evet, Sil
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ---- Ana sayfa ----
 export default function AdminThemesPage() {
   const [themes, setThemes] = useState<FreeTheme[]>([])
   const [loading, setLoading] = useState(true)
@@ -247,6 +28,7 @@ export default function AdminThemesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingTheme, setDeletingTheme] = useState<FreeTheme | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [report, setReport] = useState<AdminTheme | null>(null)
 
   useEffect(() => {
     getAdminThemes()
@@ -255,10 +37,24 @@ export default function AdminThemesPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleCreated = (t: FreeTheme) => setThemes((prev) => [t, ...prev])
+  // Yükleme/güncelleme sonrası konum analizi raporu gösterilir.
+  const handleCreated = (t: AdminTheme) => {
+    setThemes((prev) => [t, ...prev])
+    setReport(t)
+  }
 
-  const handleUpdated = (t: FreeTheme) =>
+  const handleUpdated = (t: AdminTheme) => {
     setThemes((prev) => prev.map((x) => (x.id === t.id ? t : x)))
+    if (t.slotAnalysis) setReport(t)
+  }
+
+  const openReport = async (id: string) => {
+    try {
+      setReport(await getAdminTheme(id))
+    } catch {
+      setError('Tema bilgisi alınamadı.')
+    }
+  }
 
   const handleDeleteConfirm = async () => {
     if (!deletingTheme) return
@@ -275,117 +71,138 @@ export default function AdminThemesPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
-      {/* Başlık */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Admin Paneli</h1>
-          <p className="text-gray-500 text-sm mt-1">Hazır XSLT temalarını yönetin (ücretsiz / ücretli).</p>
-        </div>
-        <Link
-          to="/dashboard"
-          className="text-sm text-gray-600 hover:text-gray-900 border border-gray-300 px-3 py-1.5 rounded-lg transition"
-        >
-          ← Dashboard
-        </Link>
+    <AdminPage>
+      <PageHeader title="Hazır Şablonlar" description="Hazır XSLT temalarını yönetin (ücretsiz / ücretli)." />
+
+      <div className="flex flex-wrap items-start gap-4">
+        <UploadForm onCreated={handleCreated} />
+
+        <Card as="section" padding="none" aria-labelledby="themes-list-title" className="min-w-0 flex-[999_1_520px]">
+          <SectionHeader
+            id="themes-list-title"
+            title="Mevcut Temalar"
+            aside={!loading && <span className="text-[12.5px] text-tx-muted">{themes.length} tema</span>}
+          />
+
+          {error && <div className="px-4 pt-3"><Banner>{error}</Banner></div>}
+
+          {loading && (
+            <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-tx-muted">
+              <Loader2 size={15} className="animate-spin" aria-hidden="true" /> Yükleniyor…
+            </div>
+          )}
+
+          {!loading && !error && themes.length === 0 && (
+            <p className="m-0 px-4 py-10 text-center text-[13px] text-tx-muted">Henüz tema yok.</p>
+          )}
+
+          {!loading && themes.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className={TABLE}>
+                <thead>
+                  <tr>
+                    <th scope="col" className={`${TH} px-4!`}>Tema Adı</th>
+                    <th scope="col" className={TH}>Tip</th>
+                    <th scope="col" className={TH}>Ücret</th>
+                    <th scope="col" className={TH}>Yükleme Tarihi</th>
+                    <th scope="col" className={`${TH} px-4! text-right!`}>İşlem</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {themes.map((theme) => {
+                    const editing = editingId === theme.id
+                    return (
+                      <Fragment key={theme.id}>
+                        <tr className={`${TR} group ${editing ? 'bg-ui-soft' : ''}`}>
+                          <td className={`${TD} px-4!`}>
+                            <span className="flex items-center gap-2.5">
+                              <IconTile icon={FileCode2} color="green" size="sm" />
+                              <span className="font-semibold text-tx">{theme.name}</span>
+                            </span>
+                          </td>
+                          <td className={`${TD} text-tx-2`}>{DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}</td>
+                          <td className={TD}>
+                            {theme.isPremium ? <Pill tone="purple">Ücretli</Pill> : <Pill tone="green">Ücretsiz</Pill>}
+                          </td>
+                          <td className={`${TD} text-tx-muted`}>{new Date(theme.createdAt).toLocaleDateString('tr-TR')}</td>
+                          <td className={`${TD} px-4!`}>
+                            <span className="flex justify-end gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => void openReport(theme.id)}
+                                aria-label={`${theme.name}: logo / imza konum analizi`}
+                                title="Logo / imza konum analizi"
+                                className={BTN_ICON}
+                              >
+                                <ScanSearch size={15} aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingId(editing ? null : theme.id)}
+                                aria-label={`${theme.name}: güncelle`}
+                                aria-expanded={editing}
+                                title="Güncelle"
+                                className={BTN_ICON}
+                              >
+                                <Pencil size={15} aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingTheme(theme)}
+                                aria-label={`${theme.name}: sil`}
+                                title="Temayı sil"
+                                className={BTN_ICON_DANGER}
+                              >
+                                <Trash2 size={15} aria-hidden="true" />
+                              </button>
+                            </span>
+                          </td>
+                        </tr>
+                        {editing && (
+                          <tr className="bg-ui-soft">
+                            <td colSpan={5} className="px-4 pt-1 pb-4">
+                              <UpdateRow
+                                theme={theme}
+                                onCancel={() => setEditingId(null)}
+                                onUpdated={(t) => {
+                                  handleUpdated(t)
+                                  setEditingId(null)
+                                }}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       </div>
 
-      {/* Yükleme formu */}
-      <UploadForm onCreated={handleCreated} />
+      {report && <ThemeSlotReport theme={report} onClose={() => setReport(null)} />}
 
-      {/* Tema tablosu */}
-      <h2 className="text-base font-semibold text-gray-800 mb-3">Mevcut Temalar</h2>
-
-      {loading && <p className="text-sm text-gray-500">Yükleniyor…</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      {!loading && !error && themes.length === 0 && (
-        <p className="text-sm text-gray-400">Henüz tema yok.</p>
-      )}
-
-      {!loading && themes.length > 0 && (
-        <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Ad</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Tip</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Ücret</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Yükleme Tarihi</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {themes.map((theme) => (
-                <tr key={theme.id}>
-                  <td className="px-4 py-4 text-gray-900">
-                    {editingId === theme.id ? (
-                      <UpdateRow
-                        theme={theme}
-                        onUpdated={(t) => {
-                          handleUpdated(t)
-                          setEditingId(null)
-                        }}
-                      />
-                    ) : (
-                      theme.name
-                    )}
-                  </td>
-                  <td className="px-4 py-4 text-gray-600">
-                    {DOC_TYPE_LABEL[theme.documentType] ?? theme.documentType}
-                  </td>
-                  <td className="px-4 py-4">
-                    {theme.isPremium ? (
-                      <span className="inline-flex items-center text-xs font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">
-                        Ücretli
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-400">Ücretsiz</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-4 text-gray-500">
-                    {new Date(theme.createdAt).toLocaleDateString('tr-TR')}
-                  </td>
-                  <td className="px-4 py-4">
-                    {editingId === theme.id ? (
-                      <button
-                        onClick={() => setEditingId(null)}
-                        className="text-xs text-gray-500 hover:text-gray-800 underline"
-                      >
-                        İptal
-                      </button>
-                    ) : (
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          onClick={() => setEditingId(theme.id)}
-                          className="px-3 py-1.5 text-xs font-medium text-blue-700 border border-blue-200 hover:bg-blue-50 rounded-lg transition"
-                        >
-                          Güncelle
-                        </button>
-                        <button
-                          onClick={() => setDeletingTheme(theme)}
-                          className="px-3 py-1.5 text-xs font-medium text-red-700 border border-red-200 hover:bg-red-50 rounded-lg transition"
-                        >
-                          Sil
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Silme modal'ı */}
       {deletingTheme && (
-        <DeleteModal
-          theme={deletingTheme}
-          onConfirm={deleteLoading ? () => {} : handleDeleteConfirm}
-          onCancel={() => setDeletingTheme(null)}
-        />
+        <Modal
+          titleId="delete-theme-title"
+          title="Temayı Sil"
+          onClose={() => setDeletingTheme(null)}
+          footer={
+            <>
+              <button type="button" onClick={() => setDeletingTheme(null)} className={`${BTN_SECONDARY} h-10! px-4!`}>İptal</button>
+              <button type="button" onClick={() => void handleDeleteConfirm()} disabled={deleteLoading} className={BTN_DANGER}>
+                {deleteLoading ? 'Siliniyor…' : 'Evet, Sil'}
+              </button>
+            </>
+          }
+        >
+          <p className="m-0 text-[13px] text-tx-2">
+            <span className="font-semibold text-tx">{deletingTheme.name}</span> teması kalıcı olarak silinecek. Bu işlem geri alınamaz.
+          </p>
+        </Modal>
       )}
-    </div>
+    </AdminPage>
   )
 }

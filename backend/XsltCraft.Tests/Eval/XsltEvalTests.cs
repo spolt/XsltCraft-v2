@@ -4,6 +4,7 @@ using System.Xml;
 using System.Xml.Xsl;
 using VerifyXunit;
 using XsltCraft.Application.Preview;
+using XsltCraft.Application.Xslt;
 
 namespace XsltCraft.Tests.Eval;
 
@@ -90,13 +91,17 @@ public class XsltEvalTests
     public void Case002_RejectsExternalResourceFunctions(string maliciousXpath)
     {
         // Kullanıcı binding XPath'i üretilen XSLT'ye gömülür; Saxon render yolunda bu
-        // fonksiyonlar SSRF/dosya okuma sağlar. Generator fail-closed reddetmeli.
+        // fonksiyonlar SSRF/dosya okuma sağlar. G3 (blok düzeyinde fail-closed): ifade stylesheet'e
+        // HİÇ girmez; blok yer tutucuyla değişir + XPATH_NOT_PORTABLE uyarısı (bkz. case011).
         var tree = SingleTextBinding(maliciousXpath);
 
         var (xslt, error) = _sut.Generate(tree);
 
-        Assert.Null(xslt);
-        Assert.NotNull(error);
+        Assert.Null(error);
+        Assert.NotNull(xslt);
+        Assert.DoesNotContain(maliciousXpath, xslt);
+        Assert.Contains("xc-binding-error", xslt);
+        Assert.Equal(new XsltGenerationWarning("b1", XPathPortability.NotPortable, maliciousXpath), Assert.Single(_sut.Warnings));
     }
 
     [Fact]

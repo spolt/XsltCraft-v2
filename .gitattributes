@@ -1,0 +1,6 @@
+# Satır sonu politikası (bkz. T2.6 raporu). Repo geneli için `* text=auto` henüz YOK: mevcut dosyaların
+# yeniden normalize edilmesi ayrı bir karar/commit gerektirir. Burada yalnız bayt-hassas dosyalar sabitlenir.
+
+# Verify golden snapshot'ları: platformdan bağımsız LF. Windows'ta core.autocrlf=true çalışma kopyasını
+# CRLF'e çevirip received/verified karşılaştırmasını ve diff'leri bozmasın. (*.received.* .gitignore'da.)
+*.verified.txt text eol=lf

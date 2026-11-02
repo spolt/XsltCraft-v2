@@ -4,6 +4,7 @@ import { useEditorStore } from '../../store/editorStore'
 import GridBlockItem from './GridBlockItem'
 import { PAGE_WIDTH_MM, PAGE_HEIGHT_MM } from '../../store/editorStore'
 import { CANVAS_DROPPABLE_ID, canvasPageRef, canvasScaleRef } from './canvasRefs'
+import CanvasToolbar from './CanvasToolbar'
 
 const GRID_SIZE_PX_PER_5MM = 5 // 5mm grid
 
@@ -105,197 +106,127 @@ export default function Canvas() {
     (a, b) => ((a.gridLayout.zIndex ?? 0) - (b.gridLayout.zIndex ?? 0)) || 0,
   )
 
+  const zoomPercent = Math.round(scale * 25.4 / 96 * 100)
+
+  // Izgara: 5 mm küçük + 10 mm büyük çizgiler (iki katman üst üste binerek büyük çizgiyi koyulaştırır)
+  const gridLine = 'var(--ui-grid)'
+
   return (
-    <main
-      ref={scrollContainerRef}
-      className="flex-1 overflow-auto"
-      style={{ background: '#F1F0EC' }}
-      onClick={() => {
-        // Sayfa arkaplanina tiklamak secimi kaldirir
-        if (selectedBlockId) selectBlock(null)
-      }}
-    >
-      {/* Sayfa kapsayicisi — scroll ve hizalama icin */}
-      <div
-        style={{
-          minHeight: '100%',
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'center',
-          padding: '32px',
+    <div className="flex min-w-0 flex-1 flex-col">
+      <CanvasToolbar zoomPercent={zoomPercent} />
+      <main
+        ref={scrollContainerRef}
+        aria-label="Tasarım alanı — A4 sayfa"
+        className="min-h-0 flex-1 overflow-auto bg-ui-bg"
+        onClick={() => {
+          // Sayfa arkaplanina tiklamak secimi kaldirir
+          if (selectedBlockId) selectBlock(null)
         }}
       >
-        {/* A4 sayfasi */}
+        {/* Sayfa kapsayicisi — scroll ve hizalama icin */}
         <div
-          ref={(node) => {
-            // hem module-level canvasPageRef hem de dnd-kit droppable ref
-            ;(canvasPageRef as React.MutableRefObject<HTMLDivElement | null>).current = node
-            setDropRef(node)
-          }}
-          onClick={(e) => e.stopPropagation()} // sayfa icini tiklamak deselect etmesin
           style={{
-            position: 'relative',
-            width: pageWidthPx,
-            height: pageHeightPx,
-            background: '#ffffff',
-            flexShrink: 0,
-            boxShadow: isOver
-              ? '0 0 0 2px #185FA5, 0 4px 24px rgba(0,0,0,0.18)'
-              : '0 2px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)',
-            borderRadius: 2,
-            // Izgara arkaplan - 5mm kucuk + 10mm buyuk cizgiler
-            backgroundImage: [
-              `linear-gradient(rgba(0,100,200,0.055) 1px, transparent 1px)`,
-              `linear-gradient(90deg, rgba(0,100,200,0.055) 1px, transparent 1px)`,
-              `linear-gradient(rgba(0,100,200,0.1) 1px, transparent 1px)`,
-              `linear-gradient(90deg, rgba(0,100,200,0.1) 1px, transparent 1px)`,
-            ].join(','),
-            backgroundSize: [
-              `${gridCellPx}px ${gridCellPx}px`,
-              `${gridCellPx}px ${gridCellPx}px`,
-              `${gridCellPx * 2}px ${gridCellPx * 2}px`,
-              `${gridCellPx * 2}px ${gridCellPx * 2}px`,
-            ].join(','),
+            minHeight: '100%',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            padding: '32px',
           }}
         >
-          {/* Marj kilavuzlari (14mm her taraftan) */}
+          {/* A4 sayfasi — her zaman beyaz */}
           <div
-            style={{
-              position: 'absolute',
-              top: 14 * scale,
-              left: 14 * scale,
-              right: 14 * scale,
-              bottom: 14 * scale,
-              border: '1px dashed rgba(24,95,165,0.18)',
-              borderRadius: 0,
-              pointerEvents: 'none',
-              zIndex: 0,
+            ref={(node) => {
+              // hem module-level canvasPageRef hem de dnd-kit droppable ref
+              ;(canvasPageRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+              setDropRef(node)
             }}
-          />
-
-          {/* Bos canvas mesaji */}
-          {blockList.length === 0 && (
+            onClick={(e) => e.stopPropagation()} // sayfa icini tiklamak deselect etmesin
+            className="xc-paper"
+            style={{
+              position: 'relative',
+              width: pageWidthPx,
+              height: pageHeightPx,
+              background: 'white',
+              flexShrink: 0,
+              boxShadow: isOver
+                ? '0 0 0 2px var(--ui-accent), var(--ui-shadow-lift)'
+                : 'var(--ui-shadow-rest), 0 8px 24px rgba(15, 36, 64, 0.10)',
+              borderRadius: 2,
+              backgroundImage: [
+                `linear-gradient(${gridLine} 1px, transparent 1px)`,
+                `linear-gradient(90deg, ${gridLine} 1px, transparent 1px)`,
+                `linear-gradient(${gridLine} 1px, transparent 1px)`,
+                `linear-gradient(90deg, ${gridLine} 1px, transparent 1px)`,
+              ].join(','),
+              backgroundSize: [
+                `${gridCellPx}px ${gridCellPx}px`,
+                `${gridCellPx}px ${gridCellPx}px`,
+                `${gridCellPx * 2}px ${gridCellPx * 2}px`,
+                `${gridCellPx * 2}px ${gridCellPx * 2}px`,
+              ].join(','),
+            }}
+          >
+            {/* Marj kilavuzlari (14mm her taraftan) */}
             <div
+              aria-hidden="true"
               style={{
                 position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
+                top: 14 * scale,
+                left: 14 * scale,
+                right: 14 * scale,
+                bottom: 14 * scale,
+                border: '1px dashed var(--ui-soft-line)',
                 pointerEvents: 'none',
+                zIndex: 0,
               }}
-            >
-              <span style={{ fontSize: 13, color: 'rgba(0,0,0,0.2)', fontWeight: 500 }}>
-                Soldaki listeden blok sürükle
-              </span>
-              <span style={{ fontSize: 11, color: 'rgba(0,0,0,0.15)' }}>
-                A4 — 210 × 297 mm
-              </span>
-            </div>
-          )}
-
-          {/* Sürükleme kılavuz çizgileri */}
-          {dragGuide && (
-            <>
-              {/* Dikey çizgi — X mesafesi */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: dragGuide.x * scale,
-                  top: 0,
-                  width: 1,
-                  height: pageHeightPx,
-                  background: 'rgba(220,30,30,0.7)',
-                  pointerEvents: 'none',
-                  zIndex: 9999,
-                }}
-              />
-              {/* Yatay çizgi — Y mesafesi */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: dragGuide.y * scale,
-                  width: pageWidthPx,
-                  height: 1,
-                  background: 'rgba(220,30,30,0.7)',
-                  pointerEvents: 'none',
-                  zIndex: 9999,
-                }}
-              />
-              {/* X etiketi */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: dragGuide.x * scale + 4,
-                  top: 4,
-                  fontSize: 9,
-                  fontWeight: 600,
-                  color: 'rgba(220,30,30,0.9)',
-                  background: 'rgba(255,255,255,0.85)',
-                  padding: '1px 4px',
-                  borderRadius: 3,
-                  pointerEvents: 'none',
-                  zIndex: 9999,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                x: {dragGuide.x.toFixed(1)} mm
-              </div>
-              {/* Y etiketi */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 4,
-                  top: dragGuide.y * scale + 4,
-                  fontSize: 9,
-                  fontWeight: 600,
-                  color: 'rgba(220,30,30,0.9)',
-                  background: 'rgba(255,255,255,0.85)',
-                  padding: '1px 4px',
-                  borderRadius: 3,
-                  pointerEvents: 'none',
-                  zIndex: 9999,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                y: {dragGuide.y.toFixed(1)} mm
-              </div>
-            </>
-          )}
-
-          {/* Bloklar */}
-          {blockList.map((block) => (
-            <GridBlockItem
-              key={block.id}
-              block={block}
-              scale={scale}
             />
-          ))}
-        </div>
-      </div>
 
-      {/* Scale bilgisi — debug icin gizli tutulabilir */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 8,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          fontSize: 9,
-          color: 'rgba(0,0,0,0.25)',
-          pointerEvents: 'none',
-          zIndex: 10,
-          background: 'rgba(255,255,255,0.6)',
-          padding: '2px 8px',
-          borderRadius: 4,
-        }}
-      >
-        {Math.round(scale * 25.4 / 96 * 100)}% · A4 {PAGE_WIDTH_MM}×{PAGE_HEIGHT_MM} mm · 5mm ızgara
-      </div>
-    </main>
+            {/* Bos canvas mesaji */}
+            {blockList.length === 0 && (
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+                <span className="text-[13px] font-medium text-tx-subtle">Soldaki listeden blok sürükle</span>
+                <span className="text-[11px] text-tx-subtle">A4 — 210 × 297 mm</span>
+              </div>
+            )}
+
+            {/* Sürükleme kılavuz çizgileri */}
+            {dragGuide && (
+              <>
+                <div style={{ ...GUIDE_LINE, left: dragGuide.x * scale, top: 0, width: 1, height: pageHeightPx }} />
+                <div style={{ ...GUIDE_LINE, left: 0, top: dragGuide.y * scale, width: pageWidthPx, height: 1 }} />
+                <div style={{ ...GUIDE_LABEL, left: dragGuide.x * scale + 4, top: 4 }}>x: {dragGuide.x.toFixed(1)} mm</div>
+                <div style={{ ...GUIDE_LABEL, left: 4, top: dragGuide.y * scale + 4 }}>y: {dragGuide.y.toFixed(1)} mm</div>
+              </>
+            )}
+
+            {/* Bloklar */}
+            {blockList.map((block) => (
+              <GridBlockItem key={block.id} block={block} scale={scale} />
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
   )
 }
 
+const GUIDE_LINE: React.CSSProperties = {
+  position: 'absolute',
+  background: 'var(--color-fn-red)',
+  opacity: 0.7,
+  pointerEvents: 'none',
+  zIndex: 9999,
+}
+
+const GUIDE_LABEL: React.CSSProperties = {
+  position: 'absolute',
+  fontSize: 9,
+  fontWeight: 600,
+  color: 'var(--color-fn-red-ink)',
+  background: 'rgba(255, 255, 255, 0.9)',
+  padding: '1px 4px',
+  borderRadius: 3,
+  pointerEvents: 'none',
+  zIndex: 9999,
+  whiteSpace: 'nowrap',
+}
