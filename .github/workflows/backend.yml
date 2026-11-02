@@ -53,6 +53,9 @@ jobs:
         run: dotnet build backend/XsltCraft.slnx --no-restore --configuration Release
 
       - name: Test
+        env:
+          # Linux'ta Java tarafı süreç içi SetEnvironmentVariable'ı görmez; sandbox kontrol testleri gerçek değişken ister.
+          XSLTCRAFT_TEST_SECRET_ENV: GIZLI_DOSYA_ICERIGI_7f3a
         # Hariç: Eval (ci.yml'de non-blocking), Measurement (ölçüm), Corpus (prod dökümü gerekir).
         # WorkerIntegration DAHİL — gerçek worker süreçleri, bloke eder.
         run: dotnet test backend/XsltCraft.slnx --no-build --configuration Release --filter "Category!=Eval&Category!=Measurement&Category!=Corpus" --verbosity normal

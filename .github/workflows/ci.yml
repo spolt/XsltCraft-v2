@@ -116,6 +116,8 @@ jobs:
         working-directory: backend
         env:
           ConnectionStrings__DefaultConnection: "Server=localhost;Port=5432;Database=xsltcraft_test;User Id=postgres;Password=postgres;"
+          # Linux'ta Java tarafı süreç içi SetEnvironmentVariable'ı görmez; sandbox kontrol testleri gerçek değişken ister.
+          XSLTCRAFT_TEST_SECRET_ENV: GIZLI_DOSYA_ICERIGI_7f3a
         # Hariç: Eval (aşağıda non-blocking), Measurement, Corpus. WorkerIntegration DAHİL (bloke eder).
         run: dotnet test --no-build --configuration Release --filter "Category!=Eval&Category!=Measurement&Category!=Corpus" --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
 

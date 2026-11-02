@@ -166,7 +166,8 @@ public sealed class XsltProblemResultsTests
     public void Kind_MapsToStatus_RenderAndValidate(XsltFailureKind kind, int status)
     {
         var failed = new XsltRunResult(null, XsltEngineKind.Saxon, null, false,
-            new XsltDiagnostic("iç ayrıntı /etc/secret", 7, 3, kind, XsltEngineKind.Saxon)) { RetryAfter = TimeSpan.FromSeconds(30) };
+            new XsltDiagnostic("iç ayrıntı /etc/secret", 7, 3, kind, XsltEngineKind.Saxon))
+        { RetryAfter = TimeSpan.FromSeconds(30) };
 
         var render = new DefaultHttpContext().Response;
         var renderResult = Assert.IsType<ObjectResult>(XsltProblemResults.Render(failed, 5, render));

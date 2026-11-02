@@ -75,7 +75,8 @@ public sealed class XsltExecutionService : IXsltExecutionService
         if (!_gate.TryAcquire(request.UserId, lane, place, out var lease, out var denial))
         {
             return XsltRunResult.Failed(new XsltDiagnostic(denial.Message, 0, 0, XsltFailureKind.UserBusy, engine, denial.ErrorCode), engine)
-                with { RetryAfter = denial.RetryAfter };
+                with
+            { RetryAfter = denial.RetryAfter };
         }
 
         var held = lease;

@@ -129,7 +129,7 @@ public static partial class HtmlNormalizer
                 case IText text when CollapseWhitespace(text.Data).Length > 0:
                     yield return text;
                     break;
-                // Yorum, işleme talimatı ve yalnız-boşluk metin düğümleri atılır.
+                    // Yorum, işleme talimatı ve yalnız-boşluk metin düğümleri atılır.
             }
         }
     }

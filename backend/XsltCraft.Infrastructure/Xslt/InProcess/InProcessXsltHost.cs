@@ -96,7 +96,8 @@ public sealed class InProcessXsltHost : IXsltInProcessHost, IDisposable
                 XsltGuardStatus.Busy => Fail(request.Engine, XsltFailureKind.Busy, BusyCode,
                     "Önizleme motoru şu anda yoğun; lütfen birazdan tekrar deneyin."),
                 _ => Fail(request.Engine, XsltFailureKind.Timeout, TimeoutCode, "XSLT dönüşümü süre sınırını aştı.")
-                    with { Runaway = outcome.Runaway },
+                    with
+                { Runaway = outcome.Runaway },
             };
         }
         catch (OperationCanceledException ex)

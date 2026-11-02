@@ -486,7 +486,13 @@ public class AdminController(
                 Images = inspection.Images.Select(i => new
                 {
                     Kind = i.Kind switch { ThemeAssetKind.Logo => "logo", ThemeAssetKind.Signature => "signature", _ => null },
-                    i.Targets, i.DataUrl, i.Width, i.Height, i.Alignment, i.Valid, i.Problem,
+                    i.Targets,
+                    i.DataUrl,
+                    i.Width,
+                    i.Height,
+                    i.Alignment,
+                    i.Valid,
+                    i.Problem,
                 }),
                 inspection.BankRows,
             },

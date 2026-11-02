@@ -62,24 +62,30 @@ public sealed class XsltRouteLimitsOptions
     /// <summary>Ham XSLT: 5 MB (base64 logolu temalar geliştirici modunda sığsın — G3); XSLT+XML 10 MB ≤ izole bütçe.</summary>
     public XsltRouteLimits Raw { get; set; } = new()
     {
-        MaxXsltChars = 5_000_000, MaxXsltBytes = 5 * MiB,
-        MaxXmlChars = 5_000_000, MaxXmlBytes = 5 * MiB,
+        MaxXsltChars = 5_000_000,
+        MaxXsltBytes = 5 * MiB,
+        MaxXmlChars = 5_000_000,
+        MaxXmlBytes = 5 * MiB,
         TimeoutMs = 10_000,
     };
 
     /// <summary><c>validate-xslt</c>: yalnız XSLT.</summary>
     public XsltRouteLimits Validate { get; set; } = new()
     {
-        MaxXsltChars = 1_000_000, MaxXsltBytes = 1 * MiB,
-        MaxXmlChars = 0, MaxXmlBytes = 0,
+        MaxXsltChars = 1_000_000,
+        MaxXsltBytes = 1 * MiB,
+        MaxXmlChars = 0,
+        MaxXmlBytes = 0,
         TimeoutMs = 5_000,
     };
 
     /// <summary>Kayıtlı şablon (generator çıktısı, worker'da).</summary>
     public XsltRouteLimits UserTemplate { get; set; } = new()
     {
-        MaxXsltChars = 2_000_000, MaxXsltBytes = 2 * MiB,
-        MaxXmlChars = 5_000_000, MaxXmlBytes = 5 * MiB,
+        MaxXsltChars = 2_000_000,
+        MaxXsltBytes = 2 * MiB,
+        MaxXmlChars = 5_000_000,
+        MaxXmlBytes = 5 * MiB,
         TimeoutMs = 8_000,
     };
 
@@ -89,10 +95,13 @@ public sealed class XsltRouteLimitsOptions
     /// </summary>
     public XsltRouteLimits Grid { get; set; } = new()
     {
-        MaxXsltChars = 6_000_000, MaxXsltBytes = 6 * MiB,
-        MaxXmlChars = 6_000_000, MaxXmlBytes = 5 * MiB,
+        MaxXsltChars = 6_000_000,
+        MaxXsltBytes = 6 * MiB,
+        MaxXmlChars = 6_000_000,
+        MaxXmlBytes = 5 * MiB,
         TimeoutMs = 8_000,
-        MaxInputDepth = 64, MaxInputNodes = 200_000,
+        MaxInputDepth = 64,
+        MaxInputNodes = 200_000,
     };
 
     /// <summary>Tüm rotalarda çıktı üst sınırı (karakter).</summary>

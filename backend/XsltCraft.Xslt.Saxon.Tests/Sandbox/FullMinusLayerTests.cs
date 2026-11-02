@@ -43,6 +43,10 @@ public sealed class FullMinusLayerTests(SecretFixture fx, ITestOutputHelper outp
     [InlineData("doc(çıplak C:/)")]
     public void NoSandbox_Control_VectorLeaks(string name)
     {
+        // UNC yolu yalnız Windows'ta dosyaya çözülür.
+        if (name.Contains("UNC", StringComparison.Ordinal) && !OperatingSystem.IsWindows())
+            return;
+
         var r = Run(SandboxLayer.None, name);
         Assert.True(r.Leaked(Marker), $"Kontrol sızmadı (vektör/fikstür bozuk?): {r}");
     }
