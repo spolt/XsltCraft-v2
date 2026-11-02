@@ -18,11 +18,12 @@ public static class XsltEngineSelector
     };
 
     /// <summary>
-    /// Tema hattı: <see cref="XsltEngineMode.Auto"/> yalnız <c>version ≥ 2.0</c> VE .NET'in çalıştıramayacağı 2.0
-    /// yapısı (<see cref="Xslt2FeatureDetector"/>) varsa Saxon'dur — <c>version="2.0"</c> bildirip 1.0 kullanan GİB
-    /// temaları .NET'te kalır (çıktı bit-aynı). Diğer modlar <see cref="Select"/> ile aynıdır.
+    /// Ham XSLT ve tema hattı: <see cref="XsltEngineMode.Auto"/> yalnız <c>version ≥ 2.0</c> VE .NET'in
+    /// çalıştıramayacağı 2.0 yapısı (<see cref="Xslt2FeatureDetector"/>) varsa Saxon'dur — <c>version="2.0"</c> bildirip
+    /// 1.0 semantiğine güvenen stylesheet'ler (GİB şablonları: çok düğümlü <c>format-number</c>, <c>value-of</c>) .NET'te
+    /// kalır, çıktı bit-aynıdır. Diğer modlar <see cref="Select"/> ile aynıdır.
     /// </summary>
-    public static XsltEngineKind SelectForTheme(XsltEngineMode mode, decimal? sniffedVersion, string xslt) =>
+    public static XsltEngineKind SelectByUsage(XsltEngineMode mode, decimal? sniffedVersion, string xslt) =>
         mode == XsltEngineMode.Auto
             ? sniffedVersion >= SaxonMinimumVersion && Xslt2FeatureDetector.UsesXslt2Features(xslt) ? XsltEngineKind.Saxon : XsltEngineKind.DotNet
             : Select(mode, sniffedVersion);

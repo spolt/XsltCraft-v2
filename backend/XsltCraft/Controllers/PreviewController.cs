@@ -297,8 +297,8 @@ public class PreviewController : ControllerBase
     }
 
     /// <summary>
-    /// Ham XSLT + XML ile anlık önizleme — geliştirici mod / XSLT editörü (<see cref="XsltRoute.Raw"/>: 1.0 → .NET,
-    /// 2.0 → Saxon, izole worker). İçerik sınırları serviste (XSLT 5 MB + XML 5 MB); gövde sınırı JSON kaçış payıyla 12 MB.
+    /// Ham XSLT + XML ile anlık önizleme — geliştirici mod / XSLT editörü (<see cref="XsltRoute.Raw"/>: 1.0 ve yalnız
+    /// <c>version="2.0"</c> bildiren → .NET, 2.0 yapısı kullanan → Saxon, izole worker). İçerik sınırları serviste (XSLT 5 MB + XML 5 MB); gövde sınırı JSON kaçış payıyla 12 MB.
     /// Request: { xslt, xmlContent }
     /// Response: { html, generationTimeMs, timings: { parseMs, compileMs, transformMs, serializeMs }, engine, cacheHit }
     /// </summary>

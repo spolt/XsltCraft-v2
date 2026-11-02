@@ -40,10 +40,11 @@ Saxon-HE **12.10** (`net.sf.saxon:Saxon-HE`, MPL-2.0) — `IKVM.Maven.Sdk 1.12.2
 
 | Mod | Raw / Validate (varsayılan **Auto**) | Grid / UserTemplate (varsayılan **DotNet**) |
 |---|---|---|
-| `Auto` | `< 2.0`/okunamaz → .NET (bit-aynı), `= 2.0` → Saxon | `version="2.0"` → Saxon |
+| `Auto` | `< 2.0`/okunamaz → .NET (bit-aynı); `= 2.0` **ve** 2.0 yapısı (`Xslt2FeatureDetector`) → Saxon; yalnız `version="2.0"` bildirip 1.0 kullanan → .NET, çıktı 1.x ile bit-aynı (tema hattıyla aynı kural, `SelectByUsage`) | `version="2.0"` → Saxon |
 | `DotNet` | Hep .NET (ileri-uyumlu mod) | Hep .NET |
 | `Saxon` | Hep Saxon | Hep Saxon |
 
+- **Raw düzeltmesi (2.0.0 sonrası):** `Raw` başta "`= 2.0` → Saxon" idi; GİB türevi stylesheet'ler `version="2.0"` bildirip 1.0 semantiğine güvendiği için ham editörde `XPTY0004` (çok düğümlü `format-number`) aldı, `value-of` çıktısı da sessizce değişti. Kural tema hattına hizalandı. Karışık durum (2.0 yapısı + çok düğümlü `format-number`) Saxon'da kalır ve stylesheet'te `(x)[1]` ile düzeltilir. `Raw=Saxon` eski davranışın anahtarıdır. `xsl:character-map`, 2.0 yapısı olmayan stylesheet'te .NET'te yok sayılır (tema hattıyla aynı ödünleşim).
 - Tek yapılandırma kaynağı `appsettings` (`Xslt:Engine:*`); DB bayrağı yok. `DotNet` 2.0.x boyunca acil anahtardır.
 - **Grid 2.0.0'da `DotNet`'te kalır (sahip kararı, 2026-10-25).** `Auto` geçişinin ön koşulları hazır: `GridEngineParityTests` (10 HTML + 10 QR bayt-aynı, bloke eden), `UserTemplateWorkerParityTests`, G3 onayı. Kalan: süreç içi Saxon p95 kabulü ve ADR 008 §Ölçümler'deki Saxon grid kaçak tablosunun yeniden değerlendirilmesi. `Grid=DotNet` iken `SaxonWarmupService` ısınmayı atlar.
 

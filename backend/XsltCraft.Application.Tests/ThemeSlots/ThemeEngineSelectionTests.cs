@@ -18,7 +18,7 @@ public class ThemeEngineSelectionTests
     {
         var xslt = ThemeFixtures.Load(fixture);
         Assert.Equal(2.0m, XsltVersionSniffer.Sniff(xslt));
-        Assert.Equal(expected, XsltEngineSelector.SelectForTheme(XsltEngineMode.Auto, XsltVersionSniffer.Sniff(xslt), xslt));
+        Assert.Equal(expected, XsltEngineSelector.SelectByUsage(XsltEngineMode.Auto, XsltVersionSniffer.Sniff(xslt), xslt));
     }
 
     [Theory]
@@ -30,6 +30,16 @@ public class ThemeEngineSelectionTests
     [InlineData("<xsl:value-of select=\"fn:count(/a)\" xmlns:fn=\"http://www.w3.org/2005/xpath-functions\"/>", true)]
     [InlineData("<xsl:for-each-group select=\"/a\" group-by=\".\"/>", true)]
     [InlineData("<p title=\"{upper-case(/a)}\"/>", true)]
+    [InlineData("<xsl:value-of select=\"/a/b\" separator=\", \"/>", true)]
+    [InlineData("<xsl:element name=\"x\"><xsl:attribute name=\"y\" select=\"/a\"/></xsl:element>", true)]
+    [InlineData("<xsl:comment select=\"/a\"/>", true)]
+    [InlineData("<xsl:for-each select=\"/a, /b\"><x/></xsl:for-each>", true)]
+    [InlineData("<xsl:if test=\"/a = ('x', 'y')\"><x/></xsl:if>", true)]
+    [InlineData("<xsl:value-of select=\"count(())\"/>", true)]
+    [InlineData("<xsl:for-each select=\"/a/(b|c)\"><x/></xsl:for-each>", true)]
+    [InlineData("<xsl:value-of select=\"format-number(//a, '#,##0.00')\"/>", false)]
+    [InlineData("<xsl:value-of select=\"concat(/a, ',', substring(/b, 1, (2 + 1)))\"/>", false)]
+    [InlineData("<xsl:value-of select=\"//a[position() = 1 and (b or c)]\"/>", false)]
     [InlineData("<xsl:value-of select=\"concat(/a, 'exists(x)')\"/>", false)]
     [InlineData("<xsl:value-of select=\"format-number(sum(/a/b) div 2, '#.##')\"/>", false)]
     [InlineData("<xsl:if test=\"not(/a) and (count(/b) &gt; 1 or /c mod 2)\"><xsl:apply-templates select=\"node()|text()\"/></xsl:if>", false)]
@@ -53,8 +63,8 @@ public class ThemeEngineSelectionTests
     {
         const string xslt = """<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"><xsl:template match="/"><xsl:value-of select="exists(/a)"/></xsl:template></xsl:stylesheet>""";
 
-        Assert.Equal(XsltEngineKind.DotNet, XsltEngineSelector.SelectForTheme(XsltEngineMode.Auto, 1.0m, xslt));
-        Assert.Equal(XsltEngineKind.DotNet, XsltEngineSelector.SelectForTheme(XsltEngineMode.DotNet, 2.0m, xslt));
-        Assert.Equal(XsltEngineKind.Saxon, XsltEngineSelector.SelectForTheme(XsltEngineMode.Saxon, 1.0m, xslt));
+        Assert.Equal(XsltEngineKind.DotNet, XsltEngineSelector.SelectByUsage(XsltEngineMode.Auto, 1.0m, xslt));
+        Assert.Equal(XsltEngineKind.DotNet, XsltEngineSelector.SelectByUsage(XsltEngineMode.DotNet, 2.0m, xslt));
+        Assert.Equal(XsltEngineKind.Saxon, XsltEngineSelector.SelectByUsage(XsltEngineMode.Saxon, 1.0m, xslt));
     }
 }

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-02
+
+### Changed
+- **Arayüz teması adları**: "Kurumsal Lacivert" → "Safir", "Mor" → "Ametist". Renkler ve kayıtlı tema tercihleri değişmedi.
+
+### Fixed
+- **XSLT Editör: `version="2.0"` bildirip XSLT 1.0 gibi çalışan stylesheet'ler hata alıyordu.** Çok düğümlü `format-number()` 2.0.0'da `XPTY0004` veriyor, `value-of` tüm düğümleri birleştirerek çıktıyı değiştiriyordu. Ham XSLT artık tema hattıyla aynı kuralla seçiliyor: yalnız gerçekten 2.0 yapısı kullanan stylesheet Saxon'da çalışır, diğerleri .NET motorunda (izole worker) 1.x ile aynı çıktıyı verir.
+
 ## [2.0.0] - 2026-11-02
 
 ### BREAKING
