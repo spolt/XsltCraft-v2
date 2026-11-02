@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { Crown, Check, Minus } from 'lucide-react'
+import { Crown, Check, LayoutGrid, Minus } from 'lucide-react'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { startCheckout } from '../services/entitlementService'
 import { toast } from '../store/toastStore'
+import Card from '../components/ui/Card'
+import IconTile from '../components/ui/IconTile'
 
 interface Row {
   label: string
@@ -11,7 +13,7 @@ interface Row {
 }
 
 const ROWS: Row[] = [
-  { label: 'Grid canvas ile şablon tasarla', free: true, pro: true },
+  { label: 'Tasarım alanında şablon tasarla', free: true, pro: true },
   { label: 'Taslak kaydet (Taslaklarım)', free: true, pro: true },
   { label: 'Ücretsiz temaları kullan, düzenle, indir', free: true, pro: true },
   { label: 'XSLT Editör (düzenle & indir)', free: true, pro: true },
@@ -21,10 +23,18 @@ const ROWS: Row[] = [
   { label: 'AI asistan', free: 'günde 1 soru', pro: '50.000 token/gün' },
 ]
 
-function Cell({ value }: { value: string | boolean }) {
-  if (value === true) return <Check size={18} className="mx-auto text-emerald-500" />
-  if (value === false) return <Minus size={18} className="mx-auto text-gray-300" />
-  return <span className="text-sm font-medium text-gray-700">{value}</span>
+function Cell({ value, pro = false }: { value: string | boolean; pro?: boolean }) {
+  if (value === true) return <Check size={18} strokeWidth={2.4} role="img" aria-label="Var" className="mx-auto text-fn-green" />
+  if (value === false) return <Minus size={18} strokeWidth={2.2} role="img" aria-label="Yok" className="mx-auto text-tx-subtle" />
+  return <span className={pro ? 'font-semibold text-fn-purple-ink' : 'font-medium text-tx-2'}>{value}</span>
+}
+
+function CurrentBadge() {
+  return (
+    <span className="absolute -top-3 right-[18px] rounded-full bg-fn-purple-ink px-2.5 py-[3px] text-[11.5px] font-bold text-on-fn">
+      Mevcut planın
+    </span>
+  )
 }
 
 export default function PricingPage() {
@@ -33,6 +43,7 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(false)
 
   const isPro = entitlements?.plan === 'Pro' || entitlements?.isPrivileged
+  const isFree = !!entitlements && !isPro
 
   async function handleCheckout() {
     setLoading(true)
@@ -49,58 +60,82 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
+    <div className="mx-auto flex w-full max-w-[900px] flex-col gap-[22px] px-8 pt-7 pb-9">
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900">XsltCraft Pro</h1>
-        <p className="mt-2 text-gray-500">
+        <h1 className="m-0 text-[26px] font-semibold text-tx">XsltCraft Pro</h1>
+        <p className="mt-1.5 mb-0 text-sm text-tx-muted">
           Üretime hazır XSLT’leri indir, şablonlarını sakla ve AI’dan sınırsız yararlan.
         </p>
       </div>
 
-      <div className="mt-8 overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="px-5 py-4 text-left text-sm font-semibold text-gray-700">Özellik</th>
-              <th className="px-4 py-4 text-center text-sm font-semibold text-gray-700">Standart</th>
-              <th className="px-4 py-4 text-center">
-                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-600">
-                  <Crown size={15} /> Pro
-                </span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {ROWS.map((row, i) => (
-              <tr key={row.label} className={i % 2 ? 'bg-gray-50/40' : ''}>
-                <td className="px-5 py-3 text-sm text-gray-700">{row.label}</td>
-                <td className="px-4 py-3 text-center"><Cell value={row.free} /></td>
-                <td className="px-4 py-3 text-center"><Cell value={row.pro} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex flex-wrap gap-[18px]">
+        <Card as="section" lift fn="blue" aria-labelledby="plan-std" className="relative flex flex-[1_1_300px] flex-col gap-3">
+          {isFree && <CurrentBadge />}
+          <IconTile icon={LayoutGrid} size="lg" />
+          <h2 id="plan-std" className="m-0 text-lg font-semibold text-tx">Standart</h2>
+          <div className="text-[26px] font-bold text-tx">Ücretsiz</div>
+          <p className="m-0 leading-normal text-tx-muted">Tasarla, taslak kaydet, ücretsiz temaları kullan.</p>
+        </Card>
+
+        <Card
+          as="section"
+          lift
+          fn="purple"
+          aria-labelledby="plan-pro"
+          className="relative flex flex-[1_1_300px] flex-col gap-3 ring-1 ring-(--fn-line)"
+        >
+          {isPro && <CurrentBadge />}
+          <IconTile icon={Crown} size="lg" />
+          <h2 id="plan-pro" className="m-0 text-lg font-semibold text-tx">Pro</h2>
+          <p className="m-0 leading-normal text-tx-muted">XSLT indir, ham XSLT sakla, ücretli temaları aç, AI’ı daha çok kullan.</p>
+          <div className="mt-auto">
+            {isPro ? (
+              <span className="inline-flex h-10 items-center gap-2 rounded-lg bg-fn-green-tint px-3.5 font-semibold text-fn-green-ink">
+                <Check size={15} strokeWidth={2.4} aria-hidden="true" /> Pro üyeliğin aktif.
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCheckout}
+                disabled={loading}
+                className="xc-focus inline-flex h-10 items-center gap-2 rounded-lg bg-fn-purple-ink px-5 text-[13.5px] font-semibold text-on-fn transition-colors hover:bg-fn-purple disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Crown size={16} aria-hidden="true" />
+                {loading ? 'İşleniyor…' : "Pro'ya Geç"}
+              </button>
+            )}
+          </div>
+        </Card>
       </div>
 
-      <div className="mt-8 flex flex-col items-center">
-        {isPro ? (
-          <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700">
-            <Check size={16} /> Pro üyeliğin aktif.
-          </div>
-        ) : (
-          <button
-            onClick={handleCheckout}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
-          >
-            <Crown size={16} />
-            {loading ? 'İşleniyor…' : "Pro'ya Geç"}
-          </button>
-        )}
-        <p className="mt-3 text-xs text-gray-400">
-          Online ödeme yakında. Şimdilik Pro üyelik yönetici tarafından tanımlanır.
-        </p>
-      </div>
+      <Card as="section" padding="none" aria-label="Plan karşılaştırması" className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[13.5px]">
+            <thead>
+              <tr className="bg-ui-hover">
+                <th scope="col" className="px-5 py-3.5 text-left font-semibold text-tx">Özellik</th>
+                <th scope="col" className="w-40 px-4 py-3.5 text-center font-semibold text-tx">Standart</th>
+                <th scope="col" className="w-[180px] px-4 py-3.5 text-center font-bold text-fn-purple-ink">
+                  <span className="inline-flex items-center gap-1.5"><Crown size={15} aria-hidden="true" /> Pro</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {ROWS.map((row) => (
+                <tr key={row.label} className="border-t border-ui-line transition-colors hover:bg-ui-hover">
+                  <th scope="row" className="px-5 py-3 text-left font-normal text-tx">{row.label}</th>
+                  <td className="px-4 py-3 text-center"><Cell value={row.free} /></td>
+                  <td className="px-4 py-3 text-center"><Cell value={row.pro} pro /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <p className="m-0 text-center text-xs text-tx-subtle">
+        Online ödeme yakında. Şimdilik Pro üyelik yönetici tarafından tanımlanır.
+      </p>
     </div>
   )
 }

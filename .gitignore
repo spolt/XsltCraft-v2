@@ -53,6 +53,8 @@ Thumbs.db
 
 # Templates
 *.xslt
+# Tema yuvası analizinin test fixture'ları (görselleri 1×1 PNG ile temizlenmiş GİB şablonları)
+!backend/XsltCraft.Application.Tests/ThemeSlots/Fixtures/*.xslt
 
 # Misc
 *.log

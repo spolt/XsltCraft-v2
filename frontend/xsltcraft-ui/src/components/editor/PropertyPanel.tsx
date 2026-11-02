@@ -1,272 +1,43 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { ChevronDown, ChevronUp, RefreshCw, Star, Trash2, Upload, X, Bold } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
-import { useXmlStore } from '../../store/xmlStore'
 import { uploadAsset, getAssetUrl, deleteAsset } from '../../services/assetService'
-import { evaluateXPathValue } from '../../utils/xmlUtils'
-import XmlTreeExplorer from './XmlTreeExplorer'
+import SegmentedTabs from '../ui/SegmentedTabs'
+import { BlockTypeIcon, blockLabel } from './paletteIcons'
 import type { GridBlock, BlockConfig, PartyType, PartyLabelStyle, ColumnFormat_ILT, InvoiceHeaderField, InvoiceTotalsField } from '../../types/blocks'
-import { PARTY_TYPE_LABELS, DEFAULT_INVOICE_TOTALS_FIELDS } from '../../types/blocks'
+import { PARTY_TYPE_LABELS, PARTY_TYPE_ROOT_XPATH, DEFAULT_INVOICE_TOTALS_FIELDS } from '../../types/blocks'
 import { GIB_LOGO_BASE64 } from '../../assets/gibLogo'
+import MatchInfo from './panel/MatchInfo'
+import {
+  AddButton,
+  CheckToggle,
+  Checkbox,
+  ColorInput,
+  Field,
+  FieldRow,
+  IconButton,
+  InfoNote,
+  ItemCard,
+  ListBox,
+  MonoPath,
+  NumberInput,
+  PanelSection,
+  Select,
+  TextInput,
+  XPathInput,
+} from './panel/fields'
 
-// ── Generic field helpers ─────────────────────────────────────────────────────
+// ── Ortak seçenekler ──────────────────────────────────────────────────────────
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col" style={{ gap: 3 }}>
-      <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)' }}>{label}</label>
-      {children}
-    </div>
-  )
-}
+const BORDER_STYLES = [
+  { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
+] as const
 
-function TextInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-}) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        width: '100%',
-        height: 28,
-        fontSize: 11,
-        padding: '0 8px',
-        boxSizing: 'border-box',
-        border: '0.5px solid var(--color-border-subtle)',
-        borderRadius: 5,
-        background: 'var(--color-surface-secondary)',
-        color: 'var(--color-text-primary)',
-        outline: 'none',
-        fontFamily: 'inherit',
-      }}
-      onFocus={e => { e.currentTarget.style.borderColor = 'var(--color-brand-primary)'; e.currentTarget.style.background = 'var(--color-surface-card)' }}
-      onBlur={e => { e.currentTarget.style.borderColor = 'var(--color-border-subtle)'; e.currentTarget.style.background = 'var(--color-surface-secondary)' }}
-    />
-  )
-}
+const ALIGNMENTS = [
+  { value: 'left', label: 'Sol' }, { value: 'center', label: 'Orta' }, { value: 'right', label: 'Sağ' },
+] as const
 
-/** XPath input with "pick from tree" button + resolved value display */
-function XPathInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-}) {
-  const xmlFiles = useXmlStore((s) => s.xmlFiles)
-  const activeXmlId = useXmlStore((s) => s.activeXmlId)
-  const isSelecting = useXmlStore((s) => s.isSelecting)
-  const startXPathSelection = useXmlStore((s) => s.startXPathSelection)
-  const activeXml = xmlFiles.find((f) => f.id === activeXmlId)
-
-  const [resolved, setResolved] = useState('')
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setResolved(
-        activeXml && value.trim() ? evaluateXPathValue(activeXml.content, value) : ''
-      )
-    }, 300)
-    return () => clearTimeout(t)
-  }, [activeXml, value])
-
-  return (
-    <div className="flex flex-col" style={{ gap: 2 }}>
-      <div className="flex">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            height: 28,
-            fontSize: 11,
-            fontFamily: 'monospace',
-            padding: '0 8px',
-            border: '0.5px solid var(--color-xpath-border)',
-            borderRight: activeXml ? 'none' : '0.5px solid var(--color-xpath-border)',
-            borderRadius: activeXml ? '5px 0 0 5px' : 5,
-            background: 'var(--color-xpath-bg)',
-            color: 'var(--color-xpath-text)',
-            outline: 'none',
-            boxSizing: 'border-box',
-          }}
-          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
-          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-xpath-border)')}
-        />
-        {activeXml && (
-          <button
-            type="button"
-            title="XML Ağacından seç"
-            onClick={() => startXPathSelection(onChange)}
-            style={{
-              padding: '0 7px',
-              border: '0.5px solid var(--color-xpath-border)',
-              borderLeft: 'none',
-              borderRadius: '0 5px 5px 0',
-              background: isSelecting ? 'var(--color-brand-light)' : 'var(--color-xpath-bg)',
-              color: isSelecting ? 'var(--color-brand-primary)' : 'var(--color-xpath-text)',
-              fontSize: 11,
-              cursor: 'pointer',
-            }}
-          >
-            ⊕
-          </button>
-        )}
-      </div>
-      {resolved && (
-        <span
-          style={{ fontSize: 11, color: 'var(--color-xpath-text)', padding: '0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          title={resolved}
-        >
-          ↳ {resolved}
-        </span>
-      )}
-    </div>
-  )
-}
-
-function Select<T extends string>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T
-  onChange: (v: T) => void
-  options: { value: T; label: string }[]
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as T)}
-      style={{
-        width: '100%',
-        height: 28,
-        fontSize: 11,
-        padding: '0 8px',
-        boxSizing: 'border-box',
-        border: '0.5px solid var(--color-border-subtle)',
-        borderRadius: 5,
-        background: 'var(--color-surface-secondary)',
-        color: 'var(--color-text-primary)',
-        outline: 'none',
-        fontFamily: 'inherit',
-        cursor: 'pointer',
-      }}
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  )
-}
-
-function ColorInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-}) {
-  // Normalize: color picker requires a valid 6-digit hex; fall back to #000000
-  const pickerValue = /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#000000'
-
-  return (
-    <div className="flex items-center" style={{ gap: 6 }}>
-      <label className="relative flex-shrink-0 cursor-pointer">
-        <input
-          type="color"
-          value={pickerValue}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-        />
-        <span
-          style={{ display: 'block', width: 24, height: 24, borderRadius: 4, border: '0.5px solid var(--color-border-subtle)' }}
-          className="flex-shrink-0"
-        />
-        <span
-          style={{ display: 'block', width: 24, height: 24, borderRadius: 4, background: pickerValue, position: 'absolute', inset: 0 }}
-        />
-      </label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder ?? '#000000'}
-        style={{
-          flex: 1,
-          height: 28,
-          fontSize: 11,
-          fontFamily: 'monospace',
-          padding: '0 8px',
-          border: '0.5px solid var(--color-border-subtle)',
-          borderRadius: 5,
-          background: 'var(--color-surface-secondary)',
-          color: 'var(--color-text-primary)',
-          outline: 'none',
-          boxSizing: 'border-box',
-        }}
-      />
-    </div>
-  )
-}
-
-function Checkbox({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <label className="flex items-center cursor-pointer" style={{ gap: 6 }}>
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 14,
-          height: 14,
-          borderRadius: 2,
-          border: checked ? '1.5px solid var(--color-brand-primary)' : '1.5px solid #A0A09A',
-          background: checked ? 'var(--color-brand-primary)' : 'var(--color-surface-card)',
-          flexShrink: 0,
-          fontSize: 9,
-          color: '#fff',
-          fontWeight: 700,
-          cursor: 'pointer',
-        }}
-      >
-        {checked ? '✓' : ''}
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
-      />
-      <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>{label}</span>
-    </label>
-  )
-}
+const clampOpacity = (v: string) => Math.min(100, Math.max(0, parseInt(v) || 0))
 
 // ── Grid pozisyon / boyut kontrolleri (V2) ────────────────────────────────────
 
@@ -274,74 +45,47 @@ function GridPositionControls({ block }: { block: GridBlock }) {
   const updateBlockGridLayout = useEditorStore((s) => s.updateBlockGridLayout)
   const gl = block.gridLayout
 
-  function numInput(
-    label: string,
-    value: number,
-    onChange: (v: number) => void,
-  ) {
+  function numInput(label: string, value: number, onChange: (v: number) => void) {
     return (
-      <div className="flex flex-col" style={{ gap: 2 }}>
-        <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--color-text-muted)' }}>{label}</span>
-        <input
-          type="number"
+      <Field label={label}>
+        <NumberInput
           value={Math.round(value * 10) / 10}
           step={5}
-          onChange={(e) => {
-            const n = parseFloat(e.target.value)
+          onChange={(raw) => {
+            const n = parseFloat(raw)
             if (!isNaN(n)) onChange(n)
           }}
-          style={{
-            width: '100%',
-            height: 26,
-            fontSize: 11,
-            padding: '0 6px',
-            border: '0.5px solid var(--color-border-subtle)',
-            borderRadius: 4,
-            background: 'var(--color-surface-secondary)',
-            color: 'var(--color-text-primary)',
-            outline: 'none',
-            fontFamily: 'inherit',
-            boxSizing: 'border-box',
-          }}
-          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
-          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-subtle)')}
         />
-      </div>
+      </Field>
     )
   }
 
   return (
-    <div style={{ paddingBottom: 8, borderBottom: '0.5px solid var(--color-border-default)' }}>
-      <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-text-muted)', marginBottom: 6 }}>
-        POZİSYON &amp; BOYUT (mm)
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-        {numInput('X (sol)', gl.x, (v) => updateBlockGridLayout(block.id, { x: v }))}
-        {numInput('Y (üst)', gl.y, (v) => updateBlockGridLayout(block.id, { y: v }))}
-        {numInput('Genişlik', gl.width, (v) => updateBlockGridLayout(block.id, { width: v }))}
-        {numInput('Yükseklik', gl.height, (v) => updateBlockGridLayout(block.id, { height: v }))}
-        {numInput('Z-index', gl.zIndex ?? 0, (v) => updateBlockGridLayout(block.id, { zIndex: Math.max(0, v) }))}
-      </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, cursor: 'pointer' }}>
-        <input
-          type="checkbox"
+    <>
+      <PanelSection title="Pozisyon ve boyut (mm)">
+        <div className="grid grid-cols-2 gap-2.5">
+          {numInput('X (sol)', gl.x, (v) => updateBlockGridLayout(block.id, { x: v }))}
+          {numInput('Y (üst)', gl.y, (v) => updateBlockGridLayout(block.id, { y: v }))}
+          {numInput('Genişlik', gl.width, (v) => updateBlockGridLayout(block.id, { width: v }))}
+          {numInput('Yükseklik', gl.height, (v) => updateBlockGridLayout(block.id, { height: v }))}
+          {numInput('Z-index', gl.zIndex ?? 0, (v) => updateBlockGridLayout(block.id, { zIndex: Math.max(0, v) }))}
+        </div>
+        <Checkbox
+          label="Otomatik yükseklik"
           checked={gl.autoHeight ?? false}
-          onChange={(e) => updateBlockGridLayout(block.id, { autoHeight: e.target.checked })}
-          style={{ accentColor: 'var(--color-brand-primary)' }}
+          onChange={(v) => updateBlockGridLayout(block.id, { autoHeight: v })}
         />
-        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Otomatik yükseklik</span>
-      </label>
+      </PanelSection>
 
-      <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--color-text-muted)', marginTop: 10, marginBottom: 6 }}>
-        KENAR BOŞLUKLARI (mm)
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-        {numInput('Üst', gl.marginTop ?? 0, (v) => updateBlockGridLayout(block.id, { marginTop: Math.max(0, v) }))}
-        {numInput('Alt', gl.marginBottom ?? 0, (v) => updateBlockGridLayout(block.id, { marginBottom: Math.max(0, v) }))}
-        {numInput('Sol', gl.marginLeft ?? 0, (v) => updateBlockGridLayout(block.id, { marginLeft: Math.max(0, v) }))}
-        {numInput('Sağ', gl.marginRight ?? 0, (v) => updateBlockGridLayout(block.id, { marginRight: Math.max(0, v) }))}
-      </div>
-    </div>
+      <PanelSection title="Kenar boşlukları (mm)">
+        <div className="grid grid-cols-2 gap-2.5">
+          {numInput('Üst', gl.marginTop ?? 0, (v) => updateBlockGridLayout(block.id, { marginTop: Math.max(0, v) }))}
+          {numInput('Alt', gl.marginBottom ?? 0, (v) => updateBlockGridLayout(block.id, { marginBottom: Math.max(0, v) }))}
+          {numInput('Sol', gl.marginLeft ?? 0, (v) => updateBlockGridLayout(block.id, { marginLeft: Math.max(0, v) }))}
+          {numInput('Sağ', gl.marginRight ?? 0, (v) => updateBlockGridLayout(block.id, { marginRight: Math.max(0, v) }))}
+        </div>
+      </PanelSection>
+    </>
   )
 }
 
@@ -350,49 +94,74 @@ function GridPositionControls({ block }: { block: GridBlock }) {
 type Config<T extends BlockConfig['type']> = Extract<BlockConfig, { type: T }>['config']
 type UpdateFn = (patch: Partial<BlockConfig['config']>) => void
 
+function FontSizeField({ config, update, placeholder = '9.5pt' }: { config: { fontSize?: string }; update: UpdateFn; placeholder?: string }) {
+  return (
+    <Field label="Yazı boyutu">
+      <TextInput value={config.fontSize ?? ''} onChange={(v) => update({ fontSize: v })} placeholder={placeholder} />
+    </Field>
+  )
+}
+
+function BorderStyleField({ value, update }: { value?: 'solid' | 'dashed' | 'dotted'; update: UpdateFn }) {
+  return (
+    <Field label="Kenarlık stili">
+      <Select value={value ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={BORDER_STYLES} />
+    </Field>
+  )
+}
+
+function OpacityField({ value, update }: { value?: number; update: UpdateFn }) {
+  return (
+    <Field label="Saydamlık (0–100)">
+      <NumberInput min={0} max={100} step={5} value={value ?? 100} onChange={(v) => update({ opacity: clampOpacity(v) })} />
+    </Field>
+  )
+}
+
 function TextStyleFields({ config, update }: { config: Config<'Text'> | Config<'Heading'>; update: UpdateFn }) {
   return (
-    <>
-      <div className="flex gap-2">
+    <PanelSection title="Biçim">
+      <FieldRow>
         <Field label="Yazı boyutu">
           <TextInput value={config.fontSize ?? ''} onChange={(v) => update({ fontSize: v })} placeholder="10pt" />
         </Field>
         <Field label="Renk">
           <ColorInput value={config.color ?? '#111111'} onChange={(v) => update({ color: v })} placeholder="#111111" />
         </Field>
-      </div>
+      </FieldRow>
       <div className="flex gap-3">
         <Checkbox label="Kalın" checked={config.fontWeight === 'bold'} onChange={(v) => update({ fontWeight: v ? 'bold' : 'normal' })} />
         <Checkbox label="İtalik" checked={config.fontStyle === 'italic'} onChange={(v) => update({ fontStyle: v ? 'italic' : 'normal' })} />
       </div>
-    </>
+    </PanelSection>
   )
 }
 
 function TextPanel({ config, update }: { config: Config<'Text'>; update: UpdateFn }) {
   return (
     <>
-      <Field label="İçerik">
-        <TextInput value={config.content ?? ''} onChange={(v) => update({ content: v })} placeholder="Statik metin..." />
-      </Field>
-      <Checkbox label="Statik metin" checked={config.isStatic} onChange={(v) => update({ isStatic: v })} />
+      <PanelSection title="İçerik">
+        <Field label="Metin">
+          <TextInput value={config.content ?? ''} onChange={(v) => update({ content: v })} placeholder="Statik metin..." />
+        </Field>
+        <Checkbox label="Statik metin" checked={config.isStatic} onChange={(v) => update({ isStatic: v })} />
+      </PanelSection>
       {!config.isStatic && (
-        <>
-          <Field label="XPath">
-            <XPathInput
-              value={config.binding?.xpath ?? ''}
-              onChange={(v) => update({ binding: { ...config.binding, xpath: v, fallback: config.binding?.fallback } })}
-              placeholder="//cbc:Name"
-            />
-          </Field>
-          <Field label="Fallback">
+        <PanelSection title="Veri kaynağı (XPath)">
+          <XPathInput
+            ariaLabel="Veri kaynağı XPath"
+            value={config.binding?.xpath ?? ''}
+            onChange={(v) => update({ binding: { ...config.binding, xpath: v, fallback: config.binding?.fallback } })}
+            placeholder="//cbc:Name"
+          />
+          <Field label="Yedek metin (eşleşme yoksa)">
             <TextInput
               value={config.binding?.fallback ?? ''}
               onChange={(v) => update({ binding: { ...config.binding, xpath: config.binding?.xpath ?? '', fallback: v } })}
               placeholder="—"
             />
           </Field>
-        </>
+        </PanelSection>
       )}
       <TextStyleFields config={config} update={update} />
     </>
@@ -402,35 +171,30 @@ function TextPanel({ config, update }: { config: Config<'Text'>; update: UpdateF
 function HeadingPanel({ config, update }: { config: Config<'Heading'>; update: UpdateFn }) {
   return (
     <>
-      <Field label="Seviye">
-        <Select value={config.level} onChange={(v) => update({ level: v })} options={[
-          { value: 'H1', label: 'H1' }, { value: 'H2', label: 'H2' },
-          { value: 'H3', label: 'H3' }, { value: 'H4', label: 'H4' },
-        ]} />
-      </Field>
-      <Field label="İçerik">
-        <TextInput value={config.content ?? ''} onChange={(v) => update({ content: v })} placeholder="Başlık metni..." />
-      </Field>
-      <Checkbox label="Statik metin" checked={config.isStatic} onChange={(v) => update({ isStatic: v })} />
+      <PanelSection title="İçerik">
+        <Field label="Seviye">
+          <Select value={config.level} onChange={(v) => update({ level: v })} options={[
+            { value: 'H1', label: 'H1' }, { value: 'H2', label: 'H2' },
+            { value: 'H3', label: 'H3' }, { value: 'H4', label: 'H4' },
+          ]} />
+        </Field>
+        <Field label="Metin">
+          <TextInput value={config.content ?? ''} onChange={(v) => update({ content: v })} placeholder="Başlık metni..." />
+        </Field>
+        <Checkbox label="Statik metin" checked={config.isStatic} onChange={(v) => update({ isStatic: v })} />
+      </PanelSection>
       {!config.isStatic && (
-        <Field label="XPath">
+        <PanelSection title="Veri kaynağı (XPath)">
           <XPathInput
+            ariaLabel="Veri kaynağı XPath"
             value={config.binding?.xpath ?? ''}
             onChange={(v) => update({ binding: { xpath: v } })}
             placeholder="//cbc:..."
           />
-        </Field>
+        </PanelSection>
       )}
       <TextStyleFields config={config} update={update} />
     </>
-  )
-}
-
-function FontSizeField({ config, update }: { config: { fontSize?: string }; update: UpdateFn }) {
-  return (
-    <Field label="Yazı boyutu">
-      <TextInput value={config.fontSize ?? ''} onChange={(v) => update({ fontSize: v })} placeholder="9.5pt" />
-    </Field>
   )
 }
 
@@ -441,38 +205,32 @@ function ParagraphPanel({ config, update }: { config: Config<'Paragraph'>; updat
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      {config.lines.map((line, i) => (
-        <div key={i} className="border border-gray-100 rounded-md p-2 flex flex-col gap-1 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-400">Satır {i + 1}</span>
-            <button
-              onClick={() => update({ lines: config.lines.filter((_, idx) => idx !== i) })}
-              className="text-xs text-red-400 hover:text-red-600"
-            >
-              ✕
-            </button>
-          </div>
-          <Checkbox label="Statik" checked={line.isStatic} onChange={(v) => updateLine(i, { isStatic: v })} />
-          {line.isStatic ? (
-            <TextInput value={line.content ?? ''} onChange={(v) => updateLine(i, { content: v })} placeholder="Metin..." />
-          ) : (
-            <XPathInput
-              value={line.xpath ?? ''}
-              onChange={(v) => updateLine(i, { xpath: v })}
-              placeholder="XPath..."
-            />
-          )}
-        </div>
-      ))}
-      <button
-        onClick={() => update({ lines: [...config.lines, { isStatic: true, content: '' }] })}
-        className="text-xs text-blue-600 hover:text-blue-800 text-left"
-      >
-        + Satır ekle
-      </button>
-      <FontSizeField config={config} update={update} />
-    </div>
+    <>
+      <PanelSection title="Satırlar" meta={config.lines.length}>
+        {config.lines.map((line, i) => (
+          <ItemCard
+            key={i}
+            title={`Satır ${i + 1}`}
+            actions={
+              <IconButton danger label="Satırı sil" onClick={() => update({ lines: config.lines.filter((_, idx) => idx !== i) })}>
+                <X size={13} aria-hidden="true" />
+              </IconButton>
+            }
+          >
+            <Checkbox label="Statik" checked={line.isStatic} onChange={(v) => updateLine(i, { isStatic: v })} />
+            {line.isStatic ? (
+              <TextInput ariaLabel={`Satır ${i + 1} metni`} value={line.content ?? ''} onChange={(v) => updateLine(i, { content: v })} placeholder="Metin..." />
+            ) : (
+              <XPathInput ariaLabel={`Satır ${i + 1} XPath`} value={line.xpath ?? ''} onChange={(v) => updateLine(i, { xpath: v })} placeholder="XPath..." />
+            )}
+          </ItemCard>
+        ))}
+        <AddButton onClick={() => update({ lines: [...config.lines, { isStatic: true, content: '' }] })}>+ Satır ekle</AddButton>
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <FontSizeField config={config} update={update} />
+      </PanelSection>
+    </>
   )
 }
 
@@ -484,63 +242,55 @@ function TablePanel({ config, update }: { config: Config<'Table'>; update: Updat
 
   return (
     <>
-      <Field label="Her satır için (XPath)">
-        <XPathInput
-          value={config.iterateOver}
-          onChange={(v) => update({ iterateOver: v })}
-          placeholder="//cac:InvoiceLine"
-        />
-      </Field>
-      <Checkbox label="Başlık satırı göster" checked={config.showHeader} onChange={(v) => update({ showHeader: v })} />
-      <Field label="Başlık arkaplanı">
-        <ColorInput value={config.headerBackgroundColor ?? '#E0E0E0'} onChange={(v) => update({ headerBackgroundColor: v })} placeholder="#E0E0E0" />
-      </Field>
-      <Field label="Sütunlar">
-        <div className="flex flex-col gap-2 mt-1">
-          {config.columns.map((col, i) => (
-            <div key={i} className="border border-gray-100 rounded p-2 bg-gray-50 flex flex-col gap-1">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">Sütun {i + 1}</span>
-                <button
-                  onClick={() => update({ columns: config.columns.filter((_, idx) => idx !== i) })}
-                  className="text-xs text-red-400 hover:text-red-600"
-                >
-                  ✕
-                </button>
-              </div>
-              <TextInput value={col.header} onChange={(v) => updateColumn(i, { header: v })} placeholder="Başlık" />
-              <XPathInput
-                value={col.xpath}
-                onChange={(v) => updateColumn(i, { xpath: v })}
-                placeholder="XPath (cbc:ID)"
-              />
-              <div className="flex gap-1.5">
-                <div className="flex-1">
-                  <TextInput value={col.width ?? ''} onChange={(v) => updateColumn(i, { width: v })} placeholder="Genişlik (10%)" />
-                </div>
-                <div className="flex-1">
-                  <Select
-                    value={(col.format ?? 'text') as 'text' | 'currency' | 'number' | 'date'}
-                    onChange={(v) => updateColumn(i, { format: v })}
-                    options={[
-                      { value: 'text', label: 'Metin' },
-                      { value: 'currency', label: 'Para' },
-                      { value: 'number', label: 'Sayı' },
-                      { value: 'date', label: 'Tarih' },
-                    ]}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-          <button
-            onClick={() => update({ columns: [...config.columns, { header: '', xpath: '', width: '' }] })}
-            className="text-xs text-blue-600 hover:text-blue-800 text-left"
+      <PanelSection title="Satır kaynağı (XPath)">
+        <XPathInput ariaLabel="Satır kaynağı XPath" match="nodes" value={config.iterateOver} onChange={(v) => update({ iterateOver: v })} placeholder="//cac:InvoiceLine" />
+      </PanelSection>
+      <PanelSection title="Sütunlar" meta={config.columns.length}>
+        {config.columns.map((col, i) => (
+          <ItemCard
+            key={i}
+            title={`Sütun ${i + 1}`}
+            actions={
+              <IconButton danger label="Sütunu sil" onClick={() => update({ columns: config.columns.filter((_, idx) => idx !== i) })}>
+                <X size={13} aria-hidden="true" />
+              </IconButton>
+            }
           >
-            + Sütun ekle
-          </button>
-        </div>
-      </Field>
+            <TextInput ariaLabel={`Sütun ${i + 1} başlığı`} value={col.header} onChange={(v) => updateColumn(i, { header: v })} placeholder="Başlık" />
+            <XPathInput
+              ariaLabel={`Sütun ${i + 1} XPath`}
+              value={col.xpath}
+              onChange={(v) => updateColumn(i, { xpath: v })}
+              placeholder="XPath (cbc:ID)"
+              contextXPath={config.iterateOver}
+            />
+            <FieldRow>
+              <Field label="Genişlik">
+                <TextInput value={col.width ?? ''} onChange={(v) => updateColumn(i, { width: v })} placeholder="10%" />
+              </Field>
+              <Field label="Format">
+                <Select
+                  value={(col.format ?? 'text') as 'text' | 'currency' | 'number' | 'date'}
+                  onChange={(v) => updateColumn(i, { format: v })}
+                  options={[
+                    { value: 'text', label: 'Metin' },
+                    { value: 'currency', label: 'Para' },
+                    { value: 'number', label: 'Sayı' },
+                    { value: 'date', label: 'Tarih' },
+                  ]}
+                />
+              </Field>
+            </FieldRow>
+          </ItemCard>
+        ))}
+        <AddButton onClick={() => update({ columns: [...config.columns, { header: '', xpath: '', width: '' }] })}>+ Sütun ekle</AddButton>
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <Checkbox label="Başlık satırı göster" checked={config.showHeader} onChange={(v) => update({ showHeader: v })} />
+        <Field label="Başlık arka planı">
+          <ColorInput value={config.headerBackgroundColor ?? '#E0E0E0'} onChange={(v) => update({ headerBackgroundColor: v })} placeholder="#E0E0E0" />
+        </Field>
+      </PanelSection>
     </>
   )
 }
@@ -578,64 +328,56 @@ function ImagePanel({ config, update }: { config: Config<'Image'>; update: Updat
 
   return (
     <>
-      <Field label="Varlık Tipi">
-        <Select value={config.assetType} onChange={(v) => update({ assetType: v })} options={[
-          { value: 'logo', label: 'Logo' },
-          { value: 'signature', label: 'İmza' },
-          { value: 'other', label: 'Diğer' },
-        ]} />
-      </Field>
-
-      {/* Asset yükleme */}
-      <Field label="Görsel">
+      <PanelSection title="Görsel">
+        <Field label="Varlık tipi">
+          <Select value={config.assetType} onChange={(v) => update({ assetType: v })} options={[
+            { value: 'logo', label: 'Logo' },
+            { value: 'signature', label: 'İmza' },
+            { value: 'other', label: 'Diğer' },
+          ]} />
+        </Field>
         <input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" className="hidden" onChange={handleFileChange} />
         {config.assetId ? (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <img
               src={getAssetUrl(config.assetId)}
               alt="önizleme"
-              className="w-full max-h-20 object-contain border border-gray-200 rounded bg-gray-50"
+              className="max-h-20 w-full rounded-md border border-ui-line bg-ui-side object-contain"
             />
             <button
+              type="button"
               onClick={handleRemoveAsset}
-              className="text-xs text-red-500 hover:text-red-700 text-left"
+              className="xc-focus flex items-center gap-1 self-start rounded px-1 py-0.5 text-[12px] font-medium text-fn-red-ink hover:underline"
             >
-              ✕ Görseli kaldır
+              <Trash2 size={13} aria-hidden="true" /> Görseli kaldır
             </button>
           </div>
         ) : (
           <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="w-full py-2 text-xs border-2 border-dashed border-gray-200 rounded text-gray-500 hover:border-blue-300 hover:text-blue-600 disabled:opacity-50 transition-colors"
+            className="xc-focus flex w-full items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-ui-line py-2.5 text-[12px] text-tx-muted transition-colors hover:border-ui-soft-line hover:text-ui-ink disabled:opacity-50"
           >
-            {uploading ? 'Yükleniyor…' : '+ PNG / JPG / SVG yükle'}
+            <Upload size={14} aria-hidden="true" />
+            {uploading ? 'Yükleniyor…' : 'PNG / JPG / SVG yükle'}
           </button>
         )}
-        {uploadError && <span className="text-xs text-red-500">{uploadError}</span>}
-      </Field>
+        {uploadError && <span role="alert" className="text-[12px] text-fn-red-ink">{uploadError}</span>}
+      </PanelSection>
 
-      <Field label="Hizalama">
-        <Select value={config.alignment} onChange={(v) => update({ alignment: v })} options={[
-          { value: 'left', label: 'Sol' },
-          { value: 'center', label: 'Orta' },
-          { value: 'right', label: 'Sağ' },
-        ]} />
-      </Field>
-      <Field label="Genişlik"><TextInput value={config.width ?? ''} onChange={(v) => update({ width: v })} placeholder="150px" /></Field>
-      <Field label="Yükseklik"><TextInput value={config.height ?? ''} onChange={(v) => update({ height: v })} placeholder="80px" /></Field>
-      <Field label="Alt metni"><TextInput value={config.altText ?? ''} onChange={(v) => update({ altText: v })} placeholder="Logo" /></Field>
-      <Checkbox label="Ücretsiz temada düzenlenebilir" checked={config.editableOnFreeTheme} onChange={(v) => update({ editableOnFreeTheme: v })} />
-      <Field label="Saydamlık (0–100)">
-        <input
-          type="number" min={0} max={100} step={5}
-          value={config.opacity ?? 100}
-          onChange={(e) => update({ opacity: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
-          style={{ width: '100%', height: 28, fontSize: 11, padding: '0 8px', boxSizing: 'border-box', border: '0.5px solid var(--color-border-subtle)', borderRadius: 5, background: 'var(--color-surface-secondary)', color: 'var(--color-text-primary)', outline: 'none', fontFamily: 'inherit' }}
-          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
-          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-subtle)')}
-        />
-      </Field>
+      <PanelSection title="Biçim">
+        <Field label="Hizalama">
+          <Select value={config.alignment} onChange={(v) => update({ alignment: v })} options={ALIGNMENTS} />
+        </Field>
+        <FieldRow>
+          <Field label="Genişlik"><TextInput value={config.width ?? ''} onChange={(v) => update({ width: v })} placeholder="150px" /></Field>
+          <Field label="Yükseklik"><TextInput value={config.height ?? ''} onChange={(v) => update({ height: v })} placeholder="80px" /></Field>
+        </FieldRow>
+        <Field label="Alt metni"><TextInput value={config.altText ?? ''} onChange={(v) => update({ altText: v })} placeholder="Logo" /></Field>
+        <OpacityField value={config.opacity} update={update} />
+        <Checkbox label="Ücretsiz temada düzenlenebilir" checked={config.editableOnFreeTheme} onChange={(v) => update({ editableOnFreeTheme: v })} />
+      </PanelSection>
     </>
   )
 }
@@ -646,40 +388,28 @@ function DocumentInfoPanel({ config, update }: { config: Config<'DocumentInfo'>;
   }
   return (
     <>
-    <Checkbox label="Kenarlıklı" checked={config.bordered ?? true} onChange={(v) => update({ bordered: v })} />
-    {(config.bordered ?? true) && (
-      <Field label="Kenarlık Stili">
-        <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
-          { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
-        ]} />
-      </Field>
-    )}
-    <FontSizeField config={config} update={update} />
-    <Field label="Satırlar">
-      <div className="flex flex-col gap-2">
+      <PanelSection title="Satırlar" meta={config.rows.length}>
         {config.rows.map((row, i) => (
-          <div key={i} className="border border-gray-100 rounded p-2 bg-gray-50 flex flex-col gap-1">
-            <div className="flex justify-between">
-              <span className="text-xs text-gray-400">Satır {i + 1}</span>
-              <button
-                onClick={() => update({ rows: config.rows.filter((_, idx) => idx !== i) })}
-                className="text-xs text-red-400"
-              >
-                ✕
-              </button>
-            </div>
-            <TextInput value={row.label} onChange={(v) => updateRow(i, { label: v })} placeholder="Etiket" />
-            <XPathInput value={row.xpath} onChange={(v) => updateRow(i, { xpath: v })} placeholder="XPath" />
-          </div>
+          <ItemCard
+            key={i}
+            title={`Satır ${i + 1}`}
+            actions={
+              <IconButton danger label="Satırı sil" onClick={() => update({ rows: config.rows.filter((_, idx) => idx !== i) })}>
+                <X size={13} aria-hidden="true" />
+              </IconButton>
+            }
+          >
+            <TextInput ariaLabel={`Satır ${i + 1} etiketi`} value={row.label} onChange={(v) => updateRow(i, { label: v })} placeholder="Etiket" />
+            <XPathInput ariaLabel={`Satır ${i + 1} XPath`} value={row.xpath} onChange={(v) => updateRow(i, { xpath: v })} placeholder="XPath" />
+          </ItemCard>
         ))}
-        <button
-          onClick={() => update({ rows: [...config.rows, { label: '', xpath: '' }] })}
-          className="text-xs text-blue-600"
-        >
-          + Satır ekle
-        </button>
-      </div>
-    </Field>
+        <AddButton onClick={() => update({ rows: [...config.rows, { label: '', xpath: '' }] })}>+ Satır ekle</AddButton>
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <Checkbox label="Kenarlıklı" checked={config.bordered ?? true} onChange={(v) => update({ bordered: v })} />
+        {(config.bordered ?? true) && <BorderStyleField value={config.borderStyle} update={update} />}
+        <FontSizeField config={config} update={update} />
+      </PanelSection>
     </>
   )
 }
@@ -690,41 +420,35 @@ function TotalsPanel({ config, update }: { config: Config<'Totals'>; update: Upd
   }
   return (
     <>
-      <FontSizeField config={config} update={update} />
-      <Field label="Hizalama">
-        <Select value={config.alignment} onChange={(v) => update({ alignment: v })} options={[
-          { value: 'left', label: 'Sol' }, { value: 'center', label: 'Orta' }, { value: 'right', label: 'Sağ' },
-        ]} />
-      </Field>
-      <Field label="Etiket sütun genişliği">
-        <TextInput value={config.labelWidth ?? ''} onChange={(v) => update({ labelWidth: v })} placeholder="180px" />
-      </Field>
-      <Field label="Satırlar">
-        <div className="flex flex-col gap-2">
-          {config.rows.map((row, i) => (
-            <div key={i} className="border border-gray-100 rounded p-2 bg-gray-50 flex flex-col gap-1">
-              <div className="flex justify-between">
-                <span className="text-xs text-gray-400">Satır {i + 1}</span>
-                <button
-                  onClick={() => update({ rows: config.rows.filter((_, idx) => idx !== i) })}
-                  className="text-xs text-red-400"
-                >
-                  ✕
-                </button>
-              </div>
-              <TextInput value={row.label} onChange={(v) => updateRow(i, { label: v })} placeholder="Etiket" />
-              <XPathInput value={row.xpath} onChange={(v) => updateRow(i, { xpath: v })} placeholder="XPath" />
-              <Checkbox label="Vurgula" checked={row.highlight ?? false} onChange={(v) => updateRow(i, { highlight: v })} />
-            </div>
-          ))}
-          <button
-            onClick={() => update({ rows: [...config.rows, { label: '', xpath: '' }] })}
-            className="text-xs text-blue-600"
+      <PanelSection title="Satırlar" meta={config.rows.length}>
+        {config.rows.map((row, i) => (
+          <ItemCard
+            key={i}
+            title={`Satır ${i + 1}`}
+            actions={
+              <IconButton danger label="Satırı sil" onClick={() => update({ rows: config.rows.filter((_, idx) => idx !== i) })}>
+                <X size={13} aria-hidden="true" />
+              </IconButton>
+            }
           >
-            + Satır ekle
-          </button>
-        </div>
-      </Field>
+            <TextInput ariaLabel={`Satır ${i + 1} etiketi`} value={row.label} onChange={(v) => updateRow(i, { label: v })} placeholder="Etiket" />
+            <XPathInput ariaLabel={`Satır ${i + 1} XPath`} value={row.xpath} onChange={(v) => updateRow(i, { xpath: v })} placeholder="XPath" />
+            <Checkbox label="Vurgula" checked={row.highlight ?? false} onChange={(v) => updateRow(i, { highlight: v })} />
+          </ItemCard>
+        ))}
+        <AddButton onClick={() => update({ rows: [...config.rows, { label: '', xpath: '' }] })}>+ Satır ekle</AddButton>
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <FieldRow>
+          <FontSizeField config={config} update={update} />
+          <Field label="Hizalama">
+            <Select value={config.alignment} onChange={(v) => update({ alignment: v })} options={ALIGNMENTS} />
+          </Field>
+        </FieldRow>
+        <Field label="Etiket sütun genişliği">
+          <TextInput value={config.labelWidth ?? ''} onChange={(v) => update({ labelWidth: v })} placeholder="180px" />
+        </Field>
+      </PanelSection>
     </>
   )
 }
@@ -749,100 +473,50 @@ function NotesPanel({ config, update }: { config: Config<'Notes'>; update: Updat
 
   return (
     <>
-      <Field label="Her not için (XPath)">
-        <XPathInput value={config.iterateOver} onChange={(v) => update({ iterateOver: v })} placeholder="//cbc:Note" />
-      </Field>
-      <Field label="Önek">
-        <TextInput value={config.prefix ?? ''} onChange={(v) => update({ prefix: v })} placeholder="Not: " />
-      </Field>
+      <PanelSection title="Veri kaynağı (XPath)">
+        <XPathInput ariaLabel="Not kaynağı XPath" match="nodes" noun="not" value={config.iterateOver} onChange={(v) => update({ iterateOver: v })} placeholder="//cbc:Note" />
+        <Field label="Önek">
+          <TextInput value={config.prefix ?? ''} onChange={(v) => update({ prefix: v })} placeholder="Not: " />
+        </Field>
+      </PanelSection>
 
-      {/* Sabit Notlar */}
-      <div style={{ borderTop: '0.5px solid var(--color-border-subtle)', paddingTop: 10, marginTop: 4 }}>
-        <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-secondary)' }}>Sabit Notlar</span>
-          <button
-            onClick={addLine}
-            style={{
-              fontSize: 10, padding: '2px 8px', borderRadius: 4,
-              border: '0.5px solid var(--color-brand-border)',
-              background: 'var(--color-brand-light)', color: 'var(--color-brand-primary)',
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            + Not Ekle
-          </button>
-        </div>
-
-        {lines.length === 0 && (
-          <p style={{ fontSize: 10, color: 'var(--color-text-muted)', textAlign: 'center', padding: '6px 0' }}>
-            Henüz sabit not yok
-          </p>
-        )}
-
+      <PanelSection title="Sabit notlar" meta={lines.length}>
+        {lines.length === 0 && <p className="m-0 text-[12px] text-tx-subtle">Henüz sabit not yok.</p>}
         {lines.map((line, i) => (
-          <div key={i} className="flex items-center" style={{ gap: 4, marginBottom: 4 }}>
-            <input
-              value={line}
-              onChange={(e) => updateLine(i, e.target.value)}
-              placeholder={`Sabit not ${i + 1}`}
-              style={{
-                flex: 1, fontSize: 11, padding: '4px 6px',
-                border: '0.5px solid var(--color-border-default)', borderRadius: 4,
-                background: 'var(--color-surface-card)', color: 'var(--color-text-primary)',
-                outline: 'none', fontFamily: 'inherit',
-              }}
-              onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
-              onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-default)')}
-            />
-            <button
-              onClick={() => removeLine(i)}
-              title="Sil"
-              style={{
-                width: 20, height: 20, flexShrink: 0, border: 'none', background: 'none',
-                cursor: 'pointer', fontSize: 11, color: 'var(--color-text-muted)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-danger)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
-            >
-              ✕
-            </button>
+          <div key={i} className="flex items-center gap-1">
+            <TextInput ariaLabel={`Sabit not ${i + 1}`} value={line} onChange={(v) => updateLine(i, v)} placeholder={`Sabit not ${i + 1}`} />
+            <IconButton danger label="Notu sil" onClick={() => removeLine(i)}>
+              <X size={13} aria-hidden="true" />
+            </IconButton>
           </div>
         ))}
-
+        <AddButton onClick={addLine}>+ Not ekle</AddButton>
         {lines.length > 0 && (
           <Field label="Sabit notların yeri">
-            <select
+            <Select
               value={position}
-              onChange={(e) => update({ staticPosition: e.target.value as 'before' | 'after' })}
-              style={{
-                width: '100%', fontSize: 11, padding: '4px 6px',
-                border: '0.5px solid var(--color-border-default)', borderRadius: 4,
-                background: 'var(--color-surface-card)', color: 'var(--color-text-primary)',
-                outline: 'none', fontFamily: 'inherit', cursor: 'pointer',
-              }}
-            >
-              <option value="before">XPath notlarından önce</option>
-              <option value="after">XPath notlarından sonra</option>
-            </select>
+              onChange={(v) => update({ staticPosition: v })}
+              options={[
+                { value: 'before', label: 'XPath notlarından önce' },
+                { value: 'after', label: 'XPath notlarından sonra' },
+              ]}
+            />
           </Field>
         )}
-      </div>
+      </PanelSection>
 
-      <Checkbox label="Dış kenarlık" checked={config.bordered ?? false} onChange={(v) => update({ bordered: v })} />
-      {config.bordered && (
-        <>
-          <Field label="Kenarlık Stili">
-            <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
-              { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
-            ]} />
-          </Field>
-          <Field label="Kenarlık Rengi">
-            <ColorInput value={config.borderColor ?? '#555555'} onChange={(v) => update({ borderColor: v })} />
-          </Field>
-        </>
-      )}
-      <FontSizeField config={config} update={update} />
+      <PanelSection title="Biçim">
+        <Checkbox label="Dış kenarlık" checked={config.bordered ?? false} onChange={(v) => update({ bordered: v })} />
+        {config.bordered && (
+          <FieldRow>
+            <BorderStyleField value={config.borderStyle} update={update} />
+            <Field label="Kenarlık rengi">
+              <ColorInput value={config.borderColor ?? '#555555'} onChange={(v) => update({ borderColor: v })} />
+            </Field>
+          </FieldRow>
+        )}
+        <FontSizeField config={config} update={update} />
+      </PanelSection>
     </>
   )
 }
@@ -850,29 +524,29 @@ function NotesPanel({ config, update }: { config: Config<'Notes'>; update: Updat
 function BankInfoPanel({ config, update }: { config: Config<'BankInfo'>; update: UpdateFn }) {
   return (
     <>
-      <Field label="Banka Adı">
-        <TextInput value={config.bankName} onChange={(v) => update({ bankName: v })} placeholder="ör. YAPIKREDI" />
-      </Field>
-      <Field label="IBAN">
-        <TextInput value={config.iban} onChange={(v) => update({ iban: v })} placeholder="ör. TR66 0006 7010 0000 0020 1934 37" />
-      </Field>
-      <Field label="IBAN Etiketi">
-        <TextInput value={config.ibanLabel ?? 'IBAN: '} onChange={(v) => update({ ibanLabel: v })} placeholder="IBAN: " />
-      </Field>
-      <Checkbox label="Dış kenarlık" checked={config.bordered ?? true} onChange={(v) => update({ bordered: v })} />
-      {config.bordered && (
-        <>
-          <Field label="Kenarlık Stili">
-            <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
-              { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
-            ]} />
-          </Field>
-          <Field label="Kenarlık Rengi">
-            <ColorInput value={config.borderColor ?? '#555555'} onChange={(v) => update({ borderColor: v })} />
-          </Field>
-        </>
-      )}
-      <FontSizeField config={config} update={update} />
+      <PanelSection title="Banka bilgisi">
+        <Field label="Banka adı">
+          <TextInput value={config.bankName} onChange={(v) => update({ bankName: v })} placeholder="ör. YAPIKREDI" />
+        </Field>
+        <Field label="IBAN">
+          <TextInput mono value={config.iban} onChange={(v) => update({ iban: v })} placeholder="ör. TR66 0006 7010 0000 0020 1934 37" />
+        </Field>
+        <Field label="IBAN etiketi">
+          <TextInput value={config.ibanLabel ?? 'IBAN: '} onChange={(v) => update({ ibanLabel: v })} placeholder="IBAN: " />
+        </Field>
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <Checkbox label="Dış kenarlık" checked={config.bordered ?? true} onChange={(v) => update({ bordered: v })} />
+        {config.bordered && (
+          <FieldRow>
+            <BorderStyleField value={config.borderStyle} update={update} />
+            <Field label="Kenarlık rengi">
+              <ColorInput value={config.borderColor ?? '#555555'} onChange={(v) => update({ borderColor: v })} />
+            </Field>
+          </FieldRow>
+        )}
+        <FontSizeField config={config} update={update} />
+      </PanelSection>
     </>
   )
 }
@@ -880,75 +554,57 @@ function BankInfoPanel({ config, update }: { config: Config<'BankInfo'>; update:
 function ETTNPanel({ config, update }: { config: Config<'ETTN'>; update: UpdateFn }) {
   return (
     <>
-      <Field label="ETTN XPath">
-        <XPathInput value={config.ettnXpath} onChange={(v) => update({ ettnXpath: v })} placeholder="//cbc:UUID" />
-      </Field>
-      <Checkbox
-        label="ETTN metnini göster"
-        checked={config.showEttn ?? true}
-        onChange={(v) => update({ showEttn: v })}
-      />
-      <Checkbox
-        label="QR Kodu göster"
-        checked={config.showQR}
-        onChange={(v) => update({ showQR: v })}
-      />
-      {config.showQR && (
-        <>
-          <div className="flex gap-2">
-            <Field label="QR Genişlik (px)">
-              <TextInput
-                value={String(config.qrWidth ?? 80)}
-                onChange={(v) => update({ qrWidth: parseInt(v) || 80 })}
-                placeholder="80"
-              />
+      <PanelSection title="Veri kaynağı (XPath)">
+        <XPathInput ariaLabel="ETTN XPath" value={config.ettnXpath} onChange={(v) => update({ ettnXpath: v })} placeholder="//cbc:UUID" />
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <Checkbox label="ETTN metnini göster" checked={config.showEttn ?? true} onChange={(v) => update({ showEttn: v })} />
+        <Checkbox label="QR kodu göster" checked={config.showQR} onChange={(v) => update({ showQR: v })} />
+        {config.showQR && (
+          <>
+            <FieldRow>
+              <Field label="QR genişlik (px)">
+                <TextInput value={String(config.qrWidth ?? 80)} onChange={(v) => update({ qrWidth: parseInt(v) || 80 })} placeholder="80" />
+              </Field>
+              <Field label="QR yükseklik (px)">
+                <TextInput value={String(config.qrHeight ?? 80)} onChange={(v) => update({ qrHeight: parseInt(v) || 80 })} placeholder="80" />
+              </Field>
+            </FieldRow>
+            <Field label="QR hizalama">
+              <Select value={config.qrAlignment ?? 'right'} onChange={(v) => update({ qrAlignment: v })} options={ALIGNMENTS} />
             </Field>
-            <Field label="QR Yükseklik (px)">
-              <TextInput
-                value={String(config.qrHeight ?? 80)}
-                onChange={(v) => update({ qrHeight: parseInt(v) || 80 })}
-                placeholder="80"
-              />
-            </Field>
-          </div>
-          <Field label="QR Hizalama">
-            <Select
-              value={config.qrAlignment ?? 'right'}
-              onChange={(v) => update({ qrAlignment: v })}
-              options={[
-                { value: 'left', label: 'Sol' },
-                { value: 'center', label: 'Orta' },
-                { value: 'right', label: 'Sağ' },
-              ]}
-            />
-          </Field>
-        </>
-      )}
+          </>
+        )}
+      </PanelSection>
     </>
   )
 }
 
 function DividerPanel({ config, update }: { config: Config<'Divider'>; update: UpdateFn }) {
   return (
-    <>
-      <Field label="Stil">
-        <Select value={config.style} onChange={(v) => update({ style: v })} options={[
-          { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
-        ]} />
-      </Field>
+    <PanelSection title="Biçim">
+      <FieldRow>
+        <Field label="Stil">
+          <Select value={config.style} onChange={(v) => update({ style: v })} options={BORDER_STYLES} />
+        </Field>
+        <Field label="Kalınlık"><TextInput value={config.thickness ?? '1px'} onChange={(v) => update({ thickness: v })} placeholder="1px" /></Field>
+      </FieldRow>
       <Field label="Renk"><ColorInput value={config.color ?? '#CCCCCC'} onChange={(v) => update({ color: v })} placeholder="#CCCCCC" /></Field>
-      <Field label="Kalınlık"><TextInput value={config.thickness ?? '1px'} onChange={(v) => update({ thickness: v })} placeholder="1px" /></Field>
-      <Field label="Üst boşluk"><TextInput value={config.marginTop ?? '8px'} onChange={(v) => update({ marginTop: v })} placeholder="8px" /></Field>
-      <Field label="Alt boşluk"><TextInput value={config.marginBottom ?? '8px'} onChange={(v) => update({ marginBottom: v })} placeholder="8px" /></Field>
-    </>
+      <FieldRow>
+        <Field label="Üst boşluk"><TextInput value={config.marginTop ?? '8px'} onChange={(v) => update({ marginTop: v })} placeholder="8px" /></Field>
+        <Field label="Alt boşluk"><TextInput value={config.marginBottom ?? '8px'} onChange={(v) => update({ marginBottom: v })} placeholder="8px" /></Field>
+      </FieldRow>
+    </PanelSection>
   )
 }
 
 function SpacerPanel({ config, update }: { config: Config<'Spacer'>; update: UpdateFn }) {
   return (
-    <Field label="Yükseklik">
-      <TextInput value={config.height} onChange={(v) => update({ height: v })} placeholder="24px" />
-    </Field>
+    <PanelSection title="Biçim">
+      <Field label="Yükseklik">
+        <TextInput value={config.height} onChange={(v) => update({ height: v })} placeholder="24px" />
+      </Field>
+    </PanelSection>
   )
 }
 
@@ -965,48 +621,49 @@ function ConditionalTextPanel({ config, update }: { config: Config<'ConditionalT
 
   return (
     <>
-      <Field label="Koşul XPath">
+      <PanelSection title="Koşul">
         <XPathInput
+          ariaLabel="Koşul XPath"
           value={config.condition.xpath}
           onChange={(v) => update({ condition: { ...config.condition, xpath: v } })}
           placeholder="//cbc:InvoiceTypeCode"
         />
-      </Field>
-      <Field label="Operatör">
-        <Select
-          value={config.condition.operator}
-          onChange={(v) => update({ condition: { ...config.condition, operator: v } })}
-          options={[...OPERATORS]}
-        />
-      </Field>
-      {!['exists', 'notExists'].includes(config.condition.operator) && (
-        <Field label="Değer">
-          <TextInput
-            value={config.condition.value ?? ''}
-            onChange={(v) => update({ condition: { ...config.condition, value: v } })}
-            placeholder="TEMELFATURA"
+        <Field label="Operatör">
+          <Select
+            value={config.condition.operator}
+            onChange={(v) => update({ condition: { ...config.condition, operator: v } })}
+            options={OPERATORS}
           />
         </Field>
-      )}
-      <div className="border-t border-gray-100 pt-2 flex flex-col gap-2">
-        <p className="text-xs font-medium text-green-600">Koşul doğruysa (THEN)</p>
+        {!['exists', 'notExists'].includes(config.condition.operator) && (
+          <Field label="Değer">
+            <TextInput
+              value={config.condition.value ?? ''}
+              onChange={(v) => update({ condition: { ...config.condition, value: v } })}
+              placeholder="TEMELFATURA"
+            />
+          </Field>
+        )}
+      </PanelSection>
+      <PanelSection title="Koşul doğruysa">
         <Checkbox label="Statik metin" checked={config.thenIsStatic} onChange={(v) => update({ thenIsStatic: v })} />
         {config.thenIsStatic ? (
-          <TextInput value={config.thenContent} onChange={(v) => update({ thenContent: v })} placeholder="Metin..." />
+          <TextInput ariaLabel="Koşul doğruysa metin" value={config.thenContent} onChange={(v) => update({ thenContent: v })} placeholder="Metin..." />
         ) : (
-          <XPathInput value={config.thenContent} onChange={(v) => update({ thenContent: v })} placeholder="XPath..." />
+          <XPathInput ariaLabel="Koşul doğruysa XPath" value={config.thenContent} onChange={(v) => update({ thenContent: v })} placeholder="XPath..." />
         )}
-      </div>
-      <div className="border-t border-gray-100 pt-2 flex flex-col gap-2">
-        <p className="text-xs font-medium text-orange-500">Koşul yanlışsa (ELSE)</p>
+      </PanelSection>
+      <PanelSection title="Koşul yanlışsa">
         <Checkbox label="Statik metin" checked={config.elseIsStatic} onChange={(v) => update({ elseIsStatic: v })} />
         {config.elseIsStatic ? (
-          <TextInput value={config.elseContent} onChange={(v) => update({ elseContent: v })} placeholder="Metin..." />
+          <TextInput ariaLabel="Koşul yanlışsa metin" value={config.elseContent} onChange={(v) => update({ elseContent: v })} placeholder="Metin..." />
         ) : (
-          <XPathInput value={config.elseContent} onChange={(v) => update({ elseContent: v })} placeholder="XPath..." />
+          <XPathInput ariaLabel="Koşul yanlışsa XPath" value={config.elseContent} onChange={(v) => update({ elseContent: v })} placeholder="XPath..." />
         )}
-      </div>
-      <FontSizeField config={config} update={update} />
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <FontSizeField config={config} update={update} />
+      </PanelSection>
     </>
   )
 }
@@ -1043,84 +700,33 @@ function InvoiceHeaderPanel({ config, update }: { config: Config<'InvoiceHeader'
     })
   }
 
-  const sectionLabelStyle: React.CSSProperties = {
-    fontSize: 9,
-    fontWeight: 600,
-    letterSpacing: '0.08em',
-    color: 'var(--color-text-muted)',
-    marginBottom: 6,
-    paddingBottom: 4,
-    borderBottom: '0.5px solid var(--color-border-default)',
-  }
-
   return (
     <>
-      <label className="flex items-center cursor-pointer" style={{ gap: 6 }}>
-        <span
-          style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 14, height: 14, borderRadius: 2,
-            border: config.bordered ? '1.5px solid var(--color-brand-primary)' : '1.5px solid #A0A09A',
-            background: config.bordered ? 'var(--color-brand-primary)' : 'var(--color-surface-card)',
-            fontSize: 9, color: '#fff', fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-          }}
-        >{config.bordered ? '✓' : ''}</span>
-        <input type="checkbox" checked={config.bordered} onChange={(e) => update({ bordered: e.target.checked })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
-        <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Kenarlıklı</span>
-      </label>
-      {config.bordered && (
-        <Field label="Kenarlık Stili">
-          <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
-            { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
-          ]} />
-        </Field>
-      )}
-      <Field label="Yazı Boyutu">
-        <TextInput value={config.fontSize ?? ''} onChange={(v) => update({ fontSize: v })} placeholder="11px" />
-      </Field>
-
-      {/* Özel alanlar */}
-      <div style={{ borderTop: '0.5px solid var(--color-border-default)', paddingTop: 8 }}>
-        <p style={sectionLabelStyle}>ÖZEL ALANLAR</p>
-        <div className="flex flex-col" style={{ gap: 3 }}>
-          {customFields.map((field) => {
-            const absIdx = config.fields.indexOf(field)
-            return (
-              <div
-                key={field.key}
-                style={{ border: '0.5px solid var(--color-border-default)', borderRadius: 5, overflow: 'hidden' }}
-              >
-                <div className="flex items-center" style={{ padding: '5px 8px', gap: 5, background: 'var(--color-surface-secondary)' }}>
-                  <input
-                    type="text"
-                    value={field.label}
-                    onChange={(e) => updateCustomField(absIdx, { label: e.target.value })}
-                    style={{
-                      flex: 1, minWidth: 0, fontSize: 11, fontFamily: 'inherit',
-                      border: 'none', background: 'transparent', outline: 'none',
-                      color: 'var(--color-text-primary)', fontWeight: 500,
-                    }}
-                    placeholder="Etiket"
-                  />
-                  <button type="button" onClick={() => removeCustomField(absIdx)}
-                    style={{ width: 18, height: 18, border: 'none', background: 'none', fontSize: 10, color: 'var(--color-danger)', cursor: 'pointer' }}>✕</button>
-                </div>
-                <div style={{ padding: '4px 8px', background: 'var(--color-surface-card)' }}>
-                  <XPathInput value={field.xpath} onChange={(v) => updateCustomField(absIdx, { xpath: v })} placeholder="//cbc:..." />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <button
-            onClick={addCustomField}
-            style={{ fontSize: 11, color: 'var(--color-brand-primary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
-          >
-            + Özel alan ekle
-          </button>
-        </div>
-      </div>
+      <PanelSection title="Özel alanlar" meta={customFields.length}>
+        {customFields.map((field) => {
+          const absIdx = config.fields.indexOf(field)
+          return (
+            <ItemCard
+              key={field.key}
+              title={field.label || 'Etiketsiz'}
+              actions={
+                <IconButton danger label="Alanı sil" onClick={() => removeCustomField(absIdx)}>
+                  <X size={13} aria-hidden="true" />
+                </IconButton>
+              }
+            >
+              <TextInput ariaLabel="Alan etiketi" value={field.label} onChange={(v) => updateCustomField(absIdx, { label: v })} placeholder="Etiket" />
+              <XPathInput ariaLabel="Alan XPath" value={field.xpath} onChange={(v) => updateCustomField(absIdx, { xpath: v })} placeholder="//cbc:..." />
+            </ItemCard>
+          )
+        })}
+        <AddButton onClick={addCustomField}>+ Özel alan ekle</AddButton>
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <Checkbox label="Kenarlıklı" checked={config.bordered} onChange={(v) => update({ bordered: v })} />
+        {config.bordered && <BorderStyleField value={config.borderStyle} update={update} />}
+        <FontSizeField config={config} update={update} placeholder="11px" />
+      </PanelSection>
     </>
   )
 }
@@ -1128,6 +734,8 @@ function InvoiceHeaderPanel({ config, update }: { config: Config<'InvoiceHeader'
 // ── InvoiceTotals — Dip toplamlar düzenleyici ─────────────────────────────────
 
 function InvoiceTotalsPanel({ config, update }: { config: Config<'InvoiceTotals'>; update: UpdateFn }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
+
   function updateField(index: number, patch: Partial<InvoiceTotalsField>) {
     const fields = config.fields.map((f, i) => (i === index ? { ...f, ...patch } : f))
     update({ fields })
@@ -1166,195 +774,107 @@ function InvoiceTotalsPanel({ config, update }: { config: Config<'InvoiceTotals'
     update({ fields })
   }
 
-  const sectionLabelStyle: React.CSSProperties = {
-    fontSize: 9,
-    fontWeight: 600,
-    letterSpacing: '0.08em',
-    color: 'var(--color-text-muted)',
-    marginBottom: 6,
-    paddingBottom: 4,
-    borderBottom: '0.5px solid var(--color-border-default)',
-  }
+  const visibleCount = config.fields.filter((f) => f.visible).length
+  const isDynamic = (key: string) => key === 'taxSubtotalGroups' || key === 'taxBaseGroups'
 
   return (
     <>
-      <div className="flex" style={{ gap: 12 }}>
-        <label className="flex items-center cursor-pointer" style={{ gap: 6 }}>
-          <span
-            style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: 14, height: 14, borderRadius: 2,
-              border: config.showCurrency ? '1.5px solid var(--color-brand-primary)' : '1.5px solid #A0A09A',
-              background: config.showCurrency ? 'var(--color-brand-primary)' : 'var(--color-surface-card)',
-              fontSize: 9, color: '#fff', fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-            }}
-          >{config.showCurrency ? '✓' : ''}</span>
-          <input type="checkbox" checked={config.showCurrency} onChange={(e) => update({ showCurrency: e.target.checked })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
-          <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Para birimi göster</span>
-        </label>
-      </div>
-
-      {config.showCurrency && (
-        <Field label="Para Birimi XPath">
-          <XPathInput
-            value={config.currencyXpath}
-            onChange={(v) => update({ currencyXpath: v })}
-            placeholder="//cbc:DocumentCurrencyCode"
-          />
-        </Field>
-      )}
-
-      <div className="flex" style={{ gap: 8 }}>
-        <Field label="Etiket Genişliği">
-          <TextInput value={config.labelWidth ?? ''} onChange={(v) => update({ labelWidth: v })} placeholder="60%" />
-        </Field>
-        <Field label="Yazı Boyutu">
-          <TextInput value={config.fontSize ?? ''} onChange={(v) => update({ fontSize: v })} placeholder="9pt" />
-        </Field>
-      </div>
-
-      {/* Alan listesi */}
-      <div style={{ borderTop: '0.5px solid var(--color-border-default)', paddingTop: 8 }}>
-        <p style={sectionLabelStyle}>SATIRLAR</p>
-        <div className="flex flex-col" style={{ gap: 3 }}>
-          {config.fields.map((field, i) => (
-            <div
-              key={field.key}
-              style={{
-                border: `0.5px solid ${field.visible ? 'var(--color-border-default)' : 'var(--color-border-subtle)'}`,
-                borderRadius: 5,
-                overflow: 'hidden',
-                opacity: field.visible ? 1 : 0.55,
-              }}
-            >
-              {/* Header satırı */}
-              <div className="flex items-center" style={{ padding: '5px 8px', gap: 5, background: 'var(--color-surface-secondary)' }}>
-                {/* Görünürlük toggle */}
-                <button
-                  type="button"
-                  onClick={() => updateField(i, { visible: !field.visible })}
-                  style={{
-                    width: 14, height: 14, borderRadius: 2, flexShrink: 0,
-                    border: field.visible ? '1.5px solid var(--color-brand-primary)' : '1.5px solid #A0A09A',
-                    background: field.visible ? 'var(--color-brand-primary)' : 'var(--color-surface-card)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, color: '#fff', fontWeight: 700, cursor: 'pointer',
-                  }}
-                  title={field.visible ? 'Gizle' : 'Göster'}
-                >
-                  {field.visible ? '✓' : ''}
-                </button>
-
-                {/* Vurgula toggle */}
-                <button
-                  type="button"
-                  onClick={() => updateField(i, { highlight: !field.highlight })}
-                  title={field.highlight ? 'Vurguyu kaldır' : 'Vurgula (arka plan rengi)'}
-                  style={{
-                    width: 14, height: 14, borderRadius: 2, flexShrink: 0,
-                    border: field.highlight ? '1.5px solid #D4A017' : '1.5px solid #A0A09A',
-                    background: field.highlight ? '#FFF3CD' : 'var(--color-surface-card)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 8, color: '#D4A017', fontWeight: 700, cursor: 'pointer',
-                  }}
-                >
-                  ★
-                </button>
-
-                {/* Kalın yazı toggle */}
-                <button
-                  type="button"
-                  onClick={() => updateField(i, { bold: !field.bold })}
-                  title={field.bold ? 'Kalın yazıyı kaldır' : 'Kalın yaz'}
-                  style={{
-                    width: 14, height: 14, borderRadius: 2, flexShrink: 0,
-                    border: field.bold ? '1.5px solid #185FA5' : '1.5px solid #A0A09A',
-                    background: field.bold ? 'rgba(24,95,165,0.12)' : 'var(--color-surface-card)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, color: field.bold ? '#185FA5' : '#A0A09A', fontWeight: 900, cursor: 'pointer',
-                  }}
-                >
-                  B
-                </button>
-
-                {/* Etiket */}
-                <input
-                  type="text"
-                  value={field.label}
-                  onChange={(e) => updateField(i, { label: e.target.value })}
-                  style={{
-                    flex: 1, minWidth: 0, fontSize: 11, fontFamily: 'inherit',
-                    border: 'none', background: 'transparent', outline: 'none',
-                    color: 'var(--color-text-primary)', fontWeight: 500,
-                  }}
-                  placeholder="Etiket"
-                />
-
-                {/* Sırala */}
-                <div className="flex" style={{ gap: 2 }}>
-                  <button type="button" onClick={() => moveField(i, -1)} disabled={i === 0}
-                    style={{ width: 18, height: 18, border: 'none', background: 'none', fontSize: 9, color: 'var(--color-text-muted)', cursor: 'pointer', opacity: i === 0 ? 0.3 : 1 }}>▲</button>
-                  <button type="button" onClick={() => moveField(i, 1)} disabled={i === config.fields.length - 1}
-                    style={{ width: 18, height: 18, border: 'none', background: 'none', fontSize: 9, color: 'var(--color-text-muted)', cursor: 'pointer', opacity: i === config.fields.length - 1 ? 0.3 : 1 }}>▼</button>
+      <PanelSection title="Satırlar" meta={`${visibleCount} / ${config.fields.length} görünür`}>
+        <ListBox>
+          {config.fields.map((field, i) => {
+            const open = expandedKey === field.key
+            return (
+              <div key={field.key} className={field.visible ? '' : 'opacity-60'}>
+                <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+                  <CheckToggle
+                    checked={field.visible}
+                    onToggle={() => updateField(i, { visible: !field.visible })}
+                    label={`${field.label} satırını ${field.visible ? 'gizle' : 'göster'}`}
+                  />
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => setExpandedKey(open ? null : field.key)}
+                    className="xc-focus flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left"
+                  >
+                    <span className={`min-w-0 flex-1 truncate text-[12px] text-tx ${field.bold ? 'font-semibold' : ''}`}>{field.label || 'Etiketsiz'}</span>
+                    {isDynamic(field.key)
+                      ? <RefreshCw size={11} aria-label="Orana göre dinamik" className="flex-none text-tx-muted" />
+                      : <MonoPath value={field.xpath.replace('//cac:LegalMonetaryTotal/', '')} />}
+                  </button>
+                  <IconButton label={field.highlight ? 'Vurguyu kaldır' : 'Vurgula (arka plan rengi)'} pressed={field.highlight} onClick={() => updateField(i, { highlight: !field.highlight })}>
+                    <Star size={12} aria-hidden="true" />
+                  </IconButton>
+                  <IconButton label={field.bold ? 'Kalın yazıyı kaldır' : 'Kalın yaz'} pressed={field.bold} onClick={() => updateField(i, { bold: !field.bold })}>
+                    <Bold size={12} aria-hidden="true" />
+                  </IconButton>
                 </div>
-
-                {/* Sil (sadece custom) */}
-                {field.isCustom && (
-                  <button type="button" onClick={() => removeField(i)}
-                    style={{ width: 18, height: 18, border: 'none', background: 'none', fontSize: 10, color: 'var(--color-danger)', cursor: 'pointer' }}>✕</button>
+                {open && (
+                  <div className="flex flex-col gap-2 border-t border-ui-line bg-ui-side px-2.5 py-2.5">
+                    <div className="flex items-end gap-1.5">
+                      <Field label="Etiket">
+                        <TextInput value={field.label} onChange={(v) => updateField(i, { label: v })} placeholder="Etiket" />
+                      </Field>
+                      <IconButton label="Yukarı taşı" disabled={i === 0} onClick={() => moveField(i, -1)}>
+                        <ChevronUp size={13} aria-hidden="true" />
+                      </IconButton>
+                      <IconButton label="Aşağı taşı" disabled={i === config.fields.length - 1} onClick={() => moveField(i, 1)}>
+                        <ChevronDown size={13} aria-hidden="true" />
+                      </IconButton>
+                      {field.isCustom && (
+                        <IconButton danger label="Satırı sil" onClick={() => { removeField(i); setExpandedKey(null) }}>
+                          <X size={13} aria-hidden="true" />
+                        </IconButton>
+                      )}
+                    </div>
+                    {isDynamic(field.key) ? (
+                      <InfoNote>
+                        {field.key === 'taxBaseGroups'
+                          ? 'TaxSubtotal/TaxableAmount — KDV oranına göre, ÖTV toplam'
+                          : 'TaxSubtotal/TaxAmount — KDV oranına göre, ÖTV toplam'}
+                      </InfoNote>
+                    ) : field.isCustom ? (
+                      <XPathInput ariaLabel="Satır XPath" value={field.xpath} onChange={(v) => updateField(i, { xpath: v })} placeholder="//cac:LegalMonetaryTotal/cbc:..." />
+                    ) : (
+                      <>
+                        <div className="truncate rounded-md border border-ui-line bg-ui-card px-2.5 py-1.5 font-mono text-[11px] text-tx-muted" title={field.xpath}>
+                          {field.xpath}
+                        </div>
+                        <MatchInfo xpath={field.xpath} />
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
-
-              {/* XPath / Dinamik bilgi */}
-              {(field.key === 'taxSubtotalGroups' || field.key === 'taxBaseGroups') ? (
-                <div style={{
-                  padding: '3px 8px', background: 'var(--color-surface-card)',
-                  fontSize: 10, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                  <span style={{ fontSize: 11 }}>↻</span>
-                  <span>
-                    {field.key === 'taxBaseGroups'
-                      ? 'TaxSubtotal/TaxableAmount — KDV oranına göre, ÖTV toplam'
-                      : 'TaxSubtotal/TaxAmount — KDV oranına göre, ÖTV toplam'}
-                  </span>
-                </div>
-              ) : field.isCustom ? (
-                <div style={{ padding: '4px 8px', background: 'var(--color-surface-card)' }}>
-                  <XPathInput
-                    value={field.xpath}
-                    onChange={(v) => updateField(i, { xpath: v })}
-                    placeholder="//cac:LegalMonetaryTotal/cbc:..."
-                  />
-                </div>
-              ) : (
-                <div style={{
-                  padding: '3px 8px', background: 'var(--color-surface-card)',
-                  fontSize: 10, fontFamily: 'monospace', color: 'var(--color-text-muted)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }} title={field.xpath}>
-                  {field.xpath}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Reset + Özel ekle */}
-        <div className="flex items-center" style={{ marginTop: 8, gap: 8 }}>
+            )
+          })}
+        </ListBox>
+        <div className="flex items-center gap-2">
+          <AddButton onClick={addCustomField}>+ Özel satır ekle</AddButton>
           <button
-            onClick={addCustomField}
-            style={{ fontSize: 11, color: 'var(--color-brand-primary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
-          >
-            + Özel satır ekle
-          </button>
-          <button
+            type="button"
             onClick={() => update({ fields: DEFAULT_INVOICE_TOTALS_FIELDS.map((f) => ({ ...f })) })}
-            style={{ fontSize: 11, color: 'var(--color-text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, marginLeft: 'auto' }}
+            className="xc-focus ml-auto rounded px-1 py-1 text-[12px] text-tx-muted hover:text-tx hover:underline"
           >
             Sıfırla
           </button>
         </div>
-      </div>
+      </PanelSection>
+
+      <PanelSection title="Biçim">
+        <Checkbox label="Para birimi göster" checked={config.showCurrency} onChange={(v) => update({ showCurrency: v })} />
+        {config.showCurrency && (
+          <Field label="Para birimi XPath">
+            <XPathInput value={config.currencyXpath} onChange={(v) => update({ currencyXpath: v })} placeholder="//cbc:DocumentCurrencyCode" />
+          </Field>
+        )}
+        <FieldRow>
+          <Field label="Etiket genişliği">
+            <TextInput value={config.labelWidth ?? ''} onChange={(v) => update({ labelWidth: v })} placeholder="60%" />
+          </Field>
+          <FontSizeField config={config} update={update} placeholder="9pt" />
+        </FieldRow>
+      </PanelSection>
     </>
   )
 }
@@ -1362,51 +882,35 @@ function InvoiceTotalsPanel({ config, update }: { config: Config<'InvoiceTotals'
 function GibLogoPanel({ config, update }: { config: Config<'GibLogo'>; update: UpdateFn }) {
   return (
     <>
-      {/* Sabit logo önizlemesi */}
-      <div style={{
-        display: 'flex', justifyContent: config.alignment,
-        padding: 8, background: 'var(--color-surface-secondary)',
-        borderRadius: 5, border: '0.5px solid var(--color-border-subtle)',
-      }}>
-        <img
-          src={GIB_LOGO_BASE64}
-          alt="GİB Logo"
-          style={{ width: config.width ?? '80px', height: config.height ?? '80px', objectFit: 'contain' }}
-        />
-      </div>
-
-      <div className="flex" style={{ gap: 8 }}>
-        <Field label="Genişlik">
-          <TextInput value={config.width ?? ''} onChange={(v) => update({ width: v })} placeholder="80px" />
+      <PanelSection title="Logo">
+        {/* Sabit logo önizlemesi */}
+        <div className="flex rounded-md border border-ui-line bg-ui-side p-2" style={{ justifyContent: config.alignment }}>
+          <img
+            src={GIB_LOGO_BASE64}
+            alt="GİB Logo"
+            style={{ width: config.width ?? '80px', height: config.height ?? '80px', objectFit: 'contain' }}
+          />
+        </div>
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <FieldRow>
+          <Field label="Genişlik">
+            <TextInput value={config.width ?? ''} onChange={(v) => update({ width: v })} placeholder="80px" />
+          </Field>
+          <Field label="Yükseklik">
+            <TextInput value={config.height ?? ''} onChange={(v) => update({ height: v })} placeholder="80px" />
+          </Field>
+        </FieldRow>
+        <Field label="Hizalama">
+          <Select value={config.alignment} onChange={(v) => update({ alignment: v as 'left' | 'center' | 'right' })} options={ALIGNMENTS} />
         </Field>
-        <Field label="Yükseklik">
-          <TextInput value={config.height ?? ''} onChange={(v) => update({ height: v })} placeholder="80px" />
-        </Field>
-      </div>
-      <Field label="Hizalama">
-        <Select
-          value={config.alignment}
-          onChange={(v) => update({ alignment: v as 'left' | 'center' | 'right' })}
-          options={[
-            { value: 'left', label: 'Sol' },
-            { value: 'center', label: 'Orta' },
-            { value: 'right', label: 'Sağ' },
-          ]}
-        />
-      </Field>
-      <Field label="Yazı Boyutu">
-        <TextInput value={config.fontSize ?? '11px'} onChange={(v) => update({ fontSize: v })} placeholder="11px" />
-      </Field>
-      <Field label="Saydamlık (0–100)">
-        <input
-          type="number" min={0} max={100} step={5}
-          value={config.opacity ?? 100}
-          onChange={(e) => update({ opacity: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
-          style={{ width: '100%', height: 28, fontSize: 11, padding: '0 8px', boxSizing: 'border-box', border: '0.5px solid var(--color-border-subtle)', borderRadius: 5, background: 'var(--color-surface-secondary)', color: 'var(--color-text-primary)', outline: 'none', fontFamily: 'inherit' }}
-          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
-          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-subtle)')}
-        />
-      </Field>
+        <FieldRow>
+          <Field label="Yazı boyutu">
+            <TextInput value={config.fontSize ?? '11px'} onChange={(v) => update({ fontSize: v })} placeholder="11px" />
+          </Field>
+          <OpacityField value={config.opacity} update={update} />
+        </FieldRow>
+      </PanelSection>
     </>
   )
 }
@@ -1414,46 +918,23 @@ function GibLogoPanel({ config, update }: { config: Config<'GibLogo'>; update: U
 function GibKarekodPanel({ config, update }: { config: Config<'GibKarekod'>; update: UpdateFn }) {
   return (
     <>
-      <p className="text-xs text-gray-400 bg-gray-50 rounded p-2">
-        GİB standart karekodu (e-Fatura veya e-İrsaliye, şablon türüne göre). XPath değerleri sabittir.
-      </p>
-      <div className="flex gap-2">
-        <Field label="Genişlik (px)">
-          <TextInput
-            value={String(config.qrWidth ?? 150)}
-            onChange={(v) => update({ qrWidth: parseInt(v) || 150 })}
-            placeholder="150"
-          />
-        </Field>
-        <Field label="Yükseklik (px)">
-          <TextInput
-            value={String(config.qrHeight ?? 150)}
-            onChange={(v) => update({ qrHeight: parseInt(v) || 150 })}
-            placeholder="150"
-          />
-        </Field>
-      </div>
-      <Field label="Hizalama">
-        <Select
-          value={config.qrAlignment ?? 'right'}
-          onChange={(v) => update({ qrAlignment: v })}
-          options={[
-            { value: 'left', label: 'Sol' },
-            { value: 'center', label: 'Orta' },
-            { value: 'right', label: 'Sağ' },
-          ]}
-        />
-      </Field>
-      <Field label="Saydamlık (0–100)">
-        <input
-          type="number" min={0} max={100} step={5}
-          value={config.opacity ?? 100}
-          onChange={(e) => update({ opacity: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
-          style={{ width: '100%', height: 28, fontSize: 11, padding: '0 8px', boxSizing: 'border-box', border: '0.5px solid var(--color-border-subtle)', borderRadius: 5, background: 'var(--color-surface-secondary)', color: 'var(--color-text-primary)', outline: 'none', fontFamily: 'inherit' }}
-          onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-brand-primary)')}
-          onBlur={e => (e.currentTarget.style.borderColor = 'var(--color-border-subtle)')}
-        />
-      </Field>
+      <InfoNote>GİB standart karekodu (e-Fatura veya e-İrsaliye, şablon türüne göre). XPath değerleri sabittir.</InfoNote>
+      <PanelSection title="Biçim">
+        <FieldRow>
+          <Field label="Genişlik (px)">
+            <TextInput value={String(config.qrWidth ?? 150)} onChange={(v) => update({ qrWidth: parseInt(v) || 150 })} placeholder="150" />
+          </Field>
+          <Field label="Yükseklik (px)">
+            <TextInput value={String(config.qrHeight ?? 150)} onChange={(v) => update({ qrHeight: parseInt(v) || 150 })} placeholder="150" />
+          </Field>
+        </FieldRow>
+        <FieldRow>
+          <Field label="Hizalama">
+            <Select value={config.qrAlignment ?? 'right'} onChange={(v) => update({ qrAlignment: v })} options={ALIGNMENTS} />
+          </Field>
+          <OpacityField value={config.opacity} update={update} />
+        </FieldRow>
+      </PanelSection>
     </>
   )
 }
@@ -1461,33 +942,41 @@ function GibKarekodPanel({ config, update }: { config: Config<'GibKarekod'>; upd
 function TaxSummaryPanel({ config, update }: { config: Config<'TaxSummary'>; update: UpdateFn }) {
   return (
     <>
-      <Field label="KDV alt toplamları (XPath)">
+      <PanelSection title="Satır kaynağı (XPath)">
         <XPathInput
+          ariaLabel="KDV alt toplamları XPath"
+          match="nodes"
           value={config.taxTotalXpath}
           onChange={(v) => update({ taxTotalXpath: v })}
           placeholder="//cac:TaxTotal/cac:TaxSubtotal"
         />
-      </Field>
-      <Checkbox label="KDV Oranı sütunu" checked={config.showPercent} onChange={(v) => update({ showPercent: v })} />
-      {config.showPercent && (
-        <Field label="Oran XPath">
-          <XPathInput value={config.percentXpath} onChange={(v) => update({ percentXpath: v })} placeholder="cac:TaxCategory/cbc:Percent" />
+      </PanelSection>
+      <PanelSection title="Kolonlar">
+        <Checkbox label="KDV Oranı sütunu" checked={config.showPercent} onChange={(v) => update({ showPercent: v })} />
+        {config.showPercent && (
+          <Field label="Oran XPath">
+            <XPathInput value={config.percentXpath} onChange={(v) => update({ percentXpath: v })} placeholder="cac:TaxCategory/cbc:Percent" contextXPath={config.taxTotalXpath} />
+          </Field>
+        )}
+        <Field label="Matrah XPath">
+          <XPathInput value={config.taxableAmountXpath} onChange={(v) => update({ taxableAmountXpath: v })} placeholder="cbc:TaxableAmount" contextXPath={config.taxTotalXpath} />
         </Field>
-      )}
-      <Field label="Matrah XPath">
-        <XPathInput value={config.taxableAmountXpath} onChange={(v) => update({ taxableAmountXpath: v })} placeholder="cbc:TaxableAmount" />
-      </Field>
-      <Field label="KDV Tutarı XPath">
-        <XPathInput value={config.taxAmountXpath} onChange={(v) => update({ taxAmountXpath: v })} placeholder="cbc:TaxAmount" />
-      </Field>
-      <Field label="Başlık arkaplanı">
-        <ColorInput value={config.headerBackgroundColor ?? '#E0E0E0'} onChange={(v) => update({ headerBackgroundColor: v })} placeholder="#E0E0E0" />
-      </Field>
+        <Field label="KDV tutarı XPath">
+          <XPathInput value={config.taxAmountXpath} onChange={(v) => update({ taxAmountXpath: v })} placeholder="cbc:TaxAmount" contextXPath={config.taxTotalXpath} />
+        </Field>
+      </PanelSection>
+      <PanelSection title="Biçim">
+        <Field label="Başlık arka planı">
+          <ColorInput value={config.headerBackgroundColor ?? '#E0E0E0'} onChange={(v) => update({ headerBackgroundColor: v })} placeholder="#E0E0E0" />
+        </Field>
+      </PanelSection>
     </>
   )
 }
 
 function PartyInfoPanel({ config, update }: { config: Config<'PartyInfo'>; update: UpdateFn }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
+
   const PARTY_TYPES: { value: PartyType; label: string }[] = [
     { value: 'SupplierParty', label: 'Satıcı' },
     { value: 'CustomerParty', label: 'Alıcı' },
@@ -1546,115 +1035,93 @@ function PartyInfoPanel({ config, update }: { config: Config<'PartyInfo'>; updat
     update({ fields })
   }
 
+  const rootXPath = PARTY_TYPE_ROOT_XPATH[config.partyType]
+  const visibleCount = config.fields.filter((f) => f.visible).length
+
   return (
     <>
-      <Field label="Taraf Tipi">
-        <Select
-          value={config.partyType}
-          onChange={(v) => handlePartyTypeChange(v as PartyType)}
-          options={PARTY_TYPES}
-        />
-      </Field>
-      <Field label="Başlık">
-        <TextInput value={config.title} onChange={(v) => update({ title: v })} placeholder="SATICI" />
-      </Field>
-      <Checkbox label="Başlığı göster" checked={config.showTitle} onChange={(v) => update({ showTitle: v })} />
-      <Checkbox label="Kenarlıklı" checked={config.bordered} onChange={(v) => update({ bordered: v })} />
-      {config.bordered && (
-        <Field label="Kenarlık Stili">
-          <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
-            { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
-          ]} />
+      <PanelSection title="Veri kaynağı">
+        <Field label="Taraf tipi">
+          <Select value={config.partyType} onChange={(v) => handlePartyTypeChange(v as PartyType)} options={PARTY_TYPES} />
         </Field>
-      )}
-      <Field label="Etiket Stili">
-        <Select
-          value={config.labelStyle}
-          onChange={(v) => update({ labelStyle: v })}
-          options={LABEL_STYLES}
-        />
-      </Field>
-      <Field label="Yazı Boyutu">
-        <TextInput value={config.fontSize ?? ''} onChange={(v) => update({ fontSize: v })} placeholder="9pt" />
-      </Field>
-
-      <div className="border-t border-gray-100 pt-2">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Alanlar</p>
-        <div className="flex flex-col gap-1.5">
-          {config.fields.map((field, i) => (
-            <div
-              key={field.key}
-              className={`border rounded p-2 flex flex-col gap-1 ${
-                field.visible ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'
-              }`}
-            >
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  title={field.visible ? 'Gizle' : 'Göster'}
-                  onClick={() => updateField(i, { visible: !field.visible })}
-                  className={`w-5 h-5 flex items-center justify-center rounded text-xs ${
-                    field.visible ? 'text-blue-600' : 'text-gray-500'
-                  }`}
-                >
-                  {field.visible ? '◉' : '○'}
-                </button>
-                <input
-                  type="text"
-                  value={field.label}
-                  onChange={(e) => updateField(i, { label: e.target.value })}
-                  className="flex-1 min-w-0 text-xs border border-gray-200 rounded px-1.5 py-1 outline-none focus:border-blue-400"
-                  placeholder="Etiket"
-                />
-                <div className="flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => moveField(i, -1)}
-                    disabled={i === 0}
-                    className="w-5 h-5 flex items-center justify-center text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveField(i, 1)}
-                    disabled={i === config.fields.length - 1}
-                    className="w-5 h-5 flex items-center justify-center text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                  >
-                    ▼
-                  </button>
-                  {field.isCustom && (
-                    <button
-                      type="button"
-                      onClick={() => removeField(i)}
-                      className="w-5 h-5 flex items-center justify-center text-xs text-red-400 hover:text-red-600"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-              {field.isCustom ? (
-                <XPathInput
-                  value={field.relativeXpath}
-                  onChange={(v) => updateField(i, { relativeXpath: v })}
-                  placeholder="cac:.../cbc:..."
-                />
-              ) : (
-                <span className="text-[10px] text-gray-400 px-1 truncate" title={field.relativeXpath}>
-                  {field.relativeXpath}
-                </span>
-              )}
-            </div>
-          ))}
+        <div className="truncate rounded-md border border-ui-line bg-ui-side px-2.5 py-1.5 font-mono text-[11px] text-tx-muted" title={rootXPath}>
+          {rootXPath}
         </div>
-        <button
-          onClick={addCustomField}
-          className="mt-2 text-xs text-blue-600 hover:text-blue-800"
-        >
-          + Özel alan ekle
-        </button>
-      </div>
+        <MatchInfo xpath={rootXPath} mode="nodes" noun="kayıt" />
+      </PanelSection>
+
+      <PanelSection title="Alanlar" meta={`${visibleCount} / ${config.fields.length} görünür`}>
+        <ListBox>
+          {config.fields.map((field, i) => {
+            const open = expandedKey === field.key
+            return (
+              <div key={field.key} className={field.visible ? '' : 'opacity-60'}>
+                <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+                  <CheckToggle
+                    checked={field.visible}
+                    onToggle={() => updateField(i, { visible: !field.visible })}
+                    label={`${field.label} alanını ${field.visible ? 'gizle' : 'göster'}`}
+                  />
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => setExpandedKey(open ? null : field.key)}
+                    className="xc-focus flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-tx">{field.label || 'Etiketsiz'}</span>
+                    <MonoPath value={field.relativeXpath} />
+                  </button>
+                </div>
+                {open && (
+                  <div className="flex flex-col gap-2 border-t border-ui-line bg-ui-side px-2.5 py-2.5">
+                    <div className="flex items-end gap-1.5">
+                      <Field label="Etiket">
+                        <TextInput value={field.label} onChange={(v) => updateField(i, { label: v })} placeholder="Etiket" />
+                      </Field>
+                      <IconButton label="Yukarı taşı" disabled={i === 0} onClick={() => moveField(i, -1)}>
+                        <ChevronUp size={13} aria-hidden="true" />
+                      </IconButton>
+                      <IconButton label="Aşağı taşı" disabled={i === config.fields.length - 1} onClick={() => moveField(i, 1)}>
+                        <ChevronDown size={13} aria-hidden="true" />
+                      </IconButton>
+                      {field.isCustom && (
+                        <IconButton danger label="Alanı sil" onClick={() => { removeField(i); setExpandedKey(null) }}>
+                          <X size={13} aria-hidden="true" />
+                        </IconButton>
+                      )}
+                    </div>
+                    {field.isCustom ? (
+                      <XPathInput
+                        ariaLabel="Alan XPath (taraf köküne göre)"
+                        value={field.relativeXpath}
+                        onChange={(v) => updateField(i, { relativeXpath: v })}
+                        placeholder="cac:.../cbc:..."
+                        contextXPath={rootXPath}
+                      />
+                    ) : (
+                      <MatchInfo xpath={field.relativeXpath} contextXPath={rootXPath} />
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </ListBox>
+        <AddButton onClick={addCustomField}>+ Özel alan ekle</AddButton>
+      </PanelSection>
+
+      <PanelSection title="Biçim">
+        <Field label="Başlık">
+          <TextInput value={config.title} onChange={(v) => update({ title: v })} placeholder="SATICI" />
+        </Field>
+        <Checkbox label="Başlığı göster" checked={config.showTitle} onChange={(v) => update({ showTitle: v })} />
+        <Field label="Etiket stili">
+          <Select value={config.labelStyle} onChange={(v) => update({ labelStyle: v })} options={LABEL_STYLES} />
+        </Field>
+        <Checkbox label="Kenarlıklı" checked={config.bordered} onChange={(v) => update({ bordered: v })} />
+        {config.bordered && <BorderStyleField value={config.borderStyle} update={update} />}
+        <FontSizeField config={config} update={update} placeholder="9pt" />
+      </PanelSection>
     </>
   )
 }
@@ -1677,134 +1144,82 @@ function InvoiceLineColumnEditor({
   formats: { value: ColumnFormat_ILT; label: string }[]
 }) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
+  const visibleCount = config.columns.filter((c) => c.visible).length
 
   return (
-    <div className="border-t border-gray-100 pt-2">
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Kolonlar</p>
-      <div className="flex flex-col gap-0.5">
+    <PanelSection title="Kolonlar" meta={`${visibleCount} / ${config.columns.length} görünür`}>
+      <ListBox>
         {config.columns.map((col, i) => {
           const isExpanded = expandedIndex === i
           return (
-            <div
-              key={col.key}
-              className={`border rounded transition-colors ${
-                col.visible
-                  ? isExpanded ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200 bg-white'
-                  : 'border-gray-100 bg-gray-50 opacity-50'
-              }`}
-            >
-              {/* Compact header row — always visible */}
-              <div
-                className="flex items-center gap-1 px-2 py-1.5 cursor-pointer select-none"
-                onClick={() => setExpandedIndex(isExpanded ? null : i)}
-              >
+            <div key={col.key} className={isExpanded ? 'bg-ui-soft/30' : ''}>
+              {/* Satır: onay kutusu + kolon adı + soluk mono XPath */}
+              <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+                <CheckToggle
+                  checked={col.visible}
+                  onToggle={() => updateColumn(i, { visible: !col.visible })}
+                  label={`${col.header || 'Başlıksız'} kolonunu ${col.visible ? 'gizle' : 'göster'}`}
+                />
                 <button
                   type="button"
-                  title={col.visible ? 'Gizle' : 'Göster'}
-                  onClick={(e) => { e.stopPropagation(); updateColumn(i, { visible: !col.visible }) }}
-                  className={`w-4 h-4 flex items-center justify-center rounded-full border transition-colors ${
-                    col.visible
-                      ? 'border-blue-500 bg-blue-500 text-white'
-                      : 'border-gray-400 bg-white text-transparent'
-                  }`}
+                  aria-expanded={isExpanded}
+                  aria-label={`${col.header || 'Başlıksız'} kolon ayrıntıları`}
+                  onClick={() => setExpandedIndex(isExpanded ? null : i)}
+                  className="xc-focus flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left"
                 >
-                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  <span className={`min-w-0 flex-1 truncate text-[12px] ${col.visible ? 'text-tx' : 'text-tx-muted'}`}>
+                    {col.header || 'Başlıksız'}
+                  </span>
+                  <MonoPath value={col.relativeXpath} />
                 </button>
-                <span className="flex-1 min-w-0 text-xs font-medium text-gray-700 truncate">{col.header || 'Başlıksız'}</span>
-                <span className="text-[10px] text-gray-400 shrink-0">{col.width}</span>
-                <svg
-                  className={`w-3 h-3 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
               </div>
 
-              {/* Expanded detail section */}
+              {/* Ayrıntılar */}
               {isExpanded && (
-                <div className="px-2.5 pb-2.5 pt-1 border-t border-gray-100 flex flex-col gap-2.5">
-                  {/* Header & Sıralama */}
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex-1">
-                      <label className="text-[11px] text-gray-500 mb-1 block">Başlık</label>
-                      <input
-                        type="text"
-                        value={col.header}
-                        onChange={(e) => updateColumn(i, { header: e.target.value })}
-                        className="w-full text-[13px] border border-gray-200 rounded-md px-2.5 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                        placeholder="Başlık"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-0.5 pt-4">
-                      <button
-                        type="button"
-                        onClick={() => moveColumn(i, -1)}
-                        disabled={i === 0}
-                        className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-100 disabled:opacity-30"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveColumn(i, 1)}
-                        disabled={i === config.columns.length - 1}
-                        className="w-6 h-6 flex items-center justify-center rounded border border-gray-200 text-[11px] text-gray-500 hover:bg-gray-100 disabled:opacity-30"
-                      >
-                        ▼
-                      </button>
-                    </div>
+                <div className="flex flex-col gap-2.5 border-t border-ui-line bg-ui-side px-2.5 py-2.5">
+                  <div className="flex items-end gap-1.5">
+                    <Field label="Başlık">
+                      <TextInput value={col.header} onChange={(v) => updateColumn(i, { header: v })} placeholder="Başlık" />
+                    </Field>
+                    <IconButton label="Yukarı taşı" disabled={i === 0} onClick={() => moveColumn(i, -1)}>
+                      <ChevronUp size={13} aria-hidden="true" />
+                    </IconButton>
+                    <IconButton label="Aşağı taşı" disabled={i === config.columns.length - 1} onClick={() => moveColumn(i, 1)}>
+                      <ChevronDown size={13} aria-hidden="true" />
+                    </IconButton>
                   </div>
-
-                  {/* Genişlik & Format yan yana */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] text-gray-500 mb-1 block">Genişlik</label>
-                      <input
-                        type="text"
-                        value={col.width ?? ''}
-                        onChange={(e) => updateColumn(i, { width: e.target.value })}
-                        className="w-full text-[13px] border border-gray-200 rounded-md px-2.5 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
-                        placeholder="10%"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-gray-500 mb-1 block">Format</label>
-                      <select
-                        value={col.format ?? 'text'}
-                        onChange={(e) => updateColumn(i, { format: e.target.value })}
-                        className="w-full text-[13px] border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 bg-white"
-                      >
-                        {formats.map((f) => (
-                          <option key={f.value} value={f.value}>{f.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* XPath */}
-                  <div>
-                    <label className="text-[11px] text-gray-500 mb-1 block">XPath</label>
+                  <FieldRow>
+                    <Field label="Genişlik">
+                      <TextInput value={col.width ?? ''} onChange={(v) => updateColumn(i, { width: v })} placeholder="10%" />
+                    </Field>
+                    <Field label="Format">
+                      <Select value={col.format ?? 'text'} onChange={(v) => updateColumn(i, { format: v })} options={formats} />
+                    </Field>
+                  </FieldRow>
+                  <Field label="XPath (satıra göre)">
                     {col.isCustom ? (
                       <XPathInput
                         value={col.relativeXpath}
                         onChange={(v) => updateColumn(i, { relativeXpath: v })}
                         placeholder="cac:.../cbc:..."
+                        contextXPath={config.iterateOver}
                       />
                     ) : (
-                      <div className="text-[11px] text-gray-500 bg-gray-50 rounded-md px-2.5 py-1.5 font-mono truncate border border-gray-100" title={col.relativeXpath}>
-                        {col.relativeXpath}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="truncate rounded-md border border-ui-line bg-ui-card px-2.5 py-1.5 font-mono text-[11px] text-tx-muted" title={col.relativeXpath}>
+                          {col.relativeXpath}
+                        </div>
+                        <MatchInfo xpath={col.relativeXpath} contextXPath={config.iterateOver} />
                       </div>
                     )}
-                  </div>
-
-                  {/* Sil butonu (sadece custom) */}
+                  </Field>
                   {col.isCustom && (
                     <button
                       type="button"
                       onClick={() => { removeColumn(i); setExpandedIndex(null) }}
-                      className="self-end text-[10px] text-red-500 hover:text-red-700 flex items-center gap-0.5"
+                      className="xc-focus flex items-center gap-1 self-end rounded px-1 py-0.5 text-[12px] font-medium text-fn-red-ink hover:underline"
                     >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      <Trash2 size={13} aria-hidden="true" />
                       Kolonu sil
                     </button>
                   )}
@@ -1813,15 +1228,9 @@ function InvoiceLineColumnEditor({
             </div>
           )
         })}
-      </div>
-      <button
-        onClick={addCustomColumn}
-        className="mt-2 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-      >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-        Özel kolon ekle
-      </button>
-    </div>
+      </ListBox>
+      <AddButton onClick={addCustomColumn}>+ Kolon ekle</AddButton>
+    </PanelSection>
   )
 }
 
@@ -1875,37 +1284,38 @@ function InvoiceLineTablePanel({ config, update }: { config: Config<'InvoiceLine
 
   return (
     <>
-      <Field label="Tekrar XPath">
+      <PanelSection title="Satır kaynağı (XPath)">
         <XPathInput
+          ariaLabel="Satır kaynağı XPath"
+          match="nodes"
           value={config.iterateOver}
           onChange={(v) => update({ iterateOver: v })}
           placeholder="//cac:InvoiceLine"
         />
-      </Field>
-      <Field label="Başlık">
-        <TextInput value={config.title} onChange={(v) => update({ title: v })} placeholder="MAL HİZMET TABLOSU" />
-      </Field>
-      <Checkbox label="Başlığı göster" checked={config.showTitle} onChange={(v) => update({ showTitle: v })} />
-      <Checkbox label="Başlık satırı göster" checked={config.showHeader} onChange={(v) => update({ showHeader: v })} />
-      <Checkbox label="Sıra No göster" checked={config.showRowNumber} onChange={(v) => update({ showRowNumber: v })} />
-      <Checkbox label="Para birimi göster" checked={config.showCurrency ?? true} onChange={(v) => update({ showCurrency: v })} />
-      <Checkbox label="Kenarlıklı" checked={config.bordered} onChange={(v) => update({ bordered: v })} />
-      {config.bordered && (
-        <Field label="Kenarlık Stili">
-          <Select value={config.borderStyle ?? 'solid'} onChange={(v) => update({ borderStyle: v })} options={[
-            { value: 'solid', label: 'Düz' }, { value: 'dashed', label: 'Kesik' }, { value: 'dotted', label: 'Noktalı' },
-          ]} />
-        </Field>
-      )}
-      <Field label="Başlık arkaplanı">
-        <ColorInput value={config.headerBackgroundColor ?? '#E0E0E0'} onChange={(v) => update({ headerBackgroundColor: v })} placeholder="#E0E0E0" />
-      </Field>
-      <Field label="Alternatif satır rengi">
-        <ColorInput value={config.alternateRowColor ?? '#F9F9F9'} onChange={(v) => update({ alternateRowColor: v })} placeholder="#F9F9F9" />
-      </Field>
-      <FontSizeField config={config} update={update} />
+      </PanelSection>
 
       <InvoiceLineColumnEditor config={config} updateColumn={updateColumn} moveColumn={moveColumn} addCustomColumn={addCustomColumn} removeColumn={removeColumn} formats={FORMATS} />
+
+      <PanelSection title="Biçim">
+        <Field label="Başlık">
+          <TextInput value={config.title} onChange={(v) => update({ title: v })} placeholder="MAL HİZMET TABLOSU" />
+        </Field>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+          <Checkbox label="Başlığı göster" checked={config.showTitle} onChange={(v) => update({ showTitle: v })} />
+          <Checkbox label="Başlık satırı" checked={config.showHeader} onChange={(v) => update({ showHeader: v })} />
+          <Checkbox label="Sıra No göster" checked={config.showRowNumber} onChange={(v) => update({ showRowNumber: v })} />
+          <Checkbox label="Para birimi" checked={config.showCurrency ?? true} onChange={(v) => update({ showCurrency: v })} />
+          <Checkbox label="Kenarlıklı" checked={config.bordered} onChange={(v) => update({ bordered: v })} />
+        </div>
+        {config.bordered && <BorderStyleField value={config.borderStyle} update={update} />}
+        <Field label="Başlık arka planı">
+          <ColorInput value={config.headerBackgroundColor ?? '#E0E0E0'} onChange={(v) => update({ headerBackgroundColor: v })} placeholder="#E0E0E0" />
+        </Field>
+        <Field label="Alternatif satır rengi">
+          <ColorInput value={config.alternateRowColor ?? '#F9F9F9'} onChange={(v) => update({ alternateRowColor: v })} placeholder="#F9F9F9" />
+        </Field>
+        <FontSizeField config={config} update={update} />
+      </PanelSection>
     </>
   )
 }
@@ -1915,13 +1325,11 @@ function InvoiceLineTablePanel({ config, update }: { config: Config<'InvoiceLine
 function ShipmentInfoPanel({ config, update }: { config: Config<'ShipmentInfo'>; update: UpdateFn }) {
   return (
     <>
-      <p className="text-xs text-gray-400 bg-gray-50 rounded p-2">
-        Taşıyıcı firma, araç/dorse plakası, şoför ve teslim eden bilgileri XML'de varsa otomatik gösterilir.
-      </p>
-      <Field label="Başlık">
-        <TextInput value={config.title} onChange={(v) => update({ title: v })} placeholder="TAŞIYICI BİLGİLERİ" />
-      </Field>
-      <Checkbox label="Başlığı göster" checked={config.showTitle} onChange={(v) => update({ showTitle: v })} />
+      <InfoNote>Taşıyıcı firma, araç/dorse plakası, şoför ve teslim eden bilgileri XML'de varsa otomatik gösterilir.</InfoNote>
+      <PanelSection title="Başlık">
+        <TextInput ariaLabel="Başlık" value={config.title} onChange={(v) => update({ title: v })} placeholder="TAŞIYICI BİLGİLERİ" />
+        <Checkbox label="Başlığı göster" checked={config.showTitle} onChange={(v) => update({ showTitle: v })} />
+      </PanelSection>
       <InvoiceHeaderPanel config={config} update={update} />
     </>
   )
@@ -1929,110 +1337,102 @@ function ShipmentInfoPanel({ config, update }: { config: Config<'ShipmentInfo'>;
 
 // ── Properties content ────────────────────────────────────────────────────────
 
-function PropertiesContent() {
-  const selectedBlockId = useEditorStore((s) => s.selectedBlockId)
-  const blocks = useEditorStore((s) => s.blocks)
+type PropTab = 'data' | 'position'
+
+const PROP_TABS = [
+  { id: 'data', label: 'Veri' },
+  { id: 'position', label: 'Konum' },
+] as const
+
+/** Seçili bloğun tipine özel veri panelleri (mantık değişmez). */
+function BlockDataPanel({ block }: { block: GridBlock }) {
   const updateBlockConfig = useEditorStore((s) => s.updateBlockConfig)
-
-  if (!selectedBlockId) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p style={{ fontSize: 11, color: 'var(--color-text-muted)', textAlign: 'center', padding: '0 16px' }}>Düzenlemek için bir blok seç</p>
-      </div>
-    )
-  }
-
-  const block = blocks[selectedBlockId]
-  if (!block) return null
-
-  const update: UpdateFn = (patch) => updateBlockConfig(selectedBlockId, patch)
+  const update: UpdateFn = (patch) => updateBlockConfig(block.id, patch)
   const cfg = block.config as never
 
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col">
-      <div style={{ padding: '8px 12px', borderBottom: '0.5px solid var(--color-border-default)', flexShrink: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{block.type}</p>
-      </div>
-      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-        <GridPositionControls block={block} />
-        {block.type === 'Text' && <TextPanel config={cfg} update={update} />}
-        {block.type === 'Heading' && <HeadingPanel config={cfg} update={update} />}
-        {block.type === 'Paragraph' && <ParagraphPanel config={cfg} update={update} />}
-        {block.type === 'Table' && <TablePanel config={cfg} update={update} />}
-        {block.type === 'Image' && <ImagePanel config={cfg} update={update} />}
-        {block.type === 'DocumentInfo' && <DocumentInfoPanel config={cfg} update={update} />}
-        {block.type === 'Totals' && <TotalsPanel config={cfg} update={update} />}
-        {block.type === 'Notes' && <NotesPanel config={cfg} update={update} />}
-        {block.type === 'BankInfo' && <BankInfoPanel config={cfg} update={update} />}
-        {block.type === 'ETTN' && <ETTNPanel config={cfg} update={update} />}
-        {block.type === 'Divider' && <DividerPanel config={cfg} update={update} />}
-        {block.type === 'Spacer' && <SpacerPanel config={cfg} update={update} />}
-        {block.type === 'ConditionalText' && <ConditionalTextPanel config={cfg} update={update} />}
-        {block.type === 'TaxSummary' && <TaxSummaryPanel config={cfg} update={update} />}
-        {block.type === 'GibKarekod' && <GibKarekodPanel config={cfg} update={update} />}
-        {block.type === 'GibLogo' && <GibLogoPanel config={cfg} update={update} />}
-        {block.type === 'PartyInfo' && <PartyInfoPanel config={cfg} update={update} />}
-        {block.type === 'InvoiceLineTable' && <InvoiceLineTablePanel config={cfg} update={update} />}
-        {block.type === 'InvoiceHeader' && <InvoiceHeaderPanel config={cfg} update={update} />}
-        {block.type === 'InvoiceTotals' && <InvoiceTotalsPanel config={cfg} update={update} />}
-        {block.type === 'ShipmentInfo' && <ShipmentInfoPanel config={cfg} update={update} />}
-      </div>
-    </div>
+    <>
+      {block.type === 'Text' && <TextPanel config={cfg} update={update} />}
+      {block.type === 'Heading' && <HeadingPanel config={cfg} update={update} />}
+      {block.type === 'Paragraph' && <ParagraphPanel config={cfg} update={update} />}
+      {block.type === 'Table' && <TablePanel config={cfg} update={update} />}
+      {block.type === 'Image' && <ImagePanel config={cfg} update={update} />}
+      {block.type === 'DocumentInfo' && <DocumentInfoPanel config={cfg} update={update} />}
+      {block.type === 'Totals' && <TotalsPanel config={cfg} update={update} />}
+      {block.type === 'Notes' && <NotesPanel config={cfg} update={update} />}
+      {block.type === 'BankInfo' && <BankInfoPanel config={cfg} update={update} />}
+      {block.type === 'ETTN' && <ETTNPanel config={cfg} update={update} />}
+      {block.type === 'Divider' && <DividerPanel config={cfg} update={update} />}
+      {block.type === 'Spacer' && <SpacerPanel config={cfg} update={update} />}
+      {block.type === 'ConditionalText' && <ConditionalTextPanel config={cfg} update={update} />}
+      {block.type === 'TaxSummary' && <TaxSummaryPanel config={cfg} update={update} />}
+      {block.type === 'GibKarekod' && <GibKarekodPanel config={cfg} update={update} />}
+      {block.type === 'GibLogo' && <GibLogoPanel config={cfg} update={update} />}
+      {block.type === 'PartyInfo' && <PartyInfoPanel config={cfg} update={update} />}
+      {block.type === 'InvoiceLineTable' && <InvoiceLineTablePanel config={cfg} update={update} />}
+      {block.type === 'InvoiceHeader' && <InvoiceHeaderPanel config={cfg} update={update} />}
+      {block.type === 'InvoiceTotals' && <InvoiceTotalsPanel config={cfg} update={update} />}
+      {block.type === 'ShipmentInfo' && <ShipmentInfoPanel config={cfg} update={update} />}
+    </>
   )
 }
 
 // ── Root PropertyPanel ────────────────────────────────────────────────────────
 
+/**
+ * Tasarım Alanı sağ paneli: "Seçili blok" başlığı + Veri | Konum sekmeleri.
+ * XML ağacı artık sol panelde (EditorLeftPanel); XPath düğmesi oraya yönlendirir.
+ */
 export default function PropertyPanel() {
-  const rightPanelTab = useXmlStore((s) => s.rightPanelTab)
-  const setRightPanelTab = useXmlStore((s) => s.setRightPanelTab)
+  const selectedBlockId = useEditorStore((s) => s.selectedBlockId)
+  const blocks = useEditorStore((s) => s.blocks)
+  const documentType = useEditorStore((s) => s.documentType)
+  const [tab, setTab] = useState<PropTab>('data')
 
-  const isXmlTab = rightPanelTab === 'xml'
+  const block = selectedBlockId ? blocks[selectedBlockId] : undefined
 
   return (
     <aside
-      className="flex-shrink-0 flex flex-col overflow-hidden"
-      style={{
-        width: isXmlTab ? 400 : 280,
-        background: 'var(--color-surface-card)',
-        borderLeft: '0.5px solid var(--color-border-default)',
-        transition: 'width 200ms ease',
-      }}
+      aria-label="Blok özellikleri"
+      className="flex w-[304px] flex-none flex-col overflow-hidden border-l border-ui-line bg-ui-card"
     >
-      {/* Tab bar */}
-      <div
-        className="flex flex-shrink-0"
-        style={{ height: 36, borderBottom: '0.5px solid var(--color-border-default)' }}
-      >
-        {(['properties', 'xml'] as const).map((tab) => {
-          const active = rightPanelTab === tab
-          return (
-            <button
-              key={tab}
-              onClick={() => setRightPanelTab(tab)}
-              style={{
-                flex: 1,
-                fontSize: 11,
-                fontWeight: 500,
-                fontFamily: 'inherit',
-                color: active ? 'var(--color-brand-primary)' : 'var(--color-text-secondary)',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: active ? '2px solid var(--color-brand-primary)' : '2px solid transparent',
-                cursor: 'pointer',
-                transition: 'color 120ms',
-              }}
-              onMouseEnter={e => { if (!active) { e.currentTarget.style.color = 'var(--color-text-primary)'; e.currentTarget.style.background = 'var(--color-surface-secondary)' } }}
-              onMouseLeave={e => { if (!active) { e.currentTarget.style.color = 'var(--color-text-secondary)'; e.currentTarget.style.background = 'transparent' } }}
-            >
-              {tab === 'properties' ? 'Özellikler' : 'XML Ağacı'}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Tab content */}
-      {rightPanelTab === 'properties' ? <PropertiesContent /> : <XmlTreeExplorer />}
+      {!block ? (
+        <div className="flex flex-1 items-center justify-center px-6">
+          <p className="text-center text-[12px] leading-relaxed text-tx-subtle">
+            Düzenlemek için sayfadaki bir bloğu seç.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-none flex-col gap-1 px-4 pt-3.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-tx-muted">Seçili blok</span>
+            <div className="flex min-w-0 items-center gap-2">
+              <BlockTypeIcon type={block.type} size={16} strokeWidth={1.8} aria-hidden="true" className="flex-none text-ui-accent" />
+              <h2 className="m-0 min-w-0 truncate text-[15px] font-semibold text-tx">
+                {blockLabel(block.type, documentType)}
+              </h2>
+              <span className="ml-auto flex-none font-mono text-[11px] text-tx-subtle">{block.type}</span>
+            </div>
+            <SegmentedTabs<PropTab>
+              items={PROP_TABS}
+              value={tab}
+              onChange={setTab}
+              ariaLabel="Blok özellikleri"
+              variant="underline"
+              idPrefix="design-props"
+              className="mt-1.5"
+            />
+          </div>
+          <div
+            role="tabpanel"
+            id={`design-props-panel-${tab}`}
+            aria-labelledby={`design-props-tab-${tab}`}
+            className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto p-4"
+          >
+            {tab === 'data' ? <BlockDataPanel key={block.id} block={block} /> : <GridPositionControls block={block} />}
+          </div>
+        </>
+      )}
     </aside>
   )
 }

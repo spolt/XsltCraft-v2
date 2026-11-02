@@ -32,7 +32,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── Public API ────────────────────────────────────────────────────────
 
-    public (string? Xslt, string? Error) GenerateFromJson(string blockTreeJson)
+    public (string? Xslt, string? Error) GenerateFromJson(string blockTreeJson, Dictionary<string, string>? assetBase64 = null)
     {
         try
         {
@@ -43,13 +43,13 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             {
                 var treeV2 = JsonSerializer.Deserialize<BlockTreeV2Dto>(blockTreeJson, JsonOpts)
                              ?? throw new JsonException("Boş sonuç.");
-                return GenerateV2(treeV2);
+                return GenerateV2(treeV2, assetBase64);
             }
             else
             {
                 var tree = JsonSerializer.Deserialize<BlockTreeDto>(blockTreeJson, JsonOpts)
                            ?? throw new JsonException("Boş sonuç.");
-                return Generate(tree);
+                return Generate(tree, assetBase64);
             }
         }
         catch (Exception ex)
@@ -62,6 +62,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     {
         _assetBase64 = assetBase64 ?? [];
         _isDespatch = false;
+        ResetCallState();
         try
         {
             var body = BuildBody(tree);
@@ -75,6 +76,10 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             var validationError = Validate(xslt);
             return validationError is null ? (xslt, null) : (null, validationError);
         }
+        catch (XPathBindingException ex)
+        {
+            return (null, ex.Message);
+        }
         catch (Exception ex)
         {
             return (null, $"XSLT üretim hatası: {ex.Message}");
@@ -87,6 +92,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     {
         _assetBase64 = assetBase64 ?? [];
         _isDespatch = IsDespatch(tree.DocumentType);
+        ResetCallState();
         try
         {
             // Create a BlockTreeDto adapter so existing DispatchBlock/Generate* methods work unchanged
@@ -100,6 +106,10 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             var xslt = WrapStylesheet(body, hasQr, isV2: true, isDespatch: _isDespatch);
             var validationError = Validate(xslt);
             return validationError is null ? (xslt, null) : (null, validationError);
+        }
+        catch (XPathBindingException ex)
+        {
+            return (null, ex.Message);
         }
         catch (Exception ex)
         {
@@ -324,7 +334,6 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                         position: relative;
                         overflow: hidden;
                       }
-                      /* layout tables — multi-column rows, no visible borders */
                       table.lr { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; }
                       table.lr > tbody > tr > td {
                         border: none;
@@ -333,11 +342,9 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                         word-break: break-word;
                         overflow-wrap: break-word;
                       }
-                      /* data tables — Table block */
                       table.dt { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 6px; font-size: 9pt; }
                       table.dt th { border: 1px solid #333; padding: 3px 6px; background: #d0d0d0; font-weight: bold; text-align: center; overflow: hidden; }
                       table.dt td { border: 1px solid #555; padding: 3px 6px; word-break: break-word; overflow-wrap: break-word; overflow: hidden; }
-                      /* document info table — key-value */
                       table.di, table.di-dashed, table.di-dotted { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
                       table.di td { border: 1px solid #555; padding: 2px 6px; }
                       table.di-dashed td { border: 1px dashed #555; padding: 2px 6px; }
@@ -346,14 +353,12 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                       table.di-plain { width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5pt; }
                       table.di-plain td { border: none; padding: 2px 6px; }
                       table.di-plain td:first-child { font-weight: bold; white-space: nowrap; width: 40%; }
-                      /* totals table */
                       table.tot { border-collapse: collapse; margin-left: auto; margin-bottom: 4px; font-size: 9.5pt; min-width: 280px; }
                       table.tot td { border: 1px solid #aaa; padding: 2px 8px; }
                       table.tot td.lbl { text-align: right; padding-right: 12px; white-space: nowrap; }
                       table.tot td.val { text-align: right; white-space: nowrap; min-width: 120px; }
                       table.tot tr.hl td { background: #ffffcc; }
                       table.tot tr.bd td { font-weight: bold; }
-                      /* typography */
                       h1, h2 { padding-bottom: 3px; padding-top: 3px; margin-bottom: 5px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; }
                       h1 { font-size: 1.4em; text-transform: none; }
                       h2 { font-size: 1em; color: brown; }
@@ -419,8 +424,6 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         var sb = new StringBuilder();
         foreach (var section in tree.Sections.OrderBy(s => s.Order))
         {
-            sb.AppendLine($"    <!-- section: {XmlEscape(section.Name)} -->");
-
             var blockList = section.BlockIds
                 .Select(id => tree.Blocks.TryGetValue(id, out var b) ? b : null)
                 .Where(b => b is not null)
@@ -582,6 +585,18 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     private string DispatchBlock(BlockDto block, BlockTreeDto tree)
     {
+        try
+        {
+            return DispatchBlockCore(block, tree);
+        }
+        catch (XPathBindingException ex)
+        {
+            return BindingErrorPlaceholder(block, ex);
+        }
+    }
+
+    private string DispatchBlockCore(BlockDto block, BlockTreeDto tree)
+    {
         return block.Type switch
         {
             "Text" => GenerateText(block),
@@ -605,13 +620,13 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             "InvoiceLineTable" => GenerateInvoiceLineTable(block, _isDespatch),
             "InvoiceHeader" => _isDespatch ? GenerateDespatchHeader(block) : GenerateInvoiceHeader(block),
             "ShipmentInfo" => GenerateShipmentInfo(block),
-            _ => $"<!-- unknown block type: {XmlEscape(block.Type)} -->"
+            _ => string.Empty
         };
     }
 
     // ── BLOCK-01: Text ────────────────────────────────────────────────────
 
-    private static string GenerateText(BlockDto block)
+    private string GenerateText(BlockDto block)
     {
         var cfg = Deserialize<TextConfig>(block.Config);
         var styleAttr = BuildStyleAttr(cfg.FontWeight, cfg.FontStyle, cfg.FontSize, cfg.Color);
@@ -619,17 +634,18 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         if (cfg.IsStatic)
             return $"    <p{styleAttr}>{XmlEscape(cfg.Content ?? string.Empty)}</p>";
 
-        var xpath = cfg.Binding?.Xpath ?? string.Empty;
+        var xpath = Bind(block, cfg.Binding?.Xpath);
+        var single = Single(block, xpath);
         var fallback = cfg.Binding?.Fallback;
         if (!string.IsNullOrEmpty(fallback))
-            return $"""    <p{styleAttr}><xsl:choose><xsl:when test="{XmlAttr(xpath)}"><xsl:value-of select="{XmlAttr(xpath)}"/></xsl:when><xsl:otherwise>{XmlEscape(fallback)}</xsl:otherwise></xsl:choose></p>""";
+            return $"""    <p{styleAttr}><xsl:choose><xsl:when test="{XmlAttr(xpath)}"><xsl:value-of select="{XmlAttr(single)}"/></xsl:when><xsl:otherwise>{XmlEscape(fallback)}</xsl:otherwise></xsl:choose></p>""";
 
-        return $"""    <p{styleAttr}><xsl:value-of select="{XmlAttr(xpath)}"/></p>""";
+        return $"""    <p{styleAttr}><xsl:value-of select="{XmlAttr(single)}"/></p>""";
     }
 
     // ── BLOCK-02: Heading ─────────────────────────────────────────────────
 
-    private static string GenerateHeading(BlockDto block)
+    private string GenerateHeading(BlockDto block)
     {
         var cfg = Deserialize<HeadingConfig>(block.Config);
         var tag = cfg.Level.ToLowerInvariant();
@@ -638,13 +654,13 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         if (cfg.IsStatic)
             return $"    <{tag}{styleAttr}>{XmlEscape(cfg.Content ?? string.Empty)}</{tag}>";
 
-        var xpath = cfg.Binding?.Xpath ?? string.Empty;
+        var xpath = Single(block, cfg.Binding?.Xpath);
         return $"""    <{tag}{styleAttr}><xsl:value-of select="{XmlAttr(xpath)}"/></{tag}>""";
     }
 
     // ── BLOCK-03: Paragraph ───────────────────────────────────────────────
 
-    private static string GenerateParagraph(BlockDto block)
+    private string GenerateParagraph(BlockDto block)
     {
         var cfg = Deserialize<ParagraphConfig>(block.Config);
         var sb = new StringBuilder("    <p>");
@@ -653,7 +669,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             if (line.IsStatic)
                 sb.Append(XmlEscape(line.Content ?? string.Empty));
             else
-                sb.Append($"""<xsl:value-of select="{XmlAttr(line.Xpath ?? string.Empty)}"/>""");
+                sb.Append($"""<xsl:value-of select="{XmlAttr(Single(block, line.Xpath))}"/>""");
         }
         sb.Append("</p>");
         return sb.ToString();
@@ -662,7 +678,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-04: Table ───────────────────────────────────────────────────
     // FIX: <colgroup> ile sütun genişlikleri güvenilir biçimde uygulanır.
 
-    private static string GenerateTable(BlockDto block)
+    private string GenerateTable(BlockDto block)
     {
         var cfg = Deserialize<TableConfig>(block.Config);
         var sb = new StringBuilder();
@@ -695,11 +711,11 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         }
 
         sb.AppendLine("      <tbody>");
-        sb.AppendLine($"        <xsl:for-each select=\"{XmlAttr(cfg.IterateOver)}\">");
+        sb.AppendLine($"        <xsl:for-each select=\"{XmlAttr(Bind(block, cfg.IterateOver))}\">");
         sb.AppendLine("          <xsl:variable name=\"pos\" select=\"position()\"/>");
         sb.AppendLine($"          <tr><xsl:if test=\"$pos mod 2 = 0\"><xsl:attribute name=\"style\">background:{XmlEscape(altColor)}</xsl:attribute></xsl:if>");
         foreach (var col in cfg.Columns)
-            sb.AppendLine($"            <td>{FormatCell(col.Xpath, col.Format)}</td>");
+            sb.AppendLine($"            <td>{FormatCell(block, col.Xpath, col.Format)}</td>");
         sb.AppendLine("          </tr>");
         sb.AppendLine("        </xsl:for-each>");
         sb.AppendLine("      </tbody>");
@@ -724,20 +740,27 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         var imgStyle = $"display:inline-block;vertical-align:top;object-fit:contain;{widthStyle}{heightStyle}{opacityStyle}";
         var alt = XmlEscape(cfg.AltText ?? cfg.AssetType);
 
-        string srcAttr;
-        if (!string.IsNullOrEmpty(cfg.AssetId) && _assetBase64.TryGetValue(cfg.AssetId, out var dataUri))
-            srcAttr = $" src=\"{dataUri}\"";
-        else if (!string.IsNullOrEmpty(cfg.AssetId))
-            srcAttr = $" src=\"/api/assets/{XmlAttr(cfg.AssetId)}/serve\"";
-        else
-            srcAttr = string.Empty;
+        var wrapper = $"    <div style=\"{alignStyle};line-height:0;font-size:0;\">";
 
-        return $"    <div style=\"{alignStyle};line-height:0;font-size:0;\"><img{srcAttr} style=\"{imgStyle}\" alt=\"{alt}\"/></div>";
+        // Görseller yalnız base64 data URI olarak gömülür; hiçbir URL'ye (ör. /api/assets/{id}/serve) düşülmez.
+        // Gömülemeyen (yetkisiz / silinmiş / eşlenmemiş) asset için <img> hiç üretilmez.
+        if (string.IsNullOrEmpty(cfg.AssetId))
+            return $"{wrapper}<img style=\"{imgStyle}\" alt=\"{alt}\"/></div>";
+
+        if (!_assetBase64.TryGetValue(cfg.AssetId, out var dataUri) || !IsImageDataUri(dataUri))
+            return $"{wrapper}</div>";
+
+        return $"{wrapper}<img src=\"{dataUri}\" style=\"{imgStyle}\" alt=\"{alt}\"/></div>";
     }
+
+    private static bool IsImageDataUri(string value) =>
+        value.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase)
+        && value.Contains(";base64,", StringComparison.Ordinal)
+        && value.IndexOfAny(['"', '<', '>', '&']) < 0;
 
     // ── BLOCK-08: DocumentInfo ────────────────────────────────────────────
 
-    private static string GenerateDocumentInfo(BlockDto block)
+    private string GenerateDocumentInfo(BlockDto block)
     {
         var cfg = Deserialize<DocumentInfoConfig>(block.Config);
         var tableClass = (cfg.Bordered ?? true)
@@ -750,7 +773,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         {
             sb.AppendLine("        <tr>");
             sb.AppendLine($"          <td>{XmlEscape(row.Label)}</td>");
-            sb.AppendLine($"          <td><xsl:value-of select=\"{XmlAttr(row.Xpath)}\"/></td>");
+            sb.AppendLine($"          <td><xsl:value-of select=\"{XmlAttr(Single(block, row.Xpath))}\"/></td>");
             sb.AppendLine("        </tr>");
         }
         sb.AppendLine("      </tbody>");
@@ -761,7 +784,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-09: Totals ──────────────────────────────────────────────────
     // FIX: Her hücreye explicit hizalama — table element'ine text-align vermek işe yaramıyor.
 
-    private static string GenerateTotals(BlockDto block)
+    private string GenerateTotals(BlockDto block)
     {
         var cfg = Deserialize<TotalsConfig>(block.Config);
         var lblWidthStyle = !string.IsNullOrEmpty(cfg.LabelWidth)
@@ -775,7 +798,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             var hlClass = row.Highlight ? " class=\"hl\"" : string.Empty;
             sb.AppendLine($"        <tr{hlClass}>");
             sb.AppendLine($"          <td class=\"lbl\"{lblWidthStyle}><strong>{XmlEscape(row.Label)}</strong></td>");
-            sb.AppendLine($"          <td class=\"val\"><xsl:value-of select=\"{XmlAttr(row.Xpath)}\"/></td>");
+            sb.AppendLine($"          <td class=\"val\"><xsl:value-of select=\"{XmlAttr(Single(block, row.Xpath))}\"/></td>");
             sb.AppendLine("        </tr>");
         }
         sb.AppendLine("      </tbody>");
@@ -785,7 +808,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK-10: Notes ───────────────────────────────────────────────────
 
-    private static string GenerateNotes(BlockDto block, bool isDespatch = false)
+    private string GenerateNotes(BlockDto block, bool isDespatch = false)
     {
         var cfg = Deserialize<NotesConfig>(block.Config);
         var prefix = XmlEscape(cfg.Prefix ?? string.Empty);
@@ -820,7 +843,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         // XPath notları
         if (!string.IsNullOrWhiteSpace(cfg.IterateOver))
         {
-            sb.AppendLine($"      <xsl:for-each select=\"{XmlAttr(cfg.IterateOver)}\">");
+            sb.AppendLine($"      <xsl:for-each select=\"{XmlAttr(Bind(block, cfg.IterateOver))}\">");
             sb.AppendLine($"        <p style=\"{pStyle}\"><strong>{prefix}</strong><xsl:value-of select=\".\"/></p>");
             sb.AppendLine("      </xsl:for-each>");
         }
@@ -845,7 +868,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             "<xsl:value-of select=\"cac:TaxCategory/cbc:TaxExemptionReason\"/></p>");
         sb.AppendLine("        </xsl:if>");
         sb.AppendLine(
-            "        <xsl:if test=\"starts-with(cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode,'007') " +
+            "        <xsl:if test=\"starts-with((cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode)[1],'007') " +
             "and cac:TaxCategory/cbc:TaxExemptionReason\">");
         sb.AppendLine(
             $"          <p style=\"{pStyle}\"><strong>ÖTV İstisna Muafiyet Sebebi: </strong>" +
@@ -891,18 +914,19 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-12: ETTN ────────────────────────────────────────────────────
     // FIX: Gerçek QR kod üretimi; UUID gizli div'de saklanır, qrcode.js ile görüntülenir.
 
-    private static string GenerateETTN(BlockDto block)
+    private string GenerateETTN(BlockDto block)
     {
         var cfg = Deserialize<EttnConfig>(block.Config);
 
         // HTML element ID'lerinde tire kullanılamaz — sadece alfanümerik
         var safeId = Regex.Replace(block.Id, "[^a-zA-Z0-9]", "");
 
+        var ettn = Single(block, cfg.EttnXpath);
         var sb = new StringBuilder();
         sb.AppendLine("    <div class=\"ettn\">");
 
         if (cfg.ShowEttn)
-            sb.AppendLine($"      <p><strong>ETTN:</strong> <xsl:value-of select=\"{XmlAttr(cfg.EttnXpath)}\"/></p>");
+            sb.AppendLine($"      <p><strong>ETTN:</strong> <xsl:value-of select=\"{XmlAttr(ettn)}\"/></p>");
 
         if (cfg.ShowQR)
         {
@@ -911,7 +935,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             var flexJustify = QrFlexJustify(cfg.QrAlignment);
 
             // UUID gizli — sadece JS tarafından okunur
-            sb.AppendLine($"      <div id=\"qrv{safeId}\" style=\"display:none;\"><xsl:value-of select=\"{XmlAttr(cfg.EttnXpath)}\"/></div>");
+            sb.AppendLine($"      <div id=\"qrv{safeId}\" style=\"display:none;\"><xsl:value-of select=\"{XmlAttr(ettn)}\"/></div>");
 
             // QR kod container — flex ile hizalama (qrcode.js canvas'a display:block ekler, text-align çalışmaz)
             sb.AppendLine($"      <div style=\"display:flex; justify-content:{flexJustify};\">");
@@ -952,7 +976,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
         // Hidden div — GİB JSON payload
         sb.AppendLine("      <div id=\"qrvalue\" style=\"visibility: hidden; height: 20px;width: 20px; ; display:none\">");
-        sb.AppendLine("        {\"vkntckn\":\"<xsl:value-of select=\"n1:Invoice/cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN']\"/>\",\"avkntckn\":\"<xsl:value-of select=\"n1:Invoice/cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN']\"/>\",<xsl:if test=\"//n1:Invoice/cbc:ProfileID = 'YOLCUBERABERFATURA'\">\"pasaportno\":\"<xsl:value-of select=\"n1:Invoice/cac:BuyerCustomerParty/cac:Party/cac:Person/cac:IdentityDocumentReference/cbc:ID\"/>\",</xsl:if><xsl:if test=\"//n1:Invoice/cbc:ProfileID = 'YOLCUBERABERFATURA'\">\"aracikurumvkn\":\"<xsl:value-of select=\"n1:Invoice/cac:TaxRepresentativeParty/cac:PartyIdentification/cbc:ID[@schemeID='ARACIKURUMVKN']\"/>\",</xsl:if>\"senaryo\":\"<xsl:value-of select=\"n1:Invoice/cbc:ProfileID\"/>\",\"tip\":\"<xsl:value-of select=\"n1:Invoice/cbc:InvoiceTypeCode\"/>\",\"tarih\":\"<xsl:value-of select=\"n1:Invoice/cbc:IssueDate\"/>\",\"no\":\"<xsl:value-of select=\"n1:Invoice/cbc:ID\"/>\",\"ettn\":\"<xsl:value-of select=\"n1:Invoice/cbc:UUID\"/>\",\"parabirimi\":\"<xsl:value-of select=\"n1:Invoice/cbc:DocumentCurrencyCode\"/>\",\"malhizmettoplam\":\"<xsl:value-of select=\"n1:Invoice/cac:LegalMonetaryTotal/cbc:LineExtensionAmount\"/>\",<xsl:for-each select=\"n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']\">\"kdvmatrah(<xsl:value-of select=\"cbc:Percent\"/>)\":\"<xsl:value-of select=\"cbc:TaxableAmount\"/>\",</xsl:for-each><xsl:for-each select=\"n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']\">\"hesaplanankdv(<xsl:value-of select=\"cbc:Percent\"/>)\":\"<xsl:value-of select=\"cbc:TaxAmount\"/>\",</xsl:for-each>\"vergidahil\":\"<xsl:value-of select=\"n1:Invoice/cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount\"/>\",\"odenecek\":\"<xsl:value-of select=\"n1:Invoice/cac:LegalMonetaryTotal/cbc:PayableAmount\"/>\"}");
+        sb.AppendLine("        {\"vkntckn\":\"<xsl:value-of select=\"(n1:Invoice/cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN'])[1]\"/>\",\"avkntckn\":\"<xsl:value-of select=\"(n1:Invoice/cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID[@schemeID='TCKN' or @schemeID='VKN'])[1]\"/>\",<xsl:if test=\"//n1:Invoice/cbc:ProfileID = 'YOLCUBERABERFATURA'\">\"pasaportno\":\"<xsl:value-of select=\"(n1:Invoice/cac:BuyerCustomerParty/cac:Party/cac:Person/cac:IdentityDocumentReference/cbc:ID)[1]\"/>\",</xsl:if><xsl:if test=\"//n1:Invoice/cbc:ProfileID = 'YOLCUBERABERFATURA'\">\"aracikurumvkn\":\"<xsl:value-of select=\"(n1:Invoice/cac:TaxRepresentativeParty/cac:PartyIdentification/cbc:ID[@schemeID='ARACIKURUMVKN'])[1]\"/>\",</xsl:if>\"senaryo\":\"<xsl:value-of select=\"(n1:Invoice/cbc:ProfileID)[1]\"/>\",\"tip\":\"<xsl:value-of select=\"(n1:Invoice/cbc:InvoiceTypeCode)[1]\"/>\",\"tarih\":\"<xsl:value-of select=\"(n1:Invoice/cbc:IssueDate)[1]\"/>\",\"no\":\"<xsl:value-of select=\"(n1:Invoice/cbc:ID)[1]\"/>\",\"ettn\":\"<xsl:value-of select=\"(n1:Invoice/cbc:UUID)[1]\"/>\",\"parabirimi\":\"<xsl:value-of select=\"(n1:Invoice/cbc:DocumentCurrencyCode)[1]\"/>\",\"malhizmettoplam\":\"<xsl:value-of select=\"(n1:Invoice/cac:LegalMonetaryTotal/cbc:LineExtensionAmount)[1]\"/>\",<xsl:for-each select=\"n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']\">\"kdvmatrah(<xsl:value-of select=\"cbc:Percent\"/>)\":\"<xsl:value-of select=\"cbc:TaxableAmount\"/>\",</xsl:for-each><xsl:for-each select=\"n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']\">\"hesaplanankdv(<xsl:value-of select=\"cbc:Percent\"/>)\":\"<xsl:value-of select=\"cbc:TaxAmount\"/>\",</xsl:for-each>\"vergidahil\":\"<xsl:value-of select=\"(n1:Invoice/cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount)[1]\"/>\",\"odenecek\":\"<xsl:value-of select=\"(n1:Invoice/cac:LegalMonetaryTotal/cbc:PayableAmount)[1]\"/>\"}");
         sb.AppendLine("      </div>");
 
         // QR container — flex alignment
@@ -979,36 +1003,39 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-15: ConditionalText ─────────────────────────────────────────
     // Koşula göre farklı metin veya XPath değeri gösterir.
 
-    private static string BuildXPathTest(ConditionalCondition cond)
+    private string BuildXPathTest(BlockDto block, ConditionalCondition cond)
     {
-        var xpath = cond.Xpath;
+        var xpath = Bind(block, cond.Xpath);
         var val = cond.Value ?? string.Empty;
 
-        return cond.Operator switch
+        // =/!= ve EBV (exists/notExists) düğüm kümesi anlamıyla kalır; tekil-argüman fonksiyonları (x)[1] alır.
+        var test = cond.Operator switch
         {
             "equals" => $"{xpath} = '{val}'",
             "notEquals" => $"{xpath} != '{val}'",
-            "contains" => $"contains({xpath}, '{val}')",
-            "greaterThan" => $"number({xpath}) > {val}",
-            "lessThan" => $"number({xpath}) < {val}",
+            "contains" => $"contains({Single(block, xpath)}, '{val}')",
+            "greaterThan" => $"number({Single(block, xpath)}) > {val}",
+            "lessThan" => $"number({Single(block, xpath)}) < {val}",
             "exists" => xpath,
             "notExists" => $"not({xpath})",
             _ => xpath
         };
+        // Değer (val) ifadeye gömülür → bileşik test de aynı kapıdan geçer.
+        return Bind(block, test);
     }
 
-    private static string GenerateConditionalText(BlockDto block)
+    private string GenerateConditionalText(BlockDto block)
     {
         var cfg = Deserialize<ConditionalTextConfig>(block.Config);
-        var test = BuildXPathTest(cfg.Condition);
+        var test = BuildXPathTest(block, cfg.Condition);
 
         var thenPart = cfg.ThenIsStatic
             ? $"<xsl:text>{XmlEscape(cfg.ThenContent)}</xsl:text>"
-            : $"<xsl:value-of select=\"{XmlAttr(cfg.ThenContent)}\"/>";
+            : $"<xsl:value-of select=\"{XmlAttr(Single(block, cfg.ThenContent))}\"/>";
 
         var elsePart = cfg.ElseIsStatic
             ? $"<xsl:text>{XmlEscape(cfg.ElseContent)}</xsl:text>"
-            : $"<xsl:value-of select=\"{XmlAttr(cfg.ElseContent)}\"/>";
+            : $"<xsl:value-of select=\"{XmlAttr(Single(block, cfg.ElseContent))}\"/>";
 
         return $"    <span><xsl:choose>" +
                $"<xsl:when test=\"{XmlAttr(test)}\">{thenPart}</xsl:when>" +
@@ -1019,7 +1046,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     // ── BLOCK-17: TaxSummary ──────────────────────────────────────────────
     // Türk e-Fatura KDV özet tablosu.
 
-    private static string GenerateTaxSummary(BlockDto block)
+    private string GenerateTaxSummary(BlockDto block)
     {
         var cfg = Deserialize<TaxSummaryConfig>(block.Config);
         var headerBg = cfg.HeaderBackgroundColor ?? "#E0E0E0";
@@ -1033,12 +1060,12 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         sb.AppendLine("        <th>KDV Tutarı</th>");
         sb.AppendLine("      </tr></thead>");
         sb.AppendLine("      <tbody>");
-        sb.AppendLine($"        <xsl:for-each select=\"{XmlAttr(cfg.TaxTotalXpath)}\">");
+        sb.AppendLine($"        <xsl:for-each select=\"{XmlAttr(Bind(block, cfg.TaxTotalXpath))}\">");
         sb.AppendLine("          <tr>");
         if (cfg.ShowPercent)
-            sb.AppendLine($"            <td><xsl:value-of select=\"{XmlAttr(cfg.PercentXpath)}\"/>%</td>");
-        sb.AppendLine($"            <td>{FormatCell(cfg.TaxableAmountXpath, "currency")}</td>");
-        sb.AppendLine($"            <td>{FormatCell(cfg.TaxAmountXpath, "currency")}</td>");
+            sb.AppendLine($"            <td><xsl:value-of select=\"{XmlAttr(Single(block, cfg.PercentXpath))}\"/>%</td>");
+        sb.AppendLine($"            <td>{FormatCell(block, cfg.TaxableAmountXpath, "currency")}</td>");
+        sb.AppendLine($"            <td>{FormatCell(block, cfg.TaxAmountXpath, "currency")}</td>");
         sb.AppendLine("          </tr>");
         sb.AppendLine("        </xsl:for-each>");
         sb.AppendLine("      </tbody>");
@@ -1072,10 +1099,10 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     private static string? Validate(string xslt)
     {
-        // Güvenlik: kullanıcı XPath'i stylesheet'e gömülür; dış kaynak çağıran fonksiyonları
-        // (document/doc/unparsed-text/collection…) motora ulaşmadan fail-closed reddet.
-        var threat = Validation.XsltSafety.FindThreat(xslt);
-        if (threat is not null)
+        // Güvenlik: kullanıcı XPath'i stylesheet'e gömülür ve çıktı render motoruna gider.
+        // Execute modu: Security (SSRF/dosya okuma/DoS) + Unsupported (XSLT 2.0 üstü) fail-closed reddedilir.
+        var report = Validation.XsltSafety.Scan(xslt, Validation.Safety.XsltSafetyMode.Execute);
+        if (report.FirstMessage is { } threat)
             return threat;
 
         try
@@ -1119,21 +1146,23 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
     }
 
     /// <summary>Generates XSLT cell content for a table column, applying numeric formatting when needed.</summary>
-    private static string FormatCell(string xpath, string? format)
+    private string FormatCell(BlockDto block, string xpath, string? format)
     {
+        // G2/G3: tekil değer + format-number(number(X)) — 1.0'daki örtük number() dönüşümü açık yazılır.
+        xpath = Single(block, xpath);
         return format switch
         {
             "currency" =>
                 $"<xsl:choose>" +
                 $"<xsl:when test=\"number({XmlAttr(xpath)}) = number({XmlAttr(xpath)})\">" +
-                $"<xsl:value-of select=\"format-number({XmlAttr(xpath)}, '#,##0.00')\"/>" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({XmlAttr(xpath)})", 2)}, '#,##0.00')\"/>" +
                 $"</xsl:when>" +
                 $"<xsl:otherwise><xsl:value-of select=\"{XmlAttr(xpath)}\"/></xsl:otherwise>" +
                 $"</xsl:choose>",
             "number" =>
                 $"<xsl:choose>" +
                 $"<xsl:when test=\"number({XmlAttr(xpath)}) = number({XmlAttr(xpath)})\">" +
-                $"<xsl:value-of select=\"format-number({XmlAttr(xpath)}, '#,##0.##')\"/>" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({XmlAttr(xpath)})", 2)}, '#,##0.##')\"/>" +
                 $"</xsl:when>" +
                 $"<xsl:otherwise><xsl:value-of select=\"{XmlAttr(xpath)}\"/></xsl:otherwise>" +
                 $"</xsl:choose>",
@@ -1168,7 +1197,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK: PartyInfo ─────────────────────────────────────────────────
 
-    private static string GeneratePartyInfo(BlockDto block)
+    private string GeneratePartyInfo(BlockDto block)
     {
         var cfg = Deserialize<PartyInfoConfig>(block.Config);
         var partyRoot = cfg.PartyType switch
@@ -1204,7 +1233,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             foreach (var f in fields)
             {
                 var label = XmlEscape(f.Label ?? string.Empty);
-                var xpath = XmlAttr(f.RelativeXpath ?? string.Empty);
+                var xpath = XmlAttr(Single(block, f.RelativeXpath));
                 var labelPart = string.IsNullOrWhiteSpace(f.Label) ? string.Empty : $"<strong>{label}: </strong>";
                 sb.AppendLine($"        <p style=\"margin:0;font-size:{fontSize}\">{labelPart}<xsl:value-of select=\"{xpath}\"/></p>");
             }
@@ -1215,7 +1244,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             foreach (var f in fields)
             {
                 var label = XmlEscape(f.Label ?? string.Empty);
-                var xpath = XmlAttr(f.RelativeXpath ?? string.Empty);
+                var xpath = XmlAttr(Single(block, f.RelativeXpath));
                 sb.AppendLine("          <tr>");
                 sb.AppendLine($"            <td style=\"font-weight:bold;padding:1px 4px;white-space:nowrap;width:35%;vertical-align:top\">{label}</td>");
                 sb.AppendLine($"            <td style=\"padding:1px 4px\"><xsl:value-of select=\"{xpath}\"/></td>");
@@ -1231,7 +1260,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK: InvoiceLineTable ───────────────────────────────────────────
 
-    private static string GenerateInvoiceLineTable(BlockDto block, bool isDespatch = false)
+    private string GenerateInvoiceLineTable(BlockDto block, bool isDespatch = false)
     {
         var cfg = Deserialize<InvoiceLineTableConfig>(block.Config);
         var columns = (cfg.Columns ?? new List<InvoiceLineColumn>())
@@ -1267,7 +1296,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         }
 
         sb.AppendLine("      <tbody>");
-        sb.AppendLine($"      <xsl:for-each select=\"{XmlAttr(cfg.IterateOver)}\">");
+        sb.AppendLine($"      <xsl:for-each select=\"{XmlAttr(Bind(block, cfg.IterateOver))}\">");
         sb.AppendLine("        <xsl:variable name=\"rowBg\">");
         sb.AppendLine("          <xsl:choose>");
         sb.AppendLine($"            <xsl:when test=\"position() mod 2 = 0\">{altRowColor}</xsl:when>");
@@ -1282,17 +1311,19 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         // Para birimi soneki: TRY/TRL → TL, diğerleri olduğu gibi
         const string currXpath = "//cbc:DocumentCurrencyCode";
         var currencySuffix = cfg.ShowCurrency
-            ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currXpath}='TRY' or {currXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currXpath}\"/></xsl:otherwise></xsl:choose>"
+            ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currXpath}='TRY' or {currXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{FirstOf(currXpath)}\"/></xsl:otherwise></xsl:choose>"
             : string.Empty;
 
         foreach (var col in columns)
         {
-            var xpathAttr = XmlAttr(col.RelativeXpath ?? string.Empty);
+            var rawXpath = Bind(block, col.RelativeXpath);
+            var xpathAttr = XmlAttr(rawXpath);
+            var singleAttr = XmlAttr(Single(block, rawXpath));
             // İrsaliyede belge para birimi yoktur — tutarın kendi @currencyID'si kullanılır
             var cellCurrency = isDespatch && cfg.ShowCurrency
-                ? CurrencySuffixFrom($"{xpathAttr}/@currencyID")
+                ? CurrencySuffixFrom($"{xpathAttr}/@currencyID", FirstOf($"{xpathAttr}/@currencyID"))
                 : currencySuffix;
-            var cellContent = GetColumnCellContent(col.Format ?? "text", xpathAttr, cellCurrency);
+            var cellContent = GetColumnCellContent(col.Format ?? "text", xpathAttr, singleAttr, cellCurrency);
             var align = col.Format is "currency" or "number" or "percent" or "percentDirect" or "quantityWithUnit"
                 ? "text-align:right;" : string.Empty;
             sb.AppendLine($"          <td style=\"border:{borderAttr};padding:2px 4px;{align}\">{cellContent}</td>");
@@ -1305,35 +1336,37 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         return sb.ToString();
     }
 
-    private static string GetColumnCellContent(string format, string xpathAttr, string currencySuffix = "")
+    /// <param name="xpathAttr">Ham (attr-kaçışlı) XPath — türetilmiş yollar (<c>/@unitCode</c>) için.</param>
+    /// <param name="singleAttr">Tekil değer bağlamı için <c>(x)[1]</c> sarmalı (attr-kaçışlı).</param>
+    private static string GetColumnCellContent(string format, string xpathAttr, string singleAttr, string currencySuffix = "")
     {
         return format switch
         {
             "currency" =>
-                $"<xsl:if test=\"number({xpathAttr}) = number({xpathAttr})\">" +
-                $"<xsl:value-of select=\"format-number(number({xpathAttr}),'#.##0,00','tr')\"/>" +
+                $"<xsl:if test=\"number({singleAttr}) = number({singleAttr})\">" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({singleAttr})", 2)},'#.##0,00','tr')\"/>" +
                 currencySuffix +
                 "</xsl:if>",
             "number" =>
-                $"<xsl:if test=\"number({xpathAttr}) = number({xpathAttr})\">" +
-                $"<xsl:value-of select=\"format-number(number({xpathAttr}),'#.##0,###','tr')\"/>" +
+                $"<xsl:if test=\"number({singleAttr}) = number({singleAttr})\">" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({singleAttr})", 3)},'#.##0,###','tr')\"/>" +
                 "</xsl:if>",
             "percent" =>
-                $"<xsl:if test=\"number({xpathAttr}) = number({xpathAttr})\">" +
-                $"<xsl:value-of select=\"format-number(number({xpathAttr})*100,'#.##0,###','tr')\"/>%" +
+                $"<xsl:if test=\"number({singleAttr}) = number({singleAttr})\">" +
+                $"<xsl:value-of select=\"format-number({PreRound($"(number({singleAttr})*100)", 3)},'#.##0,###','tr')\"/>%" +
                 "</xsl:if>",
             "percentDirect" =>
-                $"<xsl:if test=\"string-length({xpathAttr}) &gt; 0\">" +
-                $"<xsl:value-of select=\"{xpathAttr}\"/>%" +
+                $"<xsl:if test=\"string-length({singleAttr}) &gt; 0\">" +
+                $"<xsl:value-of select=\"{singleAttr}\"/>%" +
                 "</xsl:if>",
             "quantityWithUnit" =>
-                $"<xsl:if test=\"number({xpathAttr}) = number({xpathAttr})\">" +
-                $"<xsl:value-of select=\"format-number(number({xpathAttr}),'#.##0,###','tr')\"/>" +
+                $"<xsl:if test=\"number({singleAttr}) = number({singleAttr})\">" +
+                $"<xsl:value-of select=\"format-number({PreRound($"number({singleAttr})", 3)},'#.##0,###','tr')\"/>" +
                 "</xsl:if>" +
                 "&#160;" +
                 BuildUnitCodeChoose($"{xpathAttr}/@unitCode"),
             _ =>
-                $"<xsl:value-of select=\"{xpathAttr}\"/>",
+                $"<xsl:value-of select=\"{singleAttr}\"/>",
         };
     }
 
@@ -1448,14 +1481,14 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         sb.AppendLine("<xsl:choose>");
         foreach (var (code, label) in codes)
             sb.AppendLine($"  <xsl:when test=\"{unitCodeXpath}='{code}'\">{label}</xsl:when>");
-        sb.AppendLine($"  <xsl:otherwise><xsl:value-of select=\"{unitCodeXpath}\"/></xsl:otherwise>");
+        sb.AppendLine($"  <xsl:otherwise><xsl:value-of select=\"{FirstOf(unitCodeXpath)}\"/></xsl:otherwise>");
         sb.Append("</xsl:choose>");
         return sb.ToString();
     }
 
     // ── BLOCK: InvoiceHeader ──────────────────────────────────────────────
 
-    private static string GenerateInvoiceHeader(BlockDto block)
+    private string GenerateInvoiceHeader(BlockDto block)
     {
         var cfg = Deserialize<InvoiceHeaderConfig>(block.Config);
         var fontSize = string.IsNullOrWhiteSpace(cfg.FontSize) ? "10.4px" : XmlEscape(cfg.FontSize);
@@ -1472,7 +1505,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
         foreach (var f in (cfg.Fields ?? []).Where(f => f.Visible && f.IsCustom == true).OrderBy(f => f.Order))
         {
             var lbl = XmlEscape(f.Label ?? string.Empty);
-            var xp = XmlAttr(f.Xpath ?? string.Empty);
+            var xp = XmlAttr(Single(block, f.Xpath));
             customSb.AppendLine(
                 $"        <tr style=\"height:13px;\"><td><span style=\"font-weight:bold;\"><xsl:text>{lbl}</xsl:text></span></td>" +
                 $"<td><xsl:value-of select=\"{xp}\"/></td></tr>");
@@ -1575,7 +1608,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             <xsl:for-each select="n1:Invoice/cbc:IssueDate">
               <xsl:apply-templates select="."/>
               <xsl:text>&#160;</xsl:text>
-              <xsl:value-of select="substring(../cbc:IssueTime,1,5)"/>
+              <xsl:value-of select="substring((../cbc:IssueTime)[1],1,5)"/>
             </xsl:for-each>
           </td>
         </tr>
@@ -1748,7 +1781,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
 
     // ── BLOCK: InvoiceTotals ──────────────────────────────────────────────
 
-    private static string GenerateInvoiceTotals(BlockDto block, bool isDespatch = false)
+    private string GenerateInvoiceTotals(BlockDto block, bool isDespatch = false)
     {
         var cfg = Deserialize<InvoiceTotalsConfig>(block.Config);
         var fields = (cfg.Fields ?? new List<InvoiceTotalsField>())
@@ -1757,11 +1790,13 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             .ToList();
 
         if (fields.Count == 0)
-            return "<!-- InvoiceTotals: görünür alan yok -->";
+            return string.Empty;
 
-        var currencyXpath = XmlAttr(string.IsNullOrWhiteSpace(cfg.CurrencyXpath)
+        var rawCurrencyXpath = string.IsNullOrWhiteSpace(cfg.CurrencyXpath)
             ? "//cbc:DocumentCurrencyCode"
-            : cfg.CurrencyXpath);
+            : Bind(block, cfg.CurrencyXpath);
+        var currencyXpath = XmlAttr(rawCurrencyXpath);
+        var currencySingle = XmlAttr(Single(block, rawCurrencyXpath));
 
         var tableFontStyle = !string.IsNullOrWhiteSpace(cfg.FontSize)
             ? $" style=\"font-size:{XmlEscape(cfg.FontSize)}\""
@@ -1784,7 +1819,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             if (f.Key == "taxBaseGroups")
             {
                 var dynCurrency = cfg.ShowCurrency
-                    ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencyXpath}\"/></xsl:otherwise></xsl:choose>"
+                    ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencySingle}\"/></xsl:otherwise></xsl:choose>"
                     : string.Empty;
 
                 const string kdvFilter = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']";
@@ -1806,7 +1841,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                     "</td>");
                 sb.AppendLine(
                     $"            <td class=\"val\">" +
-                    "<xsl:value-of select=\"format-number(number(cbc:TaxableAmount),'#.##0,00','tr')\"/>" +
+                    $"<xsl:value-of select=\"format-number({PreRound("number(cbc:TaxableAmount)", 2)},'#.##0,00','tr')\"/>" +
                     dynCurrency +
                     "</td>");
                 sb.AppendLine("          </tr>");
@@ -1821,7 +1856,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                     "</td>");
                 sb.AppendLine(
                     $"            <td class=\"val\">" +
-                    $"<xsl:value-of select=\"format-number(sum({otvFilter}/cbc:TaxableAmount),'#.##0,00','tr')\"/>" +
+                    $"<xsl:value-of select=\"format-number({PreRound($"sum({otvFilter}/cbc:TaxableAmount)", 2)},'#.##0,00','tr')\"/>" +
                     dynCurrency +
                     "</td>");
                 sb.AppendLine("          </tr>");
@@ -1835,7 +1870,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             if (f.Key == "taxSubtotalGroups")
             {
                 var dynCurrency = cfg.ShowCurrency
-                    ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencyXpath}\"/></xsl:otherwise></xsl:choose>"
+                    ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencySingle}\"/></xsl:otherwise></xsl:choose>"
                     : string.Empty;
 
                 const string kdvFilter = "//n1:Invoice/cac:TaxTotal/cac:TaxSubtotal[cac:TaxCategory/cac:TaxScheme/cbc:TaxTypeCode='0015']";
@@ -1857,7 +1892,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                     "</td>");
                 sb.AppendLine(
                     $"            <td class=\"val\">" +
-                    "<xsl:value-of select=\"format-number(number(cbc:TaxAmount),'#.##0,00','tr')\"/>" +
+                    $"<xsl:value-of select=\"format-number({PreRound("number(cbc:TaxAmount)", 2)},'#.##0,00','tr')\"/>" +
                     dynCurrency +
                     "</td>");
                 sb.AppendLine("          </tr>");
@@ -1872,7 +1907,7 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
                     "</td>");
                 sb.AppendLine(
                     $"            <td class=\"val\">" +
-                    $"<xsl:value-of select=\"format-number(sum({otvFilter}/cbc:TaxAmount),'#.##0,00','tr')\"/>" +
+                    $"<xsl:value-of select=\"format-number({PreRound($"sum({otvFilter}/cbc:TaxAmount)", 2)},'#.##0,00','tr')\"/>" +
                     dynCurrency +
                     "</td>");
                 sb.AppendLine("          </tr>");
@@ -1883,13 +1918,13 @@ public sealed partial class XsltGeneratorService : IXsltGeneratorService
             }
 
             var labelEsc = XmlEscape(f.Label ?? string.Empty);
-            var xpathAttr = XmlAttr(f.Xpath ?? string.Empty);
+            var xpathAttr = XmlAttr(Single(block, f.Xpath));
             var currencySuffix = cfg.ShowCurrency
-                ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencyXpath}\"/></xsl:otherwise></xsl:choose>"
+                ? $"<xsl:text> </xsl:text><xsl:choose><xsl:when test=\"{currencyXpath}='TRY' or {currencyXpath}='TRL'\">TL</xsl:when><xsl:otherwise><xsl:value-of select=\"{currencySingle}\"/></xsl:otherwise></xsl:choose>"
                 : string.Empty;
             sb.AppendLine($"      <tr{rowClass}>");
             sb.AppendLine($"        <td class=\"lbl\"{lblWidthStyle}>{labelEsc}</td>");
-            sb.AppendLine($"        <td class=\"val\"><xsl:value-of select=\"format-number(number({xpathAttr}),'#.##0,00','tr')\"/>{currencySuffix}</td>");
+            sb.AppendLine($"        <td class=\"val\"><xsl:value-of select=\"format-number({PreRound($"number({xpathAttr})", 2)},'#.##0,00','tr')\"/>{currencySuffix}</td>");
             sb.AppendLine("      </tr>");
         }
         sb.AppendLine("    </table>");

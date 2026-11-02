@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Code2, Eye, Pencil, Trash2, Check, X, Share2, Users, FolderInput, LayoutGrid, Star, Upload, StickyNote } from 'lucide-react'
+import { Code2, Users, FolderInput, LayoutGrid, Star, Upload, StickyNote } from 'lucide-react'
 import {
   getUserXsltTemplates,
   getUserXsltTemplate,
@@ -21,7 +21,13 @@ import {
   type Folder,
 } from '../services/folderService'
 import { previewFromRawXslt } from '../services/previewService'
-import TemplatePreviewPanel from '../components/TemplatePreviewPanel'
+import LibraryPreviewPanel from '../components/storage/LibraryPreviewPanel'
+import LibraryTabsHeader from '../components/storage/LibraryTabsHeader'
+import XsltRow from '../components/storage/XsltRow'
+import {
+  BulkBar, BulkButton, BulkDelete, LibraryEmpty, LibraryStatus, PRIMARY_LINK, SECONDARY_LINK, SelectBox, TH,
+} from '../components/storage/LibraryParts'
+
 import ShareTemplateDialog from '../components/xslt-editor/ShareTemplateDialog'
 import FolderSidebar from '../components/storage/FolderSidebar'
 import StorageToolbar from '../components/storage/StorageToolbar'
@@ -231,12 +237,8 @@ export default function MyXsltTemplatesPage() {
     }
   }
 
-  if (loading) {
-    return <div className="flex items-center justify-center py-24"><p className="text-gray-400 text-sm">Yükleniyor...</p></div>
-  }
-  if (error) {
-    return <div className="flex items-center justify-center py-24"><p className="text-red-500 text-sm">{error}</p></div>
-  }
+  if (loading) return <LibraryStatus>Yükleniyor...</LibraryStatus>
+  if (error) return <LibraryStatus tone="error">{error}</LibraryStatus>
 
   const activeLabel = activeKey === 'all' ? 'Tümü'
     : activeKey === 'favorites' ? 'Favoriler'
@@ -254,132 +256,123 @@ export default function MyXsltTemplatesPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <FolderSidebar
-        specials={specials}
-        folders={sortedFolders.map((f) => ({ id: f.id, name: f.name, color: f.color, count: counts.byFolder[f.id] ?? 0 }))}
-        activeKey={activeKey}
-        onSelect={setActiveKey}
-        onCreate={handleCreateFolder}
-        onRename={handleRenameFolder}
-        onRecolor={handleRecolorFolder}
-        onDelete={handleDeleteFolder}
-      />
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-4 px-8 pt-7 pb-9">
+          <LibraryTabsHeader
+            active="xslt"
+            actions={
+              <Link to="/xslt-editor" className={PRIMARY_LINK}>
+                <Code2 size={15} aria-hidden="true" /> XSLT Editör
+              </Link>
+            }
+          />
 
-      <div
-        className={`overflow-y-auto ${previewId ? 'border-r border-gray-200' : 'flex-1'}`}
-        style={previewId ? { width: 400, flexShrink: 0 } : {}}
-      >
-      <div className="max-w-5xl mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-800">Şablonlarım</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{templates.length} XSLT şablon</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setBulkUploadOpen(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg px-3 py-2 transition-colors"
-          >
-            <Upload size={15} />
-            Toplu Yükle
-          </button>
-          <Link
-            to="/xslt-editor"
-            className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors"
-          >
-            <Code2 size={15} />
-            XSLT Editör
-          </Link>
-        </div>
-      </div>
-
-      {templates.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <>
-          <StorageToolbar search={search} onSearch={setSearch} sort={sort} onSort={setSort} placeholder="Şablonlarda ara…" />
-
-          {someSelected && (
-            <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
-              <span className="text-sm text-blue-700 font-medium flex-1">{selectedIds.size} şablon seçildi</span>
-              <div className="relative">
-                <button
-                  onClick={() => setBulkMoveOpen((v) => !v)}
-                  className="flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
-                >
-                  <FolderInput size={14} /> Klasöre taşı
-                </button>
-                {bulkMoveOpen && (
-                  <MoveToFolderMenu folders={sortedFolders} onMove={handleBulkMove} onClose={() => setBulkMoveOpen(false)} />
-                )}
-              </div>
-              <button
-                onClick={() => setBulkNoteOpen(true)}
-                className="flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition-colors"
-              >
-                <StickyNote size={14} /> Sabit Not Ekle
-              </button>
-              {bulkConfirm ? (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-red-600 font-medium">Emin misin?</span>
-                  <button onClick={handleBulkDelete} className="font-medium text-red-600 hover:text-red-700">Evet</button>
-                  <span className="text-gray-300">/</span>
-                  <button onClick={() => setBulkConfirm(false)} className="text-gray-500 hover:text-gray-700">Hayır</button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setBulkConfirm(true)}
-                  className="flex items-center gap-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg px-3 py-1.5 transition-colors"
-                >
-                  <Trash2 size={14} /> Seçilenleri Sil
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center gap-3 px-4 py-2 mb-1">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={toggleAll}
-              className="w-4 h-4 rounded border-gray-300 text-blue-600 accent-blue-600 cursor-pointer"
+          <div className="flex flex-wrap items-start gap-[18px]">
+            <FolderSidebar
+              specials={specials}
+              folders={sortedFolders.map((f) => ({ id: f.id, name: f.name, color: f.color, count: counts.byFolder[f.id] ?? 0 }))}
+              activeKey={activeKey}
+              onSelect={setActiveKey}
+              onCreate={handleCreateFolder}
+              onRename={handleRenameFolder}
+              onRecolor={handleRecolorFolder}
+              onDelete={handleDeleteFolder}
             />
-            <span className="text-xs text-gray-500 select-none font-medium">{activeLabel}</span>
-            <span className="text-xs text-gray-400 select-none">· {visible.length} şablon</span>
-          </div>
 
-          {visible.length === 0 ? (
-            <div className="py-16 text-center text-sm text-gray-400">
-              {search.trim()
-                ? `“${search.trim()}” ile eşleşen şablon bulunamadı.`
-                : 'Bu klasörde şablon yok.'}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {visible.map((t) => (
-                <TemplateRow
-                  key={t.id}
-                  template={t}
-                  folders={sortedFolders}
-                  selected={selectedIds.has(t.id)}
-                  onToggleSelect={toggleSelect}
-                  onOpen={() => navigate(`/xslt-editor/${t.id}`)}
-                  onDelete={handleDelete}
-                  onRename={handleRename}
-                  onPreview={(id, name) => { setPreviewId(id); setPreviewName(name) }}
-                  onShare={(id, name) => setShareTarget({ id, name })}
-                  onMove={handleMove}
-                  onToggleFavorite={handleToggleFavorite}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
-      </div>
+            <section
+              aria-label={`${activeLabel} XSLT şablonları`}
+              className="min-w-0 flex-[999_1_520px] rounded-xl border border-ui-line bg-ui-card shadow-[var(--ui-shadow-rest)]"
+            >
+              {templates.length === 0 ? (
+                <>
+                  <div className="flex justify-end border-b border-ui-line px-3.5 py-3">
+                    <BulkUploadButton onClick={() => setBulkUploadOpen(true)} />
+                  </div>
+                  <EmptyState />
+                </>
+              ) : (
+                <>
+                  <StorageToolbar search={search} onSearch={setSearch} sort={sort} onSort={setSort} placeholder="Şablonlarda ara…">
+                    <span className="text-[12.5px] text-tx-muted">
+                      <span className="font-medium text-tx-2">{activeLabel}</span> · {visible.length} şablon
+                    </span>
+                    <BulkUploadButton onClick={() => setBulkUploadOpen(true)} />
+                  </StorageToolbar>
+
+                  {someSelected && (
+                    <BulkBar count={selectedIds.size}>
+                      <div className="relative">
+                        <BulkButton
+                          icon={FolderInput}
+                          aria-haspopup="menu"
+                          aria-expanded={bulkMoveOpen}
+                          onClick={() => setBulkMoveOpen((v) => !v)}
+                        >
+                          Klasöre taşı
+                        </BulkButton>
+                        {bulkMoveOpen && (
+                          <MoveToFolderMenu folders={sortedFolders} onMove={handleBulkMove} onClose={() => setBulkMoveOpen(false)} />
+                        )}
+                      </div>
+                      <BulkButton icon={StickyNote} onClick={() => setBulkNoteOpen(true)}>Sabit Not Ekle</BulkButton>
+                      <BulkDelete
+                        confirming={bulkConfirm}
+                        onAsk={() => setBulkConfirm(true)}
+                        onYes={handleBulkDelete}
+                        onNo={() => setBulkConfirm(false)}
+                      />
+                    </BulkBar>
+                  )}
+
+                  {visible.length === 0 ? (
+                    <p className="m-0 py-16 text-center text-[13px] text-tx-subtle">
+                      {search.trim()
+                        ? `“${search.trim()}” ile eşleşen şablon bulunamadı.`
+                        : 'Bu klasörde şablon yok.'}
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-[13px]">
+                        <thead>
+                          <tr>
+                            <th scope="col" className="w-10 py-2.5 pl-3.5 pr-1 text-left">
+                              <SelectBox checked={allSelected} onChange={toggleAll} label="Görünen tüm şablonları seç" />
+                            </th>
+                            <th scope="col" className={`${TH} pl-1`}>Ad</th>
+                            <th scope="col" className={TH}>Klasör</th>
+                            <th scope="col" className={TH}>Güncellendi</th>
+                            <th scope="col" className={`${TH} pr-3.5 text-right`}>İşlemler</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visible.map((t) => (
+                            <XsltRow
+                              key={t.id}
+                              template={t}
+                              folders={sortedFolders}
+                              selected={selectedIds.has(t.id)}
+                              onToggleSelect={toggleSelect}
+                              onOpen={() => navigate(`/xslt-editor/${t.id}`)}
+                              onDelete={handleDelete}
+                              onRename={handleRename}
+                              onPreview={(id, name) => { setPreviewId(id); setPreviewName(name) }}
+                              onShare={(id, name) => setShareTarget({ id, name })}
+                              onMove={handleMove}
+                              onToggleFavorite={handleToggleFavorite}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          </div>
+        </div>
       </div>
       {previewId && (
-        <TemplatePreviewPanel
+        <LibraryPreviewPanel
           name={previewName}
           html={previewHtml}
           loading={previewLoading}
@@ -426,151 +419,22 @@ export default function MyXsltTemplatesPage() {
   )
 }
 
-function EmptyState() {
+function BulkUploadButton({ onClick }: { onClick: () => void }) {
   return (
-    <div className="flex flex-col items-center py-24 text-center">
-      <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-        <Code2 size={28} className="text-gray-400" />
-      </div>
-      <p className="text-gray-600 font-medium">Henüz kayıtlı XSLT şablonunuz yok.</p>
-      <p className="text-sm text-gray-400 mt-1">XSLT Editör'de bir dosya düzenleyip kaydedin.</p>
-      <Link to="/xslt-editor" className="mt-5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 transition-colors">XSLT Editör'e Git</Link>
-    </div>
+    <button type="button" onClick={onClick} className={SECONDARY_LINK}>
+      <Upload size={14} aria-hidden="true" /> Toplu yükle
+    </button>
   )
 }
 
-function TemplateRow({
-  template,
-  folders,
-  selected,
-  onToggleSelect,
-  onOpen,
-  onDelete,
-  onRename,
-  onPreview,
-  onShare,
-  onMove,
-  onToggleFavorite,
-}: {
-  template: UserXsltTemplateSummary
-  folders: Folder[]
-  selected: boolean
-  onToggleSelect: (id: string) => void
-  onOpen: () => void
-  onDelete: (id: string) => void
-  onRename: (id: string, name: string) => void
-  onPreview: (id: string, name: string) => void
-  onShare: (id: string, name: string) => void
-  onMove: (id: string, folderId: string | null) => void
-  onToggleFavorite: (id: string, value: boolean) => void
-}) {
-  const [editing, setEditing] = useState(false)
-  const [editName, setEditName] = useState(template.name)
-  const [showConfirm, setShowConfirm] = useState(false)
-  const [moveOpen, setMoveOpen] = useState(false)
-  const isOwner = template.isOwner
-
-  function commitRename() {
-    const trimmed = editName.trim()
-    if (trimmed && trimmed !== template.name) onRename(template.id, trimmed)
-    else setEditName(template.name)
-    setEditing(false)
-  }
-
+function EmptyState() {
   return (
-    <div
-      className={`flex items-center gap-3 px-4 py-3 bg-white border rounded-xl transition-colors ${
-        selected ? 'border-blue-300 bg-blue-50/40' : 'border-gray-200 hover:border-gray-300'
-      }`}
+    <LibraryEmpty
+      icon={Code2}
+      title="Henüz kayıtlı XSLT şablonunuz yok."
+      hint="XSLT Editör'de bir dosya düzenleyip kaydedin."
     >
-      {isOwner ? (
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={() => onToggleSelect(template.id)}
-          className="w-4 h-4 rounded border-gray-300 text-blue-600 accent-blue-600 cursor-pointer flex-shrink-0"
-        />
-      ) : (
-        <span className="w-4 h-4 flex-shrink-0" />
-      )}
-
-      {isOwner ? (
-        <button
-          onClick={() => onToggleFavorite(template.id, !template.isFavorite)}
-          title={template.isFavorite ? 'Favorilerden çıkar' : 'Favorilere ekle'}
-          className={`flex-shrink-0 p-0.5 transition-colors ${template.isFavorite ? 'text-amber-400 hover:text-amber-500' : 'text-gray-300 hover:text-amber-400'}`}
-        >
-          <Star size={15} fill={template.isFavorite ? 'currentColor' : 'none'} />
-        </button>
-      ) : (
-        <span className="w-[15px] flex-shrink-0" />
-      )}
-
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        {editing ? (
-          <div className="flex items-center gap-1 flex-1">
-            <input
-              autoFocus
-              className="flex-1 text-sm border border-blue-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-200"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename()
-                if (e.key === 'Escape') { setEditName(template.name); setEditing(false) }
-              }}
-            />
-            <button onClick={commitRename} className="text-green-600 hover:text-green-700"><Check size={14} /></button>
-            <button onClick={() => { setEditName(template.name); setEditing(false) }} className="text-red-400 hover:text-red-600"><X size={14} /></button>
-          </div>
-        ) : (
-          <button onClick={onOpen} className="text-sm font-medium text-gray-800 hover:text-blue-600 truncate text-left">
-            {template.name}
-          </button>
-        )}
-        <span className="flex-shrink-0 text-xs text-purple-500 bg-purple-50 rounded-full px-2 py-0.5">XSLT</span>
-        {template.isShared && (
-          <span title={`Sahibi: ${template.ownerName}`} className="flex-shrink-0 flex items-center gap-1 text-xs text-amber-600 bg-amber-50 rounded-full px-2 py-0.5">
-            <Users size={11} />
-            Paylaşılan • {template.ownerName}
-          </span>
-        )}
-      </div>
-
-      <span className="text-xs text-gray-400 flex-shrink-0 hidden sm:block">
-        {new Date(template.updatedAt).toLocaleDateString('tr-TR')}
-      </span>
-
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <button onClick={() => onPreview(template.id, template.name)} title="Önizle" className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Eye size={14} /></button>
-        {isOwner && (
-          <>
-            <div className="relative">
-              <button onClick={() => setMoveOpen((v) => !v)} title="Klasöre taşı" className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><FolderInput size={14} /></button>
-              {moveOpen && (
-                <MoveToFolderMenu
-                  folders={folders}
-                  currentFolderId={template.folderId}
-                  onMove={(fid) => onMove(template.id, fid)}
-                  onClose={() => setMoveOpen(false)}
-                />
-              )}
-            </div>
-            <button onClick={() => onShare(template.id, template.name)} title="Paylaş" className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"><Share2 size={14} /></button>
-            <button onClick={() => setEditing(true)} title="Yeniden adlandır" className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"><Pencil size={14} /></button>
-            {showConfirm ? (
-              <div className="flex items-center gap-1 bg-red-50 rounded px-2 py-1 text-xs">
-                <span className="text-red-600">Emin misin?</span>
-                <button onClick={() => onDelete(template.id)} className="font-medium text-red-600 hover:text-red-700">Evet</button>
-                <span className="text-gray-300">/</span>
-                <button onClick={() => setShowConfirm(false)} className="text-gray-500 hover:text-gray-700">Hayır</button>
-              </div>
-            ) : (
-              <button onClick={() => setShowConfirm(true)} title="Sil" className="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+      <Link to="/xslt-editor" className={PRIMARY_LINK}>XSLT Editör'e Git</Link>
+    </LibraryEmpty>
   )
 }

@@ -1,366 +1,229 @@
-import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  BookOpen,
-  FilePlus,
-  FolderOpen,
-  Shield,
-  Settings2,
-  X,
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import {
   Printer,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   Code2,
   Download,
   BookmarkCheck,
+  TriangleAlert,
+  CircleX,
+  Image as ImageIcon,
+  Signature,
+  Landmark,
+  FileText,
+  Upload,
+  ScanEye,
+  LoaderCircle,
+  StickyNote,
 } from 'lucide-react'
-import { getTemplate } from '../services/templateService'
+import { getTemplate, type ThemeSlotOption } from '../services/templateService'
 import { reportDownload } from '../services/activityService'
-import { previewFromStoredXslt, fetchThemeXslt, type BankInfoItem, type Alignment, type ImageSettings } from '../services/previewService'
-import { createUserXsltTemplate } from '../services/userXsltService'
-import { useAuthStore } from '../store/authStore'
+import type { AssetKind } from '../services/themeComposeService'
+import { createUserXsltTemplate, updateUserXsltTemplate } from '../services/userXsltService'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
+import { runDraftSave, useDraftField, useThemeDraftStore } from '../store/themeDraftStore'
 import { parseGateError } from '../services/entitlementService'
 import { toast } from '../store/toastStore'
 import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
+import { printActivePreview } from '../components/xslt-editor/previewFrame'
+import { extractXmlParseErrors, LEAVE_CONFIRM, SAVE_CONFLICT_MESSAGE } from '../components/xslt-editor/xsltText'
+import { documentTypeFromXslt } from '../components/dev-mode/draftCompose'
+import { useThemeCompose } from '../hooks/useThemeCompose'
+import ImagePanel from '../components/theme-assets/ImagePanel'
+import BankInfoPanel from '../components/theme-assets/BankInfoPanel'
+import FixedNotesPanel from '../components/theme-assets/FixedNotesPanel'
+import {
+  countNotes,
+  noteHasText,
+  toComposeNotes,
+  type FixedNoteState,
+} from '../components/theme-assets/fixedNoteState'
+import type { FixedNotePosition } from '../services/themeComposeService'
+import ThemeSlotPreview from '../components/theme-assets/ThemeSlotPreview'
+import DraggableAssetChip, { AssetDragPreview } from '../components/theme-assets/DraggableAssetChip'
+import { announcements, kindFromDragId, screenReaderInstructions, slotFromDropId } from '../components/theme-assets/slotDnd'
+import {
+  effectiveSlot,
+  filledBankRows,
+  readAsDataUrl,
+  toComposeAssets,
+  hiddenThemeImages,
+  themeImageRemovable,
+  validateImageFile,
+} from '../components/theme-assets/imageState'
+import WorkspaceHeader from '../components/shell/WorkspaceHeader'
+import { HeaderButton } from '../components/shell/headerParts'
+import AssetAccordionSection from '../components/theme-use/AssetAccordionSection'
+import ThemeInfoAside from '../components/theme-use/ThemeInfoAside'
+import { buildChecklist } from '../components/theme-use/themeChecklist'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
+import defaultDespatchXml from '../assets/default-despatch.xml?raw'
 
-const DEBOUNCE_MS = 1200
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target!.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-// ─── XSLT injection helpers (DevModePage ile aynı mantık) ────────────────────
-const OVERRIDE_START = '<!-- DEV-MODE-OVERRIDES:START -->'
-const OVERRIDE_END   = '<!-- DEV-MODE-OVERRIDES:END -->'
-
-function escapeXml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function buildInjection(logo: ImgState, signature: ImgState, bankInfo: BankInfoItem[]): string {
-  const parts: string[] = []
-  const hasLogo = !!logo.url
-  const hasSig  = !!signature.url
-
-  if (hasLogo || hasSig) {
-    const parseNum = (s: string) => { const n = parseInt(s); return isNaN(n) ? null : n }
-    const lines = [
-      `<script>(function(){`,
-      `  function jc(a){return a==='center'?'center':a==='right'?'flex-end':'flex-start';}`,
-      `  function setImg(ids,url,w,h,align){`,
-      `    ids.forEach(function(id){`,
-      `      var el=document.getElementById(id);if(!el)return;`,
-      `      el.style.cssText='display:flex;justify-content:'+jc(align)+';align-items:center;';`,
-      `      var img=document.createElement('img');`,
-      `      img.src=url;`,
-      `      img.style.cssText=(w?'width:'+w+'px;':'width:auto;')+(h?'height:'+h+'px;':'height:auto;')+'max-width:100%;object-fit:contain;display:block;';`,
-      `      el.innerHTML='';el.appendChild(img);`,
-      `    });`,
-      `  }`,
-      `  window.addEventListener('load',function(){`,
-    ]
-    if (hasLogo) {
-      const w = parseNum(logo.width)
-      const h = parseNum(logo.height)
-      const safeUrl = logo.url.replace(/&/g, '&amp;').replace(/'/g, '%27')
-      lines.push(`    setImg(['company_logo','companyLogo'],'${safeUrl}',${w ?? 'null'},${h ?? 'null'},'${logo.alignment}');`)
-    }
-    if (hasSig) {
-      const w = parseNum(signature.width)
-      const h = parseNum(signature.height)
-      const safeUrl = signature.url.replace(/&/g, '&amp;').replace(/'/g, '%27')
-      lines.push(`    setImg(['imza','companyKase'],'${safeUrl}',${w ?? 'null'},${h ?? 'null'},'${signature.alignment}');`)
-    }
-    lines.push(`  });`, `})();</script>`)
-    parts.push(lines.join('\n'))
-  }
-
-  const validBanks = bankInfo.filter(b => b.bankName || b.iban)
-  if (validBanks.length > 0) {
-    const rows = validBanks
-      .map(b =>
-        `      <tr>` +
-        `<td style="padding:6px 10px;border:1px solid #ddd">${escapeXml(b.bankName)}</td>` +
-        `<td style="padding:6px 10px;border:1px solid #ddd;font-family:monospace">${escapeXml(b.iban)}</td>` +
-        `</tr>`,
-      )
-      .join('\n')
-    parts.push(
-      `<div style="font-family:Arial,sans-serif;font-size:12px;margin:16px 0;page-break-inside:avoid">\n` +
-      `  <table style="width:100%;border-collapse:collapse">\n` +
-      `    <thead><tr>\n` +
-      `      <th style="text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd">Banka Adı</th>\n` +
-      `      <th style="text-align:left;padding:6px 10px;background:#f5f5f5;border:1px solid #ddd">IBAN</th>\n` +
-      `    </tr></thead>\n` +
-      `    <tbody>\n${rows}\n    </tbody>\n` +
-      `  </table>\n</div>`,
-    )
-  }
-
-  if (parts.length === 0) return ''
-  return `${OVERRIDE_START}\n${parts.join('\n')}\n${OVERRIDE_END}`
-}
-
-function applyInjection(xslt: string, injection: string): string {
-  const si = xslt.indexOf(OVERRIDE_START)
-  const ei = xslt.indexOf(OVERRIDE_END)
-  if (si >= 0 && ei >= 0) {
-    if (!injection) return xslt.slice(0, si).trimEnd() + '\n' + xslt.slice(ei + OVERRIDE_END.length).trimStart()
-    return xslt.slice(0, si) + injection + xslt.slice(ei + OVERRIDE_END.length)
-  }
-  if (!injection) return xslt
-  const bodyClose = xslt.lastIndexOf('</body>')
-  if (bodyClose >= 0) return xslt.slice(0, bodyClose) + injection + '\n' + xslt.slice(bodyClose)
-  const tmpl = xslt.lastIndexOf('</xsl:template>')
-  if (tmpl >= 0) return xslt.slice(0, tmpl) + injection + '\n' + xslt.slice(tmpl)
-  return xslt + '\n' + injection
-}
-
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
-function EditorSidebar() {
-  const { user } = useAuthStore()
-  const location = useLocation()
-  const isActive = (path: string) => location.pathname.startsWith(path)
-  const base = 'flex items-center justify-center w-9 h-9 rounded-lg transition-colors'
-  const active = 'bg-blue-50 text-blue-700'
-  const inactive = 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-  return (
-    <div className="w-12 border-r border-gray-200 bg-white py-2 flex flex-col gap-1 items-center flex-shrink-0">
-      <Link to="/dashboard" className={`${base} ${isActive('/dashboard') ? active : inactive}`} title="Dashboard"><LayoutDashboard size={18} /></Link>
-      <Link to="/templates" className={`${base} ${isActive('/templates') ? active : inactive}`} title="Tema Kütüphanesi"><BookOpen size={18} /></Link>
-      <Link to="/editor/new" className={`${base} ${isActive('/editor/new') ? active : inactive}`} title="Yeni Şablon"><FilePlus size={18} /></Link>
-      <Link to="/drafts" className={`${base} ${isActive('/drafts') ? active : inactive}`} title="Taslaklarım"><FolderOpen size={18} /></Link>
-      {user?.role === 'Admin' && (
-        <Link to="/admin/themes" className={`${base} ${isActive('/admin/themes') ? active : inactive}`} title="Admin Paneli"><Shield size={18} /></Link>
-      )}
-    </div>
-  )
-}
-
-// ─── Image settings state ─────────────────────────────────────────────────────
-interface ImgState {
-  url: string
-  width: string   // string so input is controllable; parsed to number on send
-  height: string
-  alignment: Alignment
-}
-
-const defaultImg = (): ImgState => ({ url: '', width: '250', height: '150', alignment: 'left' })
-
-// ─── Alignment picker ─────────────────────────────────────────────────────────
-function AlignPicker({ value, onChange }: { value: Alignment; onChange: (v: Alignment) => void }) {
-  const opts: { v: Alignment; Icon: typeof AlignLeft }[] = [
-    { v: 'left', Icon: AlignLeft },
-    { v: 'center', Icon: AlignCenter },
-    { v: 'right', Icon: AlignRight },
-  ]
-  return (
-    <div className="flex gap-1">
-      {opts.map(({ v, Icon }) => (
-        <button
-          key={v}
-          onClick={() => onChange(v)}
-          className={`flex items-center justify-center w-7 h-7 rounded border transition-colors ${
-            value === v
-              ? 'bg-blue-600 border-blue-600 text-white'
-              : 'border-gray-200 text-gray-400 hover:border-blue-300 hover:text-blue-500'
-          }`}
-          title={v === 'left' ? 'Sola yasla' : v === 'center' ? 'Ortala' : 'Sağa yasla'}
-        >
-          <Icon size={13} />
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// ─── Image upload + settings panel ───────────────────────────────────────────
-function ImagePanel({
-  label,
-  state,
-  uploading,
-  onUpload,
-  onChange,
-}: {
-  label: string
-  state: ImgState
-  uploading: boolean
-  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onChange: (patch: Partial<ImgState>) => void
-}) {
-  return (
-    <section>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{label}</h3>
-
-      {/* Upload area */}
-      {state.url ? (
-        <div className="flex flex-col gap-2 mb-3">
-          <img src={state.url} alt={label} className="max-h-16 object-contain border border-gray-100 rounded p-1 bg-gray-50" />
-          <label className="cursor-pointer text-xs text-blue-600 hover:underline">
-            Değiştir
-            <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={onUpload} />
-          </label>
-        </div>
-      ) : (
-        <label className="cursor-pointer flex items-center gap-2 border border-dashed border-gray-300 rounded-lg px-3 py-3 hover:border-blue-300 hover:bg-blue-50 transition-colors mb-3">
-          {uploading
-            ? <span className="text-xs text-gray-400">Yükleniyor…</span>
-            : <><span className="text-lg">🖼</span><span className="text-xs text-gray-500">Görsel yükle (PNG / JPG / SVG)</span></>
-          }
-          <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={onUpload} disabled={uploading} />
-        </label>
-      )}
-
-      {/* Size + alignment — always visible so user can set before upload too */}
-      <div className="flex flex-col gap-2">
-        {/* Width / Height */}
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="text-xs text-gray-400 mb-0.5 block">Genişlik (px)</label>
-            <input
-              type="number"
-              min={10}
-              max={1200}
-              placeholder="Otomatik"
-              value={state.width}
-              onChange={(e) => onChange({ width: e.target.value })}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="text-xs text-gray-400 mb-0.5 block">Yükseklik (px)</label>
-            <input
-              type="number"
-              min={10}
-              max={1200}
-              placeholder="Otomatik"
-              value={state.height}
-              onChange={(e) => onChange({ height: e.target.value })}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            />
-          </div>
-        </div>
-
-        {/* Alignment */}
-        <div>
-          <label className="text-xs text-gray-400 mb-0.5 block">Hizalama</label>
-          <AlignPicker value={state.alignment} onChange={(v) => onChange({ alignment: v })} />
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── Convert ImgState → ImageSettings for the service ────────────────────────
-function toSettings(s: ImgState): ImageSettings | undefined {
-  if (!s.url) return undefined
-  return {
-    url: s.url,
-    width: s.width ? parseInt(s.width) : undefined,
-    height: s.height ? parseInt(s.height) : undefined,
-    alignment: s.alignment,
-  }
-}
+const NO_SLOTS: ThemeSlotOption[] = []
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function ThemeUsePage() {
   const { templateId } = useParams<{ templateId: string }>()
   const navigate = useNavigate()
 
-  const [templateName, setTemplateName] = useState('Hazır Tema')
-  const [xslt, setXslt] = useState('')
-  const xsltReadyRef = useRef(false)
-  const [xmlContent, setXmlContent] = useState<string>(defaultInvoiceXml)
-  const [editMode, setEditMode] = useState(false)
+  const [meta, setMeta] = useDraftField('meta')
+  const templateName = meta?.name ?? 'Hazır Tema'
+  const slots = meta?.slots ?? NO_SLOTS
+  // Geliştirici Modu'nda elle düzenlenen metin varsa önizleme ve indirme onun üzerinden yürür.
+  const workingXslt = useThemeDraftStore((s) => s.workingXslt)
+  const docType = meta?.documentType ?? (workingXslt !== null ? documentTypeFromXslt(workingXslt) : null)
+  const [xml, setXml] = useDraftField('xml')
+  const xmlContent = xml?.content ?? (docType === 'Despatch' ? defaultDespatchXml : defaultInvoiceXml)
+  /** Yalnız görüntüleme: kullanıcının yüklediği XML'in adı (null → örnek XML). */
+  const xmlFileName = xml?.fileName ?? null
+  /** Önizlemede yerleşim alanlarını (yuvaları) göster. */
+  const [showFields, setShowFields] = useState(true)
+  const [openSections, setOpenSections] = useState({ logo: true, signature: false, bank: false, notes: false })
+  const xmlInputRef = useRef<HTMLInputElement>(null)
 
-  const [logo, setLogo] = useState<ImgState>(defaultImg())
-  const [signature, setSignature] = useState<ImgState>(defaultImg())
-  const [bankInfo, setBankInfo] = useState<BankInfoItem[]>([{ bankName: '', iban: '' }])
+  const [logo, setLogo] = useDraftField('logo')
+  const [signature, setSignature] = useDraftField('signature')
+  const [bankInfo, setBankInfo] = useDraftField('bankInfo')
+  const [fixedNotes, setFixedNotes] = useDraftField('fixedNotes')
+  const notesTouched = useThemeDraftStore((s) => s.notesTouched)
+  const [fixedNotesSupported, setFixedNotesSupported] = useDraftField('fixedNotesSupported')
+  const [uploading, setUploading] = useState<AssetKind | null>(null)
 
-  const [logoUploading, setLogoUploading] = useState(false)
-  const [signatureUploading, setSignatureUploading] = useState(false)
-
-  const [html, setHtml] = useState('')
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewError, setPreviewError] = useState<string | null>(null)
-  const [lastMs, setLastMs] = useState<number | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [dragKind, setDragKind] = useState<AssetKind | null>(null)
+  const mountedRef = useRef(true)
+  const saveRedirectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Tema adını ve XSLT içeriğini yükle
   useEffect(() => {
-    if (!templateId) return
-    getTemplate(templateId).then((t) => setTemplateName(t.name)).catch(() => {})
-    fetchThemeXslt(templateId)
-      .then((content) => {
-        setXslt(content)
-        xsltReadyRef.current = true
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (saveRedirectRef.current !== null) clearTimeout(saveRedirectRef.current)
+    }
+  }, [])
+
+  // Tema adı, belge türü ve konum kataloğu (Geliştirici Modu'ndan dönüşte taslakta hazırdır)
+  useEffect(() => {
+    if (!templateId || useThemeDraftStore.getState().meta) return
+    getTemplate(templateId)
+      .then((t) => setMeta({ name: t.name, slots: t.slots ?? [], documentType: t.documentType }))
+      .catch(() => {})
+  }, [templateId, setMeta])
+
+  const baselineXslt = useThemeDraftStore((s) => s.baselineXslt)
+  const xsltEdited = useThemeDraftStore((s) => s.xsltEdited)
+  const editedXslt = xsltEdited ? workingXslt : null
+  const editedXsltBroken = useMemo(
+    () => editedXslt !== null && extractXmlParseErrors(editedXslt).length > 0,
+    [editedXslt],
+  )
+
+  const assets = useMemo(() => toComposeAssets(logo, signature, slots), [logo, signature, slots])
+  const banks = useMemo(() => filledBankRows(bankInfo), [bankInfo])
+  // Düzenlenmiş metinde: dokunulmadıysa null (nota dokunma), boşaltıldıysa [] (eski notları sil).
+  const composeNotes = useMemo(() => {
+    if (editedXslt === null) return toComposeNotes(fixedNotes)
+    return notesTouched ? (toComposeNotes(fixedNotes) ?? []) : null
+  }, [editedXslt, fixedNotes, notesTouched])
+  const noteCount = countNotes(fixedNotes)
+
+  // Yalnız varlık girilmişse sormaz: bunlar temadan yeniden birleştirilebilir, elle düzenleme birleştirilemez.
+  const hasUnsavedXslt = xsltEdited && workingXslt !== baselineXslt
+  const confirmLeave = useCallback(() => !hasUnsavedXslt || window.confirm(LEAVE_CONFIRM), [hasUnsavedXslt])
+  const guardedNavigate = useCallback((path: string) => {
+    if (confirmLeave()) navigate(path)
+  }, [confirmLeave, navigate])
+
+  useEffect(() => {
+    if (!hasUnsavedXslt) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedXslt])
+
+  const handleComposeError = useCallback(async (err: unknown) => {
+    // Ücretli tema doğrudan URL ile açıldıysa backend 402 döner → Pro'ya yönlendir.
+    const gate = await parseGateError(err)
+    if (gate.status === 402) {
+      openUpgradeModal({
+        title: 'Ücretli tema',
+        message: gate.message ?? 'Bu temayı kullanmak için XsltCraft Pro üyeliği gerekir.',
       })
-      .catch(async (err) => {
-        // Ücretli tema doğrudan URL ile açıldıysa backend 402 döner → Pro'ya yönlendir.
-        const gate = await parseGateError(err)
-        if (gate.status === 402) {
-          openUpgradeModal({
-            title: 'Ücretli tema',
-            message: gate.message ?? 'Bu temayı kullanmak için XsltCraft Pro üyeliği gerekir.',
-          })
-          navigate('/templates')
-        }
-      })
-  }, [templateId, navigate])
+      navigate('/templates')
+    }
+  }, [navigate])
 
-  // Logo/imza/IBAN değişince enjeksiyonu XSLT'e göm
+  const hideThemeImages = useMemo(() => hiddenThemeImages(logo, signature, slots), [logo, signature, slots])
+  const compose = useThemeCompose({
+    themeId: editedXslt === null ? templateId : undefined,
+    xslt: editedXslt !== null && !editedXsltBroken ? editedXslt : undefined,
+    xmlContent,
+    assets,
+    bankInfo: banks,
+    hideThemeImages,
+    fixedNotes: composeNotes,
+    onError: handleComposeError,
+  })
+
+  // Bozuk metinde istek gitmez: değer son geçerli yanıttan kalır.
   useEffect(() => {
-    if (!xsltReadyRef.current) return
-    const injection = buildInjection(logo, signature, bankInfo)
-    setXslt((prev) => applyInjection(prev, injection))
-  }, [logo, signature, bankInfo])
+    if (compose.fixedNotesSupported !== null) setFixedNotesSupported(compose.fixedNotesSupported)
+  }, [compose.fixedNotesSupported, setFixedNotesSupported])
 
-  // Debounced preview
-  useEffect(() => {
-    if (!xmlContent || !templateId) return
-    const t = setTimeout(async () => {
-      setPreviewLoading(true)
-      setPreviewError(null)
-      try {
-        const result = await previewFromStoredXslt(
-          templateId,
-          xmlContent,
-          toSettings(logo),
-          toSettings(signature),
-          bankInfo.filter((b) => b.bankName || b.iban),
-        )
-        setHtml(result.html)
-        setLastMs(result.generationTimeMs)
-      } catch (e: unknown) {
-        const msg =
-          e && typeof e === 'object' && 'response' in e
-            ? (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Önizleme alınamadı.'
-            : 'Önizleme alınamadı.'
-        setPreviewError(msg)
-      } finally {
-        setPreviewLoading(false)
-      }
-    }, DEBOUNCE_MS)
-    return () => clearTimeout(t)
-  }, [xmlContent, logo, signature, bankInfo, templateId])
+  const placements = useMemo(() => ({
+    logo: logo.dataUrl ? effectiveSlot('logo', logo, slots) : null,
+    signature: signature.dataUrl ? effectiveSlot('signature', signature, slots) : null,
+  }), [logo, signature, slots])
 
-  function handleDownload() {
-    if (!xslt || isDownloading) return
+  /** Metin değişimi debounce ile; stil/temizle (dolu notta) önizlemeyi hemen yeniler. */
+  function handleNoteChange(position: FixedNotePosition, patch: Partial<FixedNoteState>, immediate: boolean) {
+    const prev = fixedNotes[position]
+    const next = { ...prev, ...patch }
+    setFixedNotes((s) => ({ ...s, [position]: { ...s[position], ...patch } }))
+    if (immediate && (noteHasText(prev) || noteHasText(next))) compose.composeNow()
+  }
+
+  const setterFor = (kind: AssetKind) => (kind === 'logo' ? setLogo : setSignature)
+
+  // ── Sürükle-bırak ───────────────────────────────────────────────────────────
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  )
+
+  function handleDragStart(e: DragStartEvent) {
+    setDragKind(kindFromDragId(e.active.id))
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    setDragKind(null)
+    const kind = kindFromDragId(e.active.id)
+    const slot = slotFromDropId(e.over?.id)
+    if (!kind || !slot) return
+    setterFor(kind)((p) => ({ ...p, slot }))
+    compose.composeNow()
+  }
+
+  // ── İndir / Kaydet: önizlemeyle aynı birleştirme ─────────────────────────────
+  async function handleDownload() {
+    if (isDownloading) return
     setIsDownloading(true)
     try {
+      const xslt = await compose.exportXslt()
       const blob = new Blob([xslt], { type: 'application/xslt+xml' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
@@ -368,13 +231,16 @@ export default function ThemeUsePage() {
       a.click()
       URL.revokeObjectURL(a.href)
       reportDownload('Template', templateId)
+    } catch (err) {
+      await handleComposeError(err)
+      toast.error('İndirme başarısız.')
     } finally {
       setIsDownloading(false)
     }
   }
 
   async function handleSave() {
-    if (!xslt || isSaving) return
+    if (isSaving) return
 
     // Proaktif gate: ham XSLT'yi "Şablonlarım"a saklamak Pro üyelik gerektirir.
     const ent = useEntitlementStore.getState().entitlements
@@ -382,22 +248,41 @@ export default function ThemeUsePage() {
       openUpgradeModal({
         title: 'Kaydetme Pro üyelik gerektirir',
         message: "Şablonu indirebilirsin, ancak 'Şablonlarım'da saklamak XsltCraft Pro’ya dahildir.",
+        confirmLeave,
       })
       return
     }
 
+    const { session, markSaved } = useThemeDraftStore.getState()
     setIsSaving(true)
     try {
-      await createUserXsltTemplate({ name: templateName, xsltContent: xslt, xmlContent })
-      setSaveSuccess(true)
-      setTimeout(() => { navigate('/my-xslt-templates') }, 800)
+      // Kayıt hedefi hat alındığında, `await`'ten önce okunur: ekrandan çıkılırsa taslak silinir, `update` yerine `create` çalışmasın.
+      await runDraftSave(async (saved) => {
+        const xslt = await compose.exportXslt()
+        if (!mountedRef.current || useThemeDraftStore.getState().session !== session) return
+        // Ad gönderilmez: kullanıcının kayıtta verdiği ad temanın adıyla ezilmesin.
+        const result = saved
+          ? await updateUserXsltTemplate(saved.id, { xsltContent: xslt, xmlContent, expectedUpdatedAt: saved.updatedAt })
+          : await createUserXsltTemplate({ name: templateName, xsltContent: xslt, xmlContent })
+        markSaved(session, { id: result.id, updatedAt: result.updatedAt, name: result.name }, workingXslt)
+        if (!mountedRef.current) return
+        setSaveSuccess(true)
+        saveRedirectRef.current = setTimeout(() => { navigate('/my-xslt-templates') }, 800)
+      })
     } catch (err) {
       const gate = await parseGateError(err)
       if (gate.status === 402) {
         openUpgradeModal({
           title: 'Kaydetme Pro üyelik gerektirir',
           message: gate.message ?? "'Şablonlarım'da saklama XsltCraft Pro’ya dahildir.",
+          confirmLeave: mountedRef.current ? confirmLeave : undefined,
         })
+      } else if (gate.status === 423) {
+        toast.error('Bu şablonu şu an başka bir kullanıcı düzenliyor. Kaydedilemedi.', {
+          title: 'Şablon kilitli', durationMs: null,
+        })
+      } else if (gate.status === 409) {
+        toast.error(SAVE_CONFLICT_MESSAGE, { title: 'Çakışma', durationMs: null })
       } else {
         toast.error('Kaydetme başarısız.')
       }
@@ -409,174 +294,315 @@ export default function ThemeUsePage() {
     e.target.value = ''
     if (!file) return
     try {
-      setXmlContent(await readUploadFile(file, 'xml'))
+      setXml({ content: await readUploadFile(file, 'xml'), fileName: file.name })
     } catch (err) {
       toast.error((err as Error).message, { title: 'XML yüklenemedi' })
     }
   }
 
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageUpload(kind: AssetKind, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    setLogoUploading(true)
+    const invalid = validateImageFile(file)
+    if (invalid) {
+      toast.error(invalid, { title: kind === 'logo' ? 'Logo yüklenemedi' : 'İmza yüklenemedi' })
+      return
+    }
+    setUploading(kind)
     try {
       const dataUrl = await readAsDataUrl(file)
-      setLogo((prev) => ({ ...prev, url: dataUrl }))
-    } catch { alert('Logo yüklenemedi.') }
-    finally { setLogoUploading(false); e.target.value = '' }
+      setterFor(kind)((prev) => ({ ...prev, dataUrl }))
+    } catch {
+      toast.error('Görsel okunamadı.')
+    } finally {
+      setUploading(null)
+    }
   }
 
-  async function handleSignatureUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setSignatureUploading(true)
-    try {
-      const dataUrl = await readAsDataUrl(file)
-      setSignature((prev) => ({ ...prev, url: dataUrl }))
-    } catch { alert('İmza yüklenemedi.') }
-    finally { setSignatureUploading(false); e.target.value = '' }
-  }
+  const dragged = dragKind === 'logo' ? logo : dragKind === 'signature' ? signature : null
+  const showSlots = showFields && slots.length > 0
+  const toggleSection = (key: keyof typeof openSections) => setOpenSections((o) => ({ ...o, [key]: !o[key] }))
 
-  function addBankRow() { setBankInfo((p) => [...p, { bankName: '', iban: '' }]) }
-  function removeBankRow(idx: number) { setBankInfo((p) => p.filter((_, i) => i !== idx)) }
-  function updateBankRow(idx: number, field: keyof BankInfoItem, value: string) {
-    setBankInfo((p) => p.map((r, i) => (i === idx ? { ...r, [field]: value } : r)))
+  const ent = useEntitlementStore((st) => st.entitlements)
+  const saveNeedsPro = !!ent && !ent.canSaveRawXslt && !ent.isPrivileged
+  const docTypeLabel = docType === 'Despatch' ? 'e-İrsaliye' : docType === 'Invoice' ? 'e-Fatura / e-Arşiv' : '—'
+  const checks = buildChecklist({
+    hasLogo: !!logo.dataUrl,
+    hasSignature: !!signature.dataUrl,
+    bankCount: banks.length,
+    noteCount,
+    notesSupported: fixedNotesSupported,
+    customXml: xmlFileName !== null,
+    preview: { loading: compose.loading, error: compose.error, ready: !!compose.html, warningCount: compose.warnings.length },
+  })
+
+  const backToDevModeButton = (
+    <button
+      type="button"
+      onClick={() => navigate(`/dev-mode/${templateId}`)}
+      className="xc-focus ml-auto flex-none rounded-md px-2 py-0.5 font-semibold underline hover:no-underline"
+    >
+      Geliştirici Modu'na dön
+    </button>
+  )
+
+  const renderImagePanel = (kind: AssetKind) => {
+    const state = kind === 'logo' ? logo : signature
+    return (
+      <ImagePanel
+        hideTitle
+        label={kind === 'logo' ? 'Logo' : 'İmza / Kaşe'}
+        state={state}
+        uploading={uploading === kind}
+        slots={slots}
+        slotValue={effectiveSlot(kind, state, slots)}
+        onUpload={(e) => handleImageUpload(kind, e)}
+        onChange={(patch) => setterFor(kind)((p) => ({ ...p, ...patch }))}
+        onRemove={() => setterFor(kind)((p) => ({ ...p, dataUrl: '' }))}
+        themeImageRemovable={themeImageRemovable(kind, slots)}
+        dragHandle={showSlots && state.dataUrl
+          ? <DraggableAssetChip kind={kind} dataUrl={state.dataUrl} />
+          : undefined}
+      />
+    )
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-50">
-      <EditorSidebar />
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Toolbar */}
-        <div className="h-12 border-b border-gray-200 bg-white flex items-center gap-2 px-4 flex-shrink-0">
-          <span className="text-base font-medium text-gray-700 flex-1 truncate">{templateName}</span>
-          {previewLoading && (
-            <span className="text-sm text-blue-500 flex items-center gap-1">
-              <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              Yükleniyor
-            </span>
-          )}
-          {!previewLoading && lastMs !== null && <span className="text-sm text-gray-400">{lastMs} ms</span>}
-          <label className="cursor-pointer text-sm text-gray-500 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50">
-            XML Değiştir
-            <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
-          </label>
-          <button onClick={() => iframeRef.current?.contentWindow?.print()} disabled={!html}
-            className="text-gray-500 border border-gray-200 rounded p-1.5 hover:bg-gray-50 disabled:opacity-30" title="Yazdır">
-            <Printer size={16} />
-          </button>
-          <button
-            onClick={() => navigate(`/dev-mode/${templateId}`)}
-            className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50"
-            title="XSLT editörünü aç"
-          >
-            <Code2 size={15} />Geliştirici Modu
-          </button>
-          <button
-            onClick={handleDownload}
-            disabled={isDownloading || !xslt}
-            className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40"
-            title="XSLT dosyasını indir"
-          >
-            <Download size={15} />{isDownloading ? '…' : 'İndir'}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving || saveSuccess || !xslt}
-            className={`flex items-center gap-1.5 text-sm border rounded px-3 py-1.5 transition-colors disabled:opacity-40 ${
-              saveSuccess
-                ? 'text-green-700 border-green-300 bg-green-50'
-                : 'text-gray-600 border-gray-200 hover:bg-gray-50'
-            }`}
-            title="Şablonlarıma kaydet"
-          >
-            <BookmarkCheck size={15} />{saveSuccess ? 'Kaydedildi' : isSaving ? '…' : 'Kaydet'}
-          </button>
-          {!editMode
-            ? <button onClick={() => setEditMode(true)} className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-3 py-1.5">
-                <Settings2 size={15} />Düzenle
-              </button>
-            : <button onClick={() => setEditMode(false)} className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded px-3 py-1.5 hover:bg-gray-50">
-                <X size={15} />Kapat
-              </button>
-          }
-        </div>
-
-        {previewError && (
-          <div className="px-4 py-2 text-xs text-red-600 bg-red-50 border-b border-red-100 flex-shrink-0">{previewError}</div>
-        )}
-
-        <div className="flex-1 flex overflow-hidden">
-          {/* Preview */}
-          <div className="flex-1 overflow-auto bg-gray-300 flex justify-center">
-            <iframe
-              ref={iframeRef}
-              srcDoc={html || '<html><body style="background:#d1d5db;margin:0"></body></html>'}
-              sandbox="allow-same-origin allow-scripts allow-modals"
-              className="border-none bg-white shadow-lg"
-              style={{ width: 860, minHeight: '100%', height: 'max(100%, 1200px)' }}
-              title="Canlı Önizleme"
+    <div className="flex h-screen flex-col overflow-hidden bg-ui-bg font-sans text-[13px] text-tx">
+      <WorkspaceHeader
+        active="themes"
+        onNavigate={guardedNavigate}
+        confirmLeave={confirmLeave}
+        actions={
+          <>
+            <HeaderButton
+              variant="icon"
+              icon={Printer}
+              aria-label="Yazdır"
+              title="Yazdır"
+              onClick={() => printActivePreview()}
+              disabled={!compose.html}
             />
-          </div>
+            <HeaderButton
+              icon={Code2}
+              onClick={() => navigate(`/dev-mode/${templateId}`)}
+              disabled={isSaving || saveSuccess}
+              title="Geliştirici modunda XSLT'yi düzenle"
+            >
+              XSLT editörünü aç
+            </HeaderButton>
+            <HeaderButton
+              icon={BookmarkCheck}
+              onClick={handleSave}
+              disabled={isSaving || saveSuccess || !compose.html}
+              title="Şablonlarıma kaydet"
+            >
+              {saveSuccess ? 'Kaydedildi' : isSaving ? 'Kaydediliyor…' : 'Şablonlarıma kaydet'}
+            </HeaderButton>
+            <HeaderButton
+              variant="primary"
+              icon={Download}
+              onClick={handleDownload}
+              disabled={isDownloading || !compose.html}
+              title="XSLT dosyasını indir"
+            >
+              {isDownloading ? 'İndiriliyor…' : 'XSLT İndir'}
+            </HeaderButton>
+          </>
+        }
+      />
 
-          {/* Right panel */}
-          {editMode && (
-            <div className="w-76 flex-shrink-0 border-l border-gray-200 bg-white flex flex-col overflow-y-auto" style={{ width: 300 }}>
-              <div className="p-4 flex flex-col gap-6">
-
-                <ImagePanel
-                  label="Logo"
-                  state={logo}
-                  uploading={logoUploading}
-                  onUpload={handleLogoUpload}
-                  onChange={(patch) => setLogo((p) => ({ ...p, ...patch }))}
-                />
-
-                <div className="border-t border-gray-100" />
-
-                <ImagePanel
-                  label="İmza / Kaşe"
-                  state={signature}
-                  uploading={signatureUploading}
-                  onUpload={handleSignatureUpload}
-                  onChange={(patch) => setSignature((p) => ({ ...p, ...patch }))}
-                />
-
-                <div className="border-t border-gray-100" />
-
-                {/* IBAN */}
-                <section>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Banka / IBAN</h3>
-                  <div className="flex flex-col gap-3">
-                    {bankInfo.map((row, idx) => (
-                      <div key={idx} className="relative bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        {bankInfo.length > 1 && (
-                          <button onClick={() => removeBankRow(idx)} className="absolute top-2 right-2 text-gray-300 hover:text-red-400" title="Kaldır">
-                            <X size={12} />
-                          </button>
-                        )}
-                        <div className="flex flex-col gap-1.5">
-                          <input type="text" placeholder="Banka adı" value={row.bankName}
-                            onChange={(e) => updateBankRow(idx, 'bankName', e.target.value)}
-                            className="text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full" />
-                          <input type="text" placeholder="TR00 0000 0000 0000 0000 0000 00" value={row.iban}
-                            onChange={(e) => updateBankRow(idx, 'iban', e.target.value)}
-                            className="text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full font-mono tracking-wide" />
-                        </div>
-                      </div>
-                    ))}
-                    <button onClick={addBankRow} className="text-xs text-blue-600 hover:text-blue-700 text-left flex items-center gap-1">
-                      + Banka hesabı ekle
-                    </button>
-                  </div>
-                </section>
-
-              </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setDragKind(null)}
+        accessibility={{ announcements, screenReaderInstructions }}
+      >
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+          {/* Sol: tema varlıkları */}
+          <aside
+            aria-label="Tema düzenleme"
+            className="flex flex-col border-r border-ui-line bg-ui-card lg:w-80 lg:flex-none lg:overflow-y-auto"
+          >
+            <div className="border-b border-ui-line px-4 pt-3.5 pb-3">
+              <nav aria-label="Konum">
+                <ol className="m-0 flex list-none gap-1.5 p-0 text-[12px] text-tx-muted">
+                  <li>
+                    <Link
+                      to={`/templates?type=${docType ?? 'Invoice'}`}
+                      onClick={(e) => {
+                        // Ctrl/⌘/orta tık yeni sekme açar; bu sayfadan ayrılınmaz.
+                        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+                        if (!confirmLeave()) e.preventDefault()
+                      }}
+                      className="xc-focus rounded text-ui-ink no-underline hover:underline"
+                    >
+                      Tema Kütüphanesi
+                    </Link>
+                  </li>
+                  <li aria-hidden="true">/</li>
+                  <li>{docTypeLabel}</li>
+                </ol>
+              </nav>
+              <h1 className="mt-1 mb-0 text-[17px] font-semibold text-tx">{templateName}</h1>
+              <p className="mt-1 mb-0 text-[12px] leading-normal text-tx-muted">
+                Logonuzu, imzanızı, banka bilgilerinizi ve sabit notlarınızı ekleyin; tema düzeni korunur.
+              </p>
+              <p className="mt-2.5 mb-0 rounded-md border border-ui-soft-line bg-ui-soft px-3 py-2 text-[12px] leading-normal text-tx-2">
+                {slots.length > 0
+                  ? 'Görseli önizlemedeki mavi kesikli alanlardan birine sürükleyin ya da “Konum” listesinden seçin.'
+                  : 'Bu tema için konum seçimi yok; görseller temanın logo/imza alanına yerleşir.'}
+              </p>
             </div>
-          )}
+
+            <AssetAccordionSection
+              title="Logo"
+              icon={ImageIcon}
+              status={logo.dataUrl ? 'Eklendi' : 'Boş'}
+              done={!!logo.dataUrl}
+              open={openSections.logo}
+              onToggle={() => toggleSection('logo')}
+            >
+              {renderImagePanel('logo')}
+            </AssetAccordionSection>
+            <AssetAccordionSection
+              title="İmza / Kaşe"
+              icon={Signature}
+              status={signature.dataUrl ? 'Eklendi' : 'Boş'}
+              done={!!signature.dataUrl}
+              open={openSections.signature}
+              onToggle={() => toggleSection('signature')}
+            >
+              {renderImagePanel('signature')}
+            </AssetAccordionSection>
+            <AssetAccordionSection
+              title="Banka / IBAN"
+              icon={Landmark}
+              status={banks.length > 0 ? `${banks.length} hesap` : 'Boş'}
+              done={banks.length > 0}
+              open={openSections.bank}
+              onToggle={() => toggleSection('bank')}
+            >
+              <BankInfoPanel hideTitle rows={bankInfo} onChange={setBankInfo} />
+            </AssetAccordionSection>
+            <AssetAccordionSection
+              title="Sabit notlar"
+              icon={StickyNote}
+              status={fixedNotesSupported === false ? 'Uygun değil' : noteCount > 0 ? `${noteCount} not` : 'Boş'}
+              done={fixedNotesSupported !== false && noteCount > 0}
+              open={openSections.notes}
+              onToggle={() => toggleSection('notes')}
+            >
+              <FixedNotesPanel
+                notes={fixedNotes}
+                onChange={handleNoteChange}
+                supported={fixedNotesSupported}
+                error={compose.errorField === 'fixedNotes' ? compose.error : null}
+              />
+            </AssetAccordionSection>
+          </aside>
+
+          {/* Orta: önizleme */}
+          <main className="flex min-h-[480px] min-w-0 flex-1 flex-col">
+            <div className="flex flex-wrap items-center gap-2 border-b border-ui-line bg-ui-card px-4 py-2">
+              <span className="text-[12px] text-tx-muted">Önizleme verisi</span>
+              <span className="inline-flex h-[30px] max-w-[220px] items-center gap-1.5 rounded-md border border-field-line bg-ui-card px-2.5 text-[12px] text-tx-2">
+                <FileText size={13} aria-hidden="true" className="flex-none" />
+                <span className="truncate">{xmlFileName ?? (docType === 'Despatch' ? 'Örnek irsaliye XML' : 'Örnek fatura XML')}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => xmlInputRef.current?.click()}
+                className="xc-focus inline-flex h-[30px] items-center gap-1.5 rounded-md px-2 text-[12px] font-semibold text-ui-ink hover:bg-ui-hover"
+              >
+                <Upload size={13} aria-hidden="true" />
+                Kendi XML'ini yükle
+              </button>
+              <input ref={xmlInputRef} type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
+              <div className="flex-1" />
+              <span aria-live="polite" className="inline-flex items-center gap-1.5 text-[12px] text-tx-subtle">
+                {compose.loading ? (
+                  <>
+                    <LoaderCircle size={14} aria-hidden="true" className="animate-spin text-ui-accent motion-reduce:animate-none" />
+                    Yükleniyor
+                  </>
+                ) : compose.lastMs !== null ? `${compose.lastMs} ms` : null}
+              </span>
+              {slots.length > 0 && (
+                <button
+                  type="button"
+                  aria-pressed={showFields}
+                  onClick={() => setShowFields((v) => !v)}
+                  className={`xc-focus inline-flex h-[30px] items-center gap-1.5 rounded-md border px-2.5 text-[12px] transition-colors ${
+                    showFields
+                      ? 'border-ui-soft-line bg-ui-soft text-ui-ink'
+                      : 'border-field-line bg-ui-card text-tx-2 hover:bg-ui-hover'
+                  }`}
+                >
+                  <ScanEye size={13} aria-hidden="true" />
+                  Alanları göster
+                </button>
+              )}
+            </div>
+
+            {xsltEdited && !editedXsltBroken && (
+              <div role="status" className="flex items-center gap-1.5 border-b border-ui-soft-line bg-ui-soft px-4 py-2 text-[12px] text-tx-2">
+                <Code2 size={13} aria-hidden="true" className="flex-none" />
+                Geliştirici Modu'ndaki XSLT düzenlemeleri uygulanıyor.
+              </div>
+            )}
+            {editedXsltBroken && (
+              <div role="alert" className="flex items-center gap-1.5 border-b border-fn-red-line bg-fn-red-tint px-4 py-2 text-[12px] text-fn-red-ink">
+                <CircleX size={13} aria-hidden="true" className="flex-none" />
+                Geliştirici Modu'ndaki XSLT'de sözdizimi hatası var; düzeltilene kadar önizleme, indirme ve kaydetme kapalı.
+                {backToDevModeButton}
+              </div>
+            )}
+            {compose.error && (
+              <div role="alert" className="flex items-center gap-1.5 border-b border-fn-red-line bg-fn-red-tint px-4 py-2 text-[12px] text-fn-red-ink">
+                <CircleX size={13} aria-hidden="true" className="flex-none" />
+                {compose.error}
+                {xsltEdited && backToDevModeButton}
+              </div>
+            )}
+            {compose.warnings.length > 0 && (
+              <div className="flex flex-col gap-0.5 border-b border-fn-orange-line bg-fn-orange-tint px-4 py-2 text-[12px] text-fn-orange-ink">
+                {compose.warnings.map((w) => (
+                  <span key={w.code + (w.kind ?? '')} className="flex items-center gap-1.5">
+                    <TriangleAlert size={12} aria-hidden="true" className="flex-none" />{w.message}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-1 overflow-auto px-6 py-8" style={{ justifyContent: 'safe center' }}>
+              <ThemeSlotPreview
+                html={compose.html}
+                slots={slots}
+                showSlots={showSlots}
+                dragging={dragKind !== null}
+                placements={placements}
+              />
+            </div>
+          </main>
+
+          {/* Sağ: tema bilgisi + kontrol listesi */}
+          <ThemeInfoAside
+            templateName={templateName}
+            docTypeLabel={docTypeLabel}
+            slotCount={slots.length}
+            saveNeedsPro={saveNeedsPro}
+            checks={checks}
+          />
         </div>
-      </div>
+
+        <DragOverlay dropAnimation={null}>
+          {dragKind && dragged?.dataUrl ? <AssetDragPreview kind={dragKind} dataUrl={dragged.dataUrl} /> : null}
+        </DragOverlay>
+      </DndContext>
     </div>
   )
 }

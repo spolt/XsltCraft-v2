@@ -1,27 +1,24 @@
-import { useCallback, useEffect, useState } from 'react'
-import { BarChart3, Download, Loader2, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, Download, Loader2, RefreshCw } from 'lucide-react'
 import {
   getUsageReport,
   getUsageDaily,
   type UsageReport,
-  type UsageDaily,
+  type UsageDailyPoint,
 } from '../../services/usageReportService'
+import Card from '../../components/ui/Card'
+import PageHeader from '../../components/ui/PageHeader'
+import {
+  AdminPage, Banner, BTN_SECONDARY, INPUT, SectionHeader, TABLE, TD, TH, TR,
+} from '../../components/admin/adminUi'
+import MetricCard from '../../components/admin/usage/MetricCard'
+import UsageAreaChart from '../../components/admin/usage/UsageAreaChart'
+import {
+  METRICS, dayCount, fillDaily, fmtNum, metricTint, pctChange, previousRange, seriesOf, shortDate, sum, utcDate,
+  type MetricKey,
+} from '../../components/admin/usage/usageChartMath'
 
-// UTC tabanlı yyyy-mm-dd (backend DateOnly UTC ile hizalı).
-function utcDate(offsetDays = 0): string {
-  const d = new Date()
-  d.setUTCDate(d.getUTCDate() + offsetDays)
-  return d.toISOString().slice(0, 10)
-}
-
-const PRESETS: { label: string; from: () => string; to: () => string }[] = [
-  { label: 'Bugün', from: () => utcDate(0), to: () => utcDate(0) },
-  { label: 'Son 7 gün', from: () => utcDate(-6), to: () => utcDate(0) },
-  { label: 'Son 30 gün', from: () => utcDate(-29), to: () => utcDate(0) },
-  { label: 'Son 90 gün', from: () => utcDate(-89), to: () => utcDate(0) },
-]
-
-const num = (n: number) => n.toLocaleString('tr-TR')
+const PRESETS = [7, 14, 30] as const
 
 function downloadCsv(report: UsageReport) {
   const headers = ['Kullanıcı', 'E-posta', 'Token', 'AI Sorusu', 'Kaydetme', 'İndirme', 'Üretim İndirme']
@@ -45,202 +42,351 @@ function downloadCsv(report: UsageReport) {
   URL.revokeObjectURL(a.href)
 }
 
-function SummaryCard({ label, value, accent }: { label: string; value: number; accent: string }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <div className="text-xs text-gray-500 uppercase tracking-wide">{label}</div>
-      <div className={`text-2xl font-semibold mt-1 ${accent}`}>{num(value)}</div>
-    </div>
-  )
-}
-
 export default function AdminUsagePage() {
   const [from, setFrom] = useState(utcDate(-29))
   const [to, setTo] = useState(utcDate(0))
+  const [customOpen, setCustomOpen] = useState(false)
+  const [metricKey, setMetricKey] = useState<MetricKey>('tokensUsed')
+  const [compare, setCompare] = useState(true)
+  const [showDaily, setShowDaily] = useState(false)
+
   const [report, setReport] = useState<UsageReport | null>(null)
-  const [daily, setDaily] = useState<UsageDaily | null>(null)
+  const [daily, setDaily] = useState<UsageDailyPoint[]>([])
+  const [prevDaily, setPrevDaily] = useState<UsageDailyPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const reqId = useRef(0)
 
   const load = useCallback(async (f: string, t: string) => {
+    const id = ++reqId.current
+    const [a, b] = f <= t ? [f, t] : [t, f]
+    const prev = previousRange(a, b)
     setLoading(true)
     setError(null)
     try {
-      const [rep, day] = await Promise.all([getUsageReport(f, t), getUsageDaily(f, t)])
+      const [rep, day, prevDay] = await Promise.all([
+        getUsageReport(a, b),
+        getUsageDaily(a, b),
+        getUsageDaily(prev.from, prev.to),
+      ])
+      if (id !== reqId.current) return
       setReport(rep)
-      setDaily(day)
+      setDaily(fillDaily(day.points, a, b))
+      setPrevDaily(fillDaily(prevDay.points, prev.from, prev.to))
     } catch {
-      setError('Rapor yüklenemedi.')
+      if (id === reqId.current) setError('Rapor yüklenemedi.')
     } finally {
-      setLoading(false)
+      if (id === reqId.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => { load(from, to) }, [from, to, load])
 
-  const activePreset = PRESETS.find(p => p.from() === from && p.to() === to)?.label
+  const today = utcDate(0)
+  const n = dayCount(from, to)
+  const activePreset = to === today ? PRESETS.find(p => from === utcDate(-(p - 1))) : undefined
+  const isCustom = customOpen || activePreset === undefined
+  const [rangeFrom, rangeTo] = from <= to ? [from, to] : [to, from]
+  const rangeLabel = activePreset && !customOpen
+    ? `son ${n} gün (${shortDate(rangeFrom)} – ${shortDate(rangeTo)})`
+    : `${shortDate(rangeFrom)} – ${shortDate(rangeTo)} (${n} gün)`
+
+  const selected = METRICS.find(m => m.key === metricKey) ?? METRICS[0]
+
+  const cards = useMemo(() => METRICS.map(m => {
+    const series = seriesOf(daily, m.key)
+    return {
+      metric: m,
+      series,
+      delta: pctChange(sum(series), sum(seriesOf(prevDaily, m.key))),
+    }
+  }), [daily, prevDaily])
+
+  const chartSeries = useMemo(() => seriesOf(daily, selected.key), [daily, selected.key])
+  const chartTotal = sum(chartSeries)
+  const chartAvg = chartSeries.length ? chartTotal / chartSeries.length : 0
+  const peakVal = chartSeries.length ? Math.max(...chartSeries) : 0
+  const peakIdx = chartSeries.indexOf(peakVal)
+
+  const pickPreset = (p: number) => {
+    setCustomOpen(false)
+    setFrom(utcDate(-(p - 1)))
+    setTo(utcDate(0))
+  }
+
+  const colStyle = (k: MetricKey) => (k === metricKey ? { background: metricTint(selected.color) } : undefined)
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-      {/* Başlık */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-            <BarChart3 size={20} className="text-blue-600" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">Kullanım Raporu</h1>
-            <p className="text-sm text-gray-500">Kullanıcı başına token, AI soru, kaydetme ve indirme — geçmişe dönük.</p>
-          </div>
-        </div>
-        <button
-          onClick={() => report && downloadCsv(report)}
-          disabled={!report || report.rows.length === 0}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition"
-        >
-          <Download size={15} /> CSV İndir
-        </button>
-      </div>
-
-      {/* Tarih aralığı */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          {PRESETS.map(p => (
+    <AdminPage>
+      <PageHeader
+        title="Kullanım Raporu"
+        description={`Token, AI soru, kaydetme ve indirme kullanımı — ${rangeLabel}.`}
+        actions={
+          <>
             <button
-              key={p.label}
-              onClick={() => { setFrom(p.from()); setTo(p.to()) }}
-              className={`px-3 py-1.5 text-sm rounded-md border transition ${
-                activePreset === p.label
-                  ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
-                  : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+              type="button"
+              aria-pressed={compare}
+              onClick={() => setCompare(c => !c)}
+              className={`xc-focus inline-flex h-[38px] items-center gap-2 rounded-[9px] border px-3 text-[12.5px] font-semibold transition-colors ${
+                compare ? 'border-ui-soft-line bg-ui-soft text-ui-ink' : 'border-ui-line bg-ui-card text-tx-2 hover:bg-ui-hover'
               }`}
             >
-              {p.label}
+              <svg aria-hidden="true" width="22" height="10" viewBox="0 0 22 10">
+                <path d="M1 5h20" stroke="currentColor" strokeWidth="2" strokeDasharray="4 3" />
+              </svg>
+              Önceki dönemle karşılaştır
             </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2 ml-auto text-sm">
-          <input type="date" value={from} max={to} onChange={e => setFrom(e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500" />
-          <span className="text-gray-400">—</span>
-          <input type="date" value={to} min={from} max={utcDate(0)} onChange={e => setTo(e.target.value)}
-            className="px-2 py-1.5 border border-gray-300 rounded-md outline-none focus:ring-2 focus:ring-blue-500" />
-          <button
-            onClick={() => load(from, to)}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-md hover:bg-gray-50 text-gray-700 disabled:opacity-40"
-          >
-            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Yenile
-          </button>
-        </div>
-      </div>
+            <div role="group" aria-label="Tarih aralığı" className="flex rounded-[9px] border border-ui-line bg-ui-card p-[3px]">
+              {PRESETS.map(p => {
+                const on = !isCustom && activePreset === p
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => pickPreset(p)}
+                    className={`xc-focus h-8 rounded-[7px] px-3.5 text-[12.5px] font-semibold transition-colors ${
+                      on ? 'bg-ui-accent text-ui-accent-fg' : 'text-tx-2 hover:bg-ui-hover'
+                    }`}
+                  >
+                    {p} gün
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                aria-pressed={isCustom}
+                aria-expanded={isCustom}
+                aria-controls="usage-custom-range"
+                onClick={() => setCustomOpen(true)}
+                className={`xc-focus h-8 rounded-[7px] px-3.5 text-[12.5px] font-semibold transition-colors ${
+                  isCustom ? 'bg-ui-accent text-ui-accent-fg' : 'text-tx-2 hover:bg-ui-hover'
+                }`}
+              >
+                Özel
+              </button>
+            </div>
+            <button type="button" onClick={() => load(from, to)} disabled={loading} className={BTN_SECONDARY}>
+              {loading ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+              Yenile
+            </button>
+            <button
+              type="button"
+              onClick={() => report && downloadCsv(report)}
+              disabled={!report || report.rows.length === 0}
+              className={BTN_SECONDARY}
+            >
+              <Download size={14} aria-hidden="true" /> CSV İndir
+            </button>
+          </>
+        }
+      />
 
-      {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{error}</div>}
-
-      {/* Özet kartları */}
-      {report && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-          <SummaryCard label="Token" value={report.totals.tokensUsed} accent="text-violet-600" />
-          <SummaryCard label="AI Sorusu" value={report.totals.aiRequests} accent="text-blue-600" />
-          <SummaryCard label="Kaydetme" value={report.totals.saveCount} accent="text-emerald-600" />
-          <SummaryCard label="İndirme" value={report.totals.downloadCount} accent="text-amber-600" />
-          <SummaryCard label="Üretim İnd." value={report.totals.templateExports} accent="text-gray-700" />
+      {isCustom && (
+        <div id="usage-custom-range" className="flex flex-wrap items-end gap-3 self-end">
+          <label className="flex flex-col gap-1 text-[12px] font-medium text-tx-muted">
+            Başlangıç
+            <input
+              type="date"
+              value={from}
+              max={to}
+              onChange={e => e.target.value && setFrom(e.target.value)}
+              className={`${INPUT} w-[160px]!`}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-[12px] font-medium text-tx-muted">
+            Bitiş
+            <input
+              type="date"
+              value={to}
+              min={from}
+              max={today}
+              onChange={e => e.target.value && setTo(e.target.value)}
+              className={`${INPUT} w-[160px]!`}
+            />
+          </label>
         </div>
       )}
 
-      {/* Kullanıcı bazlı tablo */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 text-sm font-medium text-gray-700">
-          Kullanıcı Bazlı ({report?.totals.userCount ?? 0} kullanıcı)
+      {error && <Banner>{error}</Banner>}
+
+      {loading && !report ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-tx-muted">
+          <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Yükleniyor…
         </div>
-        {loading && !report ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-400 flex items-center justify-center gap-2">
-            <Loader2 size={14} className="animate-spin" /> Yükleniyor…
+      ) : report && (
+        <>
+          <div role="group" aria-label="Grafikte gösterilecek metrik" className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3.5">
+            {cards.map(c => (
+              <MetricCard
+                key={c.metric.key}
+                metric={c.metric}
+                total={report.totals[c.metric.key]}
+                delta={c.delta}
+                series={c.series}
+                selected={c.metric.key === metricKey}
+                onSelect={() => setMetricKey(c.metric.key)}
+              />
+            ))}
           </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200 text-left text-xs uppercase text-gray-500 tracking-wide">
-              <tr>
-                <th className="px-4 py-3 font-medium">Kullanıcı</th>
-                <th className="px-4 py-3 font-medium text-right">Token</th>
-                <th className="px-4 py-3 font-medium text-right">AI Sorusu</th>
-                <th className="px-4 py-3 font-medium text-right">Kaydetme</th>
-                <th className="px-4 py-3 font-medium text-right">İndirme</th>
-                <th className="px-4 py-3 font-medium text-right">Üretim İnd.</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {report && report.rows.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Bu aralıkta kullanım yok.</td></tr>
+
+          <Card as="section" padding="none" aria-labelledby="usage-chart-title" className="flex flex-col gap-3.5 px-5 pt-[18px] pb-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 id="usage-chart-title" className="m-0 flex items-center gap-2 text-[15px] font-semibold text-tx">
+                  <span aria-hidden="true" className="h-3 w-3 rounded-[3px]" style={{ background: selected.color }} />
+                  Günlük {selected.title}
+                </h2>
+                <span className="text-[12.5px] text-tx-muted">{rangeLabel} · tüm kullanıcılar</span>
+              </div>
+              <dl className="m-0 flex flex-wrap gap-[22px]">
+                <div className="flex flex-col">
+                  <dt className="text-[11.5px] text-tx-muted">Dönem toplamı</dt>
+                  <dd className="m-0 text-[20px] font-bold text-tx tabular-nums">{fmtNum(chartTotal)}</dd>
+                </div>
+                <div className="flex flex-col">
+                  <dt className="text-[11.5px] text-tx-muted">Günlük ortalama</dt>
+                  <dd className="m-0 text-[20px] font-bold text-tx tabular-nums">{fmtNum(chartAvg)}</dd>
+                </div>
+                <div className="flex flex-col">
+                  <dt className="text-[11.5px] text-tx-muted">En yüksek gün</dt>
+                  <dd className="m-0 text-[20px] font-bold text-tx tabular-nums">
+                    {fmtNum(peakVal)}{' '}
+                    {peakVal > 0 && daily[peakIdx] && (
+                      <span className="text-[12.5px] font-medium text-tx-muted">{shortDate(daily[peakIdx].date)}</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div aria-hidden="true" className="flex flex-wrap gap-[18px] text-[12px] text-tx-2">
+              <span className="flex items-center gap-1.5">
+                <svg width="22" height="10" viewBox="0 0 22 10"><path d="M1 5h20" stroke={selected.color} strokeWidth="3" strokeLinecap="round" /></svg>
+                Bu dönem
+              </span>
+              {compare && (
+                <span className="flex items-center gap-1.5">
+                  <svg width="22" height="10" viewBox="0 0 22 10"><path d="M1 5h20" stroke="var(--color-fn-gray)" strokeWidth="2" strokeDasharray="4 3" /></svg>
+                  Önceki dönem
+                </span>
               )}
-              {report?.rows.map(r => (
-                <tr key={r.userId} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{r.username ?? r.email}</div>
-                    {r.username && <div className="text-xs text-gray-500">{r.email}</div>}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-mono text-violet-700">{num(r.tokensUsed)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-700">{num(r.aiRequests)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-700">{num(r.saveCount)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-700">{num(r.downloadCount)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-500">{num(r.templateExports)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {report && report.rows.length > 0 && (
-              <tfoot className="bg-gray-50 border-t border-gray-200 font-medium text-gray-800">
-                <tr>
-                  <td className="px-4 py-3">Toplam</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-mono">{num(report.totals.tokensUsed)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{num(report.totals.aiRequests)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{num(report.totals.saveCount)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{num(report.totals.downloadCount)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{num(report.totals.templateExports)}</td>
-                </tr>
-              </tfoot>
+              <span className="flex items-center gap-1.5">
+                <svg width="22" height="10" viewBox="0 0 22 10"><path d="M1 5h20" stroke={selected.color} strokeWidth="2" strokeDasharray="1.5 3" strokeLinecap="round" /></svg>
+                Ortalama
+              </span>
+            </div>
+
+            <UsageAreaChart points={daily} prevPoints={prevDaily} metrics={METRICS} selected={selected} compare={compare} />
+
+            <span className="text-[11.5px] text-tx-muted">
+              Grafik bir metriği gösterir; yukarıdaki kartlardan değiştirin. Bir günün üzerine gelince o günün tüm metrikleri görünür.
+            </span>
+          </Card>
+
+          <Card as="section" padding="none" aria-labelledby="usage-users-title">
+            <SectionHeader id="usage-users-title" title="Kullanıcı bazlı" aside={<span className="text-[12.5px] text-tx-muted">{report.totals.userCount} kullanıcı</span>} />
+            <div className="overflow-x-auto">
+              <table className={TABLE}>
+                <thead>
+                  <tr>
+                    <th scope="col" className={`${TH} px-4!`}>Kullanıcı</th>
+                    {METRICS.map(m => (
+                      <th
+                        key={m.key}
+                        scope="col"
+                        style={colStyle(m.key)}
+                        className={`${TH} text-right! ${m.key === metricKey ? 'font-bold! text-tx!' : ''}`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <span aria-hidden="true" className="h-2 w-2 rounded-[2px]" style={{ background: m.color }} />
+                          {m.label}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.rows.length === 0 && (
+                    <tr className="border-t border-ui-line">
+                      <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-tx-muted">Bu aralıkta kullanım yok.</td>
+                    </tr>
+                  )}
+                  {report.rows.map(r => (
+                    <tr key={r.userId} className={TR}>
+                      <td className={`${TD} px-4!`}>
+                        <div className="font-medium text-tx">{r.username ?? r.email}</div>
+                        {r.username && <div className="text-[12px] text-tx-muted">{r.email}</div>}
+                      </td>
+                      {METRICS.map(m => (
+                        <td key={m.key} style={colStyle(m.key)} className={`${TD} text-right text-tx-2 tabular-nums`}>
+                          {fmtNum(r[m.key])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+                {report.rows.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t border-ui-line bg-ui-hover font-bold text-tx">
+                      <th scope="row" className={`${TD} px-4! text-left`}>Toplam</th>
+                      {METRICS.map(m => (
+                        <td key={m.key} style={colStyle(m.key)} className={`${TD} text-right tabular-nums`}>
+                          {fmtNum(report.totals[m.key])}
+                        </td>
+                      ))}
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </Card>
+
+          <Card as="section" padding="none">
+            <button
+              type="button"
+              aria-expanded={showDaily}
+              aria-controls="usage-daily-table"
+              onClick={() => setShowDaily(v => !v)}
+              className="xc-focus flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3.5 text-left"
+            >
+              <span className="text-[15px] font-semibold text-tx">Günlük toplam (tablo)</span>
+              <ChevronDown size={16} aria-hidden="true" className={`text-tx-muted transition-transform ${showDaily ? 'rotate-180' : ''}`} />
+            </button>
+            {showDaily && (
+              <div id="usage-daily-table" className="max-h-80 overflow-y-auto border-t border-ui-line">
+                <table className={TABLE}>
+                  <thead className="sticky top-0 bg-ui-card">
+                    <tr>
+                      <th scope="col" className={`${TH} px-4!`}>Tarih</th>
+                      {METRICS.map(m => (
+                        <th key={m.key} scope="col" className={`${TH} text-right!`}>{m.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {daily.slice().reverse().map(p => (
+                      <tr key={p.date} className={TR}>
+                        <td className={`${TD} px-4! text-tx-2`}>
+                          {new Date(`${p.date.slice(0, 10)}T00:00:00Z`).toLocaleDateString('tr-TR', { timeZone: 'UTC' })}
+                        </td>
+                        {METRICS.map(m => (
+                          <td key={m.key} className={`${TD} text-right text-tx-2 tabular-nums`}>{fmtNum(p[m.key])}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </table>
-        )}
-      </div>
+          </Card>
+        </>
+      )}
 
-      {/* Günlük toplam (trend) */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 text-sm font-medium text-gray-700">
-          Günlük Toplam
-        </div>
-        <div className="max-h-80 overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200 text-left text-xs uppercase text-gray-500 tracking-wide sticky top-0">
-              <tr>
-                <th className="px-4 py-2.5 font-medium">Tarih</th>
-                <th className="px-4 py-2.5 font-medium text-right">Token</th>
-                <th className="px-4 py-2.5 font-medium text-right">AI Sorusu</th>
-                <th className="px-4 py-2.5 font-medium text-right">Kaydetme</th>
-                <th className="px-4 py-2.5 font-medium text-right">İndirme</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {daily && daily.points.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">Veri yok.</td></tr>
-              )}
-              {daily?.points.slice().reverse().map(p => (
-                <tr key={p.date} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 text-gray-700">{new Date(p.date).toLocaleDateString('tr-TR')}</td>
-                  <td className="px-4 py-2 text-right tabular-nums font-mono text-violet-700">{num(p.tokensUsed)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-gray-600">{num(p.aiRequests)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-gray-600">{num(p.saveCount)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-gray-600">{num(p.downloadCount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <p className="text-xs text-gray-400">
+      <p className="m-0 text-[12px] text-tx-muted">
         Token yaklaşıktır (üretilen karakter ÷ 4). "İndirme" sunucu indirme uçlarına (UserActivities), "Üretim İnd."
-        ise Pro günlük kotasına sayılan grid-canvas üretim indirmelerine karşılık gelir. Tarihler UTC.
+        ise Pro günlük kotasına sayılan Tasarım Alanı üretim indirmelerine karşılık gelir. Tarihler UTC.
       </p>
-    </div>
+    </AdminPage>
   )
 }

@@ -1,169 +1,119 @@
-import { useRef, useEffect, useState } from 'react'
-import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ZoomIn, ZoomOut } from 'lucide-react'
+import ScaledPreviewFrame from './ScaledPreviewFrame'
+import { PREVIEW_BASE_WIDTH, fitScale } from './previewFrame'
 
 interface Props {
   html: string
   onElementClick?: (text: string, opts?: { exact?: boolean }) => void
+  /**
+   * true: varsayılan ölçek "genişliğe sığdır" (sayfa panel daralıp genişledikçe ölçeklenir);
+   * yakınlaştırma düğmeleri sabit bir yüzdeye geçer, orta düğme yeniden sığdırır.
+   */
+  fitToWidth?: boolean
 }
-
-const CLICK_SCRIPT = `
-<script>
-document.addEventListener('click', function(e) {
-  e.preventDefault();
-  var el = e.target;
-  // Görsel tıklaması: base64 src'den ayırt edici bir parça çıkar
-  var img = el;
-  while (img && img !== document.body) {
-    if (img.tagName === 'IMG') {
-      var src = img.getAttribute('src') || '';
-      var idx = src.indexOf('base64,');
-      if (idx !== -1) {
-        var b64 = src.substring(idx + 7).replace(/\\s/g, '');
-        // İlk ~48 karakter çoğu formatta ortak başlık olduğundan atla,
-        // sonraki ~80 karakteri ayırt edici imza olarak kullan
-        var start = b64.length > 128 ? 48 : 0;
-        var fragment = b64.substr(start, 80);
-        if (fragment) {
-          window.parent.postMessage({ type: 'xslt-preview-click', text: fragment, exact: true }, '*');
-          return;
-        }
-      }
-    }
-    img = img.parentElement;
-  }
-  // Metin tıklaması
-  while (el && el !== document.body) {
-    var text = el.textContent ? el.textContent.trim().substring(0, 120) : '';
-    if (text) {
-      window.parent.postMessage({ type: 'xslt-preview-click', text: text }, '*');
-      return;
-    }
-    el = el.parentElement;
-  }
-});
-</script>
-`
 
 const ZOOM_LEVELS = [0.5, 0.6, 0.75, 1.0, 1.25, 1.5, 2.0]
 const DEFAULT_ZOOM_IDX = 3 // 1.0
-const IFRAME_BASE_WIDTH = 860
-// Generous buffer covering ~100 A4 pages at 96dpi
-const IFRAME_BASE_HEIGHT = 4000
+/** Sığdırma modunda sayfanın iki yanındaki boşluk (px, toplam). */
+const FIT_GUTTER = 32
+/** Sığdırma modunda kâğıt en az A4 oranında görünür (210×297). */
+const A4_MIN_HEIGHT = Math.round(PREVIEW_BASE_WIDTH * 297 / 210)
 
-export default function XsltEditorPreview({ html, onElementClick }: Props) {
-  const iframeRef = useRef<HTMLIFrameElement>(null)
-  const [zoomIdx, setZoomIdx] = useState(DEFAULT_ZOOM_IDX)
-  const zoom = ZOOM_LEVELS[zoomIdx]
+const zoomBtn =
+  'xc-focus h-7 w-7 flex items-center justify-center rounded-md text-tx-muted hover:bg-ui-hover hover:text-tx disabled:opacity-35 disabled:hover:bg-transparent transition-colors'
 
-  const injectedHtml = html
-    ? html.replace('</body>', CLICK_SCRIPT + '</body>')
-    : '<html><body style="background:#1f2937;margin:0"></body></html>'
+/** Canlı önizleme alanı: ölçekli A4 sayfa (zemin her zaman beyaz) + sağ altta yüzen yakınlaştırma. */
+export default function XsltEditorPreview({ html, onElementClick, fitToWidth = false }: Props) {
+  // null → sığdır (yalnız fitToWidth'te); sayı → ZOOM_LEVELS indeksi.
+  const [zoomIdx, setZoomIdx] = useState<number | null>(fitToWidth ? null : DEFAULT_ZOOM_IDX)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [areaWidth, setAreaWidth] = useState(0)
 
   useEffect(() => {
-    if (!onElementClick) return
-    function handler(e: MessageEvent) {
-      if (e.origin !== window.location.origin) return
-      if (e.data?.type === 'xslt-preview-click' && e.data.text) {
-        onElementClick!(e.data.text, { exact: !!e.data.exact })
-      }
-    }
-    window.addEventListener('message', handler)
-    return () => window.removeEventListener('message', handler)
-  }, [onElementClick])
+    if (!fitToWidth) return
+    const el = scrollRef.current
+    if (!el) return
+    // 2 px altı değişimler yok sayılır: alt piksel yuvarlamaları ölçeği ileri geri oynatmasın.
+    const ro = new ResizeObserver(() => setAreaWidth(w => (Math.abs(w - el.clientWidth) < 2 ? w : el.clientWidth)))
+    ro.observe(el)
+    setAreaWidth(el.clientWidth)
+    return () => ro.disconnect()
+  }, [fitToWidth])
 
-  const canZoomIn  = zoomIdx < ZOOM_LEVELS.length - 1
-  const canZoomOut = zoomIdx > 0
-  const isDefault  = zoomIdx === DEFAULT_ZOOM_IDX
+  const fit = areaWidth > 0 ? fitScale(areaWidth - FIT_GUTTER) : 1
+  const zoom = zoomIdx === null ? fit : ZOOM_LEVELS[zoomIdx]
+
+  // Sığdırma modundan çıkarken mevcut ölçeğe en yakın kademeden devam edilir.
+  const lowerIdx = (() => {
+    for (let i = ZOOM_LEVELS.length - 1; i >= 0; i--) if (ZOOM_LEVELS[i] < zoom - 0.001) return i
+    return -1
+  })()
+  const higherIdx = ZOOM_LEVELS.findIndex(z => z > zoom + 0.001)
+
+  const isFit = zoomIdx === null
+  const isDefault = fitToWidth ? isFit : zoomIdx === DEFAULT_ZOOM_IDX
+  const pct = Math.round(zoom * 100)
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header with zoom controls */}
-      <div className="px-3 py-1.5 bg-gray-800 border-b border-gray-700 flex-shrink-0 flex items-center justify-between">
-        <span className="text-xs text-gray-400 font-mono uppercase tracking-wide">Önizleme</span>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setZoomIdx(i => Math.max(0, i - 1))}
-            disabled={!canZoomOut}
-            className="h-6 w-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-700 hover:text-gray-200 disabled:opacity-30 transition-colors"
-            title="Uzaklaştır"
-          >
-            <ZoomOut size={13} />
-          </button>
-
-          <button
-            onClick={() => setZoomIdx(DEFAULT_ZOOM_IDX)}
-            disabled={isDefault}
-            className="h-6 px-2 flex items-center justify-center rounded text-gray-400 hover:bg-gray-700 hover:text-gray-200 disabled:opacity-30 transition-colors text-[11px] font-mono min-w-[44px]"
-            title="Varsayılan büyüklüğe sıfırla (%100)"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-
-          <button
-            onClick={() => setZoomIdx(i => Math.min(ZOOM_LEVELS.length - 1, i + 1))}
-            disabled={!canZoomIn}
-            className="h-6 w-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-700 hover:text-gray-200 disabled:opacity-30 transition-colors"
-            title="Yakınlaştır"
-          >
-            <ZoomIn size={13} />
-          </button>
-
-          {!isDefault && (
-            <button
-              onClick={() => setZoomIdx(DEFAULT_ZOOM_IDX)}
-              className="h-6 w-6 flex items-center justify-center rounded text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"
-              title="Sıfırla"
-            >
-              <RotateCcw size={11} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Scrollable preview area.
-          `justify-content: safe center` centers the scaled page when it fits, but
-          falls back to start-alignment when it overflows — otherwise a centered
-          flex item that is wider than the container clips its left edge and the
-          horizontal scrollbar can't reach it. */}
+    <div className="relative h-full flex flex-col bg-ui-bg">
+      {/* `justify-content: safe center` sığınca ortalar, taşınca başa yaslar — aksi halde
+          kaplardan geniş ortalanmış öğenin sol kenarı kırpılır ve yatay kaydırma ulaşamaz. */}
       <div
-        className="flex-1 overflow-auto bg-gray-300 flex py-2"
-        style={{ justifyContent: 'safe center' }}
+        ref={scrollRef}
+        className={`flex-1 overflow-auto flex ${fitToWidth ? 'p-4 pb-14' : 'py-4'}`}
+        // Kaydırma çubuğu yeri sabit: çubuk görünüp kaybolunca genişlik → ölçek → yükseklik döngüsü (titreme) oluşmaz.
+        style={{ justifyContent: 'safe center', alignItems: 'flex-start', scrollbarGutter: 'stable' }}
       >
-        {/*
-          Wrapper reports scaled dimensions to layout engine.
-          iframe inside is full-size, scaled via transform.
-          overflow:hidden clips any rendering outside the scaled bounds.
-        */}
-        <div
-          style={{
-            width: Math.round(IFRAME_BASE_WIDTH * zoom),
-            height: Math.round(IFRAME_BASE_HEIGHT * zoom),
-            overflow: 'hidden',
-            flexShrink: 0,
-          }}
-        >
-          <iframe
-            ref={iframeRef}
-            srcDoc={injectedHtml}
-            sandbox="allow-same-origin allow-scripts allow-modals"
-            style={{
-              width: IFRAME_BASE_WIDTH,
-              height: IFRAME_BASE_HEIGHT,
-              transform: `scale(${zoom})`,
-              transformOrigin: 'top left',
-              border: 'none',
-              display: 'block',
-              background: 'white',
-            }}
-            title="Canlı Önizleme"
+        <div className={fitToWidth ? 'flex-none shadow-[0_1px_2px_rgba(15,36,64,.08),0_8px_24px_rgba(15,36,64,.10)]' : 'contents'}>
+          <ScaledPreviewFrame
+            html={html}
+            scale={zoom}
+            onElementClick={onElementClick}
+            fitContentHeight={fitToWidth}
+            minContentHeight={fitToWidth ? A4_MIN_HEIGHT : 0}
           />
         </div>
       </div>
+
+      <div
+        role="group"
+        aria-label="Yakınlaştırma"
+        className="absolute bottom-3 right-5 flex items-center gap-0.5 rounded-lg border border-ui-line bg-ui-card p-0.5 shadow-[var(--ui-shadow-lift)]"
+      >
+        <button
+          type="button"
+          onClick={() => lowerIdx >= 0 && setZoomIdx(lowerIdx)}
+          disabled={lowerIdx < 0}
+          className={zoomBtn}
+          title="Uzaklaştır"
+          aria-label="Uzaklaştır"
+        >
+          <ZoomOut size={14} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoomIdx(fitToWidth ? null : DEFAULT_ZOOM_IDX)}
+          disabled={isDefault}
+          className="xc-focus h-7 min-w-[48px] px-1.5 rounded-md font-mono text-[11px] text-tx-2 hover:bg-ui-hover disabled:hover:bg-transparent transition-colors"
+          title={fitToWidth ? 'Genişliğe sığdır' : 'Varsayılan büyüklüğe sıfırla (%100)'}
+          aria-label={fitToWidth
+            ? `Yakınlaştırma %${pct}${isFit ? ' (sığdırılmış)' : ' — genişliğe sığdır'}`
+            : `Yakınlaştırma %${pct} — sıfırla`}
+        >
+          {pct}%
+        </button>
+        <button
+          type="button"
+          onClick={() => higherIdx >= 0 && setZoomIdx(higherIdx)}
+          disabled={higherIdx < 0}
+          className={zoomBtn}
+          title="Yakınlaştır"
+          aria-label="Yakınlaştır"
+        >
+          <ZoomIn size={14} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   )
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function printPreview(iframeEl: HTMLIFrameElement | null) {
-  iframeEl?.contentWindow?.print()
 }

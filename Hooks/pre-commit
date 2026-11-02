@@ -111,10 +111,11 @@ done <<< "$STAGED"
 
 # ────────────────────────────────────────────────────────────
 # 3. XSLT DOSYASI KONTROLÜ
-# .xslt dosyaları storage/'a yazılır, repoya eklenmez.
+# .xslt dosyaları storage/'a yazılır, repoya eklenmez. İstisna: test projelerinin
+# Fixtures/ klasörleri — tema şablonu değil test verisi (görselleri küçültülmüş örnekler).
 # ────────────────────────────────────────────────────────────
 echo -e "${CYAN}[3/6] XSLT dosya kontrolü...${NC}"
-XSLT_STAGED=$(echo "$STAGED" | grep -E "\.xslt$" || true)
+XSLT_STAGED=$(echo "$STAGED" | grep -E "\.xslt$" | grep -vE "^backend/[^/]+\.Tests/(.+/)?Fixtures/[^/]+\.xslt$" || true)
 if [[ -n "$XSLT_STAGED" ]]; then
   echo -e "  ${FAIL} HATA: .xslt dosyaları repoya eklenmez (PRD §17 — storage stratejisi):"
   echo "$XSLT_STAGED" | sed 's/^/       /'

@@ -1,18 +1,29 @@
-import { useEffect, useState, useCallback, Fragment } from 'react'
-import { Link } from 'react-router-dom'
-import { Sparkles, Search, Globe, Trash2, ThumbsUp, ThumbsDown, Check, AlertCircle } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { Check, ChevronDown, Globe, Loader2, Search, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
 import {
   getAdminAiFeedback,
   setAiFeedbackGlobal,
   deleteAiFeedback,
   type AdminAiFeedbackItem,
 } from '../../services/aiAssistantService'
+import PageHeader from '../../components/ui/PageHeader'
+import { fnStyle } from '../../theme/uiThemes'
+import { AdminPage, Banner, BTN_DANGER_SOFT, BTN_SECONDARY, INPUT, Pill } from '../../components/admin/adminUi'
 
 type RatingFilter = 'positive' | 'negative' | 'all'
 
 /** Görselli soru işareti (backend AiFeedbackMarkers.ImageAttached) — bu kayıtlar global yapılamaz. */
 const IMAGE_MARKER = '[ekran görüntüsü ekli]'
 const hasImage = (item: AdminAiFeedbackItem) => item.userMessage.includes(IMAGE_MARKER)
+
+const GLOBAL_ON =
+  'xc-focus inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-ui-soft-line bg-ui-soft px-3 text-[12.5px] font-semibold text-ui-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+
+const TABS: { key: RatingFilter; label: string }[] = [
+  { key: 'positive', label: 'İşe yaradı' },
+  { key: 'negative', label: 'İşe yaramadı' },
+  { key: 'all', label: 'Tümü' },
+]
 
 export default function AdminAiFeedbackPage() {
   const [items, setItems] = useState<AdminAiFeedbackItem[]>([])
@@ -70,165 +81,142 @@ export default function AdminAiFeedbackPage() {
     }
   }
 
-  const TABS: { key: RatingFilter; label: string }[] = [
-    { key: 'positive', label: 'İşe yaradı' },
-    { key: 'negative', label: 'İşe yaramadı' },
-    { key: 'all', label: 'Tümü' },
-  ]
-
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10">
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-            <Sparkles size={22} className="text-violet-600" />
-            AI Geri Bildirim Havuzu
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Kaliteli pozitif örnekleri <strong>global havuza</strong> terfi edin — global örnekler
+    <AdminPage>
+      <PageHeader
+        title="AI Geri Bildirim Havuzu"
+        description={
+          <>
+            Kaliteli pozitif örnekleri <strong className="font-semibold text-tx-2">global havuza</strong> terfi edin — global örnekler
             tüm kullanıcıların prompt'una few-shot olarak eklenir.
-          </p>
+          </>
+        }
+      />
+
+      <Banner tone="orange">
+        Global yapmadan önce içeriği kontrol edin: soru/cevap metni kişisel veri veya gerçek fatura bilgisi içermemeli.
+        Global örnekler diğer kullanıcıların modeline gönderilir.
+      </Banner>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="relative min-w-[220px] flex-[0_1_320px]">
+          <span className="sr-only">Soru metninde ara</span>
+          <Search size={15} aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-tx-subtle" />
+          <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Soru metninde ara…" className={`${INPUT} pl-9!`} />
+        </label>
+        <div role="group" aria-label="Değerlendirme filtresi" className="flex flex-wrap gap-2">
+          {TABS.map(t => {
+            const on = rating === t.key
+            return (
+              <button
+                key={t.key}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setRating(t.key)}
+                className={`xc-focus h-[34px] rounded-full border px-3.5 text-[12.5px] font-medium transition-colors ${
+                  on ? 'border-ui-soft-line bg-ui-soft text-ui-ink' : 'border-ui-line bg-ui-card text-tx-2 hover:bg-ui-hover'
+                }`}
+              >
+                {t.label}
+              </button>
+            )
+          })}
         </div>
-        <Link
-          to="/admin/themes"
-          className="text-sm text-gray-600 hover:text-gray-900 border border-gray-300 px-3 py-1.5 rounded-lg transition"
-        >
-          ← Admin Paneli
-        </Link>
+        <span className="ml-auto text-[12.5px] text-tx-muted" aria-live="polite">{total} kayıt</span>
       </div>
 
-      {/* Gizlilik uyarısı */}
-      <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 my-4">
-        <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-        <span>
-          Global yapmadan önce içeriği kontrol edin: soru/cevap metni kişisel veri veya gerçek
-          fatura bilgisi içermemeli. Global örnekler diğer kullanıcıların modeline gönderilir.
-        </span>
-      </div>
-
-      {/* Filtre + arama */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
-          {TABS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setRating(t.key)}
-              className={`px-3 py-1.5 text-sm rounded-md transition ${
-                rating === t.key ? 'bg-white shadow-sm text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      {error && <Banner>{error}</Banner>}
+      {loading && (
+        <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-tx-muted">
+          <Loader2 size={15} className="animate-spin" aria-hidden="true" /> Yükleniyor…
         </div>
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Soru metninde ara…"
-            className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-          />
-        </div>
-        <span className="text-xs text-gray-400">{total} kayıt</span>
-      </div>
-
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-      {loading && <p className="text-sm text-gray-500">Yükleniyor…</p>}
+      )}
       {!loading && items.length === 0 && !error && (
-        <p className="text-sm text-gray-400">Kayıt yok.</p>
+        <p className="m-0 py-10 text-center text-[13px] text-tx-muted">Kayıt yok.</p>
       )}
 
       {!loading && items.length > 0 && (
-        <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 w-10" />
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Soru</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 w-40">Kullanıcı</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 w-24">Uygulandı</th>
-                <th className="px-4 py-3 w-44" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {items.map(item => (
-                <Fragment key={item.id}>
-                  <tr className="hover:bg-gray-50 align-top">
-                    <td className="px-4 py-3">
-                      {item.rating === 'Positive'
-                        ? <ThumbsUp size={14} className="text-emerald-600" />
-                        : <ThumbsDown size={14} className="text-rose-600" />}
-                    </td>
-                    <td className="px-4 py-3">
+        <div className="flex flex-col gap-2.5">
+          {items.map(item => {
+            const open = expanded === item.id
+            const positive = item.rating === 'Positive'
+            const VoteIcon = positive ? ThumbsUp : ThumbsDown
+            const globalBlocked = !item.isGlobal && hasImage(item)
+            const panelId = `fb-${item.id}`
+            return (
+              <article
+                key={item.id}
+                className={`rounded-xl border bg-ui-card shadow-[var(--ui-shadow-rest)] transition-[border-color,box-shadow] hover:shadow-[var(--ui-shadow-lift)] ${
+                  open ? 'border-ui-soft-line' : 'border-ui-line hover:border-ui-soft-line'
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    aria-controls={panelId}
+                    onClick={() => setExpanded(open ? null : item.id)}
+                    title="Detayı aç/kapat"
+                    className="xc-focus flex min-w-0 flex-[1_1_320px] items-center gap-3 rounded-lg text-left"
+                  >
+                    <span
+                      style={fnStyle(positive ? 'green' : 'red')}
+                      className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-(--fn-tint) text-(--fn-ink)"
+                    >
+                      <VoteIcon size={17} strokeWidth={1.8} role="img" aria-label={positive ? 'İşe yaradı' : 'İşe yaramadı'} />
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate text-[13.5px] font-semibold text-tx">{item.userMessage}</span>
+                      <span className="text-[12px] text-tx-muted">{item.username || item.email}</span>
+                    </span>
+                    <ChevronDown
+                      size={15}
+                      aria-hidden="true"
+                      className={`flex-none text-tx-subtle transition-transform ${open ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {item.applied && <Pill tone="green"><Check size={11} aria-hidden="true" />Uygulandı</Pill>}
+                    {item.isGlobal && <Pill tone="blue"><Globe size={11} aria-hidden="true" />Global</Pill>}
+                    {positive && (
                       <button
-                        onClick={() => setExpanded(expanded === item.id ? null : item.id)}
-                        className="text-left text-gray-800 hover:text-violet-700 truncate max-w-[380px] block"
-                        title="Detayı aç/kapat"
+                        type="button"
+                        aria-pressed={item.isGlobal}
+                        onClick={() => toggleGlobal(item)}
+                        disabled={busyId === item.id || globalBlocked}
+                        title={globalBlocked
+                          ? 'Ekran görüntülü sorular global yapılamaz: cevap görseldeki kullanıcıya özel verileri içerebilir.'
+                          : undefined}
+                        className={item.isGlobal ? GLOBAL_ON : BTN_SECONDARY}
                       >
-                        {item.userMessage}
+                        <Globe size={13} aria-hidden="true" />
+                        {item.isGlobal ? 'Global (kaldır)' : 'Global yap'}
                       </button>
-                      {item.isGlobal && (
-                        <span className="inline-flex items-center gap-1 mt-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
-                          <Globe size={10} /> Global
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {item.username || item.email}
-                    </td>
-                    <td className="px-4 py-3">
-                      {item.applied
-                        ? <Check size={14} className="text-emerald-600" />
-                        : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2 justify-end">
-                        {item.rating === 'Positive' && (
-                          <button
-                            onClick={() => toggleGlobal(item)}
-                            disabled={busyId === item.id || (!item.isGlobal && hasImage(item))}
-                            title={!item.isGlobal && hasImage(item)
-                              ? 'Ekran görüntülü sorular global yapılamaz: cevap görseldeki kullanıcıya özel verileri içerebilir.'
-                              : undefined}
-                            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition disabled:opacity-40 ${
-                              item.isGlobal
-                                ? 'text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
-                                : 'text-gray-700 border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            <Globe size={12} />
-                            {item.isGlobal ? 'Global (kaldır)' : 'Global yap'}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => remove(item.id)}
-                          disabled={busyId === item.id}
-                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-700 border border-red-200 hover:bg-red-50 rounded-lg transition disabled:opacity-40"
-                        >
-                          <Trash2 size={12} />
-                          Sil
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  {expanded === item.id && (
-                    <tr className="bg-gray-50/60">
-                      <td />
-                      <td colSpan={4} className="px-4 py-3">
-                        <div className="text-xs text-gray-500 mb-1 font-medium">Cevap:</div>
-                        <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words bg-white border border-gray-200 rounded-lg p-3 max-h-64 overflow-auto">
-                          {item.assistantAnswer}
-                        </pre>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => remove(item.id)}
+                      disabled={busyId === item.id}
+                      className={BTN_DANGER_SOFT}
+                    >
+                      <Trash2 size={13} aria-hidden="true" />
+                      Sil
+                    </button>
+                  </div>
+                </div>
+                {open && (
+                  <div id={panelId} className="flex flex-col gap-1.5 px-4 pb-4 sm:pl-[62px]">
+                    <span className="text-[12.5px] font-semibold text-tx-2">Cevap:</span>
+                    <pre className="m-0 max-h-64 overflow-auto rounded-lg border border-ed-border bg-ed-bg p-3 font-mono text-[11.5px] leading-[1.6] break-words whitespace-pre-wrap text-ed-text">
+                      {item.assistantAnswer}
+                    </pre>
+                  </div>
+                )}
+              </article>
+            )
+          })}
         </div>
       )}
-    </div>
+    </AdminPage>
   )
 }

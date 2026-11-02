@@ -37,13 +37,17 @@ public class UblTrBusinessRuleService : IUblTrBusinessRuleService
         XDocument doc;
         try
         {
-            doc = XDocument.Parse(xmlContent, LoadOptions.SetLineInfo);
+            // XDocument.Parse DTD'yi işler (iç entity açılımı) — güvenli okuyucu: DTD yasak, resolver yok (G4).
+            var settings = Xslt.SecureXslt.ReaderSettings();
+            settings.IgnoreWhitespace = true; // XDocument.Parse(LoadOptions.None) davranışı
+            using var reader = XmlReader.Create(new StringReader(xmlContent), settings);
+            doc = XDocument.Load(reader, LoadOptions.SetLineInfo);
         }
         catch (XmlException ex)
         {
             results.Add(new BusinessRuleResult(
                 "UBL-XML", "XML Ayrıştırma", BusinessRuleSeverity.Error,
-                $"XML ayrıştırılamadı: {ex.Message}", ex.LineNumber, ex.LinePosition));
+                "XML ayrıştırılamadı: iyi biçimli değil ya da DOCTYPE/DTD içeriyor.", ex.LineNumber, ex.LinePosition));
             return results;
         }
 

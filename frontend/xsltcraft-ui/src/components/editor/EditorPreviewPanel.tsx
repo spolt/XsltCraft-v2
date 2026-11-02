@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore'
 import { useXmlStore } from '../../store/xmlStore'
 import { previewFromBlockTree, previewFromStoredXslt } from '../../services/previewService'
+import { toXsltError } from '../../services/xsltErrors'
+import { LoaderCircle, Maximize2, Minimize2, Printer } from 'lucide-react'
 
 const DEBOUNCE_MS = 1500
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000'
@@ -45,11 +47,7 @@ export default function EditorPreviewPanel() {
         setHtml(patched)
         setLastMs(result.generationTimeMs)
       } catch (e: unknown) {
-        const msg =
-          e && typeof e === 'object' && 'response' in e
-            ? (e as { response?: { data?: { error?: string } } }).response?.data?.error ?? 'Önizleme alınamadı.'
-            : 'Önizleme alınamadı.'
-        setError(msg)
+        setError(toXsltError(e).message)
       } finally {
         setLoading(false)
       }
@@ -59,65 +57,72 @@ export default function EditorPreviewPanel() {
   }, [blocks, activeXml?.content, useStoredXslt, documentType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex flex-col border-l border-gray-200 bg-white" style={{ width: expanded ? 860 : 420, flexShrink: 0 }}>
+    <section
+      aria-label="Canlı önizleme"
+      className="flex flex-col border-l border-ui-line bg-ui-card"
+      style={{ width: expanded ? 860 : 420, flexShrink: 0 }}
+    >
       {/* Header */}
-      <div className="h-9 flex items-center gap-2 px-3 border-b border-gray-100 flex-shrink-0">
-        <span className="text-xs font-medium text-gray-500 flex-1">Canlı Önizleme</span>
-        {loading && (
-          <span className="text-xs text-blue-500 flex items-center gap-1">
-            <span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            Yükleniyor
-          </span>
-        )}
-        {!loading && lastMs !== null && (
-          <span className="text-xs text-gray-400">{lastMs} ms</span>
-        )}
-        {!activeXml && (
-          <span className="text-xs text-amber-500">XML yüklenmedi</span>
-        )}
+      <div className="flex h-11 flex-none items-center gap-2 border-b border-ui-line px-3">
+        <span className="flex-1 text-[13px] font-semibold text-tx">Canlı Önizleme</span>
+        <span aria-live="polite" className="flex items-center">
+          {loading && (
+            <span className="flex items-center gap-1 text-[12px] text-ui-ink">
+              <LoaderCircle size={13} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
+              Yükleniyor
+            </span>
+          )}
+          {!loading && lastMs !== null && <span className="text-[12px] tabular-nums text-tx-subtle">{lastMs} ms</span>}
+        </span>
+        {!activeXml && <span className="text-[12px] text-fn-orange-ink">XML yüklenmedi</span>}
         <button
-          onClick={() => setExpanded(v => !v)}
-          className="px-2 py-0.5 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 flex-shrink-0"
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? 'Önizlemeyi daralt' : 'Önizlemeyi genişlet'}
+          aria-pressed={expanded}
           title={expanded ? 'Daralt' : 'Genişlet'}
+          className="xc-focus flex h-7 w-7 flex-none items-center justify-center rounded-md border border-field-line text-tx-muted hover:bg-ui-hover hover:text-tx"
         >
-          {expanded ? '⊟' : '⊞'}
+          {expanded ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
         </button>
         <button
+          type="button"
           onClick={() => iframeRef.current?.contentWindow?.print()}
           disabled={!html}
-          className="px-2 py-0.5 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+          aria-label="Yazdır / PDF olarak kaydet"
           title="Yazdır / PDF olarak kaydet"
+          className="xc-focus flex h-7 w-7 flex-none items-center justify-center rounded-md border border-field-line text-tx-muted hover:bg-ui-hover hover:text-tx disabled:cursor-not-allowed disabled:opacity-40"
         >
-          🖨
+          <Printer size={14} aria-hidden="true" />
         </button>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="px-3 py-2 text-xs text-red-600 bg-red-50 border-b border-red-100 flex-shrink-0">
+        <div role="alert" className="flex-none border-b border-fn-red-line bg-fn-red-tint px-3 py-2 text-[12px] text-fn-red-ink">
           {error}
         </div>
       )}
 
-      {/* Preview iframe — srcdoc is the reliable way to inject HTML in React */}
+      {/* Preview iframe — srcdoc is the reliable way to inject HTML in React; zemin her zaman beyaz */}
       {activeXml ? (
-        <div className="flex-1 overflow-auto bg-gray-300">
+        <div className="flex-1 overflow-auto bg-ui-bg">
           <iframe
             ref={iframeRef}
-            srcDoc={html || '<html><body style="background:#d1d5db;margin:0"></body></html>'}
+            srcDoc={html || '<html><body style="background:white;margin:0"></body></html>'}
             sandbox="allow-same-origin allow-scripts allow-modals"
-            className="w-full border-none"
+            className="w-full border-none bg-white"
             style={{ height: 'max(100%, 1200px)' }}
             title="Canlı Önizleme"
           />
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-xs text-gray-400 text-center px-4">
-            Önizleme için toolbar'dan bir XML dosyası yükleyin.
+        <div className="flex flex-1 items-center justify-center">
+          <p className="px-4 text-center text-[12px] text-tx-subtle">
+            Önizleme için sol paneldeki XML Ağacı sekmesinden bir XML dosyası yükleyin.
           </p>
         </div>
       )}
-    </div>
+    </section>
   )
 }

@@ -1,6 +1,7 @@
 import api from './apiService'
 import type { GridBlock } from '../types/blocks'
 import type { DocumentType } from '../types/template'
+import type { XsltErrorKind } from './xsltErrors'
 
 export interface PreviewTimings {
   parseMs: number
@@ -9,10 +10,29 @@ export interface PreviewTimings {
   serializeMs: number
 }
 
+/** Sunucudaki XSLT motoru (2.0.0): 1.0 → DotNet, 2.0 → Saxon. */
+export type XsltEngineName = 'DotNet' | 'Saxon'
+
 export interface PreviewResponse {
   html: string
   generationTimeMs: number
-  timings?: PreviewTimings
+  timings?: PreviewTimings | null
+  engine?: XsltEngineName | null
+  cacheHit?: boolean
+}
+
+/**
+ * Önizleme/doğrulama hata gövdesi (2.0.0): 400 içerik hatası, 429 kullanıcı meşgul / hız sınırı,
+ * 503 motor meşgul/yok (Retry-After), 500 sunucu hatası. `error/line/column` alanları değişmez.
+ */
+export interface PreviewErrorBody {
+  error?: string
+  line?: number
+  column?: number
+  kind?: XsltErrorKind
+  /** Backend hata kodu (ör. `WorkerDisabled`, sandbox kodları); 500'de yok. */
+  code?: string | null
+  engine?: XsltEngineName | null
 }
 
 export async function previewFromBlockTree(
@@ -48,13 +68,6 @@ export interface BankInfoItem {
 
 export type Alignment = 'left' | 'center' | 'right'
 
-export interface ImageSettings {
-  url: string
-  width?: number
-  height?: number
-  alignment: Alignment
-}
-
 /** Geliştirici mod: theme'in ham XSLT içeriğini döndür */
 export async function fetchThemeXslt(templateId: string): Promise<string> {
   const { data } = await api.get<string>(
@@ -65,26 +78,8 @@ export async function fetchThemeXslt(templateId: string): Promise<string> {
 }
 
 /** Geliştirici mod: ham XSLT + XML ile anlık önizleme */
-export async function previewFromRawXslt(
-  xslt: string,
-  xmlContent: string,
-  logo?: ImageSettings,
-  signature?: ImageSettings,
-  bankInfo?: BankInfoItem[],
-): Promise<PreviewResponse> {
-  const { data } = await api.post<PreviewResponse>('/api/preview/raw', {
-    xslt,
-    xmlContent,
-    logoUrl: logo?.url,
-    logoWidth: logo?.width,
-    logoHeight: logo?.height,
-    logoAlignment: logo?.alignment,
-    signatureUrl: signature?.url,
-    signatureWidth: signature?.width,
-    signatureHeight: signature?.height,
-    signatureAlignment: signature?.alignment,
-    bankInfo: bankInfo ?? [],
-  })
+export async function previewFromRawXslt(xslt: string, xmlContent: string): Promise<PreviewResponse> {
+  const { data } = await api.post<PreviewResponse>('/api/preview/raw', { xslt, xmlContent })
   return data
 }
 
@@ -100,25 +95,11 @@ export async function previewFromUserTemplate(
   return data
 }
 
-/** Storage'daki XSLT dosyasıyla (free theme klonu vb.) önizleme */
-export async function previewFromStoredXslt(
-  templateId: string,
-  xmlContent: string,
-  logo?: ImageSettings,
-  signature?: ImageSettings,
-  bankInfo?: BankInfoItem[],
-): Promise<PreviewResponse> {
-  const { data } = await api.post<PreviewResponse>(`/api/preview/theme/${templateId}`, {
-    xmlContent,
-    logoUrl: logo?.url,
-    logoWidth: logo?.width,
-    logoHeight: logo?.height,
-    logoAlignment: logo?.alignment,
-    signatureUrl: signature?.url,
-    signatureWidth: signature?.width,
-    signatureHeight: signature?.height,
-    signatureAlignment: signature?.alignment,
-    bankInfo: bankInfo ?? [],
-  })
+/**
+ * Storage'daki XSLT dosyasıyla (free theme klonu vb.) önizleme. Kullanıcı logo/imza/IBAN eklenmiş önizleme
+ * için `themeComposeService.composeTheme`.
+ */
+export async function previewFromStoredXslt(templateId: string, xmlContent: string): Promise<PreviewResponse> {
+  const { data } = await api.post<PreviewResponse>(`/api/preview/theme/${templateId}`, { xmlContent })
   return data
 }

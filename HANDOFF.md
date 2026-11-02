@@ -277,8 +277,8 @@ mkdir -p storage/themes storage/assets
 **CORS hatası (frontend → API):**
 `appsettings.Development.json`'da `AllowedOrigins` içinde `http://localhost:5173` olduğundan emin ol.
 
-**Saxon XSLT (Free theme render):**
-`XsltTemplateRenderer.RenderAsync` free theme render'ı için Saxon HE kullanır. Paket `XsltCraft.Infrastructure.csproj`'ta kayıtlı, `dotnet restore` ile gelir.
+**Saxon XSLT (2.0.0):**
+Saxon-HE 12.10 `XsltCraft.Xslt.Saxon` projesinde (`IKVM.Maven.Sdk` + Maven Central, kilitli restore + SHA-256). İlk `dotnet restore`/build Maven'dan jar indirip IKVM ile dönüştürür (~2 dk, sonra önbellekte). Ham 2.0 XSLT önizlemesi izole worker'da çalışır: Api build'i worker'ı `bin/.../xsltworker/` altına kopyalar; worker kapalıysa (`XsltWorker:Enabled=false`) 2.0 önizleme 503 döner. `/api/render` (eski Saxon 10.9 free-theme render) 2.0.0'da kaldırıldı. Ayrıntı: ADR 007/008.
 
 ---
 

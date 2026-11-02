@@ -7,6 +7,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> 2.0.0 major sürümü hazırlanıyor (XSLT 2.0 motoru + UI/UX yeniden tasarım). `[2.0.0]` başlığı GA'da açılacak; o zamana kadar tüm değişiklikler burada birikir.
+
+### BREAKING
+- **Kaldırılan uçlar**: `POST /api/render/{templateId}` ve `POST /api/document/{layout}` (ikisi de zaten çalışmıyordu). Önizleme/indirme için `/api/preview/*` ve kullanıcı şablonu uçları kullanılır.
+- **Önizleme uçları oturum istiyor**: `/api/preview`, `/api/preview/raw` ve `/api/preview/validate-xslt` artık `[Authorize]`; oturumsuz istek 401 alır. Güncelleme öncesinden açık kalan sekmeler sayfayı yenilemeli.
+- **Yeni hata sözleşmesi**: hata gövdesi `{ error, line, column, kind, code, engine }`; HTTP kodları 400 (içerik hatası), 429 (meşgul / hız sınırı), 503 (motor meşgul ya da kullanılamıyor, `Retry-After` ile), 500. `validate-xslt` operasyonel hatalarda önceden 200 + `valid:false` dönerken artık 4xx/5xx döner.
+- **XSLT tavanı 2.0**: XSLT 3.0 ve XPath 3.x yapıları önizlemede/doğrulamada `Unsupported` ile reddedilir.
+- **Grid bağlamaları sınırlı**: grid bloklarının XPath'leri iki motorda da aynı sonucu veren XPath 1.0 alt kümesiyle ve maliyet kurallarıyla (`XPathPortability`: derinlik, yüklemde yukarı eksen + `//`, birleşim sayısı vb.) sınırlı. Kuralı geçemeyen blok tüm şablonu düşürmez; yerinde yer tutucuyla gösterilir ve yanıtın `warnings` alanında listelenir.
+- **Boyut sınırları**: Raw XSLT 5 MB, XML 5 MB; `validate-xslt` 1 MB.
+- **Docker / işletme**: backend publish RID'i `linux-x64`; imaj Saxon/IKVM worker'ı ile ~626 MB. Prod compose sertleştirildi (`cap_drop`, `pids_limit: 512`, `mem_limit: 5g`). **İşletme notu:** `update.sh` VPS'teki eski compose yedeğini geri yüklediği için compose değişiklikleri VPS'e **elle** işlenmelidir; aksi halde sertleştirme ve bellek sınırı devreye girmez. Aynı nedenle (`update.sh` `appsettings.Production.json` yedeğini de geri yükler) VPS'teki `appsettings.Production.json`'a `"Security": { "NonDumpable": true }` elle eklenmelidir; yoksa Api süreç belleği koruması (`PR_SET_DUMPABLE=0`) kapalı kalır.
+
+### Security
+- Hesap silme akışında depolama temizliği düzeltildi.
+- XSLT işleme hattında güvenlik sertleştirmesi. `POST /api/preview/compose` için girdi sınırları ve eşzamanlılık sınırı eklendi (`Xslt:ThemeCompose:MaxConcurrent`; dolunca 429).
+
+### Fixed
+- **Admin: derlenemeyen ya da render edilemeyen tema yüklenebiliyordu.** Örneğin XSLT 2.0 fonksiyonu (`exists()`) kullanan bir tema "Başarısız" analizle kaydediliyor, kullanıcıya önizlenemeyen bir tema olarak sunuluyordu. Artık yüklenen tema (yeni ya da güncelleme) önce örnek fatura/irsaliye ile derlenip render ediliyor; başarısızsa yükleme 422 ile reddediliyor, mesajda hata ve — XSLT 2.0 fonksiyonu kullanıldıysa — önizleme motorunun XSLT 1.0 olduğu belirtiliyor. Kontrol, görsel/blok kararları sorulmadan önce yapılır. Daha önce bu şekilde kaydedilmiş temalar etkilenmez; admin silebilir.
+
+### Added
+- **Geliştirici Modu yeniden tasarımı**: XSLT Editör'ün araç çubuğu, önizleme paneli ve durum çubuğu; solda Tema Kullan benzeri Düzenle paneli (logo, imza, banka, sabit notlar, belge, snippet, ayarlar); örnek XML ile açılış; Şablonlarıma kaydet (sonraki kayıtlar aynı şablonu günceller); çıkış koruması; AI Asistan sekmesi; "Alanları göster" ile sürükle-bırak yerleşim. Tema Kullan ↔ Geliştirici Modu geçişlerinde varlıklar ve elle yapılan XSLT değişiklikleri, iki ekrandan çıkılana kadar bellek içi taslakta (`themeDraftStore`) korunur; Tema Kullan'ın önizleme, indirme ve kaydı bu değişiklikleri kullanır.
+- **Tema Kullan — sabit notlar**: hazır temanın Notlar kutusuna "Notların üstü" (XML `cbc:Note` satırlarının hemen öncesi) ve "Notların altı" (kutunun sonu) için birer serbest metin notu eklenebiliyor; kalın / italik / altı çizili, yazı boyutu, renk, yazı tipi ve hizalama ayarlı, çok satırlı (≤500 karakter, ≤10 satır). Önizleme, indirilen XSLT ve kaydedilen şablon aynı birleştirme yolundan geçer; XSLT 1.0 ve 2.0 temalarda çalışır. Notlar alanı bulunamayan temalarda bölüm pasiftir (`notes-not-found`). Güvenlik: metin yalnız text node (kaçışlı, AVT/XPath değil), stil yalnız sunucu beyaz listesinden (`FixedNoteStyles`), sunucu doğrulaması (görünmez biçim karakterleri dahil), son adımda `XsltSafety.FindThreat`; çıktıya yorum yazılmaz.
+- **XSLT Editör — tam ekran modu + yüzen mini önizleme**: araç çubuğunun sağ ucundaki büyüt butonu (ya da `Ctrl+Shift+F`) editörü tüm çalışma alanına yayar; kenar çubuğu gizlenir, sağ panel örtülür. Tasarımın canlı önizlemesi kodun üzerinde yüzen küçük bir pencerede (varsayılan 360×480, sağ üst) görünmeye devam eder: tutamaktan sürüklenir, sol-alt köşeden boyutlandırılır, çift tıkla varsayılana döner; önizleme pencere genişliğine sığdırılır ve tıkla→satıra git çalışır. Sağ paneldeki **Önizleme** sekmesine bitişik buton tek tıkla "tam ekran + mini pencere" açar. Açık/kapalı durumu, konum ve boyut `localStorage`'da kalıcıdır.
+  - Moda girip çıkmak Monaco'yu remount etmez (geri-al geçmişi, imleç, kaydırma korunur); sağ panelin durumu (AI sohbeti, seçili sekme) korunur — ana önizleme hariç: çıkışta yeniden yüklenir, zoom/kaydırma sıfırlanır. Kısayol yalnız editör ekrandayken ve üzerinde diyalog yokken etkindir. "AI'ya sor" ve "XML satırına git" akışları moddan otomatik çıkar.
+  - **Kod incelemesi sonrası düzeltmeler** (özellik yayımlanmadan önce; yayımlanmış bir sürümü etkilemedi):
+    - `Ctrl+Shift+F` Kaydet / Kısayollar / Snippet / AI refactor diyaloğu açıkken de modu değiştiriyor ve odağı arkadaki Monaco'ya çekiyordu (sonraki tuşlar diyaloğun arkasında XSLT'yi düzenleyebiliyordu); yükleme ekranında da görünür etki olmadan modu çeviriyor ve olayı yutuyordu. Dinleyici artık yalnız editör ekrandayken ve üzerinde diyalog yokken kuruluyor (`useEditorMaximize({ shortcutEnabled })`).
+    - Kısayollar diyaloğu (`ShortcutsDialog`) Dev Mode ile ortak olduğundan orada çalışmayan "Tam ekran editör" satırını gösteriyordu; satır artık yalnız XSLT Editör'de listeleniyor (`showMaximize`).
+    - Varsayılan konumda Monaco bul kutusu (`Ctrl+F`, sağ üst) mini pencerenin tutamağını ve kapat/geri al butonlarını örtüyordu; varsayılan üst boşluk 8 → 44 px.
+    - Sürükleme/boyutlandırma sırasında pencere alana sığmaz olup DOM'dan düşerse bırakma olayı kaçıyor, pencere geri geldiğinde gövdesi tıklanamaz kalıyor ve imleçle zıplıyordu; bitiş artık `lostpointercapture` ile de yakalanıyor, tuş basılı değilken gelen hareket sürüklemeyi sonlandırıyor.
+    - Boş önizlemede (ör. derleme hatalı şablon) mini pencere ~1700 px'lik koyu bir kaydırma alanı gösteriyordu; artık "Henüz önizleme yok" yer tutucusu var ve 0 ölçülen içerik en küçük yüksekliğe düşüyor.
+    - Mini pencere tercihi sayfa her açıldığında `localStorage`'a yeniden yazılıyor, başka sekmenin kaydını ezebiliyordu; artık yalnız kullanıcı değiştirdiğinde yazılıyor.
+    - Erişilebilirlik: pencere kapatılınca / sağ panele geri alınınca odak `body`'ye düşmek yerine editöre dönüyor; yükleniyor ve hata göstergelerine `role="status"` + `aria-label` eklendi.
+
+- **Hazır temalarda logo/imza konumu**: admin bir tema yüklediğinde sistem XSLT'yi analiz eder; zorunlu alanları (satıcı, GİB logosu, karekod, alıcı, fatura/irsaliye bilgileri, ETTN, kalemler, toplamlar, notlar) bulur ve bunlara göre logo/imza konulabilecek konumları çıkarır (ör. "Satıcı bilgilerinin üstü", "GİB logosunun altı", "Karekodun altı", "Alıcı bilgilerinin yanı", "Fatura bilgilerinin üstü", "Toplamların solu", "Notların altı/yanı"). Konumlar temaya boş, stilsiz işaretler (`data-xc-slot`) olarak yazılır; temada zaten `#company_logo`/`#imza` gibi bir alan varsa yeni işaret eklenmez, o alan benimsenir. İşaretli tema örnek fatura/irsaliye ile render edilerek doğrulanır: işaretler çıkarıldığında çıktı birebir aynı olmalı ve her konum tam bir kez görünmeli; QR, ETTN ve kök etiket bayt bayt korunur.
+  - **Tema Kullan**: "Düzenle" açıkken konumlar önizlemede kesikli mavi kutular olarak görünür; logo/imza panelden ya da önizlemedeki görselin kendisinden sürüklenip bir kutuya bırakılır. Aynı seçim "Konum" listesinden de yapılabilir; boyut ve hizalama korunur (hizalama seçili konum içinde uygulanır). Hiçbir şey seçilmezse görünüm bugünküyle aynıdır (varsayılan konumlar eski alanlardır). Aynı konuma iki görsel alt alta yerleşir.
+  - **Geliştirici Modu**: aynı "Konum" listesi (sürükle-bırak yok).
+  - **Admin**: yüklemede temada önceden gömülü bir görsel bloğu (`DEV-MODE-OVERRIDES`) varsa sorulur — **Kaldır** ya da **Temanın parçası olarak koru** (görseller temaya statik olarak gömülür, o alanlar kullanıcıya konum olarak sunulmaz; tanınmayan blok yalnız kaldırılabilir). Yükleme sonrası ve tema satırındaki **Konumlar** düğmesiyle analiz raporu: bulunan zorunlu alanlar, sunulan konumlar, uyarılar ve konumların işaretlendiği önizleme.
+  - **Temadaki gömülü görseller**: analiz temaya statik olarak gömülmüş görselleri de (ör. başlıktaki firma logosu, alıcı bilgilerinin yanındaki kaşe) bulur ve her biri için konumuna göre rol önerir (başlıkta → firma logosu; alıcı satırında ya da alt bölümde → imza/kaşe; çok büyük ya da yeri belirsiz → tasarımın parçası). `alt`/`id` dikkate alınmaz — gerçek temalarda kaşede `alt="company_logo"`, logoda `alt="E-fatura Logo"` sık görülür. GİB logosu, barkod/karekod hedefleri, korunan eski blok görselleri ve tekrarlanan bölümdeki görseller hariçtir. Yüklemede admin'e küçük resimleriyle sorulur (Firma logosu / İmza-kaşe / Tasarımın parçası, öneri seçili gelir). Logo/imza seçilen görselin **kendisi** konum olur ("Temadaki logonun yeri", "Temadaki imza / kaşenin yeri") ve o türün varsayılan konumudur: kullanıcı kendi görselini eklediğinde temadakinin yerini aynı kutuda alır (kutu boyutu korunur, görsel oranı bozulmadan sığar; boyut girilirse o uygulanır). Kullanıcı görselini başka bir konuma taşırsa temadaki görsel gizlenir ama yeri korunur — tasarım kaymaz; düzenlerken soluk görünür, geri sürüklenebilir. Görsel eklenmezse tema olduğu gibi görünür. Aynı rolde birden fazla görsel (ör. A5'te iki kopya sayfa) tek konumdur, hepsi birlikte değişir.
+    - Admin her görsel için **"Temadaki görsel"** seçer: **Görünsün**, **Görünsün, kullanıcı kaldırabilsin** ya da **Temadan kaldır** (logo/imza için varsayılan; tasarım görselinde varsayılan Görünsün). "Temadan kaldır" görseli yüklemede temadan çıkarır, kimse görmez: logo/imzanın yalnız içeriği silinir (saydam 1×1 görsel), kutusu ve yeri kullanıcının görseli için konum olarak kalır — düzen kaymaz; tasarım görseli tamamen silinir. Kullanıcı kaldırabilsin seçilen görsel için Tema Kullan ve Geliştirici Modu'nda **"Temadaki görseli kaldır"** seçeneği çıkar: kullanıcı kendi görselini eklemeden temadakini kaldırabilir (yeri korunur; indirilen/kaydedilen şablona da yansır). İzin yalnız temada işaretlidir (`data-xc-removable`), betik izinsiz görseli gizlemez.
+  - Önceden yüklenmiş temalar yeniden analiz edilmez; bugünkü gibi eski alanlarla çalışır — konum seçimi için admin temayı yeniden yükler.
+  - **Kod/güvenlik incelemesi sonrası düzeltmeler** (özellik yayımlanmadan önce):
+    - Eski tutucu id'si bir `<img>`'de olan temada (`<img id="company_logo">`) analiz bozuluyordu: görsel "logo" seçilince aynı elemana iki konum işareti yazılıp tema derlenemiyor (konum yok, varsayılan "Temadan kaldır" ile tema logosu da siliniyordu), "tasarım" seçilince kullanıcının logosu img'in içine eklenip görünmüyordu. `<img>`, `<br>` gibi boş elemanlar artık tutucu sayılmıyor; aynı elemana ikinci işaret yazımı reddediliyor; "koru" kararı img'e içerik yazmıyor; analiz edilmemiş eski temada yedek alan bir img ise kullanıcının görseli onun yerini alıyor.
+    - Analiz başarısız olduğunda görsel kaldırma ya da önceki bloğu koruma kararı uygulanmış tema kaydedilebiliyordu (konumsuz ama logosu silinmiş ya da derlenemeyen tema). Artık bu durumda yükleme reddediliyor (422, analiz hatası ve ne yapılacağı mesajda); sunucunun değiştirdiği her tema kaydedilmeden önce yeniden taranıp derleniyor. Admin'in dosyası hiç değiştirilmediyse bugünkü gibi olduğu gibi kabul ediliyor.
+    - Kullanıcının logosu hiçbir yere yerleşemediğinde (ör. o faturada çıkmayan koşullu bir konum) temadaki logo yine de gizleniyor, faturada hiç logo kalmıyordu; artık gizlenmiyor.
+    - Compose isteğinde `null` liste elemanı ya da XML'de geçersiz karakter (banka adı/IBAN) 500 yerine 400 dönüyor; doğrulama `ThemeComposeRequestValidator`'a taşındı. Beyaz liste regex'leri satır sonu kaçağına kapalı (`$` → `\z`).
+    - Tema Kullan önizlemesi: istek iptal edilip yenisi başlamadan girdi değişirse "yükleniyor" göstergesi takılı kalabiliyordu; iptal edilen isteğin geç gelen yanıtı ekrana yazılabiliyordu.
+    - Tema Kullan önizlemesi iframe içeriği yenilenirken nadiren sayfanın tamamını boşaltıyordu (belge geçici olarak boşken düzenleme sınıfı atanıyordu).
+
+### Changed
+- Önizleme iframe'i tek bileşene (`ScaledPreviewFrame`) ve sandbox/başlık sabitleri tek dosyaya (`previewFrame.ts`) indirildi. Tıklama mesajı dinleyicisi artık `origin`'e ek olarak mesajın **kaynak çerçevesini** de doğruluyor.
+- XSLT Editör — Yazdır: açık önizleme yokken (XML/AI sekmesi ya da mini pencere kapalı) sessizce hiçbir şey yapmak yerine uyarı gösteriyor.
+- Kullanıcı logo/imza/IBAN bilgisini temaya ekleyen betik artık **tek kaynaktan** (sunucu, `POST /api/preview/compose`) üretiliyor: önizleme ile indirilen/kaydedilen XSLT aynı birleştirme kodundan geçer. Önceden önizleme (sunucu) ve indirme (istemci, iki sayfada kopya) ayrı kodlardı. Eski (v1) bloklu kayıtlı/indirilmiş şablonlar değişmeden çalışır; yeniden kaydedilince yeni biçime geçer.
+- Logo/imza görselleri yalnız **PNG/JPEG**, en fazla 500 KB (SVG kaldırıldı); sunucuda içerikten doğrulanır. Görseller şablonu 150 KB'den fazla büyütürse uyarı gösterilir.
+- `/api/preview/theme/{id}` ve `/api/preview/raw` artık logo/imza/IBAN parametresi almıyor (yalnız `xmlContent`). Tema Kullan, irsaliye temalarını örnek irsaliye XML'iyle önizler.
+- Ham önizleme boyut hatası mesajı gerçek sınırı gösteriyor (5 MB; önceden yanlışlıkla "512 KB").
+- **Migration**: `Templates.SlotCatalog` (jsonb, nullable) — `AddTemplateSlotCatalog`.
+- Admin tema yükleme 409 yanıtı tek kodda birleşti: `upload_decision_required` — `overrides` (önceden gömülü blok; yoksa `null`) + `images` (temadaki görseller ve önerilen rol). Karar `existingOverrides` ve yeni `existingImages` (`logo,signature,design`, yanıttaki sırayla; logo/imzaya `:removable`, her role `:strip` eklenebilir, ör. `logo:strip,signature:removable,design`) form alanlarıyla gönderilir; `POST /api/preview/compose` yeni `hideThemeImages` (`logo`/`signature`) alanını alır; görsel sayısı tutmayan karar yeniden sorulur.
+- GİB logosu tespitinde başlığı en yakın hücresinde taşıyan görsel önceliklidir (aynı büyük hücredeki firma logosu GİB logosu sanılmasın).
+
+### Security
+- **Önizlemede self-XSS kapatıldı**: tema önizlemesine logo/imza ekleyen sunucu betiği URL'yi tek tırnaklı bir JS dizesine ve `innerHTML`'e yalnız `\` ve `"` kaçışlayarak yazıyordu; özel hazırlanmış bir "görsel" önizleme iframe'inde (uygulama origin'i) betik çalıştırabiliyordu. Kod kaldırıldı; yeni betikte değerler JSON verisi olarak, beyaz listeden geçerek ve `<`, `>`, `&` içermeden gömülür, DOM'a yalnız özellik ataması ile yazılır.
+- **`GET /api/preview/theme/{id}/xslt-content`** yalnız yayınlanmış hazır temaları döndürüyor; önceden herhangi bir şablonun saklı XSLT'si oturumsuz okunabiliyordu. Ücretli tema kapısı ortak `IThemeAccessGuard`'a taşındı (compose da kullanıyor).
+- Compose ucu oturum ister, hız sınırlıdır (kullanıcı başına 60/dk) ve istek boyutu sınırlıdır.
+
+### Tests
+- `e2e/editor-maximize.spec.ts`: remount yok, tek-iframe değişmezi, sürükleme + kalıcılık, kısayol, sekme çubuğu butonu. İnceleme sonrası sabit piksel beklentileri ölçülen değerlerden türetilir hale getirildi; panel grubu kütüphanenin iç `data-group` özniteliği yerine kendi kimliğiyle (`xslt-editor-panels`) seçiliyor.
+- `Application.Tests/ThemeSlots` (55 test): beş gerçek tema fixture'ında (GİB e-Fatura/e-Arşiv/genel, e-İrsaliye, örnek tema; gömülü görseller 1×1 PNG ile temizlendi) beklenen konumlar ve varsayılanlar, render eşdeğerliği, QR/ETTN/kök etiket bütünlüğü, idempotentlik; eski blok koru/kaldır; birleştirici güvenliği (SVG, `</script>`, bozuk işaretler, banka kaçışı); yükleme akışı; kaynak konum haritası. `.gitignore`'a fixture istisnası eklendi.
+- `e2e/theme-compose.spec.ts`: gerçek tarayıcıda yuvaya yerleşim, eski alana düşme, banka kaçışı, SVG reddi, oturumsuz ret (`E2E_API_URL` ile API adresi değiştirilebilir); temadaki görselin yerinde değişmesi (kutu korunur), başka yere taşınınca gizlenmesi, görsel eklenmezse dokunulmaması, görselsiz kaldırmanın yalnız izinli görselde uygulanması.
+- `Application.Tests/ThemeSlots` inceleme düzeltmeleri (+16): img tutucu senaryoları, ikinci işaret reddi, başarısız analizde karar reddi ve son kapı, `ThemeComposeRequestValidatorTests`, satır sonlu data URL/konum kimliği. e2e: yerleşemeyen logo temadakini gizlemez, eski temada img yedek alanın yerine geçme.
+- `Application.Tests/ThemeSlots/ThemeImageSlotTests` (+14): firma temalarının yapısını taşıyan sentetik bir tema (`ThemeFixtures.CompanyImagesTheme`, müşteri verisi yok) ile logo + kaşe tespiti ve önerisi, GİB logosu/barkod hariç tutma, işaretlenen görsellerin varsayılan konum olması, render eşdeğerliği, idempotentlik, aynı rolün tek yuvası, döngüdeki/dinamik görsellerin atlanması, yükleme kararı akışı, birleştiricinin varsayılanı.
+
+### XSLT motoru
+
+Kararlar: [ADR 007](./docs/ecc/decisions/007-xslt-engine-routing.md) (motor yönlendirme), [ADR 008](./docs/ecc/decisions/008-xslt-worker-isolation.md) (worker izolasyonu).
+
+#### Added
+- **XSLT 2.0 önizleme ve doğrulama** (Saxon-HE 12.10, IKVM üzerinden): GİB `general.xslt` gibi `exists()` ve character-map kullanan temalar artık render ediliyor.
+- **İzole worker süreç havuzu**: kullanıcı XSLT'si API sürecinde değil, ayrı ve sınırlandırılmış worker süreçlerinde çalışır; çöken/donan worker API'yi etkilemez, havuz yeniden başlatır.
+- **Grid için motor paritesi**: grid şablonları .NET ve Saxon'da bayt-aynı HTML/QR üretir (testle bloke); grid önizlemesi şimdilik .NET motorunda çalışır.
+- **Kullanıcı başı eşzamanlılık kapısı ve kötüye kullanım kesicisi**: bir kullanıcı aynı anda tek izole render çalıştırır (doğrulama hariç); iptal edilemeyen kaçak işler kesiciye takılır.
+- **Hız sınırı kullanıcı bazlı** (önizleme/doğrulama uçları).
+- Yanıtlarda `engine` (çalışan motor), `cacheHit` ve `warnings` alanları.
+- **Tema hattında XSLT 2.0** (`Xslt:Engine:Theme`, varsayılan `Auto`): admin panelinden GİB `general.xslt` gibi 2.0 yapısı (`exists()` …) kullanan temalar yüklenebilir; yükleme, yuva analizi, compose ve galeri önizlemesi bu temaları Saxon'la izole worker'da çalıştırır. `version="2.0"` bildirip yalnız 1.0 kullanan temalar .NET'te kalır (çıktı bit-aynı); 3.0 temalar anlaşılır Türkçe mesajla reddedilir.
+
+#### Changed
+- Önizleme/doğrulama çağrıları kimlik doğrulamalı API istemcisinden yapılıyor; hatalar ortak adaptörle (`xsltErrors`) gösteriliyor, motor kullanılamadığında backend mesajı görünüyor.
+- Docker build: worker imaja dahil, NuGet/Maven cache mount; CI'da kilitli (`--locked-mode`) restore.
+
+#### Security
+- **XsltSafety yasakçı tarayıcı**: stylesheet çalıştırılmadan önce fail-closed taranır (tehlikeli fonksiyonlar, ad alanları, AVT/use-when hileleri).
+- **Saxon sandbox**: kaynak/ağ/ortam erişimi kapalı, collation izin listesi, stylesheet DTD reddi, statik ifade (`use-when`, `static`) reddi.
+- Önizlemede asset IDOR kapatıldı: yalnız erişilebilir görseller gömülür.
+- Tema önizleme ucu korumalı: yalnız yayınlanmış temalar, IP bazlı hız sınırı ve boyut sınırı.
+- Worker süreçlerinde `PR_SET_DUMPABLE` kapalı (bellek dökümü / ptrace engeli).
+- Tedarik zinciri: NuGet kilit dosyası + Maven jar'ları için SHA-256 doğrulaması.
+- nginx `index.html`'i `no-cache` ile sunuyor (yayın sonrası eski bundle kalmaz).
+- Rate limiter artık kimlik doğrulamadan **sonra** çalışıyor: kullanıcı bazlı limitler önceden fiilen IP bazlıydı, artık gerçekten kullanıcı bazlı (aynı IP'deki kullanıcılar birbirini kısıtlamıyor).
+
+#### Fixed
+- **`'exists()' is an unknown XSLT function`** — XSLT 2.0 temalar önizlenemiyordu (asıl sorun).
+- "XSLT ✓" göstergesi derlenemeyen stylesheet'te de yeşil yanıyordu.
+- `/api/render` .NET 10'da Saxon 10.9 yüzünden çalışmıyordu (uç artık kaldırıldı).
+- Klonlanan şablonu güncellemek/silmek kaynak temanın XSLT dosyasını siliyordu.
+- Hesaplanan KDV bloğunun varsayılan yolu belge düzeyine (`/n1:Invoice/cac:TaxTotal/cbc:TaxAmount`) sabitlendi.
+- Görseller her yerde base64 gömülü (indirme ve kullanıcı şablonu önizlemesi dahil); dış URL yedeği kaldırıldı.
+- Üretilen XSLT çıktısından açıklama yorumları kaldırıldı.
+- `format-number` öncesi motor-bağımsız ön-yuvarlama: iki motorda aynı tutar.
+- Docker imajı restore adımında kırılıyordu.
+
+#### Removed
+- Saxon-HE 10.9 bağımlılığı.
+- Dosya tabanlı şablon motoru ve `backend/XsltCraft/Templates/` klasörü.
+- Frontend Playground sayfası.
+
+### Arayüz yeniden tasarımı
+
+Plan: [UI 2.0 yeniden tasarımı](./docs/ecc/plans/ui-2-0-redesign.md). Yalnız görsel/yerleşim değişikliği — servis, store ve API davranışı aynı.
+
+#### Added
+- **3 arayüz teması**: Lacivert (varsayılan), Mor, Gece Mavisi (koyu; gece mavisi zemin, temaya yedirilmiş yumuşak camgöbeği vurgu — eski Beyaz–Turuncu temanın yerine, kayıtlı tercih otomatik taşınır). Ayarlar'dan seçilir, tarayıcıda kalıcıdır (`xsltcraft-ui-prefs`); ilk boyamada tema uygulanır (titreme yok). Eski renk tokenları yeni temaya köprülendiği için dokunulmayan diyaloglar da temayı alır.
+- **Yeni kabuk**: daraltılabilir sol menü (açılışta daraltılmış başlama tercihi), üst barda hızlı arama (`Ctrl+K` — sayfalar ve son çalışmalar), **Ayarlar** bölümü (arayüz rengi, menü tercihi), profil kartı ve Pro'ya geç çağrısı.
+- **Dashboard**: XSLT Editör kartı (seçilen dosya doğrudan editörde açılır), Şablonlarım kartı, kısayollar (yeni e-Fatura / e-İrsaliye şablonu, Tema Kütüphanesi, Taslaklarım) ve son çalışmalar tablosu (taslak + XSLT, kaynak etiketiyle).
+- **Tasarım Alanı** (eski grid editör): solda **Bloklar | XML Ağacı** sekmeleri (blok arama + gruplar, XML yükleme ve çoklu XML seçimi, XPath seçim bannerı), sağda seçili blok için **Veri | Konum** sekmeleri (konum mm cinsinden); kanvas araç çubuğu ve durum çubuğu (blok sayısı, seçili blok konumu/boyutu, 5 mm ızgara, kayıt durumu); başlıkta satır içi ad düzenleme, geri al/yinele, Önizle, Kaydet, XSLT İndir.
+- **XSLT Editör**: dört **düzen modu** (Editör + yan önizleme, Yarı yarıya, Mini pencere önizleme, Yalnız editör) ve Ayarlar'dan varsayılan düzen; **editör temaları** (Koyu, Açık, Yüksek kontrast), yazı boyutu (11–18) ve satır kaydırma; sol menüde belirgin XSLT/XML yükleme, Dosyalar ve Snippet Kütüphanesi sekmeleri ve **Ayarlar**; **UBL-TR kontrol** artık editör araç çubuğunda (hata rozetiyle); durum çubuğu (önizleme süresi, hata/uyarı sayısı, satır, düzen); AI Asistan önizlemenin yanında ayrı sütun.
+- **Tema Kullan**: çalışma alanı başlığı, Logo / İmza-Kaşe / Banka-IBAN akordeonları, "Kendi XML'ini yükle", tema bilgisi ve kontrol listesi.
+- **Admin — Kullanım Raporu grafiği**: 7/14/30 gün ve özel aralık; beş metrik kartı (önceki döneme göre değişim + mini grafik), metrik seçilebilir alan grafiği (önceki dönem kesikli, ortalama çizgisi, en yüksek gün, gün bazlı ipucu); harici grafik kütüphanesi yok (SVG).
+- **IBM Plex Sans / Mono** fontları uygulamayla birlikte paketlenir (dış font isteği yok).
+
+#### Changed
+- Tüm sayfalar (Tema Kütüphanesi, Taslaklarım, Şablonlarım, Profil, Planlar, Hakkında, UpgradeModal) yeni kart/başlık bileşenleri ve tema tokenlarıyla yeniden çizildi.
+- **Giriş/Kayıt yeniden tasarımı**: olgun cam (glassmorphism) kart, kurumsal gece mavisi palet ve derinlik; balon küreler yerine akışkan soyut 3B formlar (şerit, halka, damla). Sol üst XsltCraft logosu ve sol alt fatura görseli korundu (keskin, döndürmesiz, yumuşak maskeli). Form alanlarına `htmlFor`/aria bağları eklendi.
+- **Admin** sayfaları (Temalar, Snippet'ler, Kullanıcılar, AI, AI Geri Bildirim) yeni yönetim kabuğunda; Kullanıcılar'da istatistik kartları, filtreli tablo ve sağda detay paneli.
+- XSLT Editör'de **Problemler** paneli varsayılan kapalı; UBL-TR kontrolü ya da sayaç tıklanınca açılır.
+- Arayüz metinlerinde "grid canvas" yerine **Tasarım Alanı**.
+- Tasarım Alanı ve XSLT Editör'de avatar menüsündeki **Çıkış yap**, kaydedilmemiş değişiklik varken diğer gezinmelerle aynı onayı soruyor.
+
+#### Removed
+- **XPath konsolu** (XSLT Editör ve Geliştirici Modu); XPath otomatik tamamlama korunur.
+- Eski üst bar/kenar çubuğu, kullanılmayan bileşenler, görseller ve CSS (FlexLayout teması dahil); eski `sidebarCollapsed` tercihi.
+
 ## [1.11.2] - 2026-10-04
 
 ### Security

@@ -1,10 +1,24 @@
 <!doctype html>
-<html lang="en">
+<html lang="tr" data-ui-theme="lacivert" data-editor-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>XsltCraft</title>
+    <script>
+      // FOUC önleme: kayıtlı arayüz/editör temasını React yüklenmeden uygula (uiPrefsStore ile aynı anahtar).
+      (function () {
+        try {
+          var raw = localStorage.getItem('xsltcraft-ui-prefs');
+          if (!raw) return;
+          var s = (JSON.parse(raw) || {}).state || {};
+          var root = document.documentElement;
+          var ui = s.uiTheme === 'turuncu' ? 'gece' : s.uiTheme; // kaldırılan tema → gece (uiPrefsStore v2 göçü)
+          if (ui === 'lacivert' || ui === 'mor' || ui === 'gece') root.setAttribute('data-ui-theme', ui);
+          if (s.editorTheme === 'dark' || s.editorTheme === 'light' || s.editorTheme === 'contrast') root.setAttribute('data-editor-theme', s.editorTheme);
+        } catch (e) { /* yoksay */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

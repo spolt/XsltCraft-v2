@@ -1,0 +1,558 @@
+/* ==========================================================================
+   XsltCraft 2.0 — tema token katmanı (plan ui-2-0-redesign §2)
+
+   Çalışma anı tokenları:
+     --ui-*   arayüz rengi (lacivert | mor | gece) → <html data-ui-theme>
+              gece koyu ağırlıklıdır: metin (--ui-tx*), alan çizgisi ve işlev
+              renkleri (--ui-fn-*) de temaya göre değişir → --color-tx*, --color-fn-*.
+     --ed-*   editör paleti (dark | light | contrast)  → <html data-editor-theme>
+   Sabitler (@theme): --color-metric-1..5, --font-sans, --font-mono.
+   .xc-paper: fatura/A4 sayfası (zemin her zaman beyaz) — açık metin/işlev
+     renklerini alt ağaçta geri yükler.
+
+   Tailwind sınıfları (ui- öneki zorunlu; hover/line/card varyantlarıyla çakışmasın):
+     bg-ui-card, bg-ui-bg, bg-ui-side, bg-ui-soft, bg-ui-accent, text-ui-accent-fg, text-ui-ink,
+     border-ui-line, hover:bg-ui-hover, bg-ui-bar, text-ui-bar-fg …
+     text-tx, text-tx-2, text-tx-muted, text-tx-subtle, border-field-line
+     bg-fn-purple, bg-fn-purple-tint, text-fn-purple-ink, border-fn-purple-line,
+     text-on-fn (dolu işlev rengi zemini üstündeki metin)
+     bg-ed-bg, bg-ed-panel, border-ed-border, bg-ed-seg, text-ed-text,
+     text-ed-muted, text-ed-warn, bg-ed-active
+   ========================================================================== */
+
+/* ---------- Arayüz temaları ---------- */
+:root,
+[data-ui-theme="lacivert"] {
+  --ui-bar: #0F2440;
+  --ui-bar-fg: #FFFFFF;
+  --ui-bar-muted: #A9B8CE;
+  --ui-bar-border: #0F2440;
+  --ui-bar-line: #2C4467;
+  --ui-search: #1A3354;
+  --ui-btn-line: #3A5375;
+  --ui-chip: #1E3A5F;
+  --ui-chip-fg: #C9D4E5;
+  --ui-avatar: #2C4467;
+  --ui-avatar-fg: #FFFFFF;
+  --ui-accent: #1D5FD1;
+  --ui-accent-fg: #FFFFFF;
+  --ui-soft: #E3ECFB;
+  --ui-soft-line: #B8CBEA;
+  --ui-ink: #17428F;
+  --ui-bg: #E9EDF3;
+  --ui-side: #F5F7FA;
+  --ui-card: #FAFBFD;
+  --ui-line: #DCE2EB;
+  --ui-hover: #E6ECF4;
+  --ui-grid: rgba(29, 95, 209, 0.08);
+  --ui-panel: #0F2440;
+  --ui-panel-fg: #FFFFFF;
+  --ui-panel-muted: #A9B8CE;
+  --ui-panel-line: #2C4467;
+  --ui-icon-fg: #8DB4F5;
+  --ui-panel-link: #B8CBEA;
+}
+
+[data-ui-theme="mor"] {
+  --ui-bar: #241645;
+  --ui-bar-fg: #FFFFFF;
+  --ui-bar-muted: #B9AED6;
+  --ui-bar-border: #241645;
+  --ui-bar-line: #3D2D67;
+  --ui-search: #33235C;
+  --ui-btn-line: #4A3A78;
+  --ui-chip: #34245E;
+  --ui-chip-fg: #D7CDEF;
+  --ui-avatar: #3D2D67;
+  --ui-avatar-fg: #FFFFFF;
+  --ui-accent: #6D3FD8;
+  --ui-accent-fg: #FFFFFF;
+  --ui-soft: #ECE4FC;
+  --ui-soft-line: #D4C6F6;
+  --ui-ink: #4F2BA8;
+  --ui-bg: #ECE9F3;
+  --ui-side: #F7F5FA;
+  --ui-card: #FBFAFD;
+  --ui-line: #E0DBEA;
+  --ui-hover: #EBE6F4;
+  --ui-grid: rgba(109, 63, 216, 0.08);
+  --ui-panel: #241645;
+  --ui-panel-fg: #FFFFFF;
+  --ui-panel-muted: #B9AED6;
+  --ui-panel-line: #3D2D67;
+  --ui-icon-fg: #B8A0F2;
+  --ui-panel-link: #D4C6F6;
+}
+
+/* Açık temalar (lacivert, mor) + kâğıt (.xc-paper): metin ve işlev renkleri.
+   .xc-paper fatura/A4 sayfasıdır; koyu temada da beyaz zemin + açık tema renkleri. */
+:root,
+[data-ui-theme="lacivert"],
+[data-ui-theme="mor"],
+.xc-paper {
+  color-scheme: light;
+  /* İşlev renkleri (C nesnesi): renk / tint (zemin) / ink (metin) / line (kenar) */
+  --ui-fn-blue: #2563EB;
+  --ui-fn-blue-tint: #E8EFFE;
+  --ui-fn-blue-ink: #1D4ED8;
+  --ui-fn-blue-line: #9DBBF7;
+  --ui-fn-orange: #D97706;
+  --ui-fn-orange-tint: #FDF0DC;
+  --ui-fn-orange-ink: #9A5B00;
+  --ui-fn-orange-line: #F2C77E;
+  --ui-fn-green: #16A34A;
+  --ui-fn-green-tint: #E3F6EA;
+  --ui-fn-green-ink: #15803D;
+  --ui-fn-green-line: #93D7AC;
+  --ui-fn-gray: #64748B;
+  --ui-fn-gray-tint: #ECEFF4;
+  --ui-fn-gray-ink: #475569;
+  --ui-fn-gray-line: #B9C3D1;
+  --ui-fn-purple: #9333EA;
+  --ui-fn-purple-tint: #F2E8FE;
+  --ui-fn-purple-ink: #7E22CE;
+  --ui-fn-purple-line: #CFA9F5;
+  --ui-fn-violet: #7C3AED;
+  --ui-fn-violet-tint: #ECE6FE;
+  --ui-fn-violet-ink: #6D28D9;
+  --ui-fn-violet-line: #C3B0F7;
+  --ui-fn-slate: #334155;
+  --ui-fn-slate-tint: #E7EBF0;
+  --ui-fn-slate-ink: #334155;
+  --ui-fn-slate-line: #AEB8C6;
+  /* Semantik hata/tehlike (C nesnesinde yok; hata durumları için) */
+  --ui-fn-red: #DC2626;
+  --ui-fn-red-tint: #FDECEC;
+  --ui-fn-red-ink: #B91C1C;
+  --ui-fn-red-line: #F5B5B5;
+
+  /* Metin */
+  --ui-tx: #1B2433;
+  --ui-tx-2: #2E3B50;
+  --ui-tx-muted: #46566E;
+  --ui-tx-subtle: #5B6B82;
+  --ui-field-line: #D9E0EA;
+  --ui-on-fn: #FFFFFF;
+}
+
+/* Tema seçici örnekleri (sabit; ThemeSwatches kullanır) + ortak gölgeler. */
+:root {
+  --ui-swatch-lacivert: #0F2440;
+  --ui-swatch-mor: #6D3FD8;
+  --ui-swatch-gece: linear-gradient(135deg, #101D35 55%, #4CB8CF 55%);
+
+  --ui-shadow-rest: 0 1px 2px rgba(15, 36, 64, 0.05);
+  --ui-shadow-lift: 0 2px 4px rgba(15, 36, 64, 0.06), 0 14px 30px rgba(15, 36, 64, 0.14);
+  --ui-shadow-pop: 0 12px 32px rgba(15, 36, 64, 0.18);
+
+  /* Dashboard çalışma paneli: sabit nötr antrasit (arayüz/editör temasından bağımsız). */
+  --ui-workspace: #2B2F36;
+  --ui-workspace-raised: #343941;
+  --ui-workspace-line: #3E444D;
+  --ui-workspace-fg: #ECEEF2;
+  --ui-workspace-muted: #A8B0BC;
+  --ui-workspace-warn: #F2B54A;
+}
+
+/* Gece Mavisi — koyu ağırlıklı. Kimlik Midnight #101D35, editör yüzeyi #263449.
+   Vurgu: #22D3EE'nin desatüre/koyulaştırılmış hali (#4CB8CF) — koyu zeminde
+   okunur (≈7.5:1) ama sırıtmaz; yalnız vurgu/çizgi/küçük alanlarda kullanılır.
+   Vurgu açık olduğundan üstündeki metin koyu (--ui-accent-fg). */
+[data-ui-theme="gece"] {
+  color-scheme: dark;
+  --ui-bar: #0B1529;
+  --ui-bar-fg: #E8EEF7;
+  --ui-bar-muted: #9AABC4;
+  --ui-bar-border: #1C2B47;
+  --ui-bar-line: #22355A;
+  --ui-search: #15233D;
+  --ui-btn-line: #2E4369;
+  --ui-chip: #1A2B48;
+  --ui-chip-fg: #C6D3E7;
+  --ui-avatar: #263449;
+  --ui-avatar-fg: #E8EEF7;
+  --ui-accent: #4CB8CF;
+  --ui-accent-fg: #0B1529;
+  --ui-soft: #173149;
+  --ui-soft-line: #2D5873;
+  --ui-ink: #86D0E0;
+  --ui-bg: #101D35;
+  --ui-side: #132240;
+  --ui-card: #172844;
+  --ui-line: #263A5B;
+  --ui-hover: #1D3152;
+  --ui-grid: rgba(76, 184, 207, 0.07);
+  --ui-panel: #101D35;
+  --ui-panel-fg: #FFFFFF;
+  --ui-panel-muted: #A3B3CC;
+  --ui-panel-line: #263449;
+  --ui-icon-fg: #86D0E0;
+  --ui-panel-link: #86D0E0;
+
+  --ui-shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --ui-shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.3), 0 14px 30px rgba(0, 0, 0, 0.45);
+  --ui-shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55);
+
+  /* Dashboard çalışma paneli: lacivert-antrasit, kartlardan bir ton koyu. */
+  --ui-workspace: #0D182D;
+  --ui-workspace-raised: #263449;
+  --ui-workspace-line: #33445F;
+  --ui-workspace-fg: #E8EEF7;
+  --ui-workspace-muted: #A3B1C6;
+  --ui-workspace-warn: #F2B54A;
+
+  /* Metin + alan çizgisi */
+  --ui-tx: #E6ECF5;
+  --ui-tx-2: #CDD7E5;
+  --ui-tx-muted: #A9B6CA;
+  --ui-tx-subtle: #8E9DB4;
+  --ui-field-line: #33496D;
+  --ui-on-fn: #0B1529;
+
+  /* İşlev renkleri: açık renk / koyu-saydam tint / açık ink / yarı saydam çizgi */
+  --ui-fn-blue: #6AA8F7;
+  --ui-fn-blue-tint: rgba(106, 168, 247, 0.15);
+  --ui-fn-blue-ink: #A5CAFB;
+  --ui-fn-blue-line: rgba(106, 168, 247, 0.45);
+  --ui-fn-orange: #F0A63A;
+  --ui-fn-orange-tint: rgba(240, 166, 58, 0.15);
+  --ui-fn-orange-ink: #F7CB86;
+  --ui-fn-orange-line: rgba(240, 166, 58, 0.45);
+  --ui-fn-green: #4CCB82;
+  --ui-fn-green-tint: rgba(76, 203, 130, 0.14);
+  --ui-fn-green-ink: #8FE0B0;
+  --ui-fn-green-line: rgba(76, 203, 130, 0.42);
+  --ui-fn-gray: #98A6BB;
+  --ui-fn-gray-tint: rgba(152, 166, 187, 0.14);
+  --ui-fn-gray-ink: #C3CDDB;
+  --ui-fn-gray-line: rgba(152, 166, 187, 0.42);
+  --ui-fn-purple: #C08CF5;
+  --ui-fn-purple-tint: rgba(192, 140, 245, 0.15);
+  --ui-fn-purple-ink: #DAB9FA;
+  --ui-fn-purple-line: rgba(192, 140, 245, 0.45);
+  --ui-fn-violet: #A993F7;
+  --ui-fn-violet-tint: rgba(169, 147, 247, 0.15);
+  --ui-fn-violet-ink: #CBBDFB;
+  --ui-fn-violet-line: rgba(169, 147, 247, 0.45);
+  --ui-fn-slate: #A9B6C9;
+  --ui-fn-slate-tint: rgba(169, 182, 201, 0.13);
+  --ui-fn-slate-ink: #CBD4E1;
+  --ui-fn-slate-line: rgba(169, 182, 201, 0.4);
+  --ui-fn-red: #F27C7C;
+  --ui-fn-red-tint: rgba(242, 124, 124, 0.15);
+  --ui-fn-red-ink: #F8AFAF;
+  --ui-fn-red-line: rgba(242, 124, 124, 0.45);
+}
+
+/* ---------- Giriş / Kayıt (AuthLayout) ----------
+   Üç temada da koyu, katmanlı zemin: deep (kenar) → bg (gövde) → lift (kartın
+   arkasındaki ışık havuzu). form-* akışkan 3B formların ışık (hi) / gövde (mid) /
+   gölge (deep) tonları — vurgunun düşük doygunluklu türevleri. */
+:root,
+[data-ui-theme="lacivert"] {
+  --ui-auth-bg-deep: #06122A;
+  --ui-auth-bg: #0B1D3A;
+  --ui-auth-bg-lift: #173662;
+  --ui-auth-form-hi: #A6C1EC;
+  --ui-auth-form-mid: #3A68B5;
+  --ui-auth-form-deep: #0F274B;
+  --ui-auth-glow: rgba(29, 95, 209, 0.38);
+  --ui-auth-muted: #B3C1D6;
+  --ui-auth-subtle: #93A3BC;
+}
+
+[data-ui-theme="mor"] {
+  --ui-auth-bg-deep: #100824;
+  --ui-auth-bg: #1C1240;
+  --ui-auth-bg-lift: #33225E;
+  --ui-auth-form-hi: #C9B8EF;
+  --ui-auth-form-mid: #6C4FBE;
+  --ui-auth-form-deep: #27184F;
+  --ui-auth-glow: rgba(109, 63, 216, 0.36);
+  --ui-auth-muted: #C2B8DD;
+  --ui-auth-subtle: #A79CC8;
+}
+
+[data-ui-theme="gece"] {
+  --ui-auth-bg-deep: #050C19;
+  --ui-auth-bg: #0C1930;
+  --ui-auth-bg-lift: #15304D;
+  --ui-auth-form-hi: #A4DBE6;
+  --ui-auth-form-mid: #3B8AA0;
+  --ui-auth-form-deep: #0E283F;
+  --ui-auth-glow: rgba(76, 184, 207, 0.26);
+  --ui-auth-muted: #AEBDD2;
+  --ui-auth-subtle: #93A4BD;
+}
+
+/* Türetilmiş auth tokenları (tema bağımsız formül) + marka logosu sabitleri. */
+:root,
+[data-ui-theme] {
+  --ui-auth-fg: #F4F7FC;
+  --ui-auth-glass: color-mix(in srgb, var(--ui-auth-bg) 62%, transparent);
+  --ui-auth-glass-solid: color-mix(in srgb, var(--ui-auth-bg) 94%, #FFFFFF);
+  --ui-auth-glass-sheen: rgba(255, 255, 255, 0.07);
+  --ui-auth-glass-line: rgba(255, 255, 255, 0.10);
+  --ui-auth-glass-hi: rgba(255, 255, 255, 0.30);
+  --ui-auth-field: color-mix(in srgb, var(--ui-auth-bg-deep) 74%, transparent);
+  --ui-auth-field-solid: color-mix(in srgb, var(--ui-auth-bg-deep) 80%, var(--ui-auth-bg));
+  --ui-auth-field-line: rgba(255, 255, 255, 0.14);
+  --ui-auth-field-line-hover: rgba(255, 255, 255, 0.24);
+  --ui-auth-focus: var(--ui-icon-fg);
+  --ui-auth-error-bg: rgba(220, 38, 38, 0.16);
+  --ui-auth-error-line: #F27C7C;
+  --ui-auth-error-fg: #FFC2C2;
+  --ui-auth-shadow: 0 30px 60px -18px rgba(2, 6, 18, 0.6), 0 12px 28px -14px rgba(2, 6, 18, 0.5);
+
+  --ui-auth-logo-a: #38BDF8;
+  --ui-auth-logo-b: #0C8FF5;
+  --ui-auth-logo-c: #0A63DD;
+  --ui-auth-logo-glow: rgba(12, 143, 245, 0.42);
+}
+
+/* ---------- Editör paleti (varsayılan koyu) ---------- */
+:root,
+[data-editor-theme="dark"] {
+  --ed-bg: #1B1E27;
+  --ed-panel: #222632;
+  --ed-border: #2E3342;
+  --ed-seg-bg: #181B23;
+  --ed-text: #D5DAE5;
+  --ed-muted: #8F98AC;
+  --ed-warn: #F5A524;
+  --ed-active-bg: #353B4D;
+}
+
+[data-editor-theme="light"] {
+  --ed-bg: #FFFFFF;
+  --ed-panel: #F7F9FB;
+  --ed-border: #D9E0EA;
+  --ed-seg-bg: #E9EDF3;
+  --ed-text: #1B2433;
+  --ed-muted: #5B6B82;
+  --ed-warn: #B45309;
+  --ed-active-bg: #FFFFFF;
+}
+
+[data-editor-theme="contrast"] {
+  --ed-bg: #000000;
+  --ed-panel: #0B0B0B;
+  --ed-border: #6B7280;
+  --ed-seg-bg: #1A1A1A;
+  --ed-text: #FFFFFF;
+  --ed-muted: #C9CED8;
+  --ed-warn: #FFB020;
+  --ed-active-bg: #3A3A3A;
+}
+
+/* ---------- Tailwind eşlemesi ---------- */
+@theme inline {
+  --color-ui-bar: var(--ui-bar);
+  --color-ui-bar-fg: var(--ui-bar-fg);
+  --color-ui-bar-muted: var(--ui-bar-muted);
+  --color-ui-bar-border: var(--ui-bar-border);
+  --color-ui-bar-line: var(--ui-bar-line);
+  --color-ui-search: var(--ui-search);
+  --color-ui-btn-line: var(--ui-btn-line);
+  --color-ui-chip: var(--ui-chip);
+  --color-ui-chip-fg: var(--ui-chip-fg);
+  --color-ui-avatar: var(--ui-avatar);
+  --color-ui-avatar-fg: var(--ui-avatar-fg);
+  --color-ui-accent: var(--ui-accent);
+  --color-ui-accent-fg: var(--ui-accent-fg);
+  --color-ui-soft: var(--ui-soft);
+  --color-ui-soft-line: var(--ui-soft-line);
+  --color-ui-ink: var(--ui-ink);
+  --color-ui-bg: var(--ui-bg);
+  --color-ui-side: var(--ui-side);
+  --color-ui-card: var(--ui-card);
+  --color-ui-line: var(--ui-line);
+  --color-ui-hover: var(--ui-hover);
+  --color-ui-grid: var(--ui-grid);
+  --color-ui-panel: var(--ui-panel);
+  --color-ui-panel-fg: var(--ui-panel-fg);
+  --color-ui-panel-muted: var(--ui-panel-muted);
+  --color-ui-panel-line: var(--ui-panel-line);
+  --color-ui-icon-fg: var(--ui-icon-fg);
+  --color-ui-panel-link: var(--ui-panel-link);
+  --color-ui-workspace: var(--ui-workspace);
+  --color-ui-workspace-raised: var(--ui-workspace-raised);
+  --color-ui-workspace-line: var(--ui-workspace-line);
+  --color-ui-workspace-fg: var(--ui-workspace-fg);
+  --color-ui-workspace-muted: var(--ui-workspace-muted);
+  --color-ui-workspace-warn: var(--ui-workspace-warn);
+
+  /* Temaya göre değişen metin / alan çizgisi / işlev renkleri */
+  --color-fn-blue: var(--ui-fn-blue);
+  --color-fn-blue-tint: var(--ui-fn-blue-tint);
+  --color-fn-blue-ink: var(--ui-fn-blue-ink);
+  --color-fn-blue-line: var(--ui-fn-blue-line);
+  --color-fn-orange: var(--ui-fn-orange);
+  --color-fn-orange-tint: var(--ui-fn-orange-tint);
+  --color-fn-orange-ink: var(--ui-fn-orange-ink);
+  --color-fn-orange-line: var(--ui-fn-orange-line);
+  --color-fn-green: var(--ui-fn-green);
+  --color-fn-green-tint: var(--ui-fn-green-tint);
+  --color-fn-green-ink: var(--ui-fn-green-ink);
+  --color-fn-green-line: var(--ui-fn-green-line);
+  --color-fn-gray: var(--ui-fn-gray);
+  --color-fn-gray-tint: var(--ui-fn-gray-tint);
+  --color-fn-gray-ink: var(--ui-fn-gray-ink);
+  --color-fn-gray-line: var(--ui-fn-gray-line);
+  --color-fn-purple: var(--ui-fn-purple);
+  --color-fn-purple-tint: var(--ui-fn-purple-tint);
+  --color-fn-purple-ink: var(--ui-fn-purple-ink);
+  --color-fn-purple-line: var(--ui-fn-purple-line);
+  --color-fn-violet: var(--ui-fn-violet);
+  --color-fn-violet-tint: var(--ui-fn-violet-tint);
+  --color-fn-violet-ink: var(--ui-fn-violet-ink);
+  --color-fn-violet-line: var(--ui-fn-violet-line);
+  --color-fn-slate: var(--ui-fn-slate);
+  --color-fn-slate-tint: var(--ui-fn-slate-tint);
+  --color-fn-slate-ink: var(--ui-fn-slate-ink);
+  --color-fn-slate-line: var(--ui-fn-slate-line);
+  --color-fn-red: var(--ui-fn-red);
+  --color-fn-red-tint: var(--ui-fn-red-tint);
+  --color-fn-red-ink: var(--ui-fn-red-ink);
+  --color-fn-red-line: var(--ui-fn-red-line);
+  --color-tx: var(--ui-tx);
+  --color-tx-2: var(--ui-tx-2);
+  --color-tx-muted: var(--ui-tx-muted);
+  --color-tx-subtle: var(--ui-tx-subtle);
+  --color-field-line: var(--ui-field-line);
+  --color-on-fn: var(--ui-on-fn);
+
+  --color-ed-bg: var(--ed-bg);
+  --color-ed-panel: var(--ed-panel);
+  --color-ed-border: var(--ed-border);
+  --color-ed-seg: var(--ed-seg-bg);
+  --color-ed-text: var(--ed-text);
+  --color-ed-muted: var(--ed-muted);
+  --color-ed-warn: var(--ed-warn);
+  --color-ed-active: var(--ed-active-bg);
+}
+
+@theme static {
+  /* Kullanım raporu metrikleri */
+  --color-metric-1: #2a78d6;
+  --color-metric-2: #eb6834;
+  --color-metric-3: #1baf7a;
+  --color-metric-4: #eda100;
+  --color-metric-5: #e87ba4;
+
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+/* ---------- Eski tokenların köprüsü ----------
+   Dokunulmayan sayfa/diyaloglar da aktif temayı alsın. Her tema kapsamında
+   yeniden hesaplanır (alt ağaca data-ui-theme verilse de doğru çözülür). */
+:root,
+[data-ui-theme],
+.xc-paper {
+  /* var(--color-tx|fn-*) doğrudan okuyanlar (fnStyle, köprüler) için çalışma anı karşılıkları */
+  --color-fn-blue: var(--ui-fn-blue);
+  --color-fn-blue-tint: var(--ui-fn-blue-tint);
+  --color-fn-blue-ink: var(--ui-fn-blue-ink);
+  --color-fn-blue-line: var(--ui-fn-blue-line);
+  --color-fn-orange: var(--ui-fn-orange);
+  --color-fn-orange-tint: var(--ui-fn-orange-tint);
+  --color-fn-orange-ink: var(--ui-fn-orange-ink);
+  --color-fn-orange-line: var(--ui-fn-orange-line);
+  --color-fn-green: var(--ui-fn-green);
+  --color-fn-green-tint: var(--ui-fn-green-tint);
+  --color-fn-green-ink: var(--ui-fn-green-ink);
+  --color-fn-green-line: var(--ui-fn-green-line);
+  --color-fn-gray: var(--ui-fn-gray);
+  --color-fn-gray-tint: var(--ui-fn-gray-tint);
+  --color-fn-gray-ink: var(--ui-fn-gray-ink);
+  --color-fn-gray-line: var(--ui-fn-gray-line);
+  --color-fn-purple: var(--ui-fn-purple);
+  --color-fn-purple-tint: var(--ui-fn-purple-tint);
+  --color-fn-purple-ink: var(--ui-fn-purple-ink);
+  --color-fn-purple-line: var(--ui-fn-purple-line);
+  --color-fn-violet: var(--ui-fn-violet);
+  --color-fn-violet-tint: var(--ui-fn-violet-tint);
+  --color-fn-violet-ink: var(--ui-fn-violet-ink);
+  --color-fn-violet-line: var(--ui-fn-violet-line);
+  --color-fn-slate: var(--ui-fn-slate);
+  --color-fn-slate-tint: var(--ui-fn-slate-tint);
+  --color-fn-slate-ink: var(--ui-fn-slate-ink);
+  --color-fn-slate-line: var(--ui-fn-slate-line);
+  --color-fn-red: var(--ui-fn-red);
+  --color-fn-red-tint: var(--ui-fn-red-tint);
+  --color-fn-red-ink: var(--ui-fn-red-ink);
+  --color-fn-red-line: var(--ui-fn-red-line);
+  --color-tx: var(--ui-tx);
+  --color-tx-2: var(--ui-tx-2);
+  --color-tx-muted: var(--ui-tx-muted);
+  --color-tx-subtle: var(--ui-tx-subtle);
+  --color-field-line: var(--ui-field-line);
+  --color-on-fn: var(--ui-on-fn);
+
+  --color-brand-primary: var(--ui-accent);
+  --color-brand-light: var(--ui-soft);
+  --color-brand-border: var(--ui-soft-line);
+  --color-brand-hover: var(--ui-ink);
+
+  --color-surface-page: var(--ui-bg);
+  --color-surface-card: var(--ui-card);
+  --color-surface-secondary: var(--ui-side);
+
+  --color-border-default: var(--ui-line);
+  --color-border-subtle: var(--ui-line);
+
+  --color-text-primary: var(--color-tx);
+  --color-text-secondary: var(--color-tx-muted);
+  --color-text-muted: var(--color-tx-subtle);
+
+  --xc-bg-darkest: var(--ui-bg);
+  --xc-bg-toolbar: var(--ui-card);
+  --xc-bg-sidebar: var(--ui-card);
+  --xc-bg-surface: var(--ui-side);
+  --xc-bg-surface-hover: var(--ui-hover);
+  --xc-bg-surface-active: var(--ui-soft);
+  --xc-text-primary: var(--color-tx);
+  --xc-text-secondary: var(--color-tx-muted);
+  --xc-text-disabled: var(--color-tx-subtle);
+  --xc-accent: var(--ui-accent);
+  --xc-accent-hover: var(--ui-ink);
+  --xc-accent-subtle: color-mix(in srgb, var(--ui-accent) 10%, transparent);
+  --xc-accent-text: var(--ui-ink);
+  --xc-border: var(--ui-line);
+  --xc-border-strong: var(--ui-soft-line);
+  --xc-divider: var(--ui-line);
+  --xc-dialog-bg: var(--ui-card);
+  --xc-input-bg: var(--ui-card);
+  --xc-input-border: var(--color-field-line);
+  --xc-input-focus: color-mix(in srgb, var(--ui-accent) 18%, transparent);
+}
+
+/* ---------- Yardımcı sınıflar ---------- */
+
+/* Kart kaldırma: hover/odakta -3px + gölge. Kenar rengi --fn-line (yoksa soft-line). */
+.xc-lift {
+  box-shadow: var(--ui-shadow-rest);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.xc-lift:hover,
+.xc-lift:focus-within {
+  transform: translateY(-3px);
+  box-shadow: var(--ui-shadow-lift);
+  border-color: var(--fn-line, var(--ui-soft-line));
+}
+
+/* Odak halkası. Koyu zeminde kapsayıcıya style={{'--xc-focus-ring': 'var(--ui-bar-fg)'}} ver. */
+.xc-focus:focus-visible {
+  outline: 2px solid var(--xc-focus-ring, var(--ui-accent));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xc-lift,
+  .xc-lift:hover,
+  .xc-lift:focus-within {
+    transition: none;
+    transform: none;
+  }
+}

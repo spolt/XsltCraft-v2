@@ -1,189 +1,189 @@
-import { useState, useRef, useEffect } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import {
-  ArrowLeft,
-  Upload,
-  Download,
-  Save,
-  Printer,
-  CheckCircle2,
+  AlignLeft,
+  MessageSquareCode,
   TriangleAlert,
-  FileCode2,
-  FileText,
-  Timer,
+  ShieldCheck,
+  Maximize2,
+  Minimize2,
+  Printer,
   Keyboard,
+  Sparkles,
+  Eye,
 } from 'lucide-react'
-import type { PreviewTimings } from '../../services/previewService'
-import { UPLOAD_ACCEPT } from '../../utils/uploadValidation'
+import LayoutSwitcher from './LayoutSwitcher'
+import type { EditorLayoutId } from '../../store/uiPrefsStore'
 
 interface Props {
-  templateName: string
-  xsltValid: boolean | null
-  xmlValid: boolean | null
-  previewLoading: boolean
-  lastMs: number | null
-  lastTimings: PreviewTimings | null
-  hasXslt: boolean
-  hasXml: boolean
-  isDirty: boolean
-  onBack: () => void
-  onUploadXslt: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onUploadXml: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onDownload: () => void
-  onSave: () => void
+  onFormat: () => void
+  onToggleComment: () => void
+  /** Problemler paneli */
+  showProblems: boolean
+  onToggleProblems: () => void
+  errorCount: number
+  warningCount: number
+  /** UBL-TR iş kuralları */
+  onValidateUblTr: () => void
+  ublTrDisabled: boolean
+  ublTrErrorCount: number | null
+  /** Düzen */
+  layout: EditorLayoutId
+  onLayoutChange: (id: EditorLayoutId) => void
+  maximized: boolean
+  onToggleMaximize: () => void
+  /** Yalnız editör modunda mini önizlemeyi açar. */
+  onShowMini?: () => void
   onPrint: () => void
   onShowShortcuts: () => void
+  /** AI Asistan — verilmezse buton gösterilmez. */
+  aiOpen?: boolean
+  onToggleAi?: () => void
 }
 
-function TimingPopover({ timings, onClose }: { timings: PreviewTimings; onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null)
+// Araç çubuğu editör bölmesinin genişliğine göre (container query) sıkışır: dar bölmede
+// etiketler gizlenir (ekran okuyucu adı kalır), çubuk iki satıra kırılmaz.
+const btn =
+  'xc-focus h-[26px] px-2 flex flex-none items-center gap-1.5 whitespace-nowrap rounded-md text-[12px] text-ed-text transition-colors hover:bg-ed-active disabled:opacity-40 disabled:hover:bg-transparent'
+const iconBtn =
+  'xc-focus h-[26px] w-[26px] flex flex-none items-center justify-center rounded-md text-ed-muted transition-colors hover:bg-ed-active hover:text-ed-text disabled:opacity-40'
+/** Geniş bölmede görünen, darda yalnız ekran okuyucuya kalan etiket. */
+const wideLabel = 'sr-only @min-[760px]:not-sr-only'
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [onClose])
-
-  const rows: [string, number][] = [
-    ['XSLT Derleme', timings.compileMs],
-    ['XML Ayrıştırma', timings.parseMs],
-    ['Dönüşüm', timings.transformMs],
-    ['Serileştirme', timings.serializeMs],
-  ]
-  const total = rows.reduce((s, [, v]) => s + v, 0)
-
+function Badge({ tone, children }: { tone: 'error' | 'warn'; children: ReactNode }) {
   return (
-    <div
-      ref={ref}
-      className="absolute top-full mt-1 right-0 z-50 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-3 min-w-[200px]"
+    <span
+      className={`min-w-[18px] rounded-full px-1.5 text-center text-[11px] font-bold leading-[17px] ${
+        tone === 'error' ? 'bg-fn-red text-on-fn' : 'bg-ed-warn text-ed-bg'
+      }`}
     >
-      <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-2 font-medium">Önizleme Süresi</p>
-      <table className="w-full text-xs">
-        <tbody>
-          {rows.map(([label, ms]) => (
-            <tr key={label}>
-              <td className="py-0.5 pr-4 text-gray-300">{label}</td>
-              <td className="py-0.5 text-right font-mono text-gray-200">{ms} ms</td>
-            </tr>
-          ))}
-          <tr className="border-t border-gray-600 mt-1">
-            <td className="pt-1.5 text-gray-400 font-medium">Toplam</td>
-            <td className="pt-1.5 text-right font-mono text-white font-semibold">{total} ms</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      {children}
+    </span>
   )
 }
 
+/** Editör alanının araç çubuğu (--ed-* paleti). Tam ekranda da görünür (editör katmanının içinde). */
 export default function XsltEditorToolbar({
-  templateName,
-  xsltValid,
-  xmlValid,
-  previewLoading,
-  lastMs,
-  lastTimings,
-  hasXslt,
-  hasXml,
-  isDirty,
-  onBack,
-  onUploadXslt,
-  onUploadXml,
-  onDownload,
-  onSave,
+  onFormat,
+  onToggleComment,
+  showProblems,
+  onToggleProblems,
+  errorCount,
+  warningCount,
+  onValidateUblTr,
+  ublTrDisabled,
+  ublTrErrorCount,
+  layout,
+  onLayoutChange,
+  maximized,
+  onToggleMaximize,
+  onShowMini,
   onPrint,
   onShowShortcuts,
+  aiOpen = false,
+  onToggleAi,
 }: Props) {
-  const btnBase = 'flex items-center gap-1.5 text-sm border border-gray-600 rounded px-3 py-1.5 hover:bg-gray-800 transition-colors'
-  const [showTimingPopover, setShowTimingPopover] = useState(false)
-
   return (
-    <div className="h-12 border-b border-gray-700 bg-gray-900 flex items-center gap-2 px-4 flex-shrink-0">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors mr-1" title="Geri dön">
-        <ArrowLeft size={15} />
+    <div
+      role="toolbar"
+      aria-label="Editör araçları"
+      style={{ '--xc-focus-ring': 'var(--ed-text)' } as CSSProperties}
+      className="@container flex-none border-b border-ed-border bg-ed-panel"
+    >
+      <div className="flex h-[36px] min-w-0 items-center gap-0.5 overflow-hidden px-2">
+      <button type="button" onClick={onFormat} className={btn} title="Belgeyi Biçimlendir (Shift+Alt+F)">
+        <AlignLeft size={14} aria-hidden="true" />
+        <span className={wideLabel}>Biçimlendir</span>
+      </button>
+      <button type="button" onClick={onToggleComment} className={btn} title="Açıklama Satırı Yap / Kaldır (Ctrl+Shift+C)">
+        <MessageSquareCode size={14} aria-hidden="true" />
+        <span className={wideLabel}>Açıklama</span>
+      </button>
+      <button
+        type="button"
+        onClick={onToggleProblems}
+        aria-pressed={showProblems}
+        className={`${btn} ${showProblems ? 'bg-ed-active' : ''}`}
+        title="Problemler panelini aç/kapat"
+      >
+        <TriangleAlert size={14} aria-hidden="true" />
+        <span className="sr-only @min-[560px]:not-sr-only">Problemler</span>
+        {errorCount > 0 && <Badge tone="error"><span className="sr-only">hata: </span>{errorCount}</Badge>}
+        {warningCount > 0 && <Badge tone="warn"><span className="sr-only">uyarı: </span>{warningCount}</Badge>}
       </button>
 
-      <span className="text-base font-medium text-gray-200 flex-1 truncate">
-        {templateName || 'XSLT Editör'}
-        {isDirty && <span className="text-gray-500 ml-1">*</span>}
-      </span>
+      <span aria-hidden="true" className="mx-1 h-4 w-px flex-none bg-ed-border" />
 
-      {/* Loading / timing */}
-      {previewLoading && (
-        <span className="text-sm text-blue-400 flex items-center gap-1">
-          <span className="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-          Derleniyor
-        </span>
+      <button
+        type="button"
+        onClick={onValidateUblTr}
+        disabled={ublTrDisabled}
+        className={`${btn} border border-ed-border font-semibold`}
+        title="UBL-TR iş kurallarını kontrol et"
+      >
+        <ShieldCheck size={14} aria-hidden="true" />
+        UBL-TR<span className="sr-only @min-[620px]:not-sr-only"> kontrol</span>
+        {ublTrErrorCount != null && ublTrErrorCount > 0 && (
+          <Badge tone="error"><span className="sr-only">hata: </span>{ublTrErrorCount}</Badge>
+        )}
+      </button>
+
+      <div className="min-w-2 flex-1" />
+
+      <LayoutSwitcher value={layout} onChange={onLayoutChange} />
+
+      <button
+        type="button"
+        onClick={onToggleMaximize}
+        aria-pressed={maximized}
+        className={iconBtn}
+        title={maximized ? 'Tam ekrandan çık (Ctrl+Shift+F)' : 'Tam ekran editör (Ctrl+Shift+F)'}
+        aria-label={maximized ? 'Tam ekrandan çık' : 'Tam ekran editör'}
+      >
+        {maximized ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
+      </button>
+
+      {onShowMini && (
+        <button
+          type="button"
+          onClick={onShowMini}
+          className={btn}
+          title="Önizlemeyi mini pencerede aç"
+          aria-label="Mini önizlemeyi göster"
+        >
+          <Eye size={14} aria-hidden="true" />
+          Önizle
+        </button>
       )}
-      {!previewLoading && lastMs !== null && (
-        <div className="relative">
-          <button
-            onClick={() => lastTimings && setShowTimingPopover(s => !s)}
-            className={`flex items-center gap-1 text-sm text-gray-500 rounded px-1.5 py-0.5 transition-colors ${
-              lastTimings ? 'hover:bg-gray-800 hover:text-gray-300 cursor-pointer' : 'cursor-default'
-            }`}
-            title={lastTimings ? 'Ayrıntılı süre kırılımı' : undefined}
-          >
-            {lastTimings && <Timer size={13} />}
-            {lastMs} ms
-          </button>
-          {showTimingPopover && lastTimings && (
-            <TimingPopover timings={lastTimings} onClose={() => setShowTimingPopover(false)} />
-          )}
-        </div>
+
+      <button type="button" onClick={onPrint} className={iconBtn} title="Yazdır" aria-label="Yazdır">
+        <Printer size={14} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={onShowShortcuts}
+        className={iconBtn}
+        title="Klavye Kısayolları (F1)"
+        aria-label="Klavye kısayolları"
+      >
+        <Keyboard size={14} aria-hidden="true" />
+      </button>
+
+      {onToggleAi && (
+        <button
+          type="button"
+          onClick={onToggleAi}
+          aria-pressed={aiOpen}
+          className={`xc-focus ml-1 flex h-[26px] flex-none items-center gap-1.5 whitespace-nowrap rounded-md border px-2 text-[12px] font-semibold transition-colors ${
+            aiOpen
+              ? 'border-ui-accent bg-ui-accent text-ui-accent-fg'
+              : 'border-ed-border text-ed-text hover:bg-ed-active'
+          }`}
+        >
+          <Sparkles size={14} aria-hidden="true" />
+          AI Asistan
+        </button>
       )}
-
-      {/* Validation status */}
-      {xsltValid !== null && (
-        <span className={`flex items-center gap-1 text-sm ${xsltValid ? 'text-green-400' : 'text-red-400'}`} title={xsltValid ? 'XSLT geçerli' : 'XSLT hatası'}>
-          {xsltValid ? <CheckCircle2 size={15} /> : <TriangleAlert size={15} />}
-          <span className="hidden sm:inline">XSLT</span>
-        </span>
-      )}
-      {xmlValid !== null && (
-        <span className={`flex items-center gap-1 text-sm ${xmlValid ? 'text-green-400' : 'text-red-400'}`} title={xmlValid ? 'XML geçerli' : 'XML hatası'}>
-          {xmlValid ? <CheckCircle2 size={15} /> : <TriangleAlert size={15} />}
-          <span className="hidden sm:inline">XML</span>
-        </span>
-      )}
-
-      {/* Upload buttons */}
-      <label className={`${btnBase} text-gray-400 cursor-pointer`} title="XSLT dosyası yükle">
-        <FileCode2 size={15} />
-        <span className="hidden sm:inline">XSLT</span>
-        <Upload size={13} />
-        <input type="file" accept={UPLOAD_ACCEPT.xslt} className="hidden" onChange={onUploadXslt} />
-      </label>
-
-      <label className={`${btnBase} text-gray-400 cursor-pointer`} title="XML dosyası yükle">
-        <FileText size={15} />
-        <span className="hidden sm:inline">XML</span>
-        <Upload size={13} />
-        <input type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={onUploadXml} />
-      </label>
-
-      {/* Download */}
-      <button onClick={onDownload} disabled={!hasXslt} className={`${btnBase} text-gray-400 disabled:opacity-30`} title="XSLT indir">
-        <Download size={15} />
-        <span className="hidden sm:inline">İndir</span>
-      </button>
-
-      {/* Save */}
-      <button onClick={onSave} disabled={!hasXslt} className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded px-3 py-1.5 disabled:opacity-30 transition-colors" title="Kaydet">
-        <Save size={15} />
-        <span className="hidden sm:inline">Kaydet</span>
-      </button>
-
-      {/* Print */}
-      <button onClick={onPrint} disabled={!hasXml || !hasXslt} className={`${btnBase} text-gray-400 disabled:opacity-30`} title="Yazdır">
-        <Printer size={16} />
-      </button>
-
-      {/* Shortcuts */}
-      <button onClick={onShowShortcuts} className={`${btnBase} text-gray-400`} title="Klavye Kısayolları (F1)">
-        <Keyboard size={15} />
-      </button>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { Copy, ClipboardCheck } from 'lucide-react'
+import { useUiPrefsStore } from '../../store/uiPrefsStore'
+import { defineMonacoThemes, monacoThemeId } from '../../theme/monacoThemes'
 import {
   parseSegments, parseBlocks, type Block, type Inline,
 } from '../../utils/markdownLite'
@@ -15,14 +17,14 @@ function InlineNodes({ nodes }: { nodes: Inline[] }) {
           case 'text':
             return <React.Fragment key={i}>{n.v}</React.Fragment>
           case 'strong':
-            return <strong key={i} className="font-semibold text-white"><InlineNodes nodes={n.c} /></strong>
+            return <strong key={i} className="font-semibold text-tx"><InlineNodes nodes={n.c} /></strong>
           case 'em':
             return <em key={i} className="italic"><InlineNodes nodes={n.c} /></em>
           case 'code':
             return (
               <code
                 key={i}
-                className="px-1 py-0.5 rounded bg-gray-900 border border-gray-700 font-mono text-[12px] text-violet-300 break-words"
+                className="px-1 py-0.5 rounded bg-ui-side border border-ui-line font-mono text-[12px] text-ui-ink break-words"
               >
                 {n.v}
               </code>
@@ -35,7 +37,7 @@ function InlineNodes({ nodes }: { nodes: Inline[] }) {
                 href={n.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-violet-400 underline hover:text-violet-300"
+                className="text-ui-accent underline hover:text-ui-ink"
               >
                 <InlineNodes nodes={n.c} />
               </a>
@@ -50,9 +52,9 @@ function InlineNodes({ nodes }: { nodes: Inline[] }) {
 
 // Panel dar; başlıkları makul ölçekte tut (h1'i devasa yapma).
 const H_CLASS: Record<1 | 2 | 3, string> = {
-  1: 'text-sm font-semibold text-white mt-2 mb-0.5',
-  2: 'text-[13px] font-semibold text-gray-100 mt-2 mb-0.5',
-  3: 'text-[13px] font-medium text-gray-200 mt-1.5 mb-0.5',
+  1: 'text-sm font-semibold text-tx mt-2 mb-0.5',
+  2: 'text-[13px] font-semibold text-tx mt-2 mb-0.5',
+  3: 'text-[13px] font-medium text-tx-2 mt-1.5 mb-0.5',
 }
 
 function BlockNodes({ blocks }: { blocks: Block[] }) {
@@ -66,7 +68,7 @@ function BlockNodes({ blocks }: { blocks: Block[] }) {
           }
           case 'p':
             return (
-              <p key={i} className="text-sm text-gray-200 leading-relaxed break-words">
+              <p key={i} className="text-[12.5px] text-tx-2 leading-relaxed break-words">
                 {b.lines.map((ln, j) => (
                   <React.Fragment key={j}>
                     {j > 0 && <br />}
@@ -77,18 +79,18 @@ function BlockNodes({ blocks }: { blocks: Block[] }) {
             )
           case 'ul':
             return (
-              <ul key={i} className="list-disc pl-5 space-y-0.5 text-sm text-gray-200 leading-relaxed">
+              <ul key={i} className="list-disc pl-5 space-y-0.5 text-[12.5px] text-tx-2 leading-relaxed">
                 {b.items.map((it, j) => <li key={j} className="break-words"><InlineNodes nodes={it} /></li>)}
               </ul>
             )
           case 'ol':
             return (
-              <ol key={i} start={b.start} className="list-decimal pl-5 space-y-0.5 text-sm text-gray-200 leading-relaxed">
+              <ol key={i} start={b.start} className="list-decimal pl-5 space-y-0.5 text-[12.5px] text-tx-2 leading-relaxed">
                 {b.items.map((it, j) => <li key={j} className="break-words"><InlineNodes nodes={it} /></li>)}
               </ol>
             )
           case 'hr':
-            return <hr key={i} className="border-gray-700 my-2" />
+            return <hr key={i} className="border-ui-line my-2" />
         }
       })}
     </>
@@ -104,11 +106,14 @@ function toMonacoLang(lang: string): string {
 }
 
 // Monaco ile <pre> arasında geçiş görünmez olsun diye ikisi de bu ölçüleri kullanır.
-const CODE_FONT_SIZE = 13
-const CODE_LINE_HEIGHT = 19
+const CODE_FONT_SIZE = 12
+const CODE_LINE_HEIGHT = 18
+const CODE_MAX_HEIGHT = 320
 
 function CodeBlock({ lang, code, open }: { lang: string; code: string; open: boolean }) {
   const [copied, setCopied] = useState(false)
+  // Monaco teması küresel: sohbetteki kod bloğu editörle aynı temayı kullanmalı, yoksa ana editörün temasını ezer.
+  const editorTheme = useUiPrefsStore(s => s.editorTheme)
 
   // Kopyala kalıbı AiApplyDialog.tsx:58-64 ile aynı.
   async function copy() {
@@ -119,21 +124,25 @@ function CodeBlock({ lang, code, open }: { lang: string; code: string; open: boo
     } catch { /* ignore */ }
   }
 
-  const height = Math.min(Math.max(code.split('\n').length * CODE_LINE_HEIGHT + 18, 48), 320)
+  // İlk tahmin satır sayısından; Monaco satır kaydırınca gerçek içerik yüksekliğine büyür
+  // (aksi halde dar panelde kaydırılan uzun satırlar kesilirdi).
+  const estimated = Math.min(Math.max(code.split('\n').length * CODE_LINE_HEIGHT + 16, 44), CODE_MAX_HEIGHT)
+  const [measured, setMeasured] = useState<number | null>(null)
+  const height = measured ?? estimated
 
   return (
-    <div className="rounded overflow-hidden border border-gray-700">
-      <div className="px-2 py-0.5 bg-gray-800 border-b border-gray-700 flex items-center gap-2">
-        <span className="text-[10px] text-gray-400 font-mono">{lang || 'kod'}</span>
+    <div className="rounded-md overflow-hidden border border-ed-border">
+      <div className="px-2 py-0.5 bg-ed-panel border-b border-ed-border flex items-center gap-2">
+        <span className="text-[10px] text-ed-muted font-mono">{lang || 'kod'}</span>
         <div className="flex-1" />
         {/* Akış sürerken kopyalama gizli — yarım kod kopyalatmak yanıltıcı olur. */}
         {!open && (
           <button
             onClick={copy}
-            className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-200 transition-colors"
+            className="xc-focus rounded flex items-center gap-1 text-[10px] text-ed-muted hover:text-ed-text transition-colors"
             title="Kodu panoya kopyala"
           >
-            {copied ? <ClipboardCheck size={11} className="text-emerald-400" /> : <Copy size={11} />}
+            {copied ? <ClipboardCheck size={11} className="text-fn-green" /> : <Copy size={11} />}
             {copied ? 'Kopyalandı' : 'Kopyala'}
           </button>
         )}
@@ -143,7 +152,7 @@ function CodeBlock({ lang, code, open }: { lang: string; code: string; open: boo
         // Yazılmakta olan blokta Monaco kullanma: her token'da setValue + layout yapar,
         // yükseklik zıplar ve scroll'un dibe yapışması bozulur. Blok kapanınca Monaco'ya geçilir.
         <pre
-          className="px-3 py-2 bg-[#1e1e1e] font-mono text-gray-200 overflow-x-auto whitespace-pre"
+          className="px-3 py-2 bg-ed-bg font-mono text-ed-text overflow-x-auto whitespace-pre"
           style={{ fontSize: CODE_FONT_SIZE, lineHeight: `${CODE_LINE_HEIGHT}px` }}
         >
           {code}
@@ -153,8 +162,14 @@ function CodeBlock({ lang, code, open }: { lang: string; code: string; open: boo
           height={height}
           language={toMonacoLang(lang)}
           value={code}
-          theme="vs-dark"
-          loading={<div className="bg-gray-900 animate-pulse" style={{ height }} />}
+          beforeMount={defineMonacoThemes}
+          theme={monacoThemeId(editorTheme)}
+          loading={<div className="bg-ed-bg animate-pulse" style={{ height }} />}
+          onMount={(editor) => {
+            const sync = () => setMeasured(Math.min(Math.max(editor.getContentHeight(), 44), CODE_MAX_HEIGHT))
+            editor.onDidContentSizeChange(sync)
+            sync()
+          }}
           options={{
             readOnly: true,
             minimap: { enabled: false },
@@ -169,6 +184,7 @@ function CodeBlock({ lang, code, open }: { lang: string; code: string; open: boo
             renderLineHighlight: 'none',
             contextmenu: false,
             padding: { top: 8, bottom: 8 },
+            fontFamily: "'IBM Plex Mono', Consolas, 'Courier New', monospace",
           }}
         />
       )}

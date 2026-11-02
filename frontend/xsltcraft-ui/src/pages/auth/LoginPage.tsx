@@ -73,68 +73,63 @@ export default function LoginPage() {
   })
 
   return (
-    <AuthLayout theme="D">
-      <h1 className="text-2xl font-bold text-white mb-2">Giriş Yap</h1>
-      <p className="text-gray-400 text-sm mb-6">
+    <AuthLayout>
+      <h1 className="xc-auth-title">Giriş Yap</h1>
+      <p className="xc-auth-sub mb-7">
         Hesabın yok mu?{' '}
-        <Link to="/auth/register" className="text-indigo-400 hover:underline">
+        <Link to="/auth/register" className="xc-auth-link">
           Kayıt ol
         </Link>
       </p>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-900/40 border-l-4 border-red-500 text-red-300 rounded-lg text-sm">
+        <div id="login-error" role="alert" className="xc-auth-error">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <label className="block text-sm text-gray-300 mb-1">Kullanıcı Adı</label>
+          <label htmlFor="login-username" className="xc-auth-label">Kullanıcı Adı</label>
           <input
+            id="login-username"
             type="text"
             required
             autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'login-error' : undefined}
+            className="xc-auth-input"
             placeholder="kullanici_adi"
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-300 mb-1">Şifre</label>
+          <label htmlFor="login-password" className="xc-auth-label">Şifre</label>
           <input
+            id="login-password"
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'login-error' : undefined}
+            className="xc-auth-input"
             placeholder="••••••••"
           />
         </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-200"
-        >
+        <button type="submit" disabled={loading} className="xc-auth-btn xc-auth-btn--primary mt-7">
           {loading ? 'Giriş yapılıyor…' : 'Giriş Yap'}
         </button>
       </form>
 
-      <div className="relative my-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-700/60" />
-        </div>
-        <div className="relative flex justify-center text-xs text-gray-500">
-          <span className="px-2 bg-transparent">veya</span>
-        </div>
-      </div>
+      <div className="xc-auth-divider">veya</div>
 
       <button
         type="button"
         onClick={() => loginWithGoogle()}
         disabled={loading}
-        className="w-full py-2.5 flex items-center justify-center gap-3 bg-gray-800/80 hover:bg-gray-700/80 border border-gray-700 hover:border-gray-600 disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-200"
+        className="xc-auth-btn xc-auth-btn--secondary"
       >
         <GoogleIcon />
         Google ile oturum açın

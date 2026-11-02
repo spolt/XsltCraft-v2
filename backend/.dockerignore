@@ -8,11 +8,21 @@
 **/*.user
 **/.env
 
-# Test projeleri ve araçlar (yalnız API publish edilir)
+# Test projeleri ve araçlar (yalnız Api + XsltWorker publish edilir)
 XsltCraft.Tests/
 XsltCraft.Application.Tests/
 XsltCraft.Infrastructure.Tests/
+XsltCraft.XsltWorker.Tests/
+XsltCraft.Xslt.Saxon.Tests/
+**/*.Tests/
 **/TestResults/
+**/*.received.*
+**/*.verified.*
+
+# Spike/prototip kodu (W0) ve yerel çıktı klasörleri
+**/spike/
+**/artifacts/
+**/publish/
 **/.vs/
 **/.vscode/
 **/.idea/

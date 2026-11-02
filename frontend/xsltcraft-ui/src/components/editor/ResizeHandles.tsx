@@ -92,6 +92,8 @@ function ResizeHandle({
 
   return (
     <div
+      aria-hidden="true"
+      data-resize-handle={dir}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -99,8 +101,8 @@ function ResizeHandle({
         position: 'absolute',
         width: HANDLE_SIZE,
         height: HANDLE_SIZE,
-        background: '#185FA5',
-        border: '1.5px solid #fff',
+        background: 'var(--ui-accent)',
+        border: '1.5px solid white',
         borderRadius: 2,
         zIndex: 10,
         ...pos,

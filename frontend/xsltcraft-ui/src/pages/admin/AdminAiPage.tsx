@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Power, Loader2, RefreshCw, CheckCircle2, AlertCircle, MinusCircle, Radio } from 'lucide-react'
+import { Loader2, RefreshCw, Radio, Sparkles, CheckCircle2, AlertCircle, MinusCircle } from 'lucide-react'
 import {
   getAdminAiFlag, setAdminAiFlag,
   getAiProviderHealth, type AiProviderHealth,
@@ -7,6 +7,12 @@ import {
   getAiUsage, type AiUsageEntry,
 } from '../../services/aiAssistantService'
 import { useAiStore } from '../../store/aiStore'
+import PageHeader from '../../components/ui/PageHeader'
+import Card from '../../components/ui/Card'
+import IconTile from '../../components/ui/IconTile'
+import Switch from '../../components/ui/Switch'
+import { fnStyle } from '../../theme/uiThemes'
+import { AdminPage, Banner, BTN_SECONDARY, Pill, SectionHeader } from '../../components/admin/adminUi'
 import AiVisionCard from './AiVisionCard'
 
 export default function AdminAiPage() {
@@ -46,7 +52,6 @@ export default function AdminAiPage() {
     refreshHealth()
     refreshUsage()
     return () => { alive = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function refreshHealth() {
@@ -105,218 +110,197 @@ export default function AdminAiPage() {
     }
   }
 
+  const ollamaModel = providers?.find(p => p.name === 'ollama')?.model
+
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <header className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center">
-          <Sparkles size={20} className="text-violet-600" />
-        </div>
-        <div>
-          <h1 className="text-lg font-semibold text-gray-800">AI Asistan</h1>
-          <p className="text-sm text-gray-500">Tüm kullanıcılar için AI özelliklerini açın veya kapatın.</p>
-        </div>
-      </header>
+    <AdminPage>
+      <PageHeader title="AI Asistan" description="Tüm kullanıcılar için AI özelliklerini açın veya kapatın." />
 
-      {/* Feature flag toggle */}
-      {loading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Loader2 size={16} className="animate-spin" /> Yükleniyor…
-        </div>
-      ) : (
-        <div className="border border-gray-200 rounded-xl bg-white p-5 space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-sm font-medium text-gray-800">Genel kullanıma açık</div>
-              <div className="text-xs text-gray-500 mt-0.5">
-                Kapalıyken kullanıcılar editörde AI butonlarını göremez ve uçnoktalar 403 döner.
+      {/* Feature flag */}
+      <Card as="section" padding="none" aria-labelledby="ai-flag-title" className="flex flex-col gap-3 px-5 py-[18px]">
+        {loading ? (
+          <div className="flex items-center gap-2 text-[13px] text-tx-muted">
+            <Loader2 size={15} className="animate-spin" aria-hidden="true" /> Yükleniyor…
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-3.5">
+              <IconTile icon={Sparkles} color="orange" size="lg" hoverFill={false} />
+              <div className="min-w-0 flex-[1_1_260px]">
+                <h2 id="ai-flag-title" className="m-0 text-[15px] font-semibold text-tx">Genel kullanıma açık</h2>
+                <span className="text-[12.5px] text-tx-muted">
+                  {enabled
+                    ? 'Açık — tüm kullanıcılar AI asistanını kullanabilir.'
+                    : 'Kapalı — kullanıcılar editörde AI butonlarını göremez ve uçnoktalar 403 döner.'}
+                </span>
               </div>
+              {saving && <Loader2 size={15} className="animate-spin text-tx-muted" aria-hidden="true" />}
+              <Switch
+                checked={!!enabled}
+                onChange={() => void toggle()}
+                disabled={saving || enabled === null}
+                label="AI genel kullanım"
+                hideLabel
+              />
             </div>
-            <button
-              onClick={toggle}
-              disabled={saving}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
-                enabled
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-500'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Power size={14} />}
-              {enabled ? 'Etkin' : 'Devre dışı'}
-            </button>
-          </div>
-
-          {error && <div className="text-xs text-red-600">{error}</div>}
-
-          <div className="text-xs text-gray-500 border-t border-gray-100 pt-3">
-            Birincil sağlayıcı:{' '}
-            <span className="font-mono">
-              ollama
-              {providers?.find(p => p.name === 'ollama')?.model
-                ? ` (${providers.find(p => p.name === 'ollama')!.model})`
-                : ''}
-            </span>. Sunucuda kurulu olmalı:{' '}
-            <code className="px-1 py-0.5 bg-gray-100 rounded">ollama serve</code>.
-          </div>
-        </div>
-      )}
+            {error && <Banner>{error}</Banner>}
+            <div className="border-t border-ui-line pt-3 text-[12px] text-tx-muted">
+              Birincil sağlayıcı: <span className="font-mono">ollama{ollamaModel ? ` (${ollamaModel})` : ''}</span>. Sunucuda kurulu olmalı:{' '}
+              <code className="rounded bg-ui-hover px-1 py-0.5 font-mono text-tx-2">ollama serve</code>.
+            </div>
+          </>
+        )}
+      </Card>
 
       {/* Provider preference */}
-      <div className="border border-gray-200 rounded-xl bg-white p-5 space-y-3">
-        <div className="flex items-center justify-between">
+      <Card as="section" padding="none" aria-labelledby="ai-provider-title" className="flex flex-col gap-3 px-5 py-[18px]">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-medium text-gray-800 flex items-center gap-1.5">
-              <Radio size={14} className="text-violet-500" />
+            <h2 id="ai-provider-title" className="m-0 flex items-center gap-1.5 text-[15px] font-semibold text-tx">
+              <Radio size={15} className="text-fn-violet" aria-hidden="true" />
               Sağlayıcı Tercihi
-            </div>
-            <div className="text-xs text-gray-500 mt-0.5">
-              Hangi AI sağlayıcısının önce deneneceğini seçin.
-            </div>
+            </h2>
+            <p className="mt-0.5 mb-0 text-[12.5px] text-tx-muted">Hangi AI sağlayıcısının önce deneneceğini seçin.</p>
           </div>
-          {providerSaving && <Loader2 size={14} className="animate-spin text-gray-400" />}
+          {providerSaving && <Loader2 size={15} className="animate-spin text-tx-muted" aria-hidden="true" />}
         </div>
 
         {providerLoading ? (
-          <div className="text-xs text-gray-400 flex items-center gap-1.5">
-            <Loader2 size={12} className="animate-spin" /> Yükleniyor…
+          <div className="flex items-center gap-1.5 text-[12px] text-tx-muted">
+            <Loader2 size={12} className="animate-spin" aria-hidden="true" /> Yükleniyor…
           </div>
         ) : (
-          <div className="flex gap-5 flex-wrap">
-            {PROVIDER_OPTIONS.map(opt => (
-              <label key={opt.value} className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="radio"
-                  name="ai-provider"
-                  value={opt.value}
-                  checked={provider === opt.value}
-                  onChange={() => handleProviderChange(opt.value)}
-                  disabled={providerSaving}
-                  className="accent-violet-600"
-                />
-                <div>
-                  <span className="text-sm text-gray-800">{opt.label}</span>
-                  <span className="block text-[11px] text-gray-400">{opt.hint}</span>
-                </div>
-              </label>
-            ))}
+          <div role="radiogroup" aria-labelledby="ai-provider-title" className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2">
+            {PROVIDER_OPTIONS.map(opt => {
+              const on = provider === opt.value
+              return (
+                <label
+                  key={opt.value}
+                  className={`flex cursor-pointer items-start gap-2.5 rounded-[10px] border px-3 py-2.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ui-accent ${
+                    on ? 'border-ui-soft-line bg-ui-soft' : 'border-ui-line bg-ui-card hover:bg-ui-hover'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="ai-provider"
+                    value={opt.value}
+                    checked={on}
+                    onChange={() => handleProviderChange(opt.value)}
+                    disabled={providerSaving}
+                    className="mt-0.5 accent-[var(--ui-accent)]"
+                  />
+                  <span>
+                    <span className={`block text-[13px] ${on ? 'font-semibold text-ui-ink' : 'font-medium text-tx'}`}>{opt.label}</span>
+                    <span className="block text-[11.5px] text-tx-muted">{opt.hint}</span>
+                  </span>
+                </label>
+              )
+            })}
           </div>
         )}
-        <div className="text-xs text-gray-400 border-t border-gray-100 pt-2">
+        <div className="border-t border-ui-line pt-2.5 text-[12px] text-tx-muted">
           Otomatik: Ollama → Gemini sırasıyla denenir. Gemini seçildiğinde cloud önce denenir, Ollama yedek kalır. DB'ye yazıldığından restart gerekmez.
         </div>
-      </div>
+      </Card>
 
       {/* Ekran görüntüsü (vision) — sıra sağlayıcı tercihine bağlı olduğu için tercihle yenilenir */}
       <AiVisionCard providerPreference={provider} />
 
       {/* Provider health */}
-      <div className="border border-gray-200 rounded-xl bg-white p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium text-gray-800">Sağlayıcı Durumu</div>
-            <div className="text-xs text-gray-500 mt-0.5">
-              Ollama'ya canlı bağlantı atılır; Gemini için yalnızca konfigürasyon kontrol edilir.
+      <Card as="section" padding="none" aria-labelledby="ai-health-title">
+        <SectionHeader
+          id="ai-health-title"
+          title="Sağlayıcı Durumu"
+          description="Ollama'ya canlı bağlantı atılır; Gemini için yalnızca konfigürasyon kontrol edilir."
+          aside={
+            <button type="button" onClick={refreshHealth} disabled={healthLoading} className={BTN_SECONDARY}>
+              {healthLoading ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={13} aria-hidden="true" />}
+              Yenile
+            </button>
+          }
+        />
+        <div className="flex flex-col gap-2.5 p-4">
+          {providers === null && healthLoading && (
+            <div className="flex items-center gap-2 text-[12.5px] text-tx-muted">
+              <Loader2 size={12} className="animate-spin" aria-hidden="true" /> Sağlayıcılar kontrol ediliyor…
             </div>
-          </div>
-          <button
-            onClick={refreshHealth}
-            disabled={healthLoading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-gray-200 hover:bg-gray-50 text-gray-700 disabled:opacity-40"
-          >
-            {healthLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-            Yenile
-          </button>
+          )}
+          {providers && providers.length === 0 && (
+            <div className="text-[12.5px] text-tx-muted">Sağlayıcı bilgisi alınamadı.</div>
+          )}
+          {providers && providers.length > 0 && (
+            <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+              {providers.map(p => <ProviderRow key={p.name} p={p} />)}
+            </ul>
+          )}
         </div>
-
-        {providers === null && healthLoading && (
-          <div className="text-xs text-gray-500 flex items-center gap-2">
-            <Loader2 size={12} className="animate-spin" /> Sağlayıcılar kontrol ediliyor…
-          </div>
-        )}
-        {providers && providers.length === 0 && (
-          <div className="text-xs text-gray-500">Sağlayıcı bilgisi alınamadı.</div>
-        )}
-        {providers && providers.length > 0 && (
-          <ul className="divide-y divide-gray-100">
-            {providers.map(p => <ProviderRow key={p.name} p={p} />)}
-          </ul>
-        )}
-      </div>
+      </Card>
 
       {/* Daily token usage */}
-      <div className="border border-gray-200 rounded-xl bg-white p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium text-gray-800">Günlük Token Kullanımı</div>
-            <div className="text-xs text-gray-500 mt-0.5">
+      <Card as="section" padding="none" aria-labelledby="ai-usage-title">
+        <SectionHeader
+          id="ai-usage-title"
+          title="Günlük Token Kullanımı"
+          description={
+            <>
               Bugün ({new Date().toLocaleDateString('tr-TR')}) — limit:{' '}
-              {usageLimit > 0
-                ? <span className="font-mono">{usageLimit.toLocaleString('tr-TR')}</span>
-                : 'sınırsız'}{' '}token/kullanıcı
-            </div>
-          </div>
-          <button
-            onClick={refreshUsage}
-            disabled={usageLoading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-gray-200 hover:bg-gray-50 text-gray-700 disabled:opacity-40"
-          >
-            {usageLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-            Yenile
-          </button>
-        </div>
-
+              {usageLimit > 0 ? <span className="font-mono">{usageLimit.toLocaleString('tr-TR')}</span> : 'sınırsız'} token/kullanıcı
+            </>
+          }
+          aside={
+            <button type="button" onClick={refreshUsage} disabled={usageLoading} className={BTN_SECONDARY}>
+              {usageLoading ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={13} aria-hidden="true" />}
+              Yenile
+            </button>
+          }
+        />
         {usageLoading && usage === null && (
-          <div className="text-xs text-gray-400 flex items-center gap-1.5">
-            <Loader2 size={12} className="animate-spin" /> Yükleniyor…
+          <div className="flex items-center gap-1.5 px-4 py-4 text-[12.5px] text-tx-muted">
+            <Loader2 size={12} className="animate-spin" aria-hidden="true" /> Yükleniyor…
           </div>
         )}
         {usage !== null && usage.length === 0 && (
-          <div className="text-xs text-gray-500">Bugün henüz AI kullanımı yok.</div>
+          <div className="px-4 py-4 text-[12.5px] text-tx-muted">Bugün henüz AI kullanımı yok.</div>
         )}
         {usage !== null && usage.length > 0 && (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-gray-100 text-left text-gray-500">
-                <th className="py-1.5 font-medium">Kullanıcı</th>
-                <th className="py-1.5 font-medium text-right">Token (~)</th>
-                {usageLimit > 0 && <th className="py-1.5 font-medium text-right">Bütçe</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {usage.map(u => {
-                const pct = usageLimit > 0 ? Math.min(100, (u.tokensUsed / usageLimit) * 100) : 0
-                return (
-                  <tr key={u.userId}>
-                    <td className="py-1.5">
-                      <span className="font-medium text-gray-800">{u.username ?? u.email}</span>
-                      {u.username && (
-                        <span className="text-gray-400 ml-1.5">{u.email}</span>
-                      )}
-                    </td>
-                    <td className="py-1.5 text-right font-mono text-gray-700">
-                      {u.tokensUsed.toLocaleString('tr-TR')}
-                    </td>
-                    {usageLimit > 0 && (
-                      <td className="py-1.5 text-right">
-                        <span className={
-                          pct >= 90 ? 'text-red-600 font-medium' :
-                          pct >= 70 ? 'text-amber-600' :
-                          'text-gray-500'
-                        }>
-                          {pct.toFixed(0)}%
-                        </span>
-                      </td>
-                    )}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <ul className="m-0 flex list-none flex-col p-0">
+            {usage.map((u, i) => {
+              const pct = usageLimit > 0 ? Math.min(100, (u.tokensUsed / usageLimit) * 100) : 0
+              const tone = pct >= 90 ? 'red' : pct >= 70 ? 'orange' : 'blue'
+              const name = u.username ?? u.email
+              return (
+                <li
+                  key={u.userId}
+                  className={`flex flex-wrap items-center gap-3.5 px-4 py-2.5 transition-colors hover:bg-ui-hover ${i ? 'border-t border-ui-line' : ''}`}
+                >
+                  <span className="flex w-[200px] min-w-0 flex-col">
+                    <span className="truncate text-[13px] font-medium text-tx">{name}</span>
+                    {u.username && <span className="truncate text-[11.5px] text-tx-muted">{u.email}</span>}
+                  </span>
+                  {usageLimit > 0 && (
+                    <div
+                      role="img"
+                      aria-label={`${name}: günlük ${usageLimit.toLocaleString('tr-TR')} tokenin ${u.tokensUsed.toLocaleString('tr-TR')} kadarı kullanıldı (%${pct.toFixed(0)})`}
+                      className="h-2 min-w-[120px] flex-[1_1_200px] overflow-hidden rounded bg-ui-hover"
+                    >
+                      <div style={{ ...fnStyle(tone), width: `${pct}%` }} className="h-full rounded bg-(--fn)" />
+                    </div>
+                  )}
+                  <span className="ml-auto text-right font-mono text-[12.5px] text-tx-2 tabular-nums">
+                    {u.tokensUsed.toLocaleString('tr-TR')}
+                    {usageLimit > 0 && <span className="text-tx-muted"> / {usageLimit.toLocaleString('tr-TR')} · %{pct.toFixed(0)}</span>}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
         )}
-        <div className="text-xs text-gray-400 border-t border-gray-100 pt-2">
-          Token sayısı yaklaşıktır: üretilen karakter sayısı ÷ 4. Limit değiştirmek için <code className="px-1 bg-gray-100 rounded">appsettings.json → Ai:DailyTokenBudgetPerUser</code>.
+        <div className="border-t border-ui-line px-4 py-2.5 text-[12px] text-tx-muted">
+          Token sayısı yaklaşıktır: üretilen karakter sayısı ÷ 4. Limit değiştirmek için{' '}
+          <code className="rounded bg-ui-hover px-1 font-mono text-tx-2">appsettings.json → Ai:DailyTokenBudgetPerUser</code>.
         </div>
-      </div>
-    </div>
+      </Card>
+    </AdminPage>
   )
 }
 
@@ -328,30 +312,32 @@ const PROVIDER_OPTIONS = [
 
 function ProviderRow({ p }: { p: AiProviderHealth }) {
   const status = !p.configured
-    ? { Icon: MinusCircle, color: 'text-gray-400', bg: 'bg-gray-100', label: 'Devre dışı' }
+    ? { Icon: MinusCircle, tone: 'gray' as const, label: 'Devre dışı' }
     : p.available
-      ? { Icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', label: 'Çalışıyor' }
-      : { Icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50', label: 'Erişilemez' }
+      ? { Icon: CheckCircle2, tone: 'green' as const, label: 'Çalışıyor' }
+      : { Icon: AlertCircle, tone: 'red' as const, label: 'Erişilemez' }
   const role = p.name === 'ollama' ? 'Birincil' : 'Yedek (cloud)'
   return (
-    <li className="flex items-start gap-3 py-2.5">
-      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${status.bg}`}>
-        <status.Icon size={14} className={status.color} />
+    <li className="flex flex-wrap items-center gap-3 rounded-[10px] border border-ui-line bg-ui-side px-3.5 py-3">
+      <span
+        aria-hidden="true"
+        style={fnStyle(p.name === 'ollama' ? 'blue' : 'orange')}
+        className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-[10px] bg-(--fn-tint) text-[13px] font-bold text-(--fn-ink) uppercase"
+      >
+        {p.name.slice(0, 2)}
+      </span>
+      <div className="flex min-w-0 flex-[1_1_200px] flex-col">
+        <span className="text-[13px] font-semibold text-tx">
+          <span className="capitalize">{p.name}</span> <span className="font-normal text-tx-muted">· {role}</span>
+          {p.latencyMs != null && <span className="ml-1.5 font-mono text-[11.5px] font-normal text-tx-muted">{p.latencyMs}ms</span>}
+        </span>
+        {p.model && <span className="font-mono text-[12px] text-tx-muted">{p.model}</span>}
+        {p.error && <span className="mt-0.5 text-[12px] break-words text-fn-orange-ink">{p.error}</span>}
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-sm font-medium text-gray-800 capitalize">{p.name}</span>
-          <span className="text-[10px] uppercase tracking-wide text-gray-400">{role}</span>
-          <span className={`text-xs ${status.color}`}>{status.label}</span>
-          {p.latencyMs != null && (
-            <span className="text-[11px] text-gray-400 font-mono">{p.latencyMs}ms</span>
-          )}
-        </div>
-        <div className="text-xs text-gray-500 mt-0.5">
-          {p.model && <span className="font-mono">{p.model}</span>}
-          {p.error && <span className="block text-amber-600 mt-0.5 break-words">{p.error}</span>}
-        </div>
-      </div>
+      <Pill tone={status.tone}>
+        <status.Icon size={12} aria-hidden="true" />
+        {status.label}
+      </Pill>
     </li>
   )
 }

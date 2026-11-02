@@ -1,0 +1,66 @@
+<Project>
+
+  <!--
+    İzole XSLT worker'ı (XsltCraft.XsltWorker, Exe) bir projenin çıktısına $(OutDir)xsltworker\ altına koyar.
+    Kullanan: XsltCraft.Api (üretim varsayılan yolu: XsltWorkerLocator {BaseDir}/xsltworker/apphost) ve
+    XsltCraft.XsltWorker.Tests (testler aynı yolu kullanır). Csproj'un SONUNDA içe aktarılır.
+
+    - Yalnız build sırası: ReferenceOutputAssembly="false" → worker assembly'si referans edilmez/yüklenmez.
+    - Private="false" → Exe→Exe ProjectReference'ın kopyalama öğeleri (worker apphost'u, .deps.json,
+      .runtimeconfig.json) referans veren projenin çıktı KÖKÜNE düşmez (orada dll'siz, kırık bir apphost olurdu).
+    - OutputItemType → referansın Build çıktısı (TargetPath) ProjectReference'ın kurduğu proje örneğinden
+      (aynı Configuration/TargetFramework/RuntimeIdentifier) alınır; -r <rid> build'inde doğru RID klasörü.
+    - Kopyalar FileWrites'a eklenir (IncrementalClean'den ÖNCE) → dotnet clean siler.
+    - Kopyalanacak dosya bulunamazsa HATA (sessiz boş kopya yok).
+    - Docker/CI'da worker ayrı publish edilir → -p:BuildXsltWorker=false bu dosyayı etkisiz kılar.
+  -->
+
+  <PropertyGroup>
+    <XsltWorkerProjectPath Condition="'$(XsltWorkerProjectPath)' == ''">$(MSBuildThisFileDirectory)..\XsltCraft.XsltWorker\XsltCraft.XsltWorker.csproj</XsltWorkerProjectPath>
+    <XsltWorkerOutputSubdirectory Condition="'$(XsltWorkerOutputSubdirectory)' == ''">xsltworker</XsltWorkerOutputSubdirectory>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(BuildXsltWorker)' != 'false'">
+    <ProjectReference Include="$(XsltWorkerProjectPath)"
+                      ReferenceOutputAssembly="false"
+                      Private="false"
+                      OutputItemType="_XsltWorkerTargetPath" />
+  </ItemGroup>
+
+  <Target Name="CopyXsltWorkerOutput"
+          AfterTargets="CopyFilesToOutputDirectory"
+          Condition="'$(BuildXsltWorker)' != 'false'">
+
+    <Error Condition="'@(_XsltWorkerTargetPath)' == ''"
+           Text="XSLT worker çıktı yolu çözülemedi ($(XsltWorkerProjectPath)). ProjectReference çıktısı boş; -p:BuildXsltWorker=false ile devre dışı bırakılabilir." />
+    <Error Condition="!Exists('%(_XsltWorkerTargetPath.FullPath)')"
+           Text="XSLT worker derlemesi bulunamadı: %(_XsltWorkerTargetPath.FullPath)" />
+
+    <PropertyGroup>
+      <_XsltWorkerOutDir>@(_XsltWorkerTargetPath->'%(RootDir)%(Directory)')</_XsltWorkerOutDir>
+      <_XsltWorkerDestination>$(OutDir)$(XsltWorkerOutputSubdirectory)\</_XsltWorkerDestination>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <!-- RID'siz düzende (bin\<cfg>\<tfm>\) önceki RID'li build'lerin alt klasörleri ve publish çıktısı karışmasın. -->
+      <_XsltWorkerFiles Include="$(_XsltWorkerOutDir)**\*"
+                        Exclude="$(_XsltWorkerOutDir)publish\**;$(_XsltWorkerOutDir)win-*\**;$(_XsltWorkerOutDir)linux-*\**;$(_XsltWorkerOutDir)linux-musl-*\**;$(_XsltWorkerOutDir)osx-*\**" />
+      <_XsltWorkerCopies Include="@(_XsltWorkerFiles->'$(_XsltWorkerDestination)%(RecursiveDir)%(Filename)%(Extension)')" />
+    </ItemGroup>
+
+    <Error Condition="'@(_XsltWorkerFiles)' == ''"
+           Text="XSLT worker çıktı klasöründe kopyalanacak dosya yok: $(_XsltWorkerOutDir)" />
+
+    <Copy SourceFiles="@(_XsltWorkerFiles)"
+          DestinationFiles="@(_XsltWorkerCopies)"
+          SkipUnchangedFiles="true" />
+
+    <Error Condition="!Exists('$(_XsltWorkerDestination)%(_XsltWorkerTargetPath.Filename)%(_XsltWorkerTargetPath.Extension)')"
+           Text="XSLT worker kopyası eksik: $(_XsltWorkerDestination)%(_XsltWorkerTargetPath.Filename)%(_XsltWorkerTargetPath.Extension)" />
+
+    <ItemGroup>
+      <FileWrites Include="@(_XsltWorkerCopies)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

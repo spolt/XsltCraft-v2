@@ -9,7 +9,12 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import BlockPalette from '../components/editor/BlockPalette'
+import EditorLeftPanel from '../components/editor/EditorLeftPanel'
+import DesignStatusBar from '../components/editor/DesignStatusBar'
+import { DOCUMENT_TYPE_LABEL, findPaletteItem } from '../components/editor/paletteIcons'
+import WorkspaceHeader from '../components/shell/WorkspaceHeader'
+import { HeaderButton, HeaderChip, HeaderDivider, HeaderStatus } from '../components/shell/headerParts'
+import { Check, Download, Eye, PanelLeft, Pencil, Redo2, Save, Undo2 } from 'lucide-react'
 import Canvas from '../components/editor/Canvas'
 import { CANVAS_DROPPABLE_ID, canvasPageRef, canvasScaleRef } from '../components/editor/canvasRefs'
 import PropertyPanel from '../components/editor/PropertyPanel'
@@ -70,10 +75,9 @@ export default function EditorPage() {
   const setHasStoredXslt = useEditorStore((s) => s.setHasStoredXslt)
 
   // XML store
-  const xmlFiles    = useXmlStore((s) => s.xmlFiles)
-  const activeXmlId = useXmlStore((s) => s.activeXmlId)
   const addXmlFile  = useXmlStore((s) => s.addXmlFile)
-  const setActiveXml = useXmlStore((s) => s.setActiveXml)
+  const isSelecting = useXmlStore((s) => s.isSelecting)
+
 
   const [isLoading, setIsLoading]         = useState(!!routeTemplateId)
   const [isSaving, setIsSaving]           = useState(false)
@@ -83,7 +87,9 @@ export default function EditorPage() {
   const [nameInput, setNameInput]         = useState(templateName)
   const [showPreview, setShowPreview]     = useState(false)
   const [xmlError, setXmlError]           = useState<string | null>(null)
-  const [paletteOpen, setPaletteOpen]     = useState(() => window.innerWidth >= 900)
+  const [leftOpen, setLeftOpen]           = useState(() => window.innerWidth >= 900)
+  // XPath seçimi başladığında (sağ paneldeki bağlantı düğmesi) sol panel kapalıysa aç — ağaç orada.
+  if (isSelecting && !leftOpen) setLeftOpen(true)
   const [namePrompt, setNamePrompt]       = useState<null | 'save' | 'download'>(null)
   const [saveSuccess, setSaveSuccess]       = useState(false)
   const saveSuccessTimer                    = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -102,10 +108,15 @@ export default function EditorPage() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [isDirty])
 
+  const confirmLeave = useCallback(
+    () => !isDirty || window.confirm('Kaydedilmemiş değişiklikler var. Sayfadan ayrılmak istiyor musun?'),
+    [isDirty],
+  )
+
   const handleNavigate = useCallback((path: string) => {
-    if (isDirty && !window.confirm('Kaydedilmemiş değişiklikler var. Sayfadan ayrılmak istiyor musun?')) return
+    if (!confirmLeave()) return
     navigate(path)
-  }, [isDirty, navigate])
+  }, [confirmLeave, navigate])
 
   // ── DnD (sadece palet -> canvas icin) ────────────────────────────────────────
   const [activeId, setActiveDndId] = useState<string | null>(null)
@@ -153,9 +164,7 @@ export default function EditorPage() {
     addBlock(blockType, { x: clamped.x, y: clamped.y }, configOverride)
   }
 
-  const activePaletteType = activeId?.startsWith('palette-')
-    ? (activeId.replace('palette-', '') as BlockType)
-    : null
+  const activePaletteItem = activeId ? findPaletteItem(activeId) : undefined
 
   // ── XML yükleme ──────────────────────────────────────────────────────────────
   async function handleXmlUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -346,154 +355,133 @@ export default function EditorPage() {
     setNamePrompt(null)
     if (action === 'save') save(name)
     else handleDownload(name)
-  }, [namePrompt, setTemplateName, save, handleDownload]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [namePrompt, setTemplateName, save, handleDownload])
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50 text-gray-500 text-sm">
+      <div role="status" className="flex h-screen items-center justify-center bg-ui-bg font-sans text-sm text-tx-muted">
         Şablon yükleniyor…
       </div>
     )
   }
 
   const hasBlocks = Object.keys(blocks).length > 0
+  const panelVisible = leftOpen
 
-  const GHOST_BTN: React.CSSProperties = {
-    padding: '6px 12px', borderRadius: 6, fontSize: 12,
-    border: '1px solid #D3D1C7', background: '#fff', cursor: 'pointer',
-    color: '#5F5E5A', transition: 'all 150ms', whiteSpace: 'nowrap',
-    display: 'inline-flex', alignItems: 'center', height: 32,
-  }
-  const PRIMARY_BTN: React.CSSProperties = {
-    padding: '6px 16px', borderRadius: 6, fontSize: 12,
-    border: '1px solid #185FA5', background: '#185FA5',
-    color: '#fff', cursor: isSaving || !isDirty ? 'not-allowed' : 'pointer',
-    opacity: isSaving || !isDirty ? 0.45 : 1, whiteSpace: 'nowrap',
-    display: 'inline-flex', alignItems: 'center', height: 32, flexShrink: 0,
-  }
+  const nameEditor = isEditingName ? (
+    <>
+      <label htmlFor="design-template-name" className="sr-only">Şablon adı</label>
+      <input
+        id="design-template-name"
+        autoFocus
+        className="h-[30px] w-[220px] rounded-md border border-ui-btn-line bg-ui-search px-2 text-[13px] font-medium text-ui-bar-fg outline-none focus:border-ui-accent"
+        value={nameInput}
+        onChange={(e) => setNameInput(e.target.value)}
+        onBlur={commitName}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commitName()
+          if (e.key === 'Escape') { setNameInput(templateName); setIsEditingName(false) }
+        }}
+      />
+    </>
+  ) : (
+    <button
+      type="button"
+      onClick={() => { setNameInput(templateName); setIsEditingName(true) }}
+      className="xc-focus group flex max-w-[240px] items-center gap-1.5 rounded px-1 text-[13px] font-medium text-ui-bar-fg hover:bg-ui-bar-line"
+      title="Adı düzenle"
+      aria-label={`Şablon adı: ${templateName} — düzenle`}
+    >
+      <span className="truncate">{templateName}</span>
+      <Pencil size={12} aria-hidden="true" className="flex-none text-ui-bar-muted opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" />
+    </button>
+  )
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#F1F0EC' }}>
-      {/* Gizli XML dosya input'u */}
+    <div className="flex h-screen flex-col overflow-hidden bg-ui-bg font-sans text-[13px] text-tx">
+      {/* Gizli XML dosya input'u — sayfada tek; sol paneldeki "XML yükle" tetikler */}
       <input ref={xmlInputRef} type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlUpload} />
 
-      {/* Topbar */}
-      <header style={{ height: 48, background: '#fff', borderBottom: '1px solid #E0DDD8', display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12, flexShrink: 0 }}>
-        {/* Logo */}
-        <span style={{ fontWeight: 700, color: '#185FA5', fontSize: 14, flexShrink: 0 }}>XsltCraft</span>
-        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
-
-        {/* Palette toggle */}
-        <button onClick={() => setPaletteOpen(v => !v)} style={GHOST_BTN} title="Blok listesini aç/kapat">
-          ☰
-        </button>
-        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
-
-        {/* Geri */}
-        <button onClick={() => handleNavigate('/dashboard')} style={GHOST_BTN}>
-          ‹ Geri
-        </button>
-        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
-
-        {/* Template adı */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-          {isEditingName ? (
-            <input
-              autoFocus
-              style={{ fontSize: 13, fontWeight: 500, border: '1px solid #185FA5', borderRadius: 5, padding: '2px 8px', outline: 'none', width: 220, color: '#2C2C2A', background: '#fff', height: 28, boxSizing: 'border-box' }}
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              onBlur={commitName}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitName()
-                if (e.key === 'Escape') { setNameInput(templateName); setIsEditingName(false) }
-              }}
+      <WorkspaceHeader
+        active="design"
+        onNavigate={handleNavigate}
+        confirmLeave={confirmLeave}
+        leading={
+          <HeaderButton
+            variant="icon"
+            icon={PanelLeft}
+            onClick={() => setLeftOpen((v) => !v)}
+            aria-label={panelVisible ? 'Sol paneli kapat' : 'Sol paneli aç'}
+            aria-expanded={panelVisible}
+            aria-controls="design-left-panel"
+            title="Bloklar / XML ağacı panelini aç/kapat"
+          />
+        }
+        center={
+          <>
+            {nameEditor}
+            <HeaderChip>{DOCUMENT_TYPE_LABEL[documentType]}</HeaderChip>
+            {isSaving ? (
+              <HeaderStatus>Kaydediliyor…</HeaderStatus>
+            ) : isDirty ? (
+              <HeaderStatus>
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-fn-orange" />
+                  Kaydedilmedi
+                </span>
+              </HeaderStatus>
+            ) : null}
+            {saveError && (
+              <span role="alert" className="max-w-[260px] truncate rounded bg-fn-red-tint px-2 py-0.5 text-[11.5px] text-fn-red-ink" title={saveError}>
+                {saveError}
+              </span>
+            )}
+          </>
+        }
+        actions={
+          <>
+            <HeaderButton
+              variant="icon"
+              icon={Undo2}
+              onClick={undo}
+              disabled={past.length === 0}
+              aria-label="Geri al"
+              title="Geri al (Ctrl+Z)"
             />
-          ) : (
-            <button
-              onClick={() => { setNameInput(templateName); setIsEditingName(true) }}
-              style={{ fontSize: 13, fontWeight: 500, color: '#2C2C2A', background: 'none', border: 'none', cursor: 'pointer', padding: 0, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-              title="Adı düzenle"
+            <HeaderButton
+              variant="icon"
+              icon={Redo2}
+              onClick={redo}
+              disabled={future.length === 0}
+              aria-label="Yinele"
+              title="Yinele (Ctrl+Y)"
+            />
+            <HeaderDivider />
+            <HeaderButton
+              icon={Eye}
+              onClick={() => setShowPreview((v) => !v)}
+              aria-pressed={showPreview}
+              title="Canlı önizlemeyi aç/kapat"
+              className={showPreview ? 'bg-ui-bar-line' : ''}
             >
-              {templateName}
-            </button>
-          )}
-          <span
-            style={{
-              flexShrink: 0, fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
-              ...(documentType === 'Despatch'
-                ? { background: '#FEF3E2', color: '#B45309', border: '1px solid #F5D9A8' }
-                : { background: '#EBF3FC', color: '#185FA5', border: '1px solid #B5D4F4' }),
-            }}
-            title="Belge türü"
-          >
-            {documentType === 'Despatch' ? 'e-İrsaliye' : 'e-Fatura / e-Arşiv'}
-          </span>
-          {isDirty && !isSaving && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, fontSize: 11, color: '#888780' }}>
-              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#E53E3E', flexShrink: 0 }} />
-              Kaydedilmedi
-            </span>
-          )}
-          {isSaving && (
-            <span style={{ fontSize: 11, color: '#888780', flexShrink: 0 }}>Kaydediliyor…</span>
-          )}
-        </div>
-
-        {saveError && <span style={{ fontSize: 11, color: '#E53E3E', flexShrink: 0 }}>{saveError}</span>}
-        {xmlError  && <span style={{ fontSize: 11, color: '#E53E3E', flexShrink: 0 }}>{xmlError}</span>}
-
-        {/* XML upload */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <button onClick={() => xmlInputRef.current?.click()} style={GHOST_BTN} title="XML dosyası yükle">
-            + XML
-          </button>
-          {xmlFiles.length > 1 && (
-            <select value={activeXmlId ?? ''} onChange={(e) => setActiveXml(e.target.value)} style={{ ...GHOST_BTN, paddingRight: 4 }}>
-              {xmlFiles.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
-            </select>
-          )}
-          {xmlFiles.length === 1 && (
-            <span style={{ fontSize: 11, color: '#888780', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={xmlFiles[0].name}>
-              {xmlFiles[0].name}
-            </span>
-          )}
-        </div>
-        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
-
-        {/* Undo/Redo */}
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          <button onClick={undo} disabled={past.length === 0} style={{ ...GHOST_BTN, opacity: past.length === 0 ? 0.4 : 1, cursor: past.length === 0 ? 'not-allowed' : 'pointer' }} title="Geri Al (Ctrl+Z)">Geri Al</button>
-          <button onClick={redo} disabled={future.length === 0} style={{ ...GHOST_BTN, opacity: future.length === 0 ? 0.4 : 1, cursor: future.length === 0 ? 'not-allowed' : 'pointer' }} title="Yinele (Ctrl+Y)">Yinele</button>
-        </div>
-        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
-
-        {/* Preview + Download */}
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          <button
-            onClick={() => setShowPreview(v => !v)}
-            style={{ ...GHOST_BTN, ...(showPreview ? { borderColor: '#185FA5', color: '#185FA5' } : {}) }}
-            title="Canlı önizlemeyi aç/kapat"
-          >
-            Önizle
-          </button>
-          <button
-            onClick={() => handleDownload()}
-            disabled={isDownloading || !hasBlocks}
-            style={{ ...GHOST_BTN, opacity: isDownloading || !hasBlocks ? 0.4 : 1, cursor: isDownloading || !hasBlocks ? 'not-allowed' : 'pointer' }}
-            title="XSLT dosyasını indir"
-          >
-            {isDownloading ? '…' : '↓ İndir'}
-          </button>
-        </div>
-        <div style={{ width: 1, height: 24, background: '#E0DDD8', flexShrink: 0 }} />
-
-        {/* Save */}
-        <button onClick={() => save()} disabled={isSaving || !isDirty} style={PRIMARY_BTN}>
-          {isSaving ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
-      </header>
+              Önizle
+            </HeaderButton>
+            <HeaderButton icon={Save} onClick={() => save()} disabled={isSaving || !isDirty} title="Taslaklarıma kaydet">
+              {isSaving ? 'Kaydediliyor…' : 'Kaydet'}
+            </HeaderButton>
+            <HeaderButton
+              variant="primary"
+              icon={Download}
+              onClick={() => handleDownload()}
+              disabled={isDownloading || !hasBlocks}
+              title="XSLT dosyasını indir"
+            >
+              {isDownloading ? 'İndiriliyor…' : 'XSLT İndir'}
+            </HeaderButton>
+          </>
+        }
+      />
 
       {/* Editor layout */}
       <DndContext
@@ -501,8 +489,12 @@ export default function EditorPage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          <BlockPalette isOpen={paletteOpen} />
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          {panelVisible && (
+            <div id="design-left-panel" className="flex">
+              <EditorLeftPanel onXmlUploadClick={() => xmlInputRef.current?.click()} xmlError={xmlError} />
+            </div>
+          )}
           <Canvas />
           {showPreview && <EditorPreviewPanel />}
           <PropertyPanel />
@@ -510,51 +502,30 @@ export default function EditorPage() {
 
         {/* Suruklenirken gosterilen overlay (sadece paletten) */}
         <DragOverlay>
-          {activePaletteType && (
-            <div
-              style={{
-                padding: '6px 12px',
-                borderRadius: 6,
-                border: '1.5px solid #B5D4F4',
-                background: 'rgba(235,243,252,0.9)',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                fontSize: 11,
-                fontWeight: 500,
-                color: '#185FA5',
-                cursor: 'grabbing',
-              }}
-            >
-              {activePaletteType}
+          {activePaletteItem && (
+            <div className="flex cursor-grabbing items-center gap-2 rounded-md border border-ui-soft-line bg-ui-card px-3 py-1.5 text-[12px] font-medium text-ui-ink shadow-[var(--ui-shadow-pop)]">
+              <activePaletteItem.icon size={15} strokeWidth={1.8} aria-hidden="true" className="text-ui-accent" />
+              {activePaletteItem.label}
             </div>
           )}
         </DragOverlay>
       </DndContext>
 
-      {/* Kayıt başarı bildirimi */}
-      {saveSuccess && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: '#1A7F4B', color: '#fff', borderRadius: 8,
-          padding: '10px 20px', fontSize: 13, fontWeight: 500,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.18)', zIndex: 99999,
-          display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
-        }}>
-          <span>✓</span> Taslaklarım'a kaydedildi
-        </div>
-      )}
+      <DesignStatusBar isSaving={isSaving} />
 
-      {/* İndirme başlatıldı bildirimi */}
-      {downloadSuccess && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: '#1A5FA5', color: '#fff', borderRadius: 8,
-          padding: '10px 20px', fontSize: 13, fontWeight: 500,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.18)', zIndex: 99999,
-          display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
-        }}>
-          <span>↓</span> Şablon indirme başlatıldı
-        </div>
-      )}
+      {/* Kayıt / indirme bildirimleri */}
+      <div aria-live="polite" className="pointer-events-none fixed bottom-10 left-1/2 z-[99999] -translate-x-1/2">
+        {saveSuccess && (
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-lg bg-fn-green-ink px-5 py-2.5 text-[13px] font-medium text-on-fn shadow-[var(--ui-shadow-pop)]">
+            <Check size={15} strokeWidth={2.4} aria-hidden="true" /> Taslaklarım'a kaydedildi
+          </div>
+        )}
+        {downloadSuccess && (
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-lg bg-ui-accent px-5 py-2.5 text-[13px] font-medium text-ui-accent-fg shadow-[var(--ui-shadow-pop)]">
+            <Download size={15} strokeWidth={2.2} aria-hidden="true" /> Şablon indirme başlatıldı
+          </div>
+        )}
+      </div>
 
       {/* İsim verme modalı — yeni şablon */}
       {namePrompt && (
@@ -588,32 +559,42 @@ function NamePromptModal({ initial, action, onConfirm, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center" style={{ zIndex: 99999 }}>
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
-        <h3 className="text-base font-semibold text-gray-900 mb-1">Şablona isim ver</h3>
-        <p className="text-sm text-gray-500 mb-4">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="name-prompt-title"
+        aria-describedby="name-prompt-desc"
+        className="mx-4 w-full max-w-sm rounded-xl border border-ui-line bg-ui-card p-6 font-sans shadow-[var(--ui-shadow-pop)]"
+      >
+        <h3 id="name-prompt-title" className="mb-1 text-base font-semibold text-tx">Şablona isim ver</h3>
+        <p id="name-prompt-desc" className="mb-4 text-sm text-tx-muted">
           {action === 'save' ? 'Kaydetmeden önce' : 'İndirmeden önce'} şablona bir isim belirleyin.
         </p>
+        <label htmlFor="name-prompt-input" className="sr-only">Şablon adı</label>
         <input
+          id="name-prompt-input"
           ref={inputRef}
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') onClose() }}
           placeholder="Şablon adı…"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 mb-5"
+          className="mb-5 w-full rounded-lg border border-field-line bg-ui-card px-3 py-2 text-sm text-tx outline-none placeholder:text-tx-subtle focus:border-ui-accent focus:ring-2 focus:ring-ui-soft"
         />
-        <div className="flex gap-3 justify-end">
+        <div className="flex justify-end gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-700 border border-gray-300 hover:bg-gray-50 rounded-lg transition"
+            className="xc-focus rounded-lg border border-field-line px-4 py-2 text-sm text-tx-2 transition hover:bg-ui-hover"
           >
             İptal
           </button>
           <button
+            type="button"
             onClick={confirm}
             disabled={!name.trim()}
-            className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-lg transition"
+            className="xc-focus rounded-lg bg-ui-accent px-4 py-2 text-sm font-semibold text-ui-accent-fg transition hover:brightness-110 disabled:opacity-40"
           >
             {action === 'save' ? 'Kaydet' : 'İndir'}
           </button>

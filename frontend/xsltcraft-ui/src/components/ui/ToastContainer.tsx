@@ -1,11 +1,12 @@
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react'
 import { useToastStore, type ToastVariant } from '../../store/toastStore'
+import { fnStyle, type FnColor } from '../../theme/uiThemes'
 
-const VARIANT_STYLES: Record<ToastVariant, { bg: string; border: string; text: string; Icon: typeof Info }> = {
-  info: { bg: 'bg-gray-900/95', border: 'border-blue-700', text: 'text-blue-300', Icon: Info },
-  success: { bg: 'bg-gray-900/95', border: 'border-emerald-700', text: 'text-emerald-300', Icon: CheckCircle2 },
-  warning: { bg: 'bg-gray-900/95', border: 'border-amber-700', text: 'text-amber-300', Icon: AlertTriangle },
-  error: { bg: 'bg-gray-900/95', border: 'border-red-700', text: 'text-red-300', Icon: AlertCircle },
+const VARIANT_STYLES: Record<ToastVariant, { fn: FnColor; Icon: typeof Info }> = {
+  info: { fn: 'blue', Icon: Info },
+  success: { fn: 'green', Icon: CheckCircle2 },
+  warning: { fn: 'orange', Icon: AlertTriangle },
+  error: { fn: 'red', Icon: AlertCircle },
 }
 
 export default function ToastContainer() {
@@ -23,18 +24,19 @@ export default function ToastContainer() {
             key={t.id}
             role="status"
             aria-live="polite"
-            className={`pointer-events-auto rounded-lg border ${style.border} ${style.bg} shadow-xl backdrop-blur-sm px-3 py-2.5 flex items-start gap-2 text-gray-100 animate-in slide-in-from-right-4`}
+            style={fnStyle(style.fn)}
+            className="pointer-events-auto rounded-lg border border-ui-line border-l-4 border-l-(--fn) bg-ui-card shadow-[var(--ui-shadow-pop)] px-3 py-2.5 flex items-start gap-2 text-tx"
           >
-            <style.Icon size={16} className={`flex-shrink-0 mt-0.5 ${style.text}`} />
+            <style.Icon size={16} className="flex-shrink-0 mt-0.5 text-(--fn)" aria-hidden="true" />
             <div className="flex-1 min-w-0">
               {t.title && (
-                <div className={`text-xs font-semibold ${style.text}`}>{t.title}</div>
+                <div className="text-xs font-semibold text-(--fn-ink)">{t.title}</div>
               )}
-              <div className="text-xs text-gray-200 break-words whitespace-pre-wrap">{t.message}</div>
+              <div className="text-xs text-tx-2 break-words whitespace-pre-wrap">{t.message}</div>
             </div>
             <button
               onClick={() => dismiss(t.id)}
-              className="text-gray-500 hover:text-white flex-shrink-0"
+              className="xc-focus rounded text-tx-subtle hover:text-tx flex-shrink-0"
               aria-label="Bildirimi kapat"
             >
               <X size={14} />

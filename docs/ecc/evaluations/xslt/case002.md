@@ -8,11 +8,11 @@ Kullanıcı binding XPath'i üretilen XSLT'ye **verbatim** gömülür (`<xsl:val
 3. `POST /api/render/{id}` ile Saxon'da çalıştırır → **SSRF / yerel dosya okuma** (`unparsed-text('file:///...')`).
 
 ## Korunma (fail-closed)
-- **Generator:** `XsltGeneratorService.Validate` → `XsltSafety.FindThreat` ile üretilen XSLT'nin `select`/`test`/`match` attribute'larında yasak fonksiyon varsa üretimi reddeder (xslt null, error dolu).
+- **Generator (G3):** `XPathPortability` kapısı bu fonksiyonları `XPATH_NOT_PORTABLE` ile işaretler; ifade stylesheet'e **hiç girmez**, blok yer tutucuyla değişir + `Warnings` (blok düzeyinde fail-closed, bkz. case011). `XsltSafety.FindThreat` üretilen XSLT'yi ayrıca tarar (defense-in-depth).
 - **Admin tema yükleme:** `AdminController.ValidateXsltFileAsync` ham `.xslt` içeriğini aynı taramadan geçirir (admin-trusted ama defense-in-depth).
 - **Saxon motoru:** `XsltCompiler`/`DocumentBuilder` üzerinde `XmlResolver.ThrowingResolver` — harici `xsl:import/include` + giriş belgesi çözümlemesini reddeder.
 
 ## Test
-- `XsltEvalTests.Case002_RejectsExternalResourceFunctions` (`[Trait("Category","Eval")]`) — `document()/doc()/unparsed-text()/collection()` binding'i reddedilir.
+- `XsltEvalTests.Case002_RejectsExternalResourceFunctions` (`[Trait("Category","Eval")]`) — `document()/doc()/unparsed-text()/collection()` binding'i stylesheet'e girmez; tek `XPATH_NOT_PORTABLE` uyarısı.
 - `XsltEvalTests.Case002_AllowsBenignXPath` — meşru `//cbc:Note` engellenmemeli (regresyon).
 - `XsltSafetyTests` — helper'ın doğrudan birim testleri (yorum/metin yanlış-pozitif üretmez).

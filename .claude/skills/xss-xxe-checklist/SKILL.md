@@ -23,12 +23,18 @@ var transform = SecureXslt.Compile(xslt); // DTD yasak + document()/script kapal
 
 ## 1. XXE
 - [ ] Her `XmlReader.Create` / `XmlDocument.Load` / `XDocument.Parse` → `DtdProcessing.Prohibit` + `XmlResolver=null`.
-- [ ] Özellikle **kullanıcı XML'i** parse eden yerlerde açık guard (örn. `UblTrBusinessRuleService`, `RenderService`, controller'lar).
+- [ ] Özellikle **kullanıcı XML'i** parse eden yerlerde açık guard (örn. `UblTrBusinessRuleService`, `LimitedXmlReader`, controller'lar).
 
 ## 2. XSLT / script & dış fonksiyon injection (SSRF / dosya okuma)
 - [ ] **.NET yolu:** `transform.Load` → `XsltSettings(enableDocumentFunction:false, enableScript:false)`.
-- [ ] **Saxon yolu:** `XsltCompiler.XmlResolver` ve `DocumentBuilder.XmlResolver` = `XmlResolver.ThrowingResolver` (Saxon `document()`/`doc()`/`unparsed-text()` varsayılan AÇIK → SSRF/`file://` okuma).
-- [ ] **Kullanıcı XPath'i stylesheet'e gömülüyorsa** `XsltSafety.FindThreat` ile fail-closed tara (`document`/`doc`/`unparsed-text`/`collection`/`system-property` + harici `xsl:import/include`). Generator ve admin tema yükleme bunu kullanır — yeni gömme noktası eklerken atlama.
+- [ ] **Saxon yolu (12.x, ADR 008 §6):** `Processor` yalnız `SaxonProcessorFactory`'den (yeni `new Processor(...)` = bulgu). Saxon `doc()`/`unparsed-text()`/`collection` varsayılan AÇIK → SSRF/`file://` okuma, bu yüzden:
+  - `ResourceResolver` (config + compiler + transformer), `UnparsedTextURIResolver`, `CollectionFinder`, `ResultDocumentHandler` **fırlatmalı** — `null` dönmek Saxon'un varsayılan çözümleyicisine düşer.
+  - `ALLOWED_PROTOCOLS` geçersiz token (`"xsltcraft-none"`); **tuzak:** `""` = tüm protokollere izin.
+  - `ALLOW_EXTERNAL_FUNCTIONS=false` (`system-property('java.*')` için tek katman), `DISABLE_XSL_EVALUATE=true`, boş env resolver, `XPATH_VERSION_FOR_XSLT=20`, `REGEX_BACKTRACKING_LIMIT`. `FEATURE_SECURE_PROCESSING`'e güvenme (12.10'da yalnız AEF'yi kapatır).
+  - Collation: `RestrictedCollationResolver` şart — `saxon.sf.net/collation?class=X` AEF=false iken de sınıf yükler; dinamik URI (`concat(...)`) statik taramada görünmez.
+  - Stylesheet derlemeden önce .NET ile ön okunmalı (`StylesheetSource.PreRead`: DOCTYPE/iç entity, derinlik, `use-when`/gölge `_*`/`static` reddi) — Saxon `disallow-doctype-decl` stylesheet'e uygulanmaz; girdi XML `XmlReaderTreeBridge` ile.
+  - Kullanıcı XSLT'si (Raw/Validate/UserTemplate) yalnız `IXsltExecutionService` → izole worker; süreç içine (Grid/Theme) kullanıcı XSLT'si sızdıran yeni yol = bulgu. `transform()` için tek kapı `XsltSafety`.
+- [ ] **Kullanıcı XPath'i stylesheet'e gömülüyorsa** `XsltSafety` ile fail-closed tara (çalıştırma: `Scan(..., Execute)`, saklama: `FindThreat`) ve grid bağlamasında `XPathPortability` maliyet kapısından geçir (`document`/`doc`/`unparsed-text`/`collection`/`system-property` + harici `xsl:import/include`). Generator ve admin tema yükleme bunu kullanır — yeni gömme noktası eklerken atlama.
 - [ ] Üretilen/kabul edilen XSLT çıktısında `msxsl:script` / `xmlns:msxsl` yok.
 
 ## 3. XPath injection
