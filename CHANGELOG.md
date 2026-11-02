@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-> 2.0.0 major sürümü hazırlanıyor (XSLT 2.0 motoru + UI/UX yeniden tasarım). `[2.0.0]` başlığı GA'da açılacak; o zamana kadar tüm değişiklikler burada birikir.
+## [2.0.0] - 2026-11-02
 
 ### BREAKING
 - **Kaldırılan uçlar**: `POST /api/render/{templateId}` ve `POST /api/document/{layout}` (ikisi de zaten çalışmıyordu). Önizleme/indirme için `/api/preview/*` ve kullanıcı şablonu uçları kullanılır.
