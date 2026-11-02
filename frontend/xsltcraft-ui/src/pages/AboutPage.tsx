@@ -49,7 +49,7 @@ const RELEASE_NOTES = [
   'XSLT 2.0 desteği — Saxon-HE motoru, izole çalışma alanında.',
   'XSLT editöründe 1.0 uyumluluk uyarıları.',
   'Temalarda XSLT 2.0 ile hazırlanmış şablonlar.',
-  'Yeni arayüz: Kurumsal Lacivert, Mor ve Gece Mavisi renkleri.',
+  'Yeni arayüz: Safir, Ametist ve Gece Mavisi renkleri.',
 ]
 
 export default function AboutPage() {

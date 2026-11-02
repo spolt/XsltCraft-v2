@@ -9,8 +9,8 @@ export interface UiThemeOption {
 }
 
 export const UI_THEMES: readonly UiThemeOption[] = [
-  { id: 'lacivert', name: 'Kurumsal Lacivert', swatch: 'var(--ui-swatch-lacivert)' },
-  { id: 'mor', name: 'Mor', swatch: 'var(--ui-swatch-mor)' },
+  { id: 'lacivert', name: 'Safir', swatch: 'var(--ui-swatch-lacivert)' },
+  { id: 'mor', name: 'Ametist', swatch: 'var(--ui-swatch-mor)' },
   { id: 'gece', name: 'Gece Mavisi', swatch: 'var(--ui-swatch-gece)' },
 ]
 

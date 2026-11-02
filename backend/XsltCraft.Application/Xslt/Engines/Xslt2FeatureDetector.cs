@@ -4,16 +4,18 @@ using XsltCraft.Application.Validation.Safety;
 namespace XsltCraft.Application.Xslt.Engines;
 
 /// <summary>
-/// Tema hattı motor seçimi (ADR 007 §2, T-izi): <c>version="2.0"</c> bildiren stylesheet XSLT 1.0 motorunun
-/// (.NET ileri-uyumlu kip) çalıştıramayacağı bir yapı kullanıyor mu? GİB temalarının çoğu <c>version="2.0"</c>
+/// Ham XSLT ve tema hattı motor seçimi (ADR 007 §2-3): <c>version="2.0"</c> bildiren stylesheet XSLT 1.0 motorunun
+/// (.NET ileri-uyumlu kip) çalıştıramayacağı bir yapı kullanıyor mu? GİB şablonlarının çoğu <c>version="2.0"</c>
 /// bildirip yalnız 1.0 kullanır (<c>xsl:character-map</c> gibi bildirimler .NET'te yok sayılır) — bunlar .NET'te
 /// kalır, çıktıları bit-aynıdır. Yalnız şunlar 2.0 sayılır:
 /// <list type="bullet">
 /// <item>Şablon içinde 2.0 komutu (<c>xsl:for-each-group</c>, <c>xsl:sequence</c>, <c>xsl:analyze-string</c> …).</item>
+/// <item>.NET'in sessizce yok saydığı 2.0 özniteliği (<c>xsl:value-of/@separator</c>, <c>xsl:attribute/@select</c> …).</item>
 /// <item>XPath'te XPath 1.0 / XSLT 1.0 dışı ön eksiz fonksiyon (<c>exists()</c>, <c>replace()</c>, <c>if (</c> …),
 ///   msxsl/exsl dışı ön ekli fonksiyon (<c>fn:</c>, <c>xs:</c>, kullanıcı <c>xsl:function</c>'ı).</item>
 /// <item>2.0 sözdizimi: <c>for/some/every $v</c>, <c>instance of</c>, <c>cast(able)/treat as</c>, işlenenden sonra
-///   <c>eq ne lt le gt ge is idiv to intersect except</c>.</item>
+///   <c>eq ne lt le gt ge is idiv to intersect except</c>, dizi virgülü <c>(a, b)</c>, boş dizi <c>()</c>,
+///   parantezli adım <c>a/(b|c)</c>.</item>
 /// </list>
 /// Saf, durumsuz; ayrıştırılamayan metin → <c>false</c> (motor kendi hatasını verir). DTD yasak.
 /// </summary>
@@ -95,6 +97,9 @@ public static class Xslt2FeatureDetector
                     continue;
 
                 var noNamespace = reader.NamespaceURI.Length == 0;
+                if (isXsl && noNamespace && IsXslt2OnlyAttribute(owner, reader.LocalName))
+                    return true;
+
                 if (isXsl && noNamespace && XsltSafetyRules.XPathAttributes.Contains(reader.LocalName))
                 {
                     if (ExpressionUsesXpath2(reader.Value, reader))
@@ -113,6 +118,15 @@ public static class Xslt2FeatureDetector
             reader.MoveToElement();
         }
     }
+
+    /// <summary>XSLT 1.0'da olmayan, .NET ileri-uyumlu kipte hatasız yok sayılıp yanlış çıktı veren öznitelikler.</summary>
+    private static bool IsXslt2OnlyAttribute(string element, string attribute) => (element, attribute) switch
+    {
+        ("value-of", "separator") => true,
+        ("attribute", "separator" or "select") => true,
+        ("comment" or "processing-instruction", "select") => true,
+        _ => false,
+    };
 
     private static bool AvtUsesXpath2(string value, XmlReader scope)
     {
@@ -140,11 +154,32 @@ public static class Xslt2FeatureDetector
             return false;
 
         var tokens = XPathTokenizer.Tokenize(expression);
+        var parens = new Stack<bool>(); // true: fonksiyon çağrısı parantezi (içindeki virgül argüman ayırıcıdır)
         for (var k = 0; k < tokens.Count; k++)
         {
             var token = tokens[k];
             if (token.Kind == XPathTokenKind.EqName)
                 return true;
+
+            if (token.Kind == XPathTokenKind.LParen)
+            {
+                var previous = k > 0 ? tokens[k - 1] : default;
+                var isCall = k > 0 && previous.Kind == XPathTokenKind.Name && !Xpath1Operators.Contains(previous.Text);
+                if (!isCall && k + 1 < tokens.Count && tokens[k + 1].Kind == XPathTokenKind.RParen)
+                    return true; // () boş dizi
+                if (k > 0 && previous.Kind == XPathTokenKind.Other && previous.Text == "/")
+                    return true; // a/(b|c) parantezli adım
+                parens.Push(isCall);
+                continue;
+            }
+            if (token.Kind == XPathTokenKind.RParen)
+            {
+                parens.TryPop(out _);
+                continue;
+            }
+            if (token.Kind == XPathTokenKind.Other && token.Text == "," && (parens.Count == 0 || !parens.Peek()))
+                return true; // (a, b) dizi oluşturma
+
             if (token.Kind != XPathTokenKind.Name)
                 continue;
 

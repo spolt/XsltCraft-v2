@@ -47,15 +47,38 @@ public sealed class XsltExecutionServiceTests
         Assert.Equal((XsltGateLane.Raw, XsltExecutionPlace.Isolated), Assert.Single(_gate.Acquired));
     }
 
+    private const string Xslt2Body = "<xsl:template match=\"/\"><p><xsl:value-of select=\"exists(//i)\"/></p></xsl:template>";
+
     [Fact]
-    public async Task Raw_V2_Saxon()
+    public async Task Raw_V2_With2Features_Saxon()
     {
-        var result = await Create().ExecuteAsync(Raw(Stylesheet("2.0")));
+        var result = await Create().ExecuteAsync(Raw(Stylesheet("2.0", Xslt2Body)));
 
         Assert.True(result.Succeeded);
         Assert.Equal(XsltEngineKind.Saxon, Assert.Single(_isolated.Requests).Engine);
         Assert.Equal(XsltEngineKind.Saxon, result.Engine);
         Assert.Equal("<html>ok</html>", result.Html);
+    }
+
+    [Fact]
+    public async Task Raw_V2_Declared_Only_DotNetInWorker()
+    {
+        var result = await Create().ExecuteAsync(Raw(Stylesheet("2.0")));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(XsltEngineKind.DotNet, Assert.Single(_isolated.Requests).Engine);
+        Assert.Equal(XsltExecutionPlace.Isolated, result.Place);
+        Assert.Empty(_inProcess.Requests);
+    }
+
+    [Fact]
+    public async Task Raw_ModeOverride_Saxon_AppliesToDeclaredOnlyStylesheet()
+    {
+        var options = new XsltExecutionOptions { Engine = new XsltEngineRoutingOptions { Raw = XsltEngineMode.Saxon } };
+
+        await Create(options).ExecuteAsync(Raw(Stylesheet("2.0")));
+
+        Assert.Equal(XsltEngineKind.Saxon, Assert.Single(_isolated.Requests).Engine);
     }
 
     [Fact]
@@ -283,7 +306,7 @@ public sealed class XsltExecutionServiceTests
         var sut = Create();
 
         var v1 = await sut.ExecuteAsync(Raw(Stylesheet("1.0")));
-        var v2 = await sut.ExecuteAsync(Raw(Stylesheet("2.0")));
+        var v2 = await sut.ExecuteAsync(Raw(Stylesheet("2.0", Xslt2Body)));
         var userTemplate = await sut.ExecuteAsync(new XsltRunRequest(XsltRoute.UserTemplate, Stylesheet("2.0"), Xml, XsltOperation.Render, User));
         var scriptGrid = await sut.ExecuteAsync(new XsltRunRequest(XsltRoute.Grid, Stylesheet("2.0"), Xml, XsltOperation.Render, User) { IsUserAuthoredGrid = true });
 

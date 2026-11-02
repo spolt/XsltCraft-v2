@@ -8,7 +8,7 @@ namespace XsltCraft.Application.Tests.ThemeSlots;
 
 /// <summary>
 /// Tema hattı için sahte <see cref="IXsltExecutionService"/>: gerçek servisle aynı motor seçimi
-/// (<see cref="XsltEngineSelector.SelectForTheme"/>, <c>Auto</c>), .NET temalar gerçek <see cref="DotNetXsltEngine"/>'le
+/// (<see cref="XsltEngineSelector.SelectByUsage"/>, <c>Auto</c>), .NET temalar gerçek <see cref="DotNetXsltEngine"/>'le
 /// (süreç içi host'la aynı motor — çıktı <c>XsltHtmlRenderer</c> ile bit-aynı) eşzamanlı çalışır. Bu proje Saxon'u
 /// göremez: Saxon seçilen tema <see cref="XsltFailureKind.EngineUnavailable"/> döner (gerçek uçtan uca testler
 /// XsltCraft.XsltWorker.Tests/Themes).
@@ -19,7 +19,7 @@ internal sealed class DotNetThemeExecution : IXsltExecutionService
 
     public Task<XsltRunResult> ExecuteAsync(XsltRunRequest request, CancellationToken cancellationToken = default)
     {
-        var engine = XsltEngineSelector.SelectForTheme(XsltEngineMode.Auto, XsltVersionSniffer.Sniff(request.Xslt), request.Xslt);
+        var engine = XsltEngineSelector.SelectByUsage(XsltEngineMode.Auto, XsltVersionSniffer.Sniff(request.Xslt), request.Xslt);
         if (engine != XsltEngineKind.DotNet)
             return Task.FromResult(Failed(new XsltDiagnostic("Saxon bu test projesinde yok.", 0, 0,
                 XsltFailureKind.EngineUnavailable, engine, "WorkerDisabled"), engine));

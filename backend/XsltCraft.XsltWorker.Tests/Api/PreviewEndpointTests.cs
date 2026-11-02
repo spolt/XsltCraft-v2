@@ -236,6 +236,37 @@ public sealed class PreviewRawGibGeneralTests
         Assert.True(JsonSerializer.SerializeToElement(validate.Value).GetProperty("valid").GetBoolean());
     }
 
+    /// <summary>
+    /// <c>version="2.0"</c> bildirip 1.0 semantiğine güvenen stylesheet: çok düğümlü <c>format-number</c> Saxon'da
+    /// XPTY0004 verir, <c>value-of</c> tüm düğümleri birleştirir. Ham editörde de .NET'te kalıp ilk düğümü almalı.
+    /// </summary>
+    [Fact]
+    public async Task PreviewRaw_Version20StylesheetWith10Semantics_StaysOnDotNet_FirstNodeWins()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["XsltWorker:PoolSize"] = "1",
+            ["XsltWorker:StartupTimeoutMs"] = "20000",
+        }).Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddXsltExecution(configuration);
+        await using var provider = services.BuildServiceProvider();
+        var pool = provider.GetRequiredService<XsltWorkerPool>();
+        await pool.StartAsync(CancellationToken.None);
+        Assert.True(await WorkerTestEnvironment.WaitUntilAsync(() => pool.ReadyCount >= 1, TimeSpan.FromSeconds(30)), "worker hazır değil");
+
+        var controller = Controller(provider.GetRequiredService<IXsltExecutionService>());
+        var xslt = EngineTestKit.Stylesheet("""<p><xsl:value-of select="format-number(//a, '0.00')"/>|<xsl:value-of select="//a"/></p>""");
+
+        var render = await controller.PreviewRaw(new RawPreviewRequest { Xslt = xslt, XmlContent = "<r><a>40.851</a><a>39.62547</a></r>" });
+
+        var body = JsonSerializer.SerializeToElement(((ObjectResult)render).Value);
+        Assert.True(render is OkObjectResult, body.ToString());
+        Assert.Equal("DotNet", body.GetProperty("engine").GetString());
+        Assert.Contains("40.85|40.851<", body.GetProperty("html").GetString());
+    }
+
     private static PreviewController Controller(IXsltExecutionService xslt)
     {
         // PreviewRaw/ValidateXslt yalnız servisi ve logger'ı kullanır; diğer bağımlılıklar bu uçlarda dokunulmaz.

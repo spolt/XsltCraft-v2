@@ -3,7 +3,10 @@ namespace XsltCraft.Application.Xslt.Engines;
 /// <summary>XSLT çalıştırma isteğinin geldiği hat; motor seçimi ve sınırlar hatta göre değişir.</summary>
 public enum XsltRoute
 {
-    /// <summary>Kullanıcının ham XSLT'si (geliştirici modu / XSLT editörü).</summary>
+    /// <summary>
+    /// Kullanıcının ham XSLT'si (geliştirici modu / XSLT editörü). Motor <c>Xslt:Engine:Raw</c>
+    /// (<see cref="XsltEngineSelector.SelectByUsage"/>); her iki motor da izole worker.
+    /// </summary>
     Raw,
 
     /// <summary>Grid blok ağacından üretilen XSLT.</summary>
@@ -11,7 +14,7 @@ public enum XsltRoute
 
     /// <summary>
     /// Hazır tema XSLT'si (yükleme/analiz, compose, galeri önizlemesi). Motor <c>Xslt:Engine:Theme</c>
-    /// (<see cref="XsltEngineSelector.SelectForTheme"/>); .NET süreç içi, Saxon izole worker.
+    /// (<see cref="XsltEngineSelector.SelectByUsage"/>); .NET süreç içi, Saxon izole worker.
     /// </summary>
     Theme,
 

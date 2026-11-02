@@ -93,7 +93,7 @@ public sealed class XsltExecutionRegistrationTests
             $"<xsl:stylesheet version=\"1.0\" xmlns:xsl=\"{ns}\"><xsl:template match=\"/\"><b><xsl:value-of select=\"/r\"/></b></xsl:template></xsl:stylesheet>",
             "<r>merhaba</r>", XsltOperation.Render, user));
         var v2 = await service.ExecuteAsync(new XsltRunRequest(XsltRoute.Raw,
-            $"<xsl:stylesheet version=\"2.0\" xmlns:xsl=\"{ns}\"><xsl:template match=\"/\"/></xsl:stylesheet>",
+            $"<xsl:stylesheet version=\"2.0\" xmlns:xsl=\"{ns}\"><xsl:template match=\"/\"><xsl:value-of select=\"exists(/r)\"/></xsl:template></xsl:stylesheet>",
             "<r/>", XsltOperation.Render, user));
 
         Assert.True(v1.Succeeded, v1.Diagnostic?.Message);

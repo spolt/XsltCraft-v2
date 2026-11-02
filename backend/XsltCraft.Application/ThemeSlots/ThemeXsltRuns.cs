@@ -5,7 +5,7 @@ namespace XsltCraft.Application.ThemeSlots;
 
 /// <summary>
 /// Tema hattının tek yürütme yolu (T-izi): <see cref="XsltRoute.Theme"/> üzerinden <see cref="IXsltExecutionService"/>.
-/// Motor sürüm + 2.0 yapısıyla seçilir (<see cref="XsltEngineSelector.SelectForTheme"/>): 1.0 temalar .NET'te süreç içi
+/// Motor sürüm + 2.0 yapısıyla seçilir (<see cref="XsltEngineSelector.SelectByUsage"/>): 1.0 temalar .NET'te süreç içi
 /// (çıktı eskisiyle bit-aynı), 2.0 temalar Saxon'da izole worker'da. Aynı stylesheet hep aynı motora gider —
 /// analizdeki işaretsiz/işaretli karşılaştırması tek motorla yapılır.
 /// </summary>

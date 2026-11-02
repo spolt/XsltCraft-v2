@@ -14,7 +14,7 @@ namespace XsltCraft.Application.Xslt.Execution;
 /// <item>Yer: Raw/Validate/UserTemplate ve script'li grid → izole; grid → süreç içi. Hazır tema
 ///   (<see cref="XsltRoute.Theme"/>: yükleme/analiz, compose, galeri; grid sınırları — G3, T-izi): .NET → süreç içi,
 ///   Saxon (2.0 yapısı kullanan tema, <see cref="XsltEngineRoutingOptions.Theme"/>) → izole.
-///   Worker kapalıysa 1.0 → süreç içi .NET, ≥ 2.0 ve script'li grid → <c>EngineUnavailable</c>.</item>
+///   Worker kapalıysa .NET → süreç içi, Saxon ve script'li grid → <c>EngineUnavailable</c>.</item>
 /// <item><see cref="IXsltUserGate"/> → host → sonuç kapıya FİİLÎ yerle (<see cref="XsltHostResult.Place"/>)
 ///   bildirilir, izin her durumda bırakılır.</item>
 /// </list>
@@ -65,9 +65,12 @@ public sealed class XsltExecutionService : IXsltExecutionService
         if (CheckVersion(version) is { } unsupported)
             return XsltRunResult.Failed(unsupported);
 
-        var engine = request.Route == XsltRoute.Theme
-            ? XsltEngineSelector.SelectForTheme(_options.Engine.Theme, version, request.Xslt)
-            : XsltEngineSelector.Select(ModeFor(request.Route), version);
+        var engine = request.Route switch
+        {
+            XsltRoute.Theme => XsltEngineSelector.SelectByUsage(_options.Engine.Theme, version, request.Xslt),
+            XsltRoute.Raw => XsltEngineSelector.SelectByUsage(_options.Engine.Raw, version, request.Xslt),
+            _ => XsltEngineSelector.Select(_options.Engine.Grid, version),
+        };
         var (place, unavailable) = ResolvePlace(request, engine);
         if (unavailable is not null)
             return XsltRunResult.Failed(unavailable, engine);
@@ -159,12 +162,6 @@ public sealed class XsltExecutionService : IXsltExecutionService
         };
     }
 
-    private XsltEngineMode ModeFor(XsltRoute route) => route switch
-    {
-        XsltRoute.Raw => _options.Engine.Raw,
-        _ => _options.Engine.Grid,
-    };
-
     private (XsltExecutionPlace Place, XsltDiagnostic? Unavailable) ResolvePlace(XsltRunRequest request, XsltEngineKind engine)
     {
         // Tema: .NET (1.0 ve 2.0 bildirip 1.0 kullanan GİB temaları) süreç içinde kalır — çıktı bit-aynı.
@@ -177,7 +174,7 @@ public sealed class XsltExecutionService : IXsltExecutionService
         if (_isolatedHost.IsEnabled)
             return (XsltExecutionPlace.Isolated, null);
 
-        // Worker kapalı (yerel geliştirme): yalnız kullanıcı kodu içermeyen 1.0 yol süreç içine düşer.
+        // Worker kapalı (yerel geliştirme): yalnız .NET motorlu yol süreç içine düşer.
         if (request.Route == XsltRoute.Grid)
             return (XsltExecutionPlace.Isolated, Unavailable(engine, "Script bloklu grid önizlemesi izole XSLT motoru gerektirir; motor bu ortamda devre dışı."));
         if (engine != XsltEngineKind.DotNet)
