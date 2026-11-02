@@ -145,7 +145,6 @@ Grid ve Theme rotaları `IXsltInProcessHost` → `InProcessXsltHost` (`InProcess
 | `ForwardedHeaders` yok: Api nginx arkasına alınırsa IP bazlı limitler (`theme-preview` anonim, `auth-sensitive`, `auth-register`) tek kovaya düşer | Açık |
 | IKVM dönüşüm önbelleği (`/tmp/ikvm/cache`) hash'siz | Release'te önbelleksiz build ya da doğrulama |
 | `PreviewTheme`/tema hattı süreç içi .NET | T-izi; ayrı iş |
-| `xslt` modlu compose (`/api/preview/compose`, `themeId` yok) API sürecinde çalışır: öznitelik/ad tavanları ve süreç geneli kapı (`Xslt:ThemeCompose:MaxConcurrent`, dolu → 429) sınırlar, ama birleştirme iptal edilemez ve `XName` tablosundaki yavaş sızıntı kalır | Kabul (sahip); kalıcı çözüm worker'a taşıma |
 | `/api/xpath/evaluate` süreç içi `XPathEvaluator` (G4: `[Authorize]` + `xpath-evaluate` 120/dk/kullanıcı; güvenli okuyucu + grid girdi sınırları; `XPathPortability` maliyet kapısı TOO_LONG/TOO_COMPLEX → 400; ayrı guard 2 slot / 5 sn — kaçak slotu tutar) | Kabul; kalan sınıf §8 ile aynı (kapının geçirdiği süper-doğrusal ifade en çok 2 thread) |
 | `/api/assets/{id}/serve` anonim: asset GUID'i erişim anahtarıdır; oturumlu başka kullanıcıya 403 göstermeliktir (oturumsuz aynı istek 200) | Kabul (editör küçük resmi + 2.0 öncesi indirilmiş XSLT'ler bağımlı) |
 | Ağ izolasyonu yok | seccomp/`unshare` sonraki adım |

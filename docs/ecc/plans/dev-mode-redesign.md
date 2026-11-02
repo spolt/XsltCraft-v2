@@ -16,7 +16,6 @@ Kapsam: `/dev-mode/:templateId` ekranı, Tema Kullan ↔ Geliştirici Modu geçi
 | K6 | "XSLT Yükle" | Bu ekranda yok (tema XSLT'sinin üzerine yazar). |
 | S1 | `xslt` modlu compose'un önizlemesi | **Backend'de izole yola alınır:** `request.ThemeId is null ? XsltRoute.Raw : XsltRoute.Theme`. 1 backend testi + güvenlik incelemesi. |
 
-**S1 gerekçesi:** `ThemeComposeController` HTML'i hep `XsltRoute.Theme` ile üretiyor; bu rota 1.0 ve 2.0 yapısı kullanmayan metni `.NET` ile API süreci içinde çalıştırıyor. Yakalanamayan özyineleme giriş yapmış herhangi bir kullanıcının API'yi düşürmesine yol açabilir (ADR-008; PoC çalıştırılmadı).
 
 ## Yerleşim
 
@@ -99,7 +98,7 @@ WorkspaceHeader: sekmeler | Tema [XSLT 2.0][Geliştirici Modu] Kaydedilmemiş | 
 
 ## İnceleme kapıları (yalnız yüksek/kritik)
 
-- **Kapı 0 (security-reviewer):** `xslt` modlu render'ın süreç içine düşen yolu kaldı mı; `XsltSafety`/`SecureXslt` atlanıyor mu?
+- **Kapı 0 (security-reviewer):** Compose yürütme yeri ve güvenlik katmanları.
 - **Kapı A (reviewer + security-reviewer):** Taslak boşken Tema Kullan istek gövdesi aynı mı? `themeId` ile `xslt` birlikte gidiyor mu? Taslak logout'ta ve tema değişiminde sızıyor mu? İptal sonrası geç yanıt store'a yazıyor mu?
 - **Kapı B (reviewer):** Kullanıcı metni ezilebiliyor mu? Monaco remount oluyor mu? İkinci iframe ya da XML input var mı? Pro'da iki kayıt tek şablon mu? 402/409/423 doğru mu? Çıkış koruması tüm yolları kapsıyor mu?
 
