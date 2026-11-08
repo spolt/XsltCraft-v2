@@ -14,6 +14,7 @@ import AdminAiFeedbackPage from './pages/admin/AdminAiFeedbackPage'
 import EditorPage from './pages/EditorPage'
 import ThemeUsePage from './pages/ThemeUsePage'
 import DevModePage from './pages/DevModePage'
+import UploadEasyEditPage from './pages/UploadEasyEditPage'
 import XsltEditorPage from './pages/XsltEditorPage'
 import MyXsltTemplatesPage from './pages/MyXsltTemplatesPage'
 import AboutPage from './pages/AboutPage'
@@ -21,6 +22,7 @@ import PricingPage from './pages/PricingPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
 import ThemeDraftScope from './components/dev-mode/ThemeDraftScope'
+import EasyEditScope from './components/easy-edit/EasyEditScope'
 import AppLayout from './components/layout/AppLayout'
 import AdminLayout from './components/layout/AdminLayout'
 import ToastContainer from './components/ui/ToastContainer'
@@ -55,6 +57,10 @@ export default function App() {
           <Route element={<ThemeDraftScope />}>
             <Route path="/theme-use/:templateId" element={<ThemeUsePage />} />
             <Route path="/dev-mode/:templateId" element={<DevModePage />} />
+          </Route>
+          <Route element={<EasyEditScope />}>
+            <Route path="/easy-edit/template/:templateId" element={<UploadEasyEditPage />} />
+            <Route path="/easy-edit/:draftId" element={<UploadEasyEditPage />} />
           </Route>
           <Route path="/xslt-editor" element={<XsltEditorPage />} />
           <Route path="/xslt-editor/:templateId" element={<XsltEditorPage />} />

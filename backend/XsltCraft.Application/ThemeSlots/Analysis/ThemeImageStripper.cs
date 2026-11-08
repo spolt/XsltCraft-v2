@@ -22,22 +22,33 @@ internal static class ThemeImageStripper
     /// <summary>1×1 saydam GIF.</summary>
     public const string BlankImage = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
-    private static readonly Regex SrcAttribute = new(@"\ssrc\s*=\s*(?:""(?<v>[^""]*)""|'(?<v>[^']*)')",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
+    /// <summary>Okunamayan durumda (ayrıştırma, sayı uyuşmazlığı, düzenli ifade süre aşımı) metin değişmeden döner;
+    /// analiz uyuşmazlığı uyarıyla raporlar.</summary>
     public static StripResult Strip(string xslt, DocumentType type, IReadOnlyList<ThemeImageDecision>? decisions)
     {
         var identity = Enumerable.Range(0, decisions?.Count ?? 0).ToList();
         if (decisions is null || !decisions.Any(d => d.Strip))
             return new StripResult(xslt, decisions, identity, []);
+        try
+        {
+            return StripCore(xslt, type, decisions) ?? new StripResult(xslt, decisions, identity, []);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return new StripResult(xslt, decisions, identity, []);
+        }
+    }
+
+    private static StripResult? StripCore(string xslt, DocumentType type, IReadOnlyList<ThemeImageDecision> decisions)
+    {
 
         var source = ThemeSlotMarkers.Clean(xslt);
         if (!XsltSourceMap.TryBuild(source, out var map, out _) || ThemeDocument.TryCreate(map, type) is not { } doc)
-            return new StripResult(xslt, decisions, identity, []);
+            return null;
 
         var detected = ThemeImageDetector.Detect(doc, new ThemeAnchorDetector().Detect(doc), new InsertionPointResolver(doc));
         if (detected.Count != decisions.Count)
-            return new StripResult(xslt, decisions, identity, []); // analiz uyuşmazlığı uyarıyla raporlar
+            return null;
 
         var edits = new SourceEdits();
         var kept = new List<ThemeImageDecision>();
@@ -55,10 +66,8 @@ internal static class ThemeImageStripper
             }
             if (d.Strip)
             {
-                var tag = source[span.Start..span.StartTagEnd];
-                var value = SrcAttribute.Match(tag).Groups["v"];
-                if (value.Success)
-                    edits.Replace(span.Start + value.Index, span.Start + value.Index + value.Length, BlankImage);
+                if (StartTagText.Parse(source[span.Start..span.StartTagEnd])?.Find("src") is { } src)
+                    edits.Replace(span.Start + src.ValueStart, span.Start + src.ValueEnd, BlankImage);
             }
             kept.Add(d with { Removable = d.Removable && !d.Strip });
             originalIndex.Add(i);

@@ -42,7 +42,7 @@ export default function SupportInfo() {
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className="xc-focus inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-ui-workspace-muted transition-colors hover:bg-ui-workspace-raised hover:text-ui-workspace-fg"
+        className="xc-focus inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium text-ui-workspace-muted transition-colors hover:bg-ui-workspace-raised hover:text-ui-workspace-fg"
       >
         <Info size={14} strokeWidth={2} aria-hidden="true" />
         Neler destekleniyor?
@@ -52,7 +52,7 @@ export default function SupportInfo() {
           id={panelId}
           role="region"
           aria-label="Desteklenen özellikler"
-          className="absolute top-full left-0 z-20 mt-2 w-[320px] rounded-lg border border-ui-workspace-line bg-ui-workspace-raised p-3.5 shadow-[var(--ui-shadow-pop)]"
+          className="absolute top-full right-0 z-20 mt-2 w-[320px] max-w-[calc(100vw-32px)] rounded-lg border border-ui-workspace-line bg-ui-workspace-raised p-3.5 shadow-[var(--ui-shadow-pop)]"
         >
           <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
             {ITEMS.map((item) => (

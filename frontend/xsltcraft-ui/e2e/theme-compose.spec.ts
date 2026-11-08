@@ -217,6 +217,58 @@ test('eski temada yedek id bir görselse kullanıcının logosu onun yerini alı
   await expect(page.locator('#company_logo *')).toHaveCount(0) // img'in içine bir şey eklenmez
 })
 
+// Kolay düzenle: dosyanın kendi görselleri (analizdeki images[].index; 0 = logo, 1 = imza) metinde statik taşınır.
+const THEME_PAYLOAD = THEME_IMG.slice(THEME_IMG.indexOf(',') + 1)
+
+test('taşınan dosya görseli metinde hedef yuvaya geçer; eski yerde yok, gizleme yok', async ({ page }) => {
+  const res = await compose({
+    xslt: PLACEHOLDER_XSLT,
+    xmlContent: XML,
+    assets: [],
+    bankInfo: [],
+    staticImages: [{ index: 0, slot: 'totals-left' }],
+    includeXslt: true,
+    includeHtml: true,
+  })
+  expect(res.status()).toBe(200)
+  const body = await res.json()
+  expect(body.warnings).toEqual([])
+  expect(body.xslt).not.toContain('data-xc-overrides') // betik yok
+  expect(body.xslt.split(THEME_PAYLOAD).length - 1).toBe(2) // logo + imza; kopya yok
+  await page.setContent(body.html)
+
+  const moved = page.locator('[data-xc-slot="totals-left"] img[data-xc-placeholder="logo"]')
+  await expect(moved).toHaveAttribute('src', THEME_IMG)
+  await expect(moved).toBeVisible()
+  await expect(page.locator('td img')).toHaveCount(0)
+  await expect(page.locator('img[data-xc-placeholder="logo"]')).toHaveCount(1)
+  await expect(page.locator('[data-xc-hidden]')).toHaveCount(0)
+  await expect(page.locator('img[data-xc-slot="existing-signature"]')).toBeVisible()
+})
+
+test('eklenmiş kutuya taşınan dosya görseli kutuyu doldurur', async ({ page }) => {
+  const res = await compose({
+    xslt: PLACEHOLDER_XSLT,
+    xmlContent: XML,
+    assets: [],
+    bankInfo: [],
+    staticImages: [{ index: 0, slot: 'totals-left' }],
+    includeXslt: true,
+    includeHtml: true,
+  })
+  expect(res.status()).toBe(200)
+  const body = await res.json()
+  expect(body.warnings).toEqual([])
+  await page.setContent(body.html)
+
+  // Eklenmiş kutu görseli sarar: kutu ile sarmalayıcı aynı eleman, görsel içinde; ayrı boş kutu kalmaz.
+  const box = page.locator('div[data-xc-slot="totals-left"][data-xc-static-wrap]')
+  await expect(box).toHaveCount(1)
+  await expect(box.locator('> img[data-xc-placeholder="logo"]')).toHaveAttribute('src', THEME_IMG)
+  await expect(page.locator('[data-xc-slot="totals-left"]')).toHaveCount(1)
+  await expect(page.locator('[data-xc-slot="totals-left"] + div > img')).toHaveCount(0)
+})
+
 test('banka bilgisi kaçışlanır, betik çalışmaz', async ({ page }) => {
   const res = await compose({
     xslt: LEGACY_XSLT,

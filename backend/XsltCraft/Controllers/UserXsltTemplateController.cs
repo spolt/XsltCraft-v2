@@ -64,7 +64,9 @@ public class UserXsltTemplateController(
                 OwnerName = string.IsNullOrWhiteSpace(t.Owner.DisplayName) ? t.Owner.Username : t.Owner.DisplayName!,
                 // Klasör/favori yalnız sahibin görünümü içindir; paylaşılan şablonlarda gösterilmez.
                 FolderId = t.OwnerId == userId ? t.FolderId : null,
-                IsFavorite = t.OwnerId == userId && t.IsFavorite
+                IsFavorite = t.OwnerId == userId && t.IsFavorite,
+                // Son projeksiyonda EF bu çağrıyı istemci tarafında değerlendirir.
+                LastEditMode = XsltEditModeNames.ToName(t.LastEditMode)
             })
             .ToListAsync();
 
@@ -94,7 +96,8 @@ public class UserXsltTemplateController(
             XmlContent = template.XmlContent,
             CreatedAt = template.CreatedAt,
             UpdatedAt = template.UpdatedAt,
-            IsOwner = template.OwnerId == userId
+            IsOwner = template.OwnerId == userId,
+            LastEditMode = XsltEditModeNames.ToName(template.LastEditMode)
         });
     }
 
@@ -111,6 +114,10 @@ public class UserXsltTemplateController(
         if (string.IsNullOrWhiteSpace(request.XsltContent))
             return BadRequest(new { message = "XSLT içeriği boş olamaz." });
 
+        var editMode = XsltEditMode.Editor;
+        if (request.LastEditMode is not null && !XsltEditModeNames.TryParse(request.LastEditMode, out editMode))
+            return InvalidEditMode();
+
         var template = new UserXsltTemplate
         {
             Id = Guid.NewGuid(),
@@ -118,6 +125,7 @@ public class UserXsltTemplateController(
             OwnerId = userId,
             XsltContent = request.XsltContent,
             XmlContent = request.XmlContent,
+            LastEditMode = editMode,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -134,7 +142,8 @@ public class UserXsltTemplateController(
             XmlContent = template.XmlContent,
             CreatedAt = template.CreatedAt,
             UpdatedAt = template.UpdatedAt,
-            IsOwner = true
+            IsOwner = true,
+            LastEditMode = XsltEditModeNames.ToName(template.LastEditMode)
         });
     }
 
@@ -181,6 +190,7 @@ public class UserXsltTemplateController(
                 OwnerId = userId,
                 XsltContent = item.XsltContent,
                 FolderId = request.FolderId,
+                LastEditMode = XsltEditMode.Editor,
                 CreatedAt = now,
                 UpdatedAt = now
             };
@@ -286,6 +296,14 @@ public class UserXsltTemplateController(
         var saveGate = await GateSaveAsync();
         if (saveGate is not null) return saveGate;
 
+        XsltEditMode? editMode = null;
+        if (request.LastEditMode is not null)
+        {
+            if (!XsltEditModeNames.TryParse(request.LastEditMode, out var parsed))
+                return InvalidEditMode();
+            editMode = parsed;
+        }
+
         // Başka kullanıcı aktif olarak düzenliyorsa kaydetmeyi engelle
         if (IsLockedByOther(template, userId, now))
         {
@@ -315,6 +333,9 @@ public class UserXsltTemplateController(
         if (request.XmlContent is not null)
             template.XmlContent = request.XmlContent;
 
+        if (editMode is not null)
+            template.LastEditMode = editMode.Value;
+
         template.UpdatedAt = now;
         // Kaydeden kullanıcının kilidini tazele
         template.EditingUserId = userId;
@@ -331,7 +352,8 @@ public class UserXsltTemplateController(
             XmlContent = template.XmlContent,
             CreatedAt = template.CreatedAt,
             UpdatedAt = template.UpdatedAt,
-            IsOwner = template.OwnerId == userId
+            IsOwner = template.OwnerId == userId,
+            LastEditMode = XsltEditModeNames.ToName(template.LastEditMode)
         });
     }
 
@@ -548,6 +570,9 @@ public class UserXsltTemplateController(
         await db.SaveChangesAsync();
         return NoContent();
     }
+
+    private BadRequestObjectResult InvalidEditMode() =>
+        BadRequest(new { message = "Geçersiz düzenleme modu. 'editor' veya 'easyEdit' olmalı." });
 
     private static bool CanAccess(UserXsltTemplate template, Guid userId) =>
         template.OwnerId == userId || template.Shares.Any(s => s.UserId == userId);

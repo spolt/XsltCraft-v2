@@ -148,6 +148,73 @@ public class ThemeOverridesProcessorTests
         Assert.False(Processor.Apply(composed.Xslt, OverridesDecision.Keep).Success);
     }
 
+    private static string FreeItem(string extra = "", string slot = "docinfo-top") =>
+        $$"""{"k":"free","slot":"{{slot}}","fb":[],"src":"{{Png}}","w":null,"h":null,"a":"left"{{extra}}}""";
+
+    private static string WithV2Data(params string[] items) => $$"""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xsl:stylesheet version="2.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:output method="html"/>
+          <xsl:template match="/"><html><body>
+            <div data-xc-slot="docinfo-top"></div>
+        <!-- DEV-MODE-OVERRIDES:START -->
+        <script type="application/json" data-xc-overrides-data="2">{"v":2,"items":[{{string.Join(",", items)}}],"hide":[]}</script>
+        <!-- DEV-MODE-OVERRIDES:END -->
+          </body></html></xsl:template>
+        </xsl:stylesheet>
+        """;
+
+    [Fact]
+    public void Free_image_is_read_back_and_only_removable()
+    {
+        var inspection = Processor.Inspect(WithV2Data(FreeItem()));
+
+        Assert.True(inspection.Recognized, inspection.Reason);
+        Assert.False(inspection.Keepable);
+        Assert.Contains("serbest", inspection.Reason);
+        var free = Assert.Single(inspection.FreeImages!);
+        Assert.Equal(new OverridesFreeImageInfo("docinfo-top", Png, null, null, "left", true, null), free);
+        Assert.False(Processor.Apply(WithV2Data(FreeItem()), OverridesDecision.Keep).Success);
+    }
+
+    [Fact]
+    public void Invalid_free_image_data_is_reported()
+    {
+        var item = FreeItem().Replace(Png, "data:image/png;base64,AAAA", StringComparison.Ordinal);
+        var free = Assert.Single(Processor.Inspect(WithV2Data(item)).FreeImages!);
+
+        Assert.False(free.Valid);
+        Assert.Null(free.DataUrl);
+        Assert.NotNull(free.Problem);
+    }
+
+    [Theory]
+    [InlineData(@",""xs"":[]")]
+    [InlineData(@",""keep"":false")]
+    public void Free_image_with_extra_slots_or_keep_is_not_recognized(string extra) =>
+        Assert.False(Processor.Inspect(WithV2Data(FreeItem(extra))).Recognized);
+
+    [Theory]
+    [InlineData("Docinfo top")]
+    [InlineData("-docinfo")]
+    public void Free_image_with_invalid_slot_is_not_recognized(string slot) =>
+        Assert.False(Processor.Inspect(WithV2Data(FreeItem(slot: slot))).Recognized);
+
+    // Boşalmış görsel yeri (existing-*) okunur; yerleşim metne göre denetlenir.
+    [Fact]
+    public void Free_image_on_vacated_theme_image_slot_is_recognized() =>
+        Assert.Equal("existing-logo", Assert.Single(Processor.Inspect(WithV2Data(FreeItem(slot: "existing-logo"))).FreeImages!).Slot);
+
+    [Fact]
+    public void Free_image_shape_rules_are_strict()
+    {
+        Assert.False(Processor.Inspect(WithV2Data(FreeItem().Replace(@"""fb"":[]", @"""fb"":[""company_logo""]", StringComparison.Ordinal))).Recognized);
+        Assert.False(Processor.Inspect(WithV2Data(FreeItem().Replace(@"""slot"":""docinfo-top""", @"""slot"":null", StringComparison.Ordinal))).Recognized);
+        Assert.False(Processor.Inspect(WithV2Data(FreeItem(), FreeItem())).Recognized);
+        Assert.False(Processor.Inspect(WithV2Data(FreeItem().Replace(@"""k"":""free""", @"""k"":""stamp""", StringComparison.Ordinal))).Recognized);
+        Assert.True(Processor.Inspect(WithV2Data(FreeItem().Replace(@"""fb"":[],", "", StringComparison.Ordinal))).Recognized);
+    }
+
     private static string WithBlock(string calls, string extra = "") => $$"""
         <?xml version="1.0" encoding="UTF-8"?>
         <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">

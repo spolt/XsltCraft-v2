@@ -64,21 +64,20 @@
     var cleared = [];
     var replaced = [];
     var kinds = {};
-    var i, j;
-    for (i = 0; i !== data.items.length; i++) {
-      var item = data.items[i];
-      var el = findTarget(item);
-      if (!el) { continue; }
+    var i;
+
+    function place(el, item) {
+      var n;
       kinds[item.k] = true;
       if (el.hasAttribute('data-xc-placeholder')) {
         var group = slotElements(el.getAttribute('data-xc-slot') || '');
         if (replaced.indexOf(group[0]) === -1) {
-          for (j = 0; j !== group.length; j++) { replace(group[j], item); replaced.push(group[j]); }
+          for (n = 0; n !== group.length; n++) { replace(group[n], item); replaced.push(group[n]); }
         } else {
           var last = group[group.length - 1];
           last.parentNode.insertBefore(build(item, 'block-clear'), last.nextSibling);
         }
-        continue;
+        return;
       }
       if ((el.tagName || '').toUpperCase() === 'IMG') {
         if (replaced.indexOf(el) === -1) {
@@ -87,13 +86,19 @@
         } else {
           el.parentNode.insertBefore(build(item, 'block-clear'), el.nextSibling);
         }
-        continue;
+        return;
       }
       if (cleared.indexOf(el) === -1) {
         while (el.firstChild) { el.removeChild(el.firstChild); }
         cleared.push(el);
       }
       el.appendChild(build(item, el.getAttribute('data-xc-layout') || 'block'));
+    }
+
+    for (i = 0; i !== data.items.length; i++) {
+      var item = data.items[i];
+      var el = findTarget(item);
+      if (el) { place(el, item); }
     }
     var removed = {};
     var hide = data.hide || [];

@@ -15,6 +15,18 @@ public sealed class ThemeComposeRequest
     public List<string> HideThemeImages { get; set; } = [];
     /// <summary>Notlar alanına sabit notlar (en fazla 2, her konum bir kez); null → XSLT'deki notlara dokunulmaz.</summary>
     public List<ThemeComposeFixedNoteDto>? FixedNotes { get; set; }
+    /// <summary>Yalnız <c>Xslt</c> dalında: her faturada çıkmayabilecek yuvalar (en fazla 32); yalnız uyarı için.</summary>
+    public List<string>? ConditionalSlots { get; set; }
+    /// <summary>Yalnız <c>Xslt</c> dalında: dosyadaki görsellerin metinde statik taşınması/silinmesi
+    /// (en fazla 20, her görsel bir kez). Her çağrıda son analizin döndürdüğü <c>xslt</c> gönderilmeli; compose çıktısı
+    /// tekrar girdi yapılmaz; liste kümülatiftir (o analizden bu yana yapılan tüm düzenlemeleri içerir).</summary>
+    public List<StaticImageDto>? StaticImages { get; set; }
+    /// <summary>Yalnız <c>Xslt</c> dalında: türü olmayan, seçilen yuvaya yerleşen serbest görseller (en fazla 1);
+    /// temadaki logo/imzayı gizlemez.</summary>
+    public List<ThemeComposeFreeImageDto>? FreeImages { get; set; }
+    /// <summary>Yalnız <c>Xslt</c> dalında: belgenin kendi banka satırlarının düzenlenmesi (analizdeki
+    /// <c>documentBank.rows[].index</c>; en fazla 20). Liste kümülatiftir; her çağrıda son analizin <c>xslt</c>'si gönderilir.</summary>
+    public List<ThemeComposeDocumentBankEditDto>? DocumentBankEdits { get; set; }
     public bool IncludeXslt { get; set; }
     public bool IncludeHtml { get; set; }
 }
@@ -30,6 +42,44 @@ public sealed class ThemeComposeAssetDto
     public int? Height { get; set; }
     /// <summary>left | center | right</summary>
     public string Alignment { get; set; } = "left";
+}
+
+/// <summary>Serbest görsel: yuva zorunlu; <c>existing-*</c> yalnız temadaki görsel taşınıp/silinip yeri boş kaldıysa kullanılabilir.</summary>
+public sealed class ThemeComposeFreeImageDto
+{
+    public string Slot { get; set; } = "";
+    public string DataUrl { get; set; } = "";
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+    /// <summary>left | center | right</summary>
+    public string Alignment { get; set; } = "left";
+}
+
+/// <summary>Belgedeki banka satırına düzenleme.</summary>
+public sealed class ThemeComposeDocumentBankEditDto
+{
+    /// <summary>Analizdeki satır (<c>documentBank.rows[].index</c>); null → yeni satır eklenir.</summary>
+    public int? Index { get; set; }
+    public string BankName { get; set; } = "";
+    /// <summary>TR IBAN (boşluklu ya da boşluksuz).</summary>
+    public string Iban { get; set; } = "";
+    /// <summary>Satır silinir (<c>Index</c> zorunlu; diğer alanlar yok sayılır).</summary>
+    public bool Remove { get; set; }
+}
+
+/// <summary>Dosyanın kendi görseli (analizdeki <c>images[].index</c>) için statik düzenleme.</summary>
+public sealed class StaticImageDto
+{
+    /// <summary>Analizdeki görsel sırası (<c>images[].index</c>).</summary>
+    public int Index { get; set; }
+    /// <summary>Hedef yuva; null → görsel yerinde kalır.</summary>
+    public string? Slot { get; set; }
+    /// <summary>Görsel metinden silinir (diğer alanlar yok sayılır).</summary>
+    public bool Remove { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+    /// <summary>left | center | right; null → değişmez.</summary>
+    public string? Alignment { get; set; }
 }
 
 public sealed class ThemeComposeFixedNoteDto

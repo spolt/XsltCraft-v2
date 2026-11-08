@@ -1,6 +1,8 @@
 using XsltCraft.Application.ThemeSlots;
+using XsltCraft.Application.ThemeSlots.Analysis;
 using XsltCraft.Application.ThemeSlots.Compose;
 using XsltCraft.Application.ThemeSlots.Overrides;
+using XsltCraft.Application.Validation;
 using XsltCraft.Application.Xslt;
 using XsltCraft.Domain.Entities;
 
@@ -156,10 +158,181 @@ public class ThemeAssetComposerTests
         Assert.True(result.Success, result.Error);
         Assert.Contains(result.Warnings, w => w.Code == "assets-large");
     }
+
+    private const string Jpeg = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHSEeHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==";
+
+    private static string Payload(string dataUrl) => dataUrl[(dataUrl.IndexOf(',') + 1)..];
+
+    private static int Occurrences(string text, string token) =>
+        (text.Length - text.Replace(token, string.Empty, StringComparison.Ordinal).Length) / token.Length;
+
+    [Fact]
+    public void Static_image_stays_unchanged_without_static_requests()
+    {
+        var result = Composer.Compose(ThemeAssetComposerTestsData.PlaceholderTheme(Png), new ThemeComposeInput(
+            [new ThemeAssetInput(ThemeAssetKind.Logo, "seller-top", Png, null, null, ThemeAlignment.Left)], []));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(2, Occurrences(result.Xslt, Payload(Png)));
+        Assert.DoesNotContain(@"""xs""", result.Xslt);
+        Assert.DoesNotContain(@"""keep""", result.Xslt);
+    }
+
+    [Fact]
+    public void Theme_compose_data_keeps_its_shape()
+    {
+        var result = Composer.Compose(MarkedTheme.Value,
+            Input(new ThemeAssetInput(ThemeAssetKind.Logo, "qr-below", Png, 200, 100, ThemeAlignment.Right)));
+
+        Assert.True(result.Success, result.Error);
+        var fallback = string.Join(",", LegacyHolderIds.For(ThemeAssetKind.Logo).Select(id => $@"""{id}"""));
+        var expected = $$"""{"v":2,"items":[{"k":"logo","slot":"qr-below","fb":[{{fallback}}],"src":"{{Png}}","w":200,"h":100,"a":"right"}],"hide":[]}""";
+        Assert.Contains($@"data-xc-overrides-data=""2"">{expected}</script>", result.Xslt);
+    }
+
+    [Fact]
+    public void Legacy_block_with_extra_slots_and_keep_is_still_recognized()
+    {
+        var composed = Composer.Compose(ThemeAssetComposerTestsData.PlaceholderTheme(Png), new ThemeComposeInput(
+            [new ThemeAssetInput(ThemeAssetKind.Logo, "seller-top", Jpeg, null, null, ThemeAlignment.Left)], []));
+        Assert.True(composed.Success, composed.Error);
+        var legacy = composed.Xslt.Replace(@"""a"":""left""}", @"""a"":""left"",""xs"":[""docinfo-top""],""keep"":true}", StringComparison.Ordinal);
+        Assert.NotEqual(composed.Xslt, legacy);
+
+        var inspection = new ThemeOverridesProcessor(new ThemeImageValidator()).Inspect(legacy);
+
+        Assert.True(inspection.Recognized, inspection.Reason);
+        var image = Assert.Single(inspection.Images);
+        Assert.Equal("seller-top", image.Slot);
+        Assert.Equal(["docinfo-top"], image.ExtraSlots!);
+        Assert.True(image.Keep);
+    }
+
+    private static ThemeComposeInput FreeInput(string slot, string dataUrl = Png, params ThemeAssetInput[] assets) =>
+        new(assets, [], FreeImages: [new FreeImageInput(slot, dataUrl, 150, null, ThemeAlignment.Center)]);
+
+    [Fact]
+    public void Free_image_is_written_without_fallback_and_does_not_hide_theme_logo()
+    {
+        var result = Composer.Compose(ThemeAssetComposerTestsData.PlaceholderTheme(Png), FreeInput("docinfo-top", Jpeg));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Empty(result.Warnings);
+        Assert.Empty(result.AppliedSlots);
+        Assert.True(result.AddedImageBytes > 0);
+        var expected = $$"""{"v":2,"items":[{"k":"free","slot":"docinfo-top","fb":[],"src":"{{Jpeg}}","w":150,"h":null,"a":"center"}],"hide":[]}""";
+        Assert.Contains($@"data-xc-overrides-data=""2"">{expected}</script>", result.Xslt);
+        // Temadaki logo yerinde kalır (statik görsel metinden silinmez).
+        Assert.Equal(1, Occurrences(result.Xslt, Payload(Png)));
+        SecureXslt.Compile(result.Xslt);
+    }
+
+    [Fact]
+    public void Free_image_comes_after_assets()
+    {
+        var result = Composer.Compose(ThemeAssetComposerTestsData.PlaceholderTheme(Png), FreeInput("docinfo-top", Jpeg,
+            new ThemeAssetInput(ThemeAssetKind.Logo, "seller-top", Png, null, null, ThemeAlignment.Left)));
+
+        Assert.True(result.Success, result.Error);
+        Assert.True(result.Xslt.IndexOf(@"""k"":""logo""", StringComparison.Ordinal)
+                    < result.Xslt.IndexOf(@"""k"":""free""", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("yok-boyle-bir-yuva")]
+    [InlineData("existing-logo")]
+    public void Free_image_with_missing_or_theme_image_slot_is_skipped(string slot)
+    {
+        var result = Composer.Compose(ThemeAssetComposerTestsData.PlaceholderTheme(Png), FreeInput(slot));
+
+        Assert.True(result.Success, result.Error);
+        var warning = Assert.Single(result.Warnings);
+        Assert.Equal("free-slot-not-found", warning.Code);
+        Assert.Null(warning.Kind);
+        Assert.Empty(OverridesBlockText.Scan(result.Xslt).Blocks);
+    }
+
+    [Fact]
+    public void Free_image_on_asset_slot_is_occupied()
+    {
+        var result = Composer.Compose(ThemeAssetComposerTestsData.PlaceholderTheme(Png), FreeInput("seller-top", Jpeg,
+            new ThemeAssetInput(ThemeAssetKind.Logo, "seller-top", Png, null, null, ThemeAlignment.Left)));
+
+        Assert.True(result.Success, result.Error);
+        var warning = Assert.Single(result.Warnings);
+        Assert.Equal("slot-occupied", warning.Code);
+        Assert.Null(warning.Kind);
+        Assert.DoesNotContain(@"""k"":""free""", result.Xslt);
+    }
+
+    [Fact]
+    public void Free_image_on_static_image_box_is_occupied()
+    {
+        var theme = ThemeAssetComposerTestsData.PlaceholderTheme(Png);
+        var result = Composer.Compose(theme, new ThemeComposeInput([], [],
+            StaticImages: [new StaticImageInput(0, "docinfo-top", false, null, null, null)],
+            FreeImages: [new FreeImageInput("docinfo-top", Jpeg, null, null, ThemeAlignment.Left)]));
+
+        Assert.True(result.Success, result.Error);
+        Assert.Contains(result.Warnings, w => w is { Code: "slot-occupied", Kind: null });
+        Assert.DoesNotContain(@"""k"":""free""", result.Xslt);
+    }
+
+    [Fact]
+    public void Free_image_on_conditional_slot_warns_and_is_placed()
+    {
+        var result = Composer.Compose(ThemeAssetComposerTestsData.PlaceholderTheme(Png), FreeInput("docinfo-top") with
+        {
+            ConditionalSlots = new HashSet<string> { "docinfo-top" },
+        });
+
+        Assert.True(result.Success, result.Error);
+        Assert.Contains(result.Warnings, w => w is { Code: "slot-conditional", Kind: null });
+        Assert.Contains(@"""k"":""free""", result.Xslt);
+    }
+
+    [Theory]
+    [InlineData("data:image/svg+xml;base64,PHN2Zy8+")]
+    [InlineData("data:image/png;base64,AAAA")]
+    public void Invalid_free_image_fails_closed(string dataUrl)
+    {
+        var theme = ThemeAssetComposerTestsData.PlaceholderTheme(Png);
+        var result = Composer.Compose(theme, FreeInput("yok-boyle-bir-yuva", dataUrl));
+
+        Assert.False(result.Success);
+        Assert.Equal(theme, result.Xslt);
+    }
+
+    [Fact]
+    public void Free_image_round_trips_and_is_not_keepable()
+    {
+        var composed = Composer.Compose(ThemeAssetComposerTestsData.PlaceholderTheme(Png), FreeInput("docinfo-top", Jpeg));
+        Assert.True(composed.Success, composed.Error);
+
+        var inspection = new ThemeOverridesProcessor(new ThemeImageValidator()).Inspect(composed.Xslt);
+
+        Assert.True(inspection.Recognized, inspection.Reason);
+        Assert.False(inspection.Keepable);
+        Assert.Empty(inspection.Images);
+        var free = Assert.Single(inspection.FreeImages!);
+        Assert.Equal(new OverridesFreeImageInfo("docinfo-top", Jpeg, 150, null, "center", true, null), free);
+    }
 }
 
 internal static class ThemeAssetComposerTestsData
 {
+    public static string PlaceholderTheme(string imageSrc) => $"""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xsl:stylesheet version="2.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+          <xsl:output method="html"/>
+          <xsl:template match="/"><html><body>
+            <div data-xc-slot="seller-top"></div>
+            <img data-xc-slot="existing-logo" data-xc-placeholder="logo" src="{imageSrc}"/>
+            <div data-xc-slot="docinfo-top"></div>
+          </body></html></xsl:template>
+        </xsl:stylesheet>
+        """;
+
     public const string UnmarkedTheme = """
         <?xml version="1.0" encoding="UTF-8"?>
         <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">

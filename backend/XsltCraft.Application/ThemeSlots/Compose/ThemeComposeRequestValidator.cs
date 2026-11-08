@@ -2,6 +2,7 @@ using System.Text;
 using System.Xml;
 
 using XsltCraft.Application.DTO;
+using XsltCraft.Application.EasyEdit;
 using XsltCraft.Application.ThemeSlots.Analysis;
 
 namespace XsltCraft.Application.ThemeSlots.Compose;
@@ -13,11 +14,13 @@ public sealed record ThemeComposeRequestError(string Field, string Message);
 /// <c>POST /api/preview/compose</c> isteğinin birleştirmeden önceki biçim doğrulaması (beyaz liste). Eksik liste,
 /// boş öğe ve XML'e yazılamayan karakter sunucu hatası (500) yerine 400 olur.
 /// </summary>
-public static class ThemeComposeRequestValidator
+public static partial class ThemeComposeRequestValidator
 {
     public const int MaxXsltBytes = 4 * 1024 * 1024;
     public const int MaxXmlBytes = 1024 * 1024;
     public const int MaxBankRows = 10;
+    public const int MaxConditionalSlots = 32;
+    public const int MaxStaticImages = UploadedXsltAnalyzer.MaxImages;
 
     public static ThemeComposeRequestError? Validate(ThemeComposeRequest r)
     {
@@ -45,13 +48,22 @@ public static class ThemeComposeRequestValidator
                 return Error("assets.kind", "Görsel türü 'logo' ya da 'signature' olmalı.");
             if (a.Alignment is not ("left" or "center" or "right"))
                 return Error("assets.alignment", "Hizalama 'left', 'center' ya da 'right' olmalı.");
-            if (a.Width is < 10 or > 1200 || a.Height is < 10 or > 1200)
-                return Error("assets.size", "Genişlik ve yükseklik 10–1200 piksel arasında olmalı.");
+            if (!IsValidSize(a.Width, a.Height))
+                return Error("assets.size", SizeMessage);
             if (a.Slot is not null && !ThemeSlotMarkers.SlotIdPattern.IsMatch(a.Slot))
                 return Error("assets.slot", "Geçersiz konum kimliği.");
             if (a.DataUrl.Length > ThemeImageValidator.MaxDataUrlLength)
                 return Error("assets.dataUrl", "Görsel çok büyük (en fazla 500 KB).");
         }
+
+        if (ValidateStaticImages(r) is { } staticError)
+            return staticError;
+        if (ValidateFreeImages(r) is { } freeError)
+            return freeError;
+
+        if (r.ConditionalSlots is { } conditional
+            && (conditional.Count > MaxConditionalSlots || conditional.Any(s => s is null || !ThemeSlotMarkers.SlotIdPattern.IsMatch(s))))
+            return Error("conditionalSlots", $"Koşullu konum listesi geçersiz (en fazla {MaxConditionalSlots} geçerli kimlik).");
 
         if (r.HideThemeImages is null)
             return Error("hideThemeImages", "Kaldırılacak görsel listesi eksik.");
@@ -72,7 +84,42 @@ public static class ThemeComposeRequestValidator
                 return Error("bankInfo", "Banka bilgisinde geçersiz karakter var.");
         }
 
+        if (ValidateDocumentBankEdits(r) is { } documentBankError)
+            return documentBankError;
+
         return ValidateFixedNotes(r.FixedNotes);
+    }
+
+    private const string SizeMessage = "Genişlik ve yükseklik 10–1200 piksel arasında olmalı.";
+
+    private static bool IsValidSize(int? width, int? height) =>
+        width is null or (>= 10 and <= 1200) && height is null or (>= 10 and <= 1200);
+
+    private static ThemeComposeRequestError? ValidateStaticImages(ThemeComposeRequest r)
+    {
+        const string field = "staticImages";
+        if (r.StaticImages is not { } images)
+            return null;
+        if (r.ThemeId is not null && images.Count > 0)
+            return new(field, "Dosyadaki görseller yalnız XSLT içeriğiyle düzenlenebilir.");
+        if (images.Any(i => i is null))
+            return new(field, "Görsel düzenleme listesi boş öğe içeriyor.");
+        if (images.Count > MaxStaticImages)
+            return new(field, $"En fazla {MaxStaticImages} görsel düzenlenebilir.");
+        if (images.Select(i => i.Index).Distinct().Count() != images.Count)
+            return new(field, "Her görsel bir kez düzenlenebilir.");
+        foreach (var i in images)
+        {
+            if (i.Index is < 0 or >= MaxStaticImages)
+                return new("staticImages.index", "Geçersiz görsel sırası.");
+            if (i.Slot is not null && !ThemeSlotMarkers.SlotIdPattern.IsMatch(i.Slot))
+                return new("staticImages.slot", "Geçersiz konum kimliği.");
+            if (!IsValidSize(i.Width, i.Height))
+                return new("staticImages.size", SizeMessage);
+            if (i.Alignment is not (null or "left" or "center" or "right"))
+                return new("staticImages.alignment", "Hizalama 'left', 'center' ya da 'right' olmalı.");
+        }
+        return null;
     }
 
     private static ThemeComposeRequestError? ValidateFixedNotes(List<ThemeComposeFixedNoteDto>? notes)

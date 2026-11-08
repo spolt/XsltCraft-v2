@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 using XsltCraft.Application.Auth;
+using XsltCraft.Application.EasyEdit;
 using XsltCraft.Application.Interfaces;
 using XsltCraft.Application.Membership;
 using XsltCraft.Application.Preview;
@@ -88,6 +89,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IThemeSlotProjector, ThemeSlotProjector>();
         services.AddSingleton<IThemeAssetComposer, ThemeAssetComposer>();
         services.AddScoped<IThemeAccessGuard, ThemeAccessGuard>();
+
+        // Kolay düzenle: kullanıcının yüklediği XSLT'nin analizi (yürütme Raw rotada).
+        services.AddSingleton<IUploadedXsltAnalyzer, UploadedXsltAnalyzer>();
 
         // -------------------------------------------------
         // User Management

@@ -116,6 +116,71 @@ public sealed class ThemeComposeRouteTests
                 new ThemeComposeRequest { Xslt = Xslt, IncludeXslt = true }, CancellationToken.None));
     }
 
+    private const string SlottedXslt =
+        "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'><xsl:template match='/'>"
+        + "<div data-xc-slot=\"seller-top\" data-xc-layout=\"block\" data-xc-inserted=\"1\"></div>"
+        + "<div data-xc-slot=\"qr-below\" data-xc-layout=\"block-clear\" data-xc-inserted=\"1\"></div>"
+        + "</xsl:template></xsl:stylesheet>";
+
+    private const string Png =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+    private static List<ThemeComposeAssetDto> LogoAndSignature() =>
+    [
+        new() { Kind = "logo", Slot = "qr-below", DataUrl = Png },
+        new() { Kind = "signature", Slot = "seller-top", DataUrl = Png },
+    ];
+
+    [Fact]
+    public async Task Compose_XsltModeWithConditionalSlots_WarnsForRequestedSlotOnly()
+    {
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var controller = Controller(db, new RecordingExecution(), storedXslt: SlottedXslt);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.Compose(new ThemeComposeRequest
+        {
+            Xslt = SlottedXslt,
+            Assets = LogoAndSignature(),
+            ConditionalSlots = ["qr-below"],
+            IncludeXslt = true,
+        }, CancellationToken.None));
+
+        var conditional = Assert.IsType<ThemeComposeResponse>(ok.Value).Warnings.Where(w => w.Code == "slot-conditional").ToList();
+        Assert.Equal("logo", Assert.Single(conditional).Kind);
+    }
+
+    [Fact]
+    public async Task Compose_ThemeIdModeWithConditionalSlots_IgnoresRequestAndUsesCatalog()
+    {
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var catalog = new ThemeSlotCatalog(ThemeSlotCatalog.CurrentVersion, 1, ThemeSlotStatus.Ok, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), [],
+            [
+                new ThemeSlot("seller-top", "R1", 1, SlotLayout.Block, null, Conditional: true, null, true, 1),
+                new ThemeSlot("qr-below", "R2", 2, SlotLayout.BlockClear, null, Conditional: false, null, true, 1),
+            ], [], null, []);
+        db.Templates.Add(new Template
+        {
+            Id = PublishedTheme,
+            Name = "tema",
+            IsFreeTheme = true,
+            XsltStoragePath = "themes/a.xslt",
+            SlotCatalog = ThemeSlotCatalogJson.Serialize(catalog),
+        });
+        await db.SaveChangesAsync();
+        var controller = Controller(db, new RecordingExecution(), storedXslt: SlottedXslt);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.Compose(new ThemeComposeRequest
+        {
+            ThemeId = PublishedTheme,
+            Assets = LogoAndSignature(),
+            ConditionalSlots = ["qr-below"],
+            IncludeXslt = true,
+        }, CancellationToken.None));
+
+        var conditional = Assert.IsType<ThemeComposeResponse>(ok.Value).Warnings.Where(w => w.Code == "slot-conditional").ToList();
+        Assert.Equal("signature", Assert.Single(conditional).Kind);
+    }
+
     private static ThemeComposeController Controller(AppDbContext db, IXsltExecutionService execution,
         IThemeAssetComposer? composer = null, string? storedXslt = null, IThemeComposeGate? gate = null) =>
         new(db, new XsltStorage(storedXslt ?? Xslt), new ThemeAccessGuard(new NoEntitlements()), composer ?? new ThemeAssetComposer(new ThemeImageValidator()),

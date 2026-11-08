@@ -42,6 +42,8 @@ interface UiPrefsState {
   xsltAiPanelSize: number
   /** "Tek panel (sekmeli)" modunda sağ sütunun genişliği (%). */
   xsltTabsPanelSize: number
+  /** XSLT editördeki "Kolay düzenle'ye geç" öneri bandı kapatıldı. */
+  easyEditHintDismissed: boolean
 
   setUiTheme: (theme: UiThemeId) => void
   setNavCollapsedOnStart: (value: boolean) => void
@@ -56,6 +58,7 @@ interface UiPrefsState {
   setXsltRightPanelMode: (mode: XsltRightPanelMode) => void
   setXsltAiPanelSize: (size: number) => void
   setXsltTabsPanelSize: (size: number) => void
+  dismissEasyEditHint: () => void
 }
 
 type PersistedPrefs = Omit<
@@ -74,6 +77,7 @@ type PersistedPrefs = Omit<
   | 'setXsltRightPanelMode'
   | 'setXsltAiPanelSize'
   | 'setXsltTabsPanelSize'
+  | 'dismissEasyEditHint'
 >
 
 const clampPanelSize = (n: unknown, fallback: number) =>
@@ -105,6 +109,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       xsltRightPanelMode: 'split',
       xsltAiPanelSize: XSLT_AI_SIZE_DEFAULT,
       xsltTabsPanelSize: XSLT_TABS_SIZE_DEFAULT,
+      easyEditHintDismissed: false,
 
       setUiTheme: (uiTheme) => set({ uiTheme }),
       setNavCollapsedOnStart: (navCollapsedOnStart) => set({ navCollapsedOnStart }),
@@ -119,6 +124,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       setXsltRightPanelMode: (xsltRightPanelMode) => set({ xsltRightPanelMode }),
       setXsltAiPanelSize: (size) => set({ xsltAiPanelSize: clampPanelSize(size, XSLT_AI_SIZE_DEFAULT) }),
       setXsltTabsPanelSize: (size) => set({ xsltTabsPanelSize: clampPanelSize(size, XSLT_TABS_SIZE_DEFAULT) }),
+      dismissEasyEditHint: () => set({ easyEditHintDismissed: true }),
     }),
     {
       name: 'xsltcraft-ui-prefs',
@@ -139,6 +145,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         xsltRightPanelMode: s.xsltRightPanelMode,
         xsltAiPanelSize: s.xsltAiPanelSize,
         xsltTabsPanelSize: s.xsltTabsPanelSize,
+        easyEditHintDismissed: s.easyEditHintDismissed,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<PersistedPrefs>
@@ -151,6 +158,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           xsltRightPanelMode: merged.xsltRightPanelMode === 'tabs' ? 'tabs' : 'split',
           xsltAiPanelSize: clampPanelSize(merged.xsltAiPanelSize, XSLT_AI_SIZE_DEFAULT),
           xsltTabsPanelSize: clampPanelSize(merged.xsltTabsPanelSize, XSLT_TABS_SIZE_DEFAULT),
+          easyEditHintDismissed: merged.easyEditHintDismissed === true,
           navCollapsed: merged.navCollapsedOnStart,
         }
       },

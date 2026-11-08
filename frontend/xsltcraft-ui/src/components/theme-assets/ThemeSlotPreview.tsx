@@ -5,7 +5,8 @@ import { PREVIEW_BASE_WIDTH, PREVIEW_IFRAME_TITLE, PREVIEW_SANDBOX } from '../xs
 import type { ThemeSlotOption } from '../../services/templateService'
 import type { AssetKind } from '../../services/themeComposeService'
 import { ASSET_LABEL } from './imageState'
-import { assetDragId, slotDropId } from './slotDnd'
+import { FREE_IMAGE_LABEL } from './freeImageState'
+import { assetDragId, freeDragId, slotDropId, type DragSource } from './slotDnd'
 import { useSlotRects, type Box } from './useSlotRects'
 
 // Düzenleme modunda yuvaları görünür kılan stil. Sınıf iframe'in kök elemanına konur (srcDoc yeniden
@@ -14,7 +15,7 @@ const EDIT_CSS =
   '<style data-xc-edit-css>@media screen{' +
   'html.xc-edit [data-xc-slot]{outline:2px dashed #60a5fa;outline-offset:-2px;border-radius:6px}' +
   'html.xc-edit [data-xc-slot]:not(img){display:block;min-height:44px;min-width:110px}' +
-  'html.xc-edit [data-xc-slot]:not(img):not(:has([data-xc-asset])){background:rgba(219,234,254,.55)}' +
+  'html.xc-edit [data-xc-slot]:not(img):not(:has([data-xc-asset],[data-xc-static-wrap])){background:rgba(219,234,254,.55)}' +
   // Temadaki görsel kaldırıldıysa/yerini kullanıcının görseli aldıysa çıktıdan tamamen çıkar (display:none);
   // düzenlerken soluk görünsün ki geri bırakılabilsin.
   'html.xc-edit img[data-xc-hidden]{display:inline-block!important;opacity:.25}' +
@@ -40,13 +41,25 @@ interface Props {
   placements: Partial<Record<AssetKind, string | null>>
   /** false → salt-okunur (admin raporu): yalnız etiketler. */
   interactive?: boolean
+  /**
+   * Çalışma betiğinin eklemediği (dosyanın kendi) görseller için tutamak: tür → tutamağın aranacağı yuvalar (sırayla).
+   * Önce yuvadaki o türden görsel aranır; hiçbirinde yoksa ilk bulunan yuvanın kutusu kullanılır.
+   */
+  staticHandles?: Partial<Record<AssetKind, readonly string[]>>
+  /**
+   * Yalnız doc: serbest görsellerin yuvaları (liste sırasıyla; null → yerleşmedi). Verilirse yerleşmiş serbest
+   * görsellere sürükleme tutamağı eklenir.
+   */
+  freePlacements?: readonly (string | null)[]
 }
 
 /**
  * Tema önizlemesi + yuva katmanı. Yuvalar (<c>data-xc-slot</c>) iframe içinde kesikli kutular olarak görünür;
  * üstteki katmanda her yuva bir bırakma hedefi, yerleşmiş her görsel bir sürükleme tutamağıdır.
  */
-export default function ThemeSlotPreview({ html, slots, showSlots, dragging, placements, interactive = true }: Props) {
+export default function ThemeSlotPreview({
+  html, slots, showSlots, dragging, placements, interactive = true, staticHandles, freePlacements,
+}: Props) {
   const [iframe, setIframe] = useState<HTMLIFrameElement | null>(null)
   const srcDoc = useMemo(() => withEditCss(html), [html])
   const geometry = useSlotRects(iframe, srcDoc)
@@ -63,6 +76,20 @@ export default function ThemeSlotPreview({ html, slots, showSlots, dragging, pla
 
   const labelOf = (id: string) => slots.find((s) => s.id === id)?.label ?? id
   const height = Math.max(geometry.contentHeight, 600)
+  const kinds = Object.keys(placements) as AssetKind[]
+  const handles = { ...geometry.assets }
+  for (const [kind, candidates] of Object.entries(staticHandles ?? {}) as [AssetKind, readonly string[]][]) {
+    if (handles[kind]) continue
+    const image = candidates.map((c) => geometry.slotImages[c]?.[kind]).find((b) => b)
+    const id = candidates.find((c) => geometry.slots[c])
+    if (image) handles[kind] = image
+    else if (id) handles[kind] = geometry.slots[id]
+  }
+  // Runtime serbest görselleri liste sırasıyla yerleştirir; yerleşmeyen (yuvası bulunamayan) öğe sırayı kaydırmasın.
+  const placedFree = (freePlacements ?? [])
+    .map((slot, index) => ({ slot, index }))
+    .filter((f): f is { slot: string; index: number } => !!f.slot && !!geometry.slots[f.slot])
+  const freeHandles = placedFree.flatMap((f, i) => (geometry.free[i] ? [{ index: f.index, box: geometry.free[i] }] : []))
 
   return (
     <div className="relative bg-white shadow-[var(--ui-shadow-lift)]" style={{ width: PREVIEW_BASE_WIDTH, height }}>
@@ -77,13 +104,16 @@ export default function ThemeSlotPreview({ html, slots, showSlots, dragging, pla
       {showSlots && (
         <div className="absolute inset-0 pointer-events-none" aria-hidden={!interactive}>
           {Object.entries(geometry.slots).map(([id, box]) => {
-            const kinds = (Object.keys(placements) as AssetKind[]).filter((k) => placements[k] === id)
+            const filled = kinds.some((k) => placements[k] === id) || placedFree.some((f) => f.slot === id)
             return interactive
-              ? <SlotTarget key={id} id={id} box={box} label={labelOf(id)} filledBy={kinds} dragging={dragging} />
+              ? <SlotTarget key={id} id={id} box={box} label={labelOf(id)} filled={filled} dragging={dragging} />
               : <SlotLabel key={id} box={box} label={labelOf(id)} />
           })}
-          {interactive && (Object.entries(geometry.assets) as [AssetKind, Box][]).map(([kind, box]) => (
-            <AssetHandle key={kind} kind={kind} box={box} />
+          {interactive && (Object.entries(handles) as [AssetKind, Box][]).map(([kind, box]) => (
+            <AssetHandle key={kind} source={{ type: 'asset', kind }} box={box} />
+          ))}
+          {interactive && freeHandles.map(({ index, box }) => (
+            <AssetHandle key={`free-${index}`} source={{ type: 'free', index }} box={box} />
           ))}
         </div>
       )}
@@ -91,11 +121,11 @@ export default function ThemeSlotPreview({ html, slots, showSlots, dragging, pla
   )
 }
 
-function SlotTarget({ id, box, label, filledBy, dragging }: {
-  id: string; box: Box; label: string; filledBy: AssetKind[]; dragging: boolean
+function SlotTarget({ id, box, label, filled, dragging }: {
+  id: string; box: Box; label: string; filled: boolean; dragging: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: slotDropId(id), data: { slotId: id, label } })
-  const empty = filledBy.length === 0
+  const empty = !filled
   return (
     <div
       ref={setNodeRef}
@@ -130,9 +160,12 @@ function SlotLabel({ box, label }: { box: Box; label: string }) {
   )
 }
 
-/** Önizlemedeki görselin üstünde sürükleme tutamağı. */
-function AssetHandle({ kind, box }: { kind: AssetKind; box: Box }) {
-  const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: assetDragId(kind), data: { kind } })
+/** Önizlemedeki görselin (logo/imza ya da serbest görsel) üstünde sürükleme tutamağı. */
+function AssetHandle({ source, box }: { source: DragSource; box: Box }) {
+  const { setNodeRef, attributes, listeners, isDragging } = useDraggable(source.type === 'asset'
+    ? { id: assetDragId(source.kind), data: { kind: source.kind } }
+    : { id: freeDragId(source.index), data: { freeIndex: source.index } })
+  const label = source.type === 'asset' ? ASSET_LABEL[source.kind] : FREE_IMAGE_LABEL
   return (
     <button
       ref={setNodeRef}
@@ -143,8 +176,8 @@ function AssetHandle({ kind, box }: { kind: AssetKind; box: Box }) {
         isDragging ? 'opacity-40' : 'hover:ring-2 hover:ring-ui-accent focus-visible:ring-2 focus-visible:ring-ui-accent'
       }`}
       style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
-      title={`${ASSET_LABEL[kind]} — başka bir konuma sürükleyin`}
-      aria-label={`${ASSET_LABEL[kind]} konumunu değiştir`}
+      title={`${label} — başka bir konuma sürükleyin`}
+      aria-label={`${label} konumunu değiştir`}
     >
       <span className="absolute -top-2 -left-2 hidden group-hover:flex group-focus-visible:flex items-center bg-ui-accent text-ui-accent-fg rounded p-0.5 shadow">
         <GripVertical size={12} aria-hidden="true" />

@@ -37,6 +37,9 @@ import BulkAddNoteModal from '../components/storage/BulkAddNoteModal'
 import BulkNoteResultDialog from '../components/storage/BulkNoteResultDialog'
 import { useTemplateLibrary, type SortKey } from '../components/storage/useTemplateLibrary'
 import { toast } from '../store/toastStore'
+import { useEntitlementStore } from '../store/entitlementStore'
+import { isProOrAbove } from '../services/entitlementService'
+import { xsltOpenPath } from '../utils/workRoutes'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 
 export default function MyXsltTemplatesPage() {
@@ -59,6 +62,7 @@ export default function MyXsltTemplatesPage() {
   const [shareTarget, setShareTarget] = useState<{ id: string; name: string } | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const isPro = useEntitlementStore((s) => isProOrAbove(s.entitlements))
 
   const activeKey = searchParams.get('folder') ?? 'all'
   function setActiveKey(key: string) {
@@ -352,7 +356,7 @@ export default function MyXsltTemplatesPage() {
                               folders={sortedFolders}
                               selected={selectedIds.has(t.id)}
                               onToggleSelect={toggleSelect}
-                              onOpen={() => navigate(`/xslt-editor/${t.id}`)}
+                              onOpen={() => navigate(xsltOpenPath(t.id, t.lastEditMode, isPro))}
                               onDelete={handleDelete}
                               onRename={handleRename}
                               onPreview={(id, name) => { setPreviewId(id); setPreviewName(name) }}

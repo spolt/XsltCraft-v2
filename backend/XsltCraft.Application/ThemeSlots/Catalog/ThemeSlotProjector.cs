@@ -25,15 +25,20 @@ public sealed record ThemeSlotReportDto(string Status, DateTime AnalyzedAt, IRea
 public interface IThemeSlotProjector
 {
     IReadOnlyList<ThemeSlotOptionDto> ForUser(string? catalogJson, DocumentType type);
+    IReadOnlyList<ThemeSlotOptionDto> ForUser(ThemeSlotCatalog? catalog, DocumentType type);
     ThemeSlotReportDto? ForAdmin(string? catalogJson, DocumentType type);
     IReadOnlyDictionary<ThemeAssetKind, string> Defaults(string? catalogJson);
     IReadOnlySet<string> ConditionalSlots(string? catalogJson);
+    IReadOnlySet<string> ConditionalSlots(ThemeSlotCatalog? catalog);
 }
 
 public sealed class ThemeSlotProjector : IThemeSlotProjector
 {
     public IReadOnlyList<ThemeSlotOptionDto> ForUser(string? catalogJson, DocumentType type) =>
-        ThemeSlotCatalogJson.TryDeserialize(catalogJson)?.Slots
+        ForUser(ThemeSlotCatalogJson.TryDeserialize(catalogJson), type);
+
+    public IReadOnlyList<ThemeSlotOptionDto> ForUser(ThemeSlotCatalog? catalog, DocumentType type) =>
+        catalog?.Slots
             .OrderBy(s => s.Order)
             .Select(s => new ThemeSlotOptionDto(s.Id, ThemeSlotLabels.Slot(s.Id, type), ThemeSlotLabels.Group(s.Id),
                 KindValue(s.DefaultFor), s.Order, s.Removable))
@@ -65,7 +70,10 @@ public sealed class ThemeSlotProjector : IThemeSlotProjector
         ?? new Dictionary<ThemeAssetKind, string>();
 
     public IReadOnlySet<string> ConditionalSlots(string? catalogJson) =>
-        ThemeSlotCatalogJson.TryDeserialize(catalogJson)?.Slots.Where(s => s.Conditional).Select(s => s.Id).ToHashSet()
+        ConditionalSlots(ThemeSlotCatalogJson.TryDeserialize(catalogJson));
+
+    public IReadOnlySet<string> ConditionalSlots(ThemeSlotCatalog? catalog) =>
+        catalog?.Slots.Where(s => s.Conditional).Select(s => s.Id).ToHashSet()
         ?? [];
 
     public static string RoleValue(ThemeImageRole role) => role switch
@@ -87,7 +95,8 @@ public sealed class ThemeSlotProjector : IThemeSlotProjector
         }
     }
 
-    private static string? KindValue(ThemeAssetKind? kind) => kind switch
+    /// <summary>Görsel türünün API değeri (logo | signature); diğerlerinde null.</summary>
+    public static string? KindValue(ThemeAssetKind? kind) => kind switch
     {
         ThemeAssetKind.Logo => "logo",
         ThemeAssetKind.Signature => "signature",

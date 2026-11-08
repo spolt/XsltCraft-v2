@@ -4,6 +4,8 @@ using XsltCraft.Application.ThemeSlots;
 using XsltCraft.Application.ThemeSlots.Analysis;
 using XsltCraft.Application.Validation;
 using XsltCraft.Application.Xslt;
+using XsltCraft.Application.Xslt.Engines;
+using XsltCraft.Application.Xslt.Execution;
 using XsltCraft.Domain.Entities;
 
 namespace XsltCraft.Application.Tests.ThemeSlots;
@@ -37,6 +39,33 @@ public class ThemeSlotAnalyzerTests
         Assert.Equal(slots.Split(','), result.Catalog.Slots.Select(s => s.Id));
         Assert.Equal(logo, result.Catalog.Slots.Single(s => s.DefaultFor == ThemeAssetKind.Logo).Id);
         Assert.Equal(signature, result.Catalog.Slots.Single(s => s.DefaultFor == ThemeAssetKind.Signature).Id);
+    }
+
+    [Fact]
+    public async Task Raw_route_sends_every_request_as_raw_without_validate()
+    {
+        var recording = new RouteRecordingExecution(ThemeFixtures.Execution);
+        var analyzer = new ThemeSlotAnalyzer(recording, ThemeFixtures.Samples);
+
+        var result = await analyzer.AnalyzeAsync(ThemeFixtures.Load(ThemeFixtures.TestTheme), DocumentType.Invoice, [],
+            null, Guid.NewGuid(), XsltRoute.Raw);
+
+        Assert.Equal(ThemeSlotStatus.Ok, result.Catalog.Status);
+        Assert.NotEmpty(recording.Requests);
+        Assert.All(recording.Requests, r => Assert.Equal(XsltRoute.Raw, r.Route));
+        Assert.DoesNotContain(recording.Requests, r => r.Op == XsltOperation.Validate);
+    }
+
+    [Fact]
+    public async Task Theme_route_sends_every_request_as_theme()
+    {
+        var recording = new RouteRecordingExecution(ThemeFixtures.Execution);
+        var analyzer = new ThemeSlotAnalyzer(recording, ThemeFixtures.Samples);
+
+        await analyzer.AnalyzeAsync(ThemeFixtures.Load(ThemeFixtures.TestTheme), DocumentType.Invoice, [], null, Guid.Empty, XsltRoute.Theme);
+
+        Assert.NotEmpty(recording.Requests);
+        Assert.All(recording.Requests, r => Assert.Equal(XsltRoute.Theme, r.Route));
     }
 
     [Fact]

@@ -21,8 +21,9 @@ internal sealed class SourceEdits
 
     public string Apply(string source)
     {
-        // Aynı noktaya yapılan eklemeler eklenme sırasıyla yan yana kalsın: önce büyük ofset, eşitlikte büyük sıra.
-        var ordered = _edits.OrderByDescending(e => e.Start).ThenByDescending(e => e.Seq).ToList();
+        // Önce büyük ofset; aynı başlangıçta değiştirme eklemeden sonra gelir (ekleme aralığın önüne yazılır); aynı noktaya
+        // yapılan eklemeler eklenme sırasıyla yan yana kalır.
+        var ordered = _edits.OrderByDescending(e => e.Start).ThenByDescending(e => e.End).ThenByDescending(e => e.Seq).ToList();
 
         for (var i = 1; i < ordered.Count; i++)
         {

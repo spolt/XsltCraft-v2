@@ -50,16 +50,19 @@ import {
   getUserXsltTemplate,
   createUserXsltTemplate,
   updateUserXsltTemplate,
-  acquireEditingLock,
-  releaseEditingLock,
+  type XsltEditMode,
 } from '../services/userXsltService'
+import { useEditingLock } from '../hooks/useEditingLock'
+import { useEasyEditModeSwitch } from '../hooks/useEasyEditModeSwitch'
 import { toast } from '../store/toastStore'
-import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
+import { readUploadFile, stripXsltExt, UPLOAD_ACCEPT } from '../utils/uploadValidation'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { openUpgradeModal } from '../store/upgradeModalStore'
 import { useUiPrefsStore, type EditorLayoutId } from '../store/uiPrefsStore'
-
-const LOCK_HEARTBEAT_MS = 30_000
+import { toDownloadName } from '../components/theme-use/easyEditSource'
+import EditorModeBar from '../components/easy-edit/EditorModeBar'
+import { readEditorHandoff, type EditorHandoff } from '../components/easy-edit/editorHandoff'
+import { sampleXmlFile, sampleXmlLabel, sniffDocumentType, type EditorPendingState } from '../components/dashboard/editorFiles'
 
 /** Sekmeli sağ sütunda "yarı yarıya" düzeninin genişliği (%). */
 const TABS_HALF_SIZE = 50
@@ -83,12 +86,26 @@ export default function XsltEditorPage() {
   // Yalnız görüntüleme (sol menü / başlık): yüklenen dosyaların adları.
   const [xsltFileName, setXsltFileName] = useState<string | null>(null)
   const [xmlFileName, setXmlFileName] = useState<string | null>(null)
+  // Kayıtlı şablonun en son düzenlendiği mod (yüklenen dosyada null).
+  const [lastEditMode, setLastEditMode] = useState<XsltEditMode | null>(null)
 
-  // Eşzamanlı düzenleme kilidi
-  const [lockedByOther, setLockedByOther] = useState(false)
-  const [lockOwnerName, setLockOwnerName] = useState<string | null>(null)
+  // Kolay düzenle'den gelen metin (location.state.pendingXsltContent). Yalnız açılışta okunur; `templateId` rotadakiyle
+  // eşleşmiyorsa yok sayılır. Kayıtlı şablonda sunucudan yüklenen metnin yerine geçer.
+  const [initialHandoff] = useState<EditorHandoff | null>(() => {
+    const h = readEditorHandoff(location.state)
+    return h && (h.templateId ?? null) === (routeTemplateId ?? null) ? h : null
+  })
+  const handoffRef = useRef(initialHandoff)
+
+  // Eşzamanlı düzenleme kilidi: kilit al + heartbeat + çıkışta bırak
+  const { lockedByOther, lockOwnerName, markLockedByOther } = useEditingLock(templateId, {
+    onLost: (ownerName) =>
+      toast.warning(
+        `Şu an ${ownerName ?? 'başka bir kullanıcı'} bu şablonu düzenliyor. Salt-okunur açıldı.`,
+        { title: 'Şablon kilitli', durationMs: 6000 },
+      ),
+  })
   const loadedUpdatedAtRef = useRef<string | null>(null)
-  const wasLockedRef = useRef(false)
 
   // Doğrulama + problemler ve önizleme (Geliştirici Modu ile ortak hook'lar)
   const diag = useXsltDiagnostics({ xslt: xsltContent, xml: xmlContent })
@@ -355,53 +372,33 @@ export default function XsltEditorPage() {
   // ─── Load saved template ────────────────────────────────────────────────────
   useEffect(() => {
     if (!routeTemplateId) return
+    // Aktarım effect başında okunur: StrictMode'daki ikinci çalışma da aynı metni uygular.
+    const handoff = handoffRef.current
     setLoadingTemplate(true)
     getUserXsltTemplate(routeTemplateId)
       .then((t) => {
+        handoffRef.current = null
+        const xslt = handoff ? handoff.pendingXsltContent : t.xsltContent
+        const xml = handoff?.pendingXmlContent ?? t.xmlContent
         setTemplateId(t.id)
         setTemplateName(t.name)
-        setXsltContent(t.xsltContent)
-        setXmlContent(t.xmlContent)
-        loadedUpdatedAtRef.current = t.updatedAt
-        setIsDirty(false)
+        setXsltContent(xslt)
+        setXmlContent(xml)
+        setLastEditMode(t.lastEditMode)
+        // Aktarılan metin kaynak ekranın bildiği sürüme dayanır; kayıtta çakışma denetimi o sürümle yapılır.
+        loadedUpdatedAtRef.current = handoff?.savedUpdatedAt ?? t.updatedAt
+        setIsDirty(!!handoff && (!!handoff.dirty || xslt !== t.xsltContent || xml !== t.xmlContent))
       })
-      .catch(() => navigate('/xslt-editor'))
+      .catch(() => {
+        // Aktarılan metin şablona aitti: yeni (kaydedilmemiş) belgeye dönüşmesin.
+        if (handoff) {
+          handoffRef.current = null
+          toast.error('Şablon yüklenemedi; aktarılan değişiklikler açılamadı.', { title: 'XSLT Editör' })
+        }
+        navigate('/xslt-editor')
+      })
       .finally(() => setLoadingTemplate(false))
   }, [routeTemplateId, navigate])
-
-  // ─── Eşzamanlı düzenleme kilidi: kilit al + heartbeat ───────────────────────
-  useEffect(() => {
-    if (!templateId) return
-    let cancelled = false
-
-    async function tick() {
-      try {
-        const lock = await acquireEditingLock(templateId!)
-        if (cancelled) return
-        setLockedByOther(lock.lockedByOther)
-        setLockOwnerName(lock.editingUserName)
-        // Yalnızca kilitlenme anında (yükselen kenar) uyarı göster
-        if (lock.lockedByOther && !wasLockedRef.current) {
-          toast.warning(
-            `Şu an ${lock.editingUserName ?? 'başka bir kullanıcı'} bu şablonu düzenliyor. Salt-okunur açıldı.`,
-            { title: 'Şablon kilitli', durationMs: 6000 },
-          )
-        }
-        wasLockedRef.current = lock.lockedByOther
-      } catch {
-        // sessizce yoksay (yetki/ağ hatası)
-      }
-    }
-
-    tick()
-    const intervalId = setInterval(tick, LOCK_HEARTBEAT_MS)
-    return () => {
-      cancelled = true
-      clearInterval(intervalId)
-      releaseEditingLock(templateId!).catch(() => {})
-      wasLockedRef.current = false
-    }
-  }, [templateId])
 
   // ─── File upload handlers ───────────────────────────────────────────────────
   /** XSLT dosyasını doğrulayıp editöre yükler (input ve Dashboard'dan gelen dosya ortak yolu). */
@@ -411,7 +408,7 @@ export default function XsltEditorPage() {
       setXsltContent(content)
       setIsDirty(true)
       setXsltFileName(file.name)
-      setTemplateName(name => name || file.name.replace(/\.(xsl|xslt)$/i, ''))
+      setTemplateName(name => name || stripXsltExt(file.name))
     } catch (err) {
       toast.error((err as Error).message, { title: 'XSLT yüklenemedi' })
     }
@@ -425,17 +422,23 @@ export default function XsltEditorPage() {
   }
 
   /** XML dosyasını doğrulayıp editöre yükler (input ve Dashboard'dan gelen dosya ortak yolu). */
-  const loadXmlFile = useCallback(async (file: File) => {
+  const loadXmlFile = useCallback(async (file: File, displayName?: string) => {
     try {
       const content = await readUploadFile(file, 'xml')
       // Debounce'u beklemez: minify XML'in biçimli görünümü xmlValid'e bağlı, gecikmesin.
       validateXmlNow(content)
       setXmlContent(content)
-      setXmlFileName(file.name)
+      setXmlFileName(displayName || file.name)
     } catch (err) {
       toast.error((err as Error).message, { title: 'XML yüklenemedi' })
     }
   }, [validateXmlNow])
+
+  /** XML yokken varsayılan örnek belgeyle devam: tür XSLT'nin namespace'inden çıkarılır. */
+  const sampleXmlType = useMemo(() => sniffDocumentType(xsltContent), [xsltContent])
+  function continueWithSampleXml() {
+    void loadXmlFile(sampleXmlFile(sampleXmlType), sampleXmlLabel(sampleXmlType))
+  }
 
   async function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -445,20 +448,56 @@ export default function XsltEditorPage() {
   }
 
   // ─── Dashboard'dan gelen dosyalar (location.state.pendingXsltFile / pendingXmlFile) ─
-  const pendingState = location.state as { pendingXsltFile?: unknown; pendingXmlFile?: unknown } | null
+  const pendingState = location.state as { [K in keyof EditorPendingState]?: unknown } | null
   const pendingXsltFile = pendingState?.pendingXsltFile instanceof File ? pendingState.pendingXsltFile : null
   const pendingXmlFile = pendingState?.pendingXmlFile instanceof File ? pendingState.pendingXmlFile : null
+  const pendingXmlLabel = typeof pendingState?.pendingXmlLabel === 'string' ? pendingState.pendingXmlLabel : undefined
+  const pendingInitialLine = typeof pendingState?.initialLine === 'number' && Number.isInteger(pendingState.initialLine)
+    && pendingState.initialLine > 0 ? pendingState.initialLine : null
+  // "Editörde düzelt": imleç, editör hazır olunca bu satıra gider.
+  const initialLineRef = useRef<number | null>(null)
   const handledPendingFilesRef = useRef<Set<File>>(new Set())
   useEffect(() => {
     const handled = handledPendingFilesRef.current
     const fresh = [pendingXsltFile, pendingXmlFile].filter((f): f is File => f !== null && !handled.has(f))
     if (fresh.length === 0) return
     fresh.forEach(f => handled.add(f))
-    if (pendingXsltFile && fresh.includes(pendingXsltFile)) void loadXsltFile(pendingXsltFile)
-    if (pendingXmlFile && fresh.includes(pendingXmlFile)) void loadXmlFile(pendingXmlFile)
+    if (pendingXsltFile && fresh.includes(pendingXsltFile)) {
+      initialLineRef.current = pendingInitialLine
+      void loadXsltFile(pendingXsltFile)
+    }
+    if (pendingXmlFile && fresh.includes(pendingXmlFile)) void loadXmlFile(pendingXmlFile, pendingXmlLabel)
     // State temizlenir: yenilemede / geri gelişte dosya ikinci kez yüklenmesin.
     navigate(location.pathname, { replace: true, state: null })
-  }, [pendingXsltFile, pendingXmlFile, loadXsltFile, loadXmlFile, navigate, location.pathname])
+  }, [pendingXsltFile, pendingXmlFile, pendingXmlLabel, pendingInitialLine, loadXsltFile, loadXmlFile, navigate, location.pathname])
+
+  // ─── Kolay düzenle'den gelen metin (location.state.pendingXsltContent) ──────
+  // Yüklenen dosyada burada uygulanır (kayıtlı şablonda yükleme effect'inde). Metin uygulamanın kendi compose
+  // çıktısıdır, dosya doğrulamasından geçmez; yalnız metin olarak editöre konur.
+  useEffect(() => {
+    const handoff = handoffRef.current
+    if (!handoff || routeTemplateId) return
+    handoffRef.current = null
+    setXsltContent(handoff.pendingXsltContent)
+    setXsltFileName(handoff.pendingXsltName ?? null)
+    if (handoff.pendingXsltName) {
+      const base = stripXsltExt(handoff.pendingXsltName)
+      setTemplateName(name => name || base)
+    }
+    if (handoff.pendingXmlContent) {
+      validateXmlNow(handoff.pendingXmlContent)
+      setXmlContent(handoff.pendingXmlContent)
+      setXmlFileName(handoff.pendingXmlName ?? null)
+    }
+    // Kaydedilmemiş belge.
+    setIsDirty(true)
+  }, [routeTemplateId, validateXmlNow])
+
+  // Aktarım state'i temizlenir: yenilemede / geri gelişte metin ikinci kez uygulanmasın.
+  const hasHandoffState = readEditorHandoff(location.state) !== null
+  useEffect(() => {
+    if (hasHandoffState) navigate(location.pathname, { replace: true, state: null })
+  }, [hasHandoffState, navigate, location.pathname])
 
   // ─── Image insert ───────────────────────────────────────────────────────────
   function handleRequestImageInsert(lineNumber: number) {
@@ -495,7 +534,7 @@ export default function XsltEditorPage() {
     const blob = new Blob([xsltContent], { type: 'application/xslt+xml' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `${(templateName || 'template').replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
+    a.download = toDownloadName(templateName || 'template')
     a.click()
     URL.revokeObjectURL(a.href)
     reportDownload('Xslt', templateId)
@@ -511,6 +550,7 @@ export default function XsltEditorPage() {
           xsltContent,
           xmlContent: xmlContent ?? undefined,
           expectedUpdatedAt: loadedUpdatedAtRef.current ?? undefined,
+          lastEditMode: 'editor',
         })
         setTemplateName(name)
         loadedUpdatedAtRef.current = updated.updatedAt
@@ -519,6 +559,7 @@ export default function XsltEditorPage() {
           name,
           xsltContent,
           xmlContent: xmlContent ?? undefined,
+          lastEditMode: 'editor',
         })
         setTemplateId(result.id)
         setTemplateName(result.name)
@@ -527,6 +568,7 @@ export default function XsltEditorPage() {
         window.history.replaceState(null, '', `/xslt-editor/${result.id}`)
       }
       setIsDirty(false)
+      setLastEditMode('editor')
       setShowSaveDialog(false)
       toast.success('Şablon kaydedildi.', { durationMs: 2500 })
     } catch (err: unknown) {
@@ -540,8 +582,7 @@ export default function XsltEditorPage() {
         })
       } else if (status === 423) {
         // Başka kullanıcı düzenliyor — salt-okunura geç
-        setLockedByOther(true)
-        wasLockedRef.current = true
+        markLockedByOther()
         setShowSaveDialog(false)
         toast.error('Bu şablonu şu an başka bir kullanıcı düzenliyor. Kaydedilemedi.', {
           title: 'Şablon kilitli', durationMs: null,
@@ -678,6 +719,21 @@ export default function XsltEditorPage() {
   const sideXml: SideMenuFile | null = xmlContent ? { name: xmlDisplayName, size: xmlSize } : null
   const xsltEol = useMemo(() => (xsltContent.includes('\r\n') ? 'CRLF' : 'LF'), [xsltContent])
 
+  // ─── Düzenleme modu: XSLT Editör ↔ Kolay düzenle (Pro ve üstü) ─────────────
+  const modeSwitch = useEasyEditModeSwitch({
+    xslt: xsltContent,
+    xml: xmlContent,
+    templateId,
+    templateName,
+    fileName: xsltDisplayName,
+    uploadedFileName: xsltFileName,
+    dirty: isDirty,
+    loading: loadingTemplate,
+    lastEditMode,
+    savedUpdatedAt: () => loadedUpdatedAtRef.current,
+  })
+  const { showDocumentBar } = modeSwitch
+
   const header = (
     <WorkspaceHeader
       active="xslt"
@@ -688,15 +744,29 @@ export default function XsltEditorPage() {
           <span className="max-w-[260px] truncate font-mono font-medium">{templateName || xsltDisplayName}</span>
           {version && <HeaderChip>XSLT {version}</HeaderChip>}
           {lockedByOther && <HeaderChip>Salt-okunur</HeaderChip>}
-          {isDirty && <HeaderStatus>Kaydedilmemiş değişiklik</HeaderStatus>}
+          {isDirty && !showDocumentBar && <HeaderStatus>Kaydedilmemiş değişiklik</HeaderStatus>}
         </>
       ) : null}
-      actions={(
+      actions={showDocumentBar ? undefined : (
         <>
           <HeaderButton icon={Save} onClick={requestSave} disabled={!xsltContent}>Şablonlarıma kaydet</HeaderButton>
           <HeaderButton variant="primary" icon={Download} onClick={handleDownload} disabled={!xsltContent}>İndir</HeaderButton>
         </>
       )}
+    />
+  )
+
+  // Pro ve üstünde kayıt / indirme düğmeleri mod anahtarıyla birlikte belge çubuğundadır.
+  const documentBar = (
+    <EditorModeBar
+      modeSwitch={modeSwitch}
+      fileName={xsltDisplayName}
+      dirty={isDirty}
+      saving={saving}
+      printDisabled={!workspaceReady}
+      onPrint={handlePrint}
+      onSave={requestSave}
+      onDownload={handleDownload}
     />
   )
 
@@ -733,6 +803,8 @@ export default function XsltEditorPage() {
           xmlName={xmlDisplayName}
           onUploadXslt={() => xsltInputRef.current?.click()}
           onUploadXml={() => xmlInputRef.current?.click()}
+          sampleXmlLabel={sampleXmlLabel(sampleXmlType)}
+          onUseSampleXml={continueWithSampleXml}
           onOpenSaved={() => guardedNavigate('/my-xslt-templates')}
         />
       </>
@@ -813,6 +885,11 @@ export default function XsltEditorPage() {
                       toggleCommentRef.current = toggleComment
                       formatDocumentRef.current = formatDocument
                       focusEditorRef.current = focus
+                      const line = initialLineRef.current
+                      if (line) {
+                        initialLineRef.current = null
+                        requestAnimationFrame(() => { revealLine(line); focus() })
+                      }
                     }}
                     onRequestImageInsert={handleRequestImageInsert}
                     errors={diag.editorMarkers}
@@ -982,6 +1059,7 @@ export default function XsltEditorPage() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-ui-bg text-tx">
       {header}
+      {documentBar}
 
       <div className="flex min-h-0 flex-1">{body}</div>
 

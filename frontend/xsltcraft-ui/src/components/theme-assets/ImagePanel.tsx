@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react'
-import { ImageUp, Trash2, RefreshCw } from 'lucide-react'
+import { ImageUp, Trash2, RefreshCw, Undo2 } from 'lucide-react'
 import type { ThemeSlotOption } from '../../services/templateService'
 import AlignPicker from './AlignPicker'
 import { IMAGE_ACCEPT, usesThemeBox, type ImgState } from './imageState'
@@ -21,7 +21,13 @@ interface Props {
   themeImageRemovable?: boolean
   /** Başlığı gizle (başlık dışarıda, ör. akordeon düğmesinde gösteriliyorsa). */
   hideTitle?: boolean
+  /** Yalnız Kolay düzenle (doc): kaldırılan dosya görselini geri getirir. */
+  onRestore?: () => void
+  /** Konum seçimi zorunlu (serbest görsel): varsayılan konum seçeneği yoktur, konumsuz görsel eklenmez. */
+  requireSlot?: boolean
 }
+
+const ORIGIN_BADGE: Record<string, string> = { extracted: 'Dosyadan alındı', previous: 'Önceki kayıttan' }
 
 const fieldLabel = 'mb-1 block text-[12px] text-tx-muted'
 const fieldInput =
@@ -30,13 +36,17 @@ const fieldInput =
 /** Logo / imza: yükleme, konum, boyut ve hizalama. */
 export default function ImagePanel({
   label, state, uploading, slots, slotValue, onUpload, onChange, onRemove, dragHandle, themeImageRemovable = false,
-  hideTitle = false,
+  hideTitle = false, onRestore, requireSlot = false,
 }: Props) {
   const groups = [...new Set(slots.map((s) => s.group))]
   const selectId = useId()
   // Temadaki görselin yerine geçerken kutu temadan gelir; kullanıcı yazınca kendi boyutu geçerli olur.
   const themeBox = usesThemeBox(state, slotValue)
-  const sizePlaceholder = themeBox ? 'Temadaki boyut' : 'Otomatik'
+  const fromFile = state.origin === 'extracted'
+  const sizePlaceholder = themeBox ? (fromFile ? 'Dosyadaki boyut' : 'Temadaki boyut') : 'Otomatik'
+  const badge = state.origin === 'upload' && state.index != null
+    ? 'Dosyadaki görselin yerine geçer'
+    : state.origin ? ORIGIN_BADGE[state.origin] : undefined
   // Tema kutusundan çıkarken diğer kenar otomatik kalsın (oran korunur).
   const setSize = (side: 'width' | 'height', value: string) =>
     onChange(themeBox
@@ -55,6 +65,11 @@ export default function ImagePanel({
             <img src={state.dataUrl} alt={label} className="max-h-16 rounded bg-white object-contain p-1" />
           )}
           <div className="ml-auto flex flex-col items-start gap-1">
+            {badge && (
+              <span data-testid="image-origin-badge" className="rounded bg-ui-soft px-1.5 py-0.5 text-[10.5px] font-semibold text-ui-ink">
+                {badge}
+              </span>
+            )}
             <label className="xc-focus flex cursor-pointer items-center gap-1 rounded text-[12px] font-medium text-ui-ink hover:underline focus-within:outline-2 focus-within:outline-ui-accent">
               <RefreshCw size={12} aria-hidden="true" />
               Değiştir
@@ -85,7 +100,21 @@ export default function ImagePanel({
         </label>
       )}
 
-      {themeImageRemovable && !state.dataUrl && (
+      {fromFile && !state.dataUrl && onRestore && (
+        <p className="m-0 flex items-center gap-2 text-[12px] text-tx-2">
+          Dosyadaki görsel kaldırıldı.
+          <button
+            type="button"
+            onClick={onRestore}
+            className="xc-focus inline-flex items-center gap-1 rounded font-semibold text-ui-ink hover:underline"
+          >
+            <Undo2 size={12} aria-hidden="true" />
+            Geri al
+          </button>
+        </p>
+      )}
+
+      {themeImageRemovable && !state.dataUrl && !fromFile && (
         <label className="flex cursor-pointer select-none items-center gap-2 text-[12px] text-tx-2">
           <input
             type="checkbox"
@@ -98,6 +127,9 @@ export default function ImagePanel({
       )}
 
       <div className="flex flex-col gap-2.5">
+        {requireSlot && slots.length === 0 && (
+          <p className="m-0 text-[12px] text-tx-muted">Bu belgede görsel eklenebilecek boş bir konum yok.</p>
+        )}
         {slots.length > 0 && (
           <div>
             <label htmlFor={selectId} className={fieldLabel}>Konum</label>
@@ -106,8 +138,11 @@ export default function ImagePanel({
               value={slotValue ?? ''}
               onChange={(e) => onChange({ slot: e.target.value || null })}
               className={fieldInput}
+              aria-invalid={requireSlot && !!state.dataUrl && slotValue === null ? true : undefined}
             >
-              {slotValue === null && <option value="">Temanın varsayılan alanı</option>}
+              {slotValue === null && (requireSlot
+                ? <option value="" disabled>Konum seç</option>
+                : <option value="">{fromFile ? 'Dosyadaki yeri' : 'Temanın varsayılan alanı'}</option>)}
               {groups.map((g) => (
                 <optgroup key={g} label={g}>
                   {slots.filter((s) => s.group === g).map((s) => (
@@ -116,6 +151,11 @@ export default function ImagePanel({
                 </optgroup>
               ))}
             </select>
+            {requireSlot && state.dataUrl && slotValue === null && (
+              <p className="mt-1 mb-0 text-[11.5px] text-fn-orange-ink">
+                Görselin belgeye eklenmesi için bir konum seç ya da önizlemedeki bir alana sürükle.
+              </p>
+            )}
           </div>
         )}
 

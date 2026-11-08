@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Api.Xslt;
 using XsltCraft.Application.DTO;
+using XsltCraft.Application.EasyEdit.Banks;
 using XsltCraft.Application.Themes;
 using XsltCraft.Application.ThemeSlots;
 using XsltCraft.Application.ThemeSlots.Catalog;
@@ -86,7 +87,8 @@ public class ThemeComposeController(
             if (ThemeComposeXsltLimits.Check(xslt) is { } overLimit)
                 return BadRequest(new { error = overLimit.Message, field = overLimit.Field });
 
-            documentType = xslt.Contains(DespatchNamespace, StringComparison.Ordinal) ? DocumentType.Despatch : DocumentType.Invoice;
+            documentType = ThemeDocumentTypeSniffer.Sniff(xslt);
+            conditional = request.ConditionalSlots?.ToHashSet(StringComparer.Ordinal);
         }
 
         var input = new ThemeComposeInput(
@@ -97,7 +99,10 @@ public class ThemeComposeController(
             conditional,
             request.HideThemeImages.Select(ParseKind).ToList(),
             request.FixedNotes?.Select(ToFixedNote).ToList(),
-            documentType);
+            documentType,
+            request.ThemeId is null ? request.StaticImages?.Select(ToStaticImage).ToList() : null,
+            request.ThemeId is null ? request.FreeImages?.Select(ToFreeImage).ToList() : null,
+            request.ThemeId is null ? request.DocumentBankEdits?.Select(ToDocumentBankEdit).ToList() : null);
 
         // İstekle gelen xslt birleştirmesi senkron ve iptalsizdir: süreç genelinde sınırlı, kuyruksuz. Hazır tema kapıya girmez.
         IDisposable? composeSlot = null;
@@ -112,7 +117,7 @@ public class ThemeComposeController(
             result = composer.Compose(xslt, input);
 
         if (!result.Success)
-            return BadRequest(new { error = result.Error });
+            return result.ErrorCode is { } code ? BadRequest(new { error = result.Error, code }) : BadRequest(new { error = result.Error });
 
         string? html = null;
         if (request.IncludeHtml)
@@ -146,12 +151,10 @@ public class ThemeComposeController(
             request.IncludeXslt ? result.Xslt : null,
             html,
             sw.ElapsedMilliseconds,
-            result.Warnings.Select(w => new ThemeComposeWarningDto(w.Code, w.Message, KindValue(w.Kind))).ToList(),
-            result.AppliedSlots.ToDictionary(kv => KindValue(kv.Key)!, kv => kv.Value),
+            result.Warnings.Select(w => new ThemeComposeWarningDto(w.Code, w.Message, ThemeSlotProjector.KindValue(w.Kind))).ToList(),
+            result.AppliedSlots.ToDictionary(kv => ThemeSlotProjector.KindValue(kv.Key)!, kv => kv.Value),
             result.FixedNotesSupported));
     }
-
-    private const string DespatchNamespace = "urn:oasis:names:specification:ubl:schema:xsd:DespatchAdvice-2";
 
     // Doğrulayıcıdan geçmiş değerler; ayrıştırma yalnız tür dönüşümü.
     private static FixedNoteInput ToFixedNote(ThemeComposeFixedNoteDto n)
@@ -161,6 +164,15 @@ public class ThemeComposeController(
         return new FixedNoteInput(position, n.Text, n.Bold, n.Italic, n.Underline, n.FontSize, n.Color, n.FontFamily, align);
     }
 
+    private static StaticImageInput ToStaticImage(StaticImageDto i) =>
+        new(i.Index, i.Slot, i.Remove, i.Width, i.Height, i.Alignment is null ? null : ParseAlignment(i.Alignment));
+
+    private static FreeImageInput ToFreeImage(ThemeComposeFreeImageDto f) =>
+        new(f.Slot, f.DataUrl, f.Width, f.Height, ParseAlignment(f.Alignment));
+
+    private static DocumentBankEditInput ToDocumentBankEdit(ThemeComposeDocumentBankEditDto e) =>
+        new(e.Index, e.BankName.Trim(), e.Iban.Trim(), e.Remove);
+
     private static ThemeAssetKind ParseKind(string kind) => kind == "logo" ? ThemeAssetKind.Logo : ThemeAssetKind.Signature;
 
     private static ThemeAlignment ParseAlignment(string a) => a switch
@@ -168,12 +180,5 @@ public class ThemeComposeController(
         "center" => ThemeAlignment.Center,
         "right" => ThemeAlignment.Right,
         _ => ThemeAlignment.Left,
-    };
-
-    private static string? KindValue(ThemeAssetKind? kind) => kind switch
-    {
-        ThemeAssetKind.Logo => "logo",
-        ThemeAssetKind.Signature => "signature",
-        _ => null,
     };
 }

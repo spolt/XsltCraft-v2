@@ -41,10 +41,15 @@ internal sealed class XsltSourceMap
         return (idx >= 0 ? idx : ~idx - 1) + 1;
     }
 
-    public static bool TryBuild(string source, [NotNullWhen(true)] out XsltSourceMap? map, out string? error)
+    public static bool TryBuild(string source, [NotNullWhen(true)] out XsltSourceMap? map, out string? error) =>
+        TryBuild(source, out map, out error, out _);
+
+    /// <param name="errorLine">Ayrıştırma hatasının satırı (bilinmiyorsa 0).</param>
+    public static bool TryBuild(string source, [NotNullWhen(true)] out XsltSourceMap? map, out string? error, out int errorLine)
     {
         map = null;
         error = null;
+        errorLine = 0;
         try
         {
             var lineStarts = LineStarts(source);
@@ -71,6 +76,7 @@ internal sealed class XsltSourceMap
         catch (Exception ex) when (ex is XmlException or InvalidOperationException)
         {
             error = ex.Message;
+            errorLine = ex is XmlException xml ? xml.LineNumber : 0;
             return false;
         }
     }

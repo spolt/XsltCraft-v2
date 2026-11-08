@@ -1,5 +1,8 @@
 import api from './apiService'
 
+/** Şablonun en son düzenlendiği mod. */
+export type XsltEditMode = 'editor' | 'easyEdit'
+
 export interface UserXsltTemplateSummary {
   id: string
   name: string
@@ -11,6 +14,7 @@ export interface UserXsltTemplateSummary {
   ownerName: string
   folderId: string | null
   isFavorite: boolean
+  lastEditMode: XsltEditMode
 }
 
 export interface UserXsltTemplateDetail extends UserXsltTemplateSummary {
@@ -53,6 +57,7 @@ export async function createUserXsltTemplate(params: {
   name: string
   xsltContent: string
   xmlContent?: string
+  lastEditMode?: XsltEditMode
 }): Promise<UserXsltTemplateDetail> {
   const { data } = await api.post<UserXsltTemplateDetail>('/api/user-xslt-templates', params)
   return data
@@ -60,7 +65,7 @@ export async function createUserXsltTemplate(params: {
 
 export async function updateUserXsltTemplate(
   id: string,
-  params: { name?: string; xsltContent?: string; xmlContent?: string; expectedUpdatedAt?: string },
+  params: { name?: string; xsltContent?: string; xmlContent?: string; expectedUpdatedAt?: string; lastEditMode?: XsltEditMode },
 ): Promise<UserXsltTemplateDetail> {
   const { data } = await api.put<UserXsltTemplateDetail>(`/api/user-xslt-templates/${id}`, params)
   return data

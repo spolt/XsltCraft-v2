@@ -37,6 +37,7 @@ import { listSnippets, type UserSnippet } from '../services/snippetService'
 import { useThemeDraftStore } from '../store/themeDraftStore'
 import { toast } from '../store/toastStore'
 import { readUploadFile, UPLOAD_ACCEPT } from '../utils/uploadValidation'
+import { toDownloadName } from '../components/theme-use/easyEditSource'
 
 export default function DevModePage() {
   const { templateId } = useParams<{ templateId: string }>()
@@ -170,7 +171,7 @@ export default function DevModePage() {
       const blob = new Blob([content], { type: 'application/xslt+xml' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `${doc.templateName.replace(/[^a-z0-9çğıöşüÇĞİÖŞÜ]/gi, '_')}.xslt`
+      a.download = toDownloadName(doc.templateName)
       a.click()
       URL.revokeObjectURL(a.href)
       reportDownload('Template', templateId)

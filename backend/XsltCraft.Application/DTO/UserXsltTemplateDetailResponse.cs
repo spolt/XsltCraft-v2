@@ -10,4 +10,7 @@ public sealed class UserXsltTemplateDetailResponse
     public DateTime UpdatedAt { get; set; }
 
     public bool IsOwner { get; set; }
+
+    /// <summary><c>"editor"</c> veya <c>"easyEdit"</c>.</summary>
+    public string LastEditMode { get; set; } = XsltEditModeNames.Editor;
 }

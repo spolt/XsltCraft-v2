@@ -496,6 +496,13 @@ namespace XsltCraft.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("LastEditMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Editor");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)

@@ -16,4 +16,7 @@ public sealed class UserXsltTemplateResponse
     // Klasörleme (yalnız sahip için anlamlı; paylaşılan şablonlarda null)
     public Guid? FolderId { get; set; }
     public bool IsFavorite { get; set; }
+
+    /// <summary><c>"editor"</c> veya <c>"easyEdit"</c>.</summary>
+    public string LastEditMode { get; set; } = XsltEditModeNames.Editor;
 }

@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 using XsltCraft.Application.ThemeSlots.Analysis;
 using XsltCraft.Application.ThemeSlots.Catalog;
 using XsltCraft.Application.ThemeSlots.Overrides;
@@ -39,20 +37,16 @@ public interface IThemeUploadProcessor
         IReadOnlyList<ThemeImageDecision>? imageRoles = null, Guid userId = default, CancellationToken cancellationToken = default);
 }
 
-public sealed partial class ThemeUploadProcessor(
+public sealed class ThemeUploadProcessor(
     IThemeOverridesProcessor overrides, IThemeSlotAnalyzer analyzer, IXsltExecutionService execution, IThemeSampleXmlProvider samples)
     : IThemeUploadProcessor
 {
-    [GeneratedRegex(@"^\s*<\?xml[^>]*\bencoding\s*=\s*[""']([^""']+)[""']", RegexOptions.CultureInvariant)]
-    private static partial Regex DeclaredEncoding();
-
     private const string EngineUnavailableMessage = "XSLT motoru şu anda kullanılamıyor; tema yüklenmedi, lütfen birazdan tekrar deneyin.";
 
     public async Task<ThemeUploadOutcome> ProcessAsync(string xslt, DocumentType type, OverridesDecision? decision,
         IReadOnlyList<ThemeImageDecision>? imageRoles = null, Guid userId = default, CancellationToken cancellationToken = default)
     {
-        if (xslt.Length > 0 && xslt[0] == '﻿')
-            xslt = xslt[1..];
+        xslt = ThemeTextPrelude.StripBom(xslt);
         var uploaded = xslt;
 
         // Önizlemede render edilemeyen tema yayımlanmaz — karar sorulmadan (409) ve analizden önce.
@@ -61,12 +55,11 @@ public sealed partial class ThemeUploadProcessor(
 
         // Analiz metni UTF-8 olarak yeniden yazar; bildirimi farklı kodlama diyen dosyada bayt/bildirim uyuşmazlığı
         // doğmasın diye dokunulmaz.
-        var encoding = DeclaredEncoding().Match(xslt);
-        if (encoding.Success && !encoding.Groups[1].Value.Trim().Equals("utf-8", StringComparison.OrdinalIgnoreCase))
+        if (ThemeTextPrelude.NonUtf8DeclaredEncoding(xslt) is { } encoding)
         {
             var skipped = new ThemeSlotCatalog(ThemeSlotCatalog.CurrentVersion, ThemeSlotCatalog.CurrentAnalyzerVersion,
                 ThemeSlotStatus.Skipped, DateTime.UtcNow, [], [], [], null,
-                [new ThemeSlotWarning("not-utf8", $"Tema {encoding.Groups[1].Value} kodlamalı; konum analizi yalnız UTF-8 temalarda yapılır.")]);
+                [new ThemeSlotWarning("not-utf8", $"Tema {encoding} kodlamalı; konum analizi yalnız UTF-8 temalarda yapılır.")]);
             return new ThemeUploadOutcome.Ready(xslt, ThemeSlotCatalogJson.Serialize(skipped), skipped, Original: true);
         }
 
@@ -103,7 +96,8 @@ public sealed partial class ThemeUploadProcessor(
             warnings.Add(new ThemeSlotWarning("dangling-marker", "Eşleşmeyen görsel bloğu işaretleri temizlendi."));
         }
 
-        var analysis = await analyzer.AnalyzeAsync(xslt, type, occupied, images.Count > 0 ? imageRoles : null, userId, cancellationToken)
+        var analysis = await analyzer.AnalyzeAsync(xslt, type, occupied, images.Count > 0 ? imageRoles : null, userId,
+            route: XsltRoute.Theme, cancellationToken)
             .ConfigureAwait(false);
 
         // Motor geçici olarak yoksa konumsuz tema saklanmaz (tema hatası değil — yeniden denenebilir).
@@ -149,7 +143,7 @@ public sealed partial class ThemeUploadProcessor(
         if (XsltSafety.FindThreat(text) is { } threat)
             return $"İşlenen tema güvenlik denetiminden geçmedi: {threat}";
 
-        var compiled = await execution.CompileThemeAsync(text, userId, cancellationToken).ConfigureAwait(false);
+        var compiled = await execution.CompileAsync(route: XsltRoute.Theme, text, userId, cancellationToken).ConfigureAwait(false);
         return compiled.Diagnostic switch
         {
             null => null,
@@ -161,7 +155,7 @@ public sealed partial class ThemeUploadProcessor(
     // Tema örnek belgeyle derlenip render edilebilmeli (önizleme, compose ve analiz aynı motoru kullanır).
     private async Task<string?> RenderProblemAsync(string text, DocumentType type, Guid userId, CancellationToken cancellationToken)
     {
-        var run = await execution.RenderThemeAsync(text, samples.Get(type), userId, cancellationToken).ConfigureAwait(false);
+        var run = await execution.RenderAsync(route: XsltRoute.Theme, text, samples.Get(type), userId, cancellationToken).ConfigureAwait(false);
         if (run.Diagnostic is not { } error)
             return null;
         if (ThemeXsltRuns.IsOperational(error))

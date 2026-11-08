@@ -12,8 +12,8 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-6 px-4 pt-6 pb-8 sm:px-8">
-      <header className="flex flex-col gap-3.5">
-        <h1 className="m-0 text-[22px] font-semibold leading-tight text-tx">Çalışma alanı</h1>
+      <header className="flex flex-col">
+        <h1 className="sr-only">Çalışma alanı</h1>
         <CreateActions />
       </header>
 

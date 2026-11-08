@@ -33,8 +33,23 @@ public sealed class ThemeSampleXmlProvider : IThemeSampleXmlProvider
 /// <param name="EquivalentAfterStrip">İşaretler çıkarıldığında çıktı işaretsiz sürümle aynı (yerleşim bozulmadı).</param>
 /// <param name="Occurrences">Her yuvanın çıktıdaki geçiş sayısı.</param>
 /// <param name="Operational">Render temadan bağımsız (geçici) bir motor durumu yüzünden yapılamadı.</param>
+/// <param name="Kind">Render motor hatasıyla yapılamadıysa hatanın türü.</param>
+/// <param name="Line">Motor hatasının satırı (bilinmiyorsa 0).</param>
+/// <param name="Failure">Render yapılamadıysa nedeni.</param>
 internal sealed record RenderVerification(bool Rendered, bool EquivalentAfterStrip,
-    IReadOnlyDictionary<string, int> Occurrences, string? Error, bool Operational = false);
+    IReadOnlyDictionary<string, int> Occurrences, string? Error, bool Operational = false,
+    XsltFailureKind? Kind = null, int Line = 0, RenderFailure Failure = RenderFailure.None);
+
+internal enum RenderFailure
+{
+    None,
+    /// <summary>Motor hata döndü (<see cref="RenderVerification.Kind"/>).</summary>
+    Engine,
+    /// <summary>İşaretli ve işaretsiz sürüm farklı motorlarla çalıştı.</summary>
+    EngineMismatch,
+    /// <summary>Çıktı karşılaştırma sınırını aştı.</summary>
+    OutputLimit,
+}
 
 /// <summary>
 /// İşaretli temanın örnek belgeyle render edilip doğrulanması — upload sırasında çalışan değişmez:
@@ -43,34 +58,45 @@ internal sealed record RenderVerification(bool Rendered, bool EquivalentAfterStr
 /// </summary>
 internal sealed class ThemeRenderVerifier(IXsltExecutionService xslt, IThemeSampleXmlProvider samples)
 {
-    private static readonly Regex AroundTags = new(@"\s*(<[^>]*>)\s*", RegexOptions.CultureInvariant);
-    private static readonly Regex Spaces = new(@"\s+", RegexOptions.CultureInvariant);
+    /// <summary>Karşılaştırılan her render çıktısının üst sınırı (karakter).</summary>
+    public const int MaxComparedChars = 4 * 1024 * 1024;
 
     public async Task<RenderVerification> VerifyAsync(string baseXslt, string markedXslt, DocumentType type,
-        IEnumerable<string> slotIds, Guid userId, CancellationToken cancellationToken)
+        IEnumerable<string> slotIds, XsltRoute route, Guid userId, CancellationToken cancellationToken)
     {
         var xml = samples.Get(type);
-        var baseRun = await xslt.RenderThemeAsync(baseXslt, xml, userId, cancellationToken).ConfigureAwait(false);
+        var baseRun = await xslt.RenderAsync(route, baseXslt, xml, userId, cancellationToken).ConfigureAwait(false);
         if (baseRun.Diagnostic is { } baseError)
             return Failed(baseError);
-        var markedRun = await xslt.RenderThemeAsync(markedXslt, xml, userId, cancellationToken).ConfigureAwait(false);
+        var markedRun = await xslt.RenderAsync(route, markedXslt, xml, userId, cancellationToken).ConfigureAwait(false);
         if (markedRun.Diagnostic is { } markedError)
             return Failed(markedError);
         if (baseRun.Engine != markedRun.Engine)
             return new RenderVerification(false, false, new Dictionary<string, int>(),
-                $"İşaretli ve işaretsiz tema farklı XSLT motorlarıyla çalıştı ({baseRun.Engine} / {markedRun.Engine}).");
+                $"İşaretli ve işaretsiz tema farklı XSLT motorlarıyla çalıştı ({baseRun.Engine} / {markedRun.Engine}).",
+                Failure: RenderFailure.EngineMismatch);
 
         var baseHtml = baseRun.Html ?? "";
         var markedHtml = markedRun.Html ?? "";
-        var equivalent = Normalize(ThemeSlotMarkers.StripFromHtml(markedHtml)) == Normalize(baseHtml);
-        var occurrences = slotIds.Distinct().ToDictionary(id => id, id => ThemeSlotMarkers.CountOccurrences(markedHtml, id));
-        return new RenderVerification(true, equivalent, occurrences, null);
+        if (baseHtml.Length > MaxComparedChars || markedHtml.Length > MaxComparedChars)
+            return OverLimit();
+
+        try
+        {
+            var equivalent = HtmlComparison.Normalize(ThemeSlotMarkers.StripFromHtml(markedHtml)) == HtmlComparison.Normalize(baseHtml);
+            var occurrences = slotIds.Distinct().ToDictionary(id => id, id => ThemeSlotMarkers.CountOccurrences(markedHtml, id));
+            return new RenderVerification(true, equivalent, occurrences, null);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return OverLimit();
+        }
     }
 
     private static RenderVerification Failed(XsltDiagnostic diagnostic) =>
-        new(false, false, new Dictionary<string, int>(), ThemeXsltRuns.Describe(diagnostic), ThemeXsltRuns.IsOperational(diagnostic));
+        new(false, false, new Dictionary<string, int>(), ThemeXsltRuns.Describe(diagnostic), ThemeXsltRuns.IsOperational(diagnostic),
+            diagnostic.Kind, diagnostic.Line, RenderFailure.Engine);
 
-    // Girintili çıktı (html yönteminin varsayılanı) işaretin çevresine satır sonu ekler; karşılaştırma etiket
-    // çevresindeki boşluktan bağımsızdır.
-    private static string Normalize(string html) => Spaces.Replace(AroundTags.Replace(html, "$1"), " ").Trim();
+    private static RenderVerification OverLimit() =>
+        new(false, false, new Dictionary<string, int>(), "Render çıktısı karşılaştırma sınırını aştı.", Failure: RenderFailure.OutputLimit);
 }
