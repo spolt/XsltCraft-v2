@@ -129,6 +129,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                   .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(t => t.EditingUserId);
             entity.Property(t => t.IsFavorite).HasDefaultValue(false);
+            entity.Property(t => t.LastEditMode).HasConversion<string>().HasMaxLength(20).HasDefaultValue(XsltEditMode.Editor);
             entity.HasOne(t => t.Folder)
                   .WithMany()
                   .HasForeignKey(t => t.FolderId)

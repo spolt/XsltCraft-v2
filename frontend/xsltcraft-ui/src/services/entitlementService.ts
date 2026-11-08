@@ -66,6 +66,11 @@ export async function parseGateError(err: unknown): Promise<GateError> {
   return { status, code: parsed?.error, message: parsed?.message, upgrade: parsed?.upgrade }
 }
 
+/** Etkin plan Pro ya da ayrıcalıklı rol (Editör/Admin). `plan` sunucuda etkin planı taşır (süresi dolan Pro → Free). */
+export function isProOrAbove(e: Entitlements | null | undefined): boolean {
+  return !!e && (e.plan === 'Pro' || e.isPrivileged)
+}
+
 /** Pro'nun günlük indirme hakkından kalan; sınırsızsa (privileged) null. */
 export function exportsRemaining(e: Entitlements | null): number | null {
   if (!e || e.isPrivileged || e.dailyTemplateExportLimit === 0) return null

@@ -15,7 +15,7 @@ cd backend && dotnet ef migrations add <Ad> --project XsltCraft.Infrastructure -
 | `RefreshToken` | HttpOnly refresh-token rotation — `TokenHash` (SHA-256), `ExpiresAt` (2 sa kayan), `SessionExpiresAt` (12 sa mutlak), `ReplacedByTokenId` (reuse tespiti) |
 | `Template` | Tasarımcı şablonu — `OwnerId?` (→User), `IsFreeTheme`, `BlockTree` (JSON), `XsltStoragePath`, `DocumentType` |
 | `Asset` | Yüklenen görsel (logo/imza) — `filePath`, `Template` ilişkisi |
-| `UserXsltTemplate` | Ham XSLT şablonu — **içerik DB'de** (`text` kolon), storage'a yazılmaz |
+| `UserXsltTemplate` | Ham XSLT şablonu — **içerik DB'de** (`text` kolon), storage'a yazılmaz; `LastEditMode` (`XsltEditMode` `Editor`/`EasyEdit`, string kolon ≤ 20, varsayılan `Editor`; migration `AddUserXsltTemplateLastEditMode`) — şablonun son açıldığı mod, kayıtta yazılır. Kolay düzenle analizi saklanmaz (ADR 009) |
 | `UserXsltTemplateShare` | Ham şablon paylaşımı / eşzamanlı düzenleme kilidi |
 | `UserSnippet` | Kişisel XSLT snippet'leri (admin public snippet'ler de burada) |
 | `UserActivity` | Aktivite kaydı (Save/Download…) — `IUserActivityRecorder` |

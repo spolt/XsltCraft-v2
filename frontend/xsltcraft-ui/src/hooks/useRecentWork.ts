@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { isProOrAbove } from '../services/entitlementService'
 import { getMyTemplates } from '../services/templateService'
-import { getUserXsltTemplates } from '../services/userXsltService'
+import { getUserXsltTemplates, type XsltEditMode } from '../services/userXsltService'
 import { useAuthStore } from '../store/authStore'
+import { useEntitlementStore } from '../store/entitlementStore'
 import { SOURCE_LABEL, draftOpenPath, draftSource, xsltOpenPath, type WorkSource } from '../utils/workRoutes'
 
 /** Kullanıcının bir çalışması: Tasarım Alanı taslağı ya da XSLT şablonu. */
@@ -18,8 +20,10 @@ export interface WorkItem {
   source: WorkSource
   /** "Tasarım alanı" | "Temadan" | "XSLT" */
   sourceLabel: string
-  /** "Aç" rotası (DraftsPage / MyXsltTemplatesPage ile aynı). */
+  /** "Aç" rotası (DraftsPage / MyXsltTemplatesPage ile aynı); XSLT'de `xsltOpenPath` kuralıyla. */
   to: string
+  /** XSLT'nin en son düzenlendiği mod; taslaklarda yok. */
+  lastEditMode?: XsltEditMode
   /** Başkası tarafından paylaşılan XSLT. */
   isShared: boolean
 }
@@ -65,8 +69,8 @@ export function loadRecentWork(force = false): Promise<void> {
         for (const x of xsltRes.value) {
           items.push({
             key: `xslt:${x.id}`, id: x.id, kind: 'xslt', name: x.name, updatedAt: x.updatedAt,
-            documentType: null, source: 'xslt', sourceLabel: SOURCE_LABEL.xslt, to: xsltOpenPath(x.id),
-            isShared: !x.isOwner,
+            documentType: null, source: 'xslt', sourceLabel: SOURCE_LABEL.xslt, to: xsltOpenPath(x.id, x.lastEditMode),
+            lastEditMode: x.lastEditMode, isShared: !x.isOwner,
           })
         }
       }
@@ -117,5 +121,11 @@ export function useRecentWork(options?: { lazy?: boolean }): RecentWorkState & {
     if (!lazy) void loadRecentWork()
   }, [lazy])
   const reload = useCallback(() => loadRecentWork(true), [])
-  return { items: snap.items, loading: snap.loading, error: snap.error, reload }
+  // Açma yolu üyeliğe bağlı: yetkiler önbellekten sonra yüklenebilir, bu yüzden render'da çözülür.
+  const isPro = useEntitlementStore((s) => isProOrAbove(s.entitlements))
+  const items = useMemo(
+    () => (isPro ? snap.items.map((i) => (i.kind === 'xslt' ? { ...i, to: xsltOpenPath(i.id, i.lastEditMode, true) } : i)) : snap.items),
+    [snap.items, isPro],
+  )
+  return { items, loading: snap.loading, error: snap.error, reload }
 }

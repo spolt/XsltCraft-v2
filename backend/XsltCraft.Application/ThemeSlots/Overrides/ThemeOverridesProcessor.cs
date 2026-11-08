@@ -10,13 +10,27 @@ namespace XsltCraft.Application.ThemeSlots.Overrides;
 /// <summary>Admin'in yüklediği temada önceden gömülü görsel bloğu bulunduğunda vereceği karar.</summary>
 public enum OverridesDecision { Strip, Keep }
 
+/// <param name="Slot">v2 yuva kimliği.</param>
+/// <param name="ExtraSlots">v2 ek yuvalar (<c>xs</c>).</param>
+/// <param name="Keep">v2 <c>keep</c>: temadaki aynı tür görsel gizlenmez.</param>
 public sealed record OverridesImageInfo(ThemeAssetKind? Kind, IReadOnlyList<string> Targets, string? DataUrl,
-    int? Width, int? Height, string Alignment, bool Valid, string? Problem);
+    int? Width, int? Height, string Alignment, bool Valid, string? Problem,
+    string? Slot = null, IReadOnlyList<string>? ExtraSlots = null, bool Keep = false);
+
+/// <summary>Bloktaki serbest görsel (<c>k:"free"</c>); geçersizse <c>DataUrl</c> null.</summary>
+public sealed record OverridesFreeImageInfo(string Slot, string? DataUrl, int? Width, int? Height, string Alignment,
+    bool Valid, string? Problem);
 
 /// <param name="Present">Tam bir blok bulundu (karar gerekir).</param>
 /// <param name="Keepable">"Temanın parçası olarak koru" uygulanabilir.</param>
+/// <param name="Recognized">Blok içeriği tanınan biçimde (blok yoksa false).</param>
+/// <param name="Hide">v2 <c>hide</c>: kullanıcının görsel eklemeden kaldırdığı türler.</param>
+/// <param name="Bank">Banka tablosunun satırları (geri okunmuş).</param>
+/// <param name="FreeImages">Serbest görseller (geri okunmuş).</param>
 public sealed record OverridesInspection(bool Present, int BlockCount, int DanglingMarkers, int Version, bool Keepable,
-    string? Reason, IReadOnlyList<OverridesImageInfo> Images, int BankRows);
+    string? Reason, IReadOnlyList<OverridesImageInfo> Images, int BankRows,
+    bool Recognized = false, IReadOnlyList<ThemeAssetKind>? Hide = null, IReadOnlyList<BankInfoInput>? Bank = null,
+    IReadOnlyList<OverridesFreeImageInfo>? FreeImages = null);
 
 public sealed record OverridesApplyResult(bool Success, string Xslt, IReadOnlyList<string> OccupiedHolderIds,
     int ImagesKept, int BankRowsKept, string? Error);
@@ -112,8 +126,13 @@ public sealed class ThemeOverridesProcessor(IThemeImageValidator images) : IThem
         if (!parsed.Recognized)
             return (NotKeepable(scan, parsed.Version, parsed.Reason!), parsed, none, null);
 
+        var bank = BankTableReader.Read(parsed.BankTableXml);
+        var free = parsed.FreeImages.Select(FreeInfo).ToList();
         if (!XsltSourceMap.TryBuild(xslt, out var map, out var error))
-            return (NotKeepable(scan, parsed.Version, $"Tema ayrıştırılamadı: {error}"), parsed, none, null);
+        {
+            var unparsed = NotKeepable(scan, parsed.Version, $"Tema ayrıştırılamadı: {error}");
+            return (unparsed with { Recognized = true, Hide = parsed.Hide, Bank = bank, FreeImages = free }, parsed, none, null);
+        }
 
         var body = map.Document.Descendants().FirstOrDefault(e => ThemeDocument.IsLiteral(e, "body"));
         var infos = new List<OverridesImageInfo>();
@@ -131,12 +150,27 @@ public sealed class ThemeOverridesProcessor(IThemeImageValidator images) : IThem
             reason ??= problem;
             holders.AddRange(targets.Select(t => (t, image)));
             infos.Add(new OverridesImageInfo(image.Kind, image.Targets, check.Valid ? image.DataUrl : null,
-                image.Width, image.Height, image.Alignment.ToString().ToLowerInvariant(), problem is null, problem));
+                image.Width, image.Height, image.Alignment.ToString().ToLowerInvariant(), problem is null, problem,
+                image.Slot, image.ExtraSlots, image.Keep));
         }
 
+        // Ek yuva / keep statik görsele çevrilemez (koru yalnız tek hedef yazar).
+        if (parsed.Images.Any(i => i.ExtraSlots.Count > 0 || i.Keep))
+            reason ??= "Blokta ek konuma kopyalanan ya da temadaki görseli koruyan bir görsel var; yalnız kaldırılabilir.";
+        // Serbest görsel temanın parçası yapılmaz.
+        if (free.Count > 0)
+            reason ??= "Blokta serbest görsel var; yalnız kaldırılabilir.";
+
         var inspection = new OverridesInspection(true, 1, scan.Dangling.Count, parsed.Version, reason is null,
-            reason, infos, parsed.BankRows);
+            reason, infos, parsed.BankRows, Recognized: true, parsed.Hide, bank, free);
         return (inspection, parsed, holders, map);
+    }
+
+    private OverridesFreeImageInfo FreeInfo(ParsedFreeImage image)
+    {
+        var check = images.Check(image.DataUrl);
+        return new OverridesFreeImageInfo(image.Slot, check.Valid ? image.DataUrl : null, image.Width, image.Height,
+            image.Alignment.ToString().ToLowerInvariant(), check.Valid, check.Valid ? null : check.Error);
     }
 
     // v1: listedeki mevcut her id (betik ids.forEach ile hepsine yazıyordu). v2: önce yuva, yoksa ilk yedek id.

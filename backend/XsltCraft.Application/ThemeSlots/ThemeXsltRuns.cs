@@ -11,14 +11,20 @@ namespace XsltCraft.Application.ThemeSlots;
 /// </summary>
 internal static class ThemeXsltRuns
 {
-    public static Task<XsltRunResult> RenderThemeAsync(this IXsltExecutionService xslt, string stylesheet, string xml,
+    /// <param name="route">Yalnız <see cref="XsltRoute.Theme"/> (admin teması) ya da <see cref="XsltRoute.Raw"/>
+    /// (kullanıcının yüklediği XSLT — .NET de izole worker'da).</param>
+    public static Task<XsltRunResult> RenderAsync(this IXsltExecutionService xslt, XsltRoute route, string stylesheet, string xml,
         Guid userId, CancellationToken cancellationToken) =>
-        xslt.ExecuteAsync(new XsltRunRequest(XsltRoute.Theme, stylesheet, xml, XsltOperation.Render, userId), cancellationToken);
+        xslt.ExecuteAsync(new XsltRunRequest(Checked(route), stylesheet, xml, XsltOperation.Render, userId), cancellationToken);
 
-    /// <summary>Yalnız derleme (temanın seçilen motoruyla).</summary>
-    public static Task<XsltRunResult> CompileThemeAsync(this IXsltExecutionService xslt, string stylesheet,
+    /// <summary>Yalnız derleme (stylesheet'in seçilen motoruyla).</summary>
+    public static Task<XsltRunResult> CompileAsync(this IXsltExecutionService xslt, XsltRoute route, string stylesheet,
         Guid userId, CancellationToken cancellationToken) =>
-        xslt.ExecuteAsync(new XsltRunRequest(XsltRoute.Theme, stylesheet, null, XsltOperation.Validate, userId), cancellationToken);
+        xslt.ExecuteAsync(new XsltRunRequest(Checked(route), stylesheet, null, XsltOperation.Validate, userId), cancellationToken);
+
+    private static XsltRoute Checked(XsltRoute route) => route is XsltRoute.Theme or XsltRoute.Raw
+        ? route
+        : throw new ArgumentOutOfRangeException(nameof(route), route, "Tema hattı yalnız Theme ya da Raw rotasıyla çalışır.");
 
     /// <summary>İçerikten bağımsız (geçici) motor durumu: tema hatalı sayılmaz, işlem yeniden denenmeli.</summary>
     public static bool IsOperational(XsltDiagnostic diagnostic) =>

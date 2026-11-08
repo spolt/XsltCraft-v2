@@ -26,18 +26,31 @@ internal static class ThemeSlotMarkers
     public static readonly Regex SlotIdPattern = new(@"^[a-z][a-z0-9-]{1,40}\z", RegexOptions.CultureInvariant);
 
     private static readonly Regex InsertedDiv = new(
-        @"<div data-xc-slot=""[a-z0-9-]+"" data-xc-layout=""[a-z-]+"" data-xc-inserted=""1""\s*(?:/>|>(?:<[A-Za-z_][\w.-]*:comment\s*/>|<!---->)?</div>)",
+        @"<div data-xc-slot=""([a-z0-9-]+)"" data-xc-layout=""[a-z-]+"" data-xc-inserted=""1""\s*(?:/>|>(?:<[A-Za-z_][\w.-]*:comment\s*/>|<!---->)?</div>)",
         RegexOptions.CultureInvariant);
 
     private static readonly Regex SlotAttr = new(@" data-xc-slot=""[a-z0-9-]+""", RegexOptions.CultureInvariant);
 
     private static readonly Regex PlaceholderAttr = new(@" data-xc-placeholder=""(?:logo|signature)""(?: data-xc-removable=""1"")?", RegexOptions.CultureInvariant);
 
+    private static readonly TimeSpan MatchTimeout = TimeSpan.FromSeconds(2);
+
     private static readonly Regex SlotIds = new(@"data-xc-slot=""([a-z][a-z0-9-]{1,40})""", RegexOptions.CultureInvariant);
 
     /// <summary>Önceki analizden kalan işaretleri siler (idempotent). <c>data-xc-occupied</c> korunur.</summary>
     public static string Clean(string source) =>
         PlaceholderAttr.Replace(SlotAttr.Replace(InsertedDiv.Replace(source, string.Empty), string.Empty), string.Empty);
+
+    /// <summary>Metinde boş eklenmiş işaret kutusu olarak duran yuvalar (içinde görsel ya da başka içerik yok).</summary>
+    public static IReadOnlySet<string> EmptyInsertedSlotIdsIn(string text) =>
+        InsertedDiv.Matches(text).Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>Boş eklenmiş işaret kutusu; <see cref="Clean"/> onu iz bırakmadan siler.</summary>
+    public static string InsertedMarker(ThemeDocument d, string slotId, SlotLayout layout)
+    {
+        var inner = d.MarkerStyle == MarkerStyle.WithComment ? $"<{d.XslPrefix}:comment/>" : string.Empty;
+        return $@"<div {SlotAttribute}=""{slotId}"" {LayoutAttribute}=""{LayoutValue(layout)}"" data-xc-inserted=""1"">{inner}</div>";
+    }
 
     /// <summary>Render edilmiş HTML'den işaretleri siler — "işaretler çıkınca çıktı aynı" denetimi için.</summary>
     public static string StripFromHtml(string html) => Clean(html);
@@ -46,8 +59,9 @@ internal static class ThemeSlotMarkers
     public static IReadOnlyCollection<string> SlotIdsIn(string text) =>
         SlotIds.Matches(text).Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
 
+    /// <summary>Yuvanın render çıktısındaki geçiş sayısı. Süre aşımında <see cref="RegexMatchTimeoutException"/>.</summary>
     public static int CountOccurrences(string html, string slotId) =>
-        Regex.Matches(html, $@"data-xc-slot=""{Regex.Escape(slotId)}""", RegexOptions.CultureInvariant).Count;
+        Regex.Matches(html, $@"data-xc-slot=""{Regex.Escape(slotId)}""", RegexOptions.CultureInvariant, MatchTimeout).Count;
 
     public static string LayoutValue(SlotLayout layout) => layout switch
     {
@@ -91,9 +105,7 @@ internal static class ThemeSlotMarkers
             }
             else if (c.Point is not null)
             {
-                var inner = d.MarkerStyle == MarkerStyle.WithComment ? $"<{d.XslPrefix}:comment/>" : string.Empty;
-                edits.Insert(c.Point.Offset,
-                    $@"<div {SlotAttribute}=""{slot.Id}"" {LayoutAttribute}=""{LayoutValue(c.Layout)}"" data-xc-inserted=""1"">{inner}</div>");
+                edits.Insert(c.Point.Offset, InsertedMarker(d, slot.Id, c.Layout));
             }
         }
         return edits.Apply(d.Map.Source);

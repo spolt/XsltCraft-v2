@@ -12,6 +12,7 @@ public class UserXsltTemplate
     public Guid? FolderId { get; set; }
     public Folder? Folder { get; set; }
     public bool IsFavorite { get; set; } = false;
+    public XsltEditMode LastEditMode { get; set; } = XsltEditMode.Editor;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

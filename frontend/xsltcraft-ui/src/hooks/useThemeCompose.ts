@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
-import { composeTheme, type AssetKind, type ComposeAsset, type ComposeFixedNote, type ComposeResponse, type ComposeWarning } from '../services/themeComposeService'
+import { composeTheme, type AssetKind, type ComposeAsset, type ComposeDocumentBankEdit, type ComposeFixedNote, type ComposeFreeImage, type ComposeResponse, type ComposeStaticImage, type ComposeWarning } from '../services/themeComposeService'
 import type { BankInfoItem } from '../services/previewService'
 
 const DEBOUNCE_MS = 1200
@@ -16,6 +16,14 @@ interface Options {
   hideThemeImages?: AssetKind[]
   /** Sabit notlar — önizleme ve indir/kaydet aynı değeri gönderir. */
   fixedNotes?: ComposeFixedNote[] | null
+  /** Yalnız `xslt` dalında gönderilir: koşullu yuvalar. */
+  conditionalSlots?: string[]
+  /** Yalnız `xslt` dalında gönderilir: dosyanın kendi görselleri için düzenleme listesi. */
+  staticImages?: ComposeStaticImage[]
+  /** Yalnız `xslt` dalında gönderilir: serbest görseller. */
+  freeImages?: ComposeFreeImage[]
+  /** Yalnız `xslt` dalında gönderilir: belgenin kendi IBAN satırlarındaki düzenlemeler. */
+  documentBankEdits?: ComposeDocumentBankEdit[]
   /** Hata yanıtı (402 vb.) — çağıran yükseltme penceresi/yönlendirme yapar. */
   onError: (err: unknown) => void
 }
@@ -37,14 +45,25 @@ export interface ThemeCompose {
   exportXslt: () => Promise<string>
 }
 
-/** Kaynak alanı: gövdede `themeId` ve `xslt`'den yalnız biri bulunur. */
-const composeSource = (themeId: string | undefined, xslt: string | undefined) => (xslt ? { xslt } : { themeId })
+/** Kaynak alanı: gövdede `themeId` ve `xslt`'den yalnız biri bulunur; `xslt` dalına özgü alanlar yalnız onunla gider. */
+interface XsltOnlyFields {
+  conditionalSlots: string[] | undefined
+  staticImages: ComposeStaticImage[] | undefined
+  freeImages: ComposeFreeImage[] | undefined
+  documentBankEdits: ComposeDocumentBankEdit[] | undefined
+}
+
+const composeSource = (
+  themeId: string | undefined,
+  xslt: string | undefined,
+  { conditionalSlots, staticImages, freeImages, documentBankEdits }: XsltOnlyFields,
+) => (xslt ? { xslt, conditionalSlots, staticImages, freeImages, documentBankEdits } : { themeId })
 
 /**
  * Tema Kullan önizlemesi: logo/imza/IBAN değiştikçe sunucuda birleştirip HTML'i alır. Her yeni istek bir
  * öncekini iptal eder; yalnız son isteğin sonucu uygulanır.
  */
-export function useThemeCompose({ themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, onError }: Options): ThemeCompose {
+export function useThemeCompose({ themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, conditionalSlots, staticImages, freeImages, documentBankEdits, onError }: Options): ThemeCompose {
   const [html, setHtml] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,12 +80,13 @@ export function useThemeCompose({ themeId, xslt, xmlContent, assets, bankInfo, h
 
   // İstek gövdesi değişmedikçe yeniden istek atma (dizi kimlikleri her render'da değişebilir).
   const requestKey = useMemo(
-    () => JSON.stringify({ themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes }),
-    [themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes],
+    () => JSON.stringify({ themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, conditionalSlots, staticImages, freeImages, documentBankEdits }),
+    [themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, conditionalSlots, staticImages, freeImages, documentBankEdits],
   )
-  const latestRef = useRef({ themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes })
-  useEffect(() => { latestRef.current = { themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes } },
-    [themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes])
+  const latestRef = useRef({ themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, conditionalSlots, staticImages, freeImages, documentBankEdits })
+  useEffect(() => {
+    latestRef.current = { themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, conditionalSlots, staticImages, freeImages, documentBankEdits }
+  }, [themeId, xslt, xmlContent, assets, bankInfo, hideThemeImages, fixedNotes, conditionalSlots, staticImages, freeImages, documentBankEdits])
 
   useEffect(() => {
     if ((!themeId && !xslt) || !xmlContent) return
@@ -79,9 +99,9 @@ export function useThemeCompose({ themeId, xslt, xmlContent, assets, bankInfo, h
       setError(null)
       setErrorField(null)
       try {
-        const { themeId: id, xslt: x, xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n } = latestRef.current
+        const { themeId: id, xslt: x, xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, ...only } = latestRef.current
         const result = await composeTheme(
-          { ...composeSource(id, x), xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: true, includeXslt: false },
+          { ...composeSource(id, x, only), xmlContent: xml, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: true, includeXslt: false },
           controller.signal,
         )
         // İptalden hemen önce çözülen eski yanıt yenisinin yerine yazılmasın.
@@ -117,8 +137,8 @@ export function useThemeCompose({ themeId, xslt, xmlContent, assets, bankInfo, h
   }, [])
 
   const exportXslt = useCallback(async () => {
-    const { themeId: id, xslt: x, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n } = latestRef.current
-    const result = await composeTheme({ ...composeSource(id, x), assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: false, includeXslt: true })
+    const { themeId: id, xslt: x, assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, ...rest } = latestRef.current
+    const result = await composeTheme({ ...composeSource(id, x, rest), assets: a, bankInfo: b, hideThemeImages: h, fixedNotes: n, includeHtml: false, includeXslt: true })
     return result.xslt ?? ''
   }, [])
 

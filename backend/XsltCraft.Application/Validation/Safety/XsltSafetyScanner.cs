@@ -18,6 +18,9 @@ namespace XsltCraft.Application.Validation.Safety;
 /// </summary>
 public sealed class XsltSafetyScanner
 {
+    /// <summary>İyi biçimli olmayan stylesheet bulgusunun kodu.</summary>
+    public const string MalformedXmlCode = "MalformedXml";
+
     public XsltSafetyReport Scan(string? xslt, XsltSafetyMode mode)
     {
         if (string.IsNullOrEmpty(xslt))
@@ -64,7 +67,7 @@ public sealed class XsltSafetyScanner
             bool isDtd = ex.Message.Contains("DTD", StringComparison.OrdinalIgnoreCase)
                          || ex.Message.Contains("DOCTYPE", StringComparison.OrdinalIgnoreCase);
             findings.Insert(0, new XsltSafetyFinding(
-                isDtd ? "Doctype" : "MalformedXml",
+                isDtd ? "Doctype" : MalformedXmlCode,
                 XsltSafetySeverity.Security,
                 isDtd
                     ? "DOCTYPE / DTD içeren stylesheet reddedildi (XXE / varlık genişletme riski)."

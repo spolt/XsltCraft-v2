@@ -43,6 +43,18 @@ internal sealed class DotNetThemeExecution : IXsltExecutionService
     private static XsltRunResult Failed(XsltDiagnostic diagnostic, XsltEngineKind engine) => new(null, engine, null, false, diagnostic);
 }
 
+/// <summary>İstekleri kaydedip içteki servise ileten yürütme (rota/işlem doğrulaması için).</summary>
+internal sealed class RouteRecordingExecution(IXsltExecutionService inner) : IXsltExecutionService
+{
+    public List<XsltRunRequest> Requests { get; } = [];
+
+    public Task<XsltRunResult> ExecuteAsync(XsltRunRequest request, CancellationToken cancellationToken = default)
+    {
+        Requests.Add(request);
+        return inner.ExecuteAsync(request, cancellationToken);
+    }
+}
+
 /// <summary>
 /// Eşzamanlı test kısayolları: <see cref="DotNetThemeExecution"/> eşzamanlı tamamlandığı için async tema servisleri
 /// de tamamlanmış görev döner (bekleme/kilitlenme yok).
@@ -51,7 +63,7 @@ internal static class ThemeServiceTestExtensions
 {
     public static ThemeSlotAnalysis Analyze(this IThemeSlotAnalyzer analyzer, string xslt, DocumentType type,
         IReadOnlyCollection<string> occupiedHolderIds, IReadOnlyList<ThemeImageDecision>? imageRoles = null) =>
-        Completed(analyzer.AnalyzeAsync(xslt, type, occupiedHolderIds, imageRoles));
+        Completed(analyzer.AnalyzeAsync(xslt, type, occupiedHolderIds, imageRoles, Guid.Empty, XsltRoute.Theme));
 
     public static ThemeUploadOutcome Process(this IThemeUploadProcessor processor, string xslt, DocumentType type,
         OverridesDecision? decision, IReadOnlyList<ThemeImageDecision>? imageRoles = null) =>

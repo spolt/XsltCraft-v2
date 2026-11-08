@@ -8,9 +8,14 @@ export const LEAVE_CONFIRM = 'Kaydedilmemiş değişiklikler var. Sayfadan ayrı
 export const SAVE_CONFLICT_MESSAGE = 'Şablon siz düzenlerken değiştirildi. Çalışmanızı kaybetmemek için XSLT\'yi indirin; ardından Şablonlarım\'dan şablonu açıp değişiklikleri uygulayın.'
 
 /** DOMParser parsererror çıktısından satır/kolon çıkarır. */
-export function extractXmlParseErrors(xml: string): { message: string; line: number | null; column: number | null }[] {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(xml, 'text/xml')
+export function extractXmlParseErrors(xml: string): XmlParseError[] {
+  return xmlParseErrorsOf(new DOMParser().parseFromString(xml, 'text/xml'))
+}
+
+export interface XmlParseError { message: string; line: number | null; column: number | null }
+
+/** Ayrıştırılmış belgedeki hata (varsa); `extractXmlParseErrors`'ın belge alan hâli. */
+export function xmlParseErrorsOf(doc: Document): XmlParseError[] {
   const err = doc.querySelector('parsererror')
   if (!err) return []
   const raw = (err.textContent ?? 'XML ayrıştırma hatası').replace(/\s+/g, ' ').trim()

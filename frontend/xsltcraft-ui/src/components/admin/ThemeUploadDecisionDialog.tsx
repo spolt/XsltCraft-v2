@@ -1,14 +1,9 @@
 import { useId, useState } from 'react'
 import { ImageOff, TriangleAlert } from 'lucide-react'
 import type { ImageDecision, ImageRole, ImageVisibility, OverridesDecision, UploadDecision, UploadDecisionRequest } from '../../services/adminService'
+import { ROLE_OPTIONS } from '../theme-assets/roleOptions'
 
 const KIND_LABEL = { logo: 'Logo', signature: 'İmza / Kaşe' } as const
-
-const ROLE_OPTIONS: { value: ImageRole; label: string }[] = [
-  { value: 'logo', label: 'Firma logosu' },
-  { value: 'signature', label: 'İmza / kaşe' },
-  { value: 'design', label: 'Tasarımın parçası' },
-]
 
 const VISIBILITY_OPTIONS: { value: ImageVisibility; label: string; designOk: boolean }[] = [
   { value: 'keep', label: 'Görünsün', designOk: true },

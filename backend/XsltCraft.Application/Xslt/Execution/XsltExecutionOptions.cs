@@ -19,6 +19,8 @@ public sealed class XsltExecutionOptions
 
     public XsltThemeComposeOptions ThemeCompose { get; set; } = new();
 
+    public XsltEasyEditAnalyzeOptions EasyEditAnalyze { get; set; } = new();
+
     /// <summary>Tutarsız ayarları döndürür (boş → geçerli).</summary>
     public IReadOnlyList<string> Validate()
     {
@@ -30,6 +32,7 @@ public sealed class XsltExecutionOptions
         Grid.CollectErrors(errors);
         UserGate.CollectErrors(errors);
         ThemeCompose.CollectErrors(errors);
+        EasyEditAnalyze.CollectErrors(errors);
         return errors;
     }
 }
@@ -193,6 +196,18 @@ public sealed class XsltThemeComposeOptions
     {
         if (MaxConcurrent < 1)
             errors.Add("ThemeCompose:MaxConcurrent ≥ 1 olmalı.");
+    }
+}
+
+/// <summary>Kolay düzenle analizi: süreç genelinde eşzamanlı analiz; dolu kapı beklemeden 429 verir.</summary>
+public sealed class XsltEasyEditAnalyzeOptions
+{
+    public int MaxConcurrent { get; set; } = 2;
+
+    internal void CollectErrors(List<string> errors)
+    {
+        if (MaxConcurrent < 1)
+            errors.Add("EasyEditAnalyze:MaxConcurrent ≥ 1 olmalı.");
     }
 }
 

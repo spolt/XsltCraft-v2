@@ -30,6 +30,12 @@ const EXTENSIONS: Record<UploadKind, string[]> = {
 
 const LABEL: Record<UploadKind, string> = { xml: 'XML', xslt: 'XSLT' }
 
+/** XSLT dosya uzantısı (`.xsl` / `.xslt`). */
+export const XSLT_EXT = /\.(xslt|xsl)$/i
+
+/** Dosya adından XSLT uzantısını atar. */
+export const stripXsltExt = (fileName: string) => fileName.replace(XSLT_EXT, '')
+
 /** Uzantı ve boyut denetimi — dosya okunmadan önce. Hata mesajı ya da null döner. */
 export function validateUploadFile(file: File, kind: UploadKind): string | null {
   const name = file.name.toLowerCase()
@@ -48,7 +54,11 @@ export function validateUploadFile(file: File, kind: UploadKind): string | null 
  * gösterir ve kullanıcı düzeltebilir.
  */
 export function validateUploadContent(content: string, kind: UploadKind): string | null {
-  const doc = new DOMParser().parseFromString(content, 'application/xml')
+  return validateParsedContent(new DOMParser().parseFromString(content, 'application/xml'), kind)
+}
+
+/** `validateUploadContent`'in ayrıştırılmış belge üzerinde çalışan hâli (metni ikinci kez ayrıştırmamak için). */
+export function validateParsedContent(doc: Document, kind: UploadKind): string | null {
   if (doc.getElementsByTagName('parsererror').length > 0) return null
 
   const isStylesheet = doc.documentElement?.namespaceURI === XSL_NAMESPACE

@@ -1,5 +1,5 @@
-import type { MouseEvent } from 'react'
-import { CheckCircle2, Code2, FileUp, type LucideIcon } from 'lucide-react'
+import type { MouseEvent, ReactNode } from 'react'
+import { CheckCircle2, Code2, FileText, FileUp, type LucideIcon } from 'lucide-react'
 
 interface Props {
   hasXslt: boolean
@@ -9,16 +9,30 @@ interface Props {
   /** Sayfa kökündeki tek gizli input'ları tetikler (e2e strict mode: ikinci input yok). */
   onUploadXslt: () => void
   onUploadXml: () => void
+  /** Örnek belgenin etiketi (ör. "Örnek fatura XML"); tür XSLT'den çıkarılır. */
+  sampleXmlLabel: string
+  /** XML yokken varsayılan örnek XML ile devam eder. */
+  onUseSampleXml: () => void
   /** "Kayıtlı şablonlar" bağlantısı — kaydedilmemiş değişiklik korumasından geçer. */
   onOpenSaved: () => void
 }
 
 /** Faz 1 / 1b: iki dosyadan biri ya da ikisi de yokken yükleme kartları. */
-export default function XsltEmptyState({ hasXslt, hasXml, xsltName, xmlName, onUploadXslt, onUploadXml, onOpenSaved }: Props) {
+export default function XsltEmptyState({
+  hasXslt,
+  hasXml,
+  xsltName,
+  xmlName,
+  onUploadXslt,
+  onUploadXml,
+  sampleXmlLabel,
+  onUseSampleXml,
+  onOpenSaved,
+}: Props) {
   const description = !hasXslt && !hasXml
     ? 'XSLT ve XML dosyalarınızı yükleyerek düzenlemeye başlayın.'
     : hasXslt
-      ? 'XML dosyası yükleyerek devam edin.'
+      ? 'XML dosyası yükleyin ya da örnek belgeyle devam edin.'
       : 'XSLT dosyası yükleyerek devam edin.'
 
   function openSaved(e: MouseEvent<HTMLAnchorElement>) {
@@ -62,6 +76,17 @@ export default function XsltEmptyState({ hasXslt, hasXml, xsltName, xmlName, onU
           hint=".xml — fatura veya irsaliye"
           loadedName={hasXml ? xmlName : null}
           onClick={onUploadXml}
+          footer={hasXslt && !hasXml ? (
+            <button
+              type="button"
+              onClick={onUseSampleXml}
+              title={`${sampleXmlLabel} kullanılır`}
+              className="xc-focus inline-flex items-center gap-1.5 rounded px-1 text-[13px] font-medium text-ui-accent transition-colors hover:text-ui-ink hover:underline"
+            >
+              <FileText size={14} aria-hidden="true" className="flex-none" />
+              Varsayılan XML ile devam et
+            </button>
+          ) : undefined}
         />
       </div>
 
@@ -83,6 +108,7 @@ function UploadCard({
   loadedName,
   primary = false,
   onClick,
+  footer,
 }: {
   icon: LucideIcon
   title: string
@@ -91,14 +117,21 @@ function UploadCard({
   loadedName: string | null
   primary?: boolean
   onClick: () => void
+  /** Kartın altında, ayırıcı çizgiyle gösterilen ikincil eylem. */
+  footer?: ReactNode
 }) {
   const loaded = loadedName !== null
   return (
+    <div
+      className={`xc-lift flex flex-col rounded-xl border-2 border-dashed bg-ui-card transition-colors ${
+        loaded ? 'border-fn-green-line' : 'border-ui-soft-line'
+      }`}
+    >
     <button
       type="button"
       onClick={onClick}
-      className={`xc-focus xc-lift group flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-8 py-8 text-center transition-colors ${
-        loaded ? 'border-fn-green-line bg-ui-card' : 'border-ui-soft-line bg-ui-card hover:bg-ui-soft'
+      className={`xc-focus group flex flex-1 flex-col items-center gap-3 rounded-xl px-8 py-8 text-center transition-colors ${
+        loaded ? '' : 'hover:bg-ui-soft'
       }`}
     >
       <span
@@ -115,5 +148,9 @@ function UploadCard({
       <span className="max-w-full truncate font-mono text-xs text-tx-subtle">{loaded ? loadedName : hint}</span>
       {loaded && <span className="text-[11.5px] text-tx-muted">Değiştirmek için tıklayın</span>}
     </button>
+    {footer && (
+      <div className="mx-6 flex justify-center border-t border-ui-line py-3">{footer}</div>
+    )}
+    </div>
   )
 }

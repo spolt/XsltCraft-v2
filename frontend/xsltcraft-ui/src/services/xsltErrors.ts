@@ -65,7 +65,8 @@ function asNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 }
 
-function parseRetryAfter(raw: unknown): number | undefined {
+/** `Retry-After` başlığını saniyeye çevirir (sayı ya da HTTP tarihi); okunamazsa undefined. */
+export function parseRetryAfter(raw: unknown): number | undefined {
   if (typeof raw !== 'string' && typeof raw !== 'number') return undefined
   const seconds = Number(raw)
   if (Number.isFinite(seconds)) return seconds > 0 ? Math.ceil(seconds) : undefined

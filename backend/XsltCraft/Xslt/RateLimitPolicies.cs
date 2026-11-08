@@ -21,7 +21,11 @@ public static class RateLimitPolicies
     /// <summary>XPath konsolu (<c>/api/xpath/evaluate</c>): 120 istek/dk/kullanıcı (G4).</summary>
     public const string XPathEvaluate = "xpath-evaluate";
 
+    /// <summary>Kolay düzenle analizi (<c>/api/easy-edit/analyze</c>): 10 istek/dk/kullanıcı (kimliksizse IP).</summary>
+    public const string EasyEditAnalyze = "easy-edit-analyze";
+
     private const int PermitPerMinute = 120;
+    private const int EasyEditAnalyzePerMinute = 10;
     private const int ThemePreviewPerMinute = 30;
 
     /// <summary>Kullanıcı bölümlü (kimliksizse IP) sabit pencere politikalarını ekler.</summary>
@@ -31,12 +35,13 @@ public static class RateLimitPolicies
         options.AddPolicy(XsltValidate, PerUserPerMinute);
         options.AddPolicy(XPathEvaluate, PerUserPerMinute);
         options.AddPolicy(ThemePreview, httpContext => PerUserOrIp(httpContext, ThemePreviewPerMinute, TimeSpan.FromMinutes(1)));
+        options.AddPolicy(EasyEditAnalyze, httpContext => PerUserOrIp(httpContext, EasyEditAnalyzePerMinute, TimeSpan.FromMinutes(1)));
         return options;
     }
 
     /// <summary>
     /// 429 yanıtı: <c>Retry-After</c> (pencere metadata'sından) ve XSLT uçlarında editörlerin okuduğu
-    /// hata gövdesi <c>{ error, line, column, kind, engine }</c>.
+    /// hata gövdesi <c>{ error, line, column, kind, engine }</c>; kolay düzenle uçlarında <c>{ error, kind }</c>.
     /// </summary>
     public static async ValueTask OnRejectedAsync(OnRejectedContext context, CancellationToken cancellationToken)
     {
@@ -53,6 +58,14 @@ public static class RateLimitPolicies
                 column = 0,
                 kind = "RateLimited",
                 engine = (string?)null,
+            }, cancellationToken);
+        }
+        else if (context.HttpContext.Request.Path.StartsWithSegments("/api/easy-edit"))
+        {
+            await response.WriteAsJsonAsync(new
+            {
+                error = "Çok fazla analiz isteği gönderildi, biraz bekleyip tekrar deneyin.",
+                kind = "RateLimited",
             }, cancellationToken);
         }
     }

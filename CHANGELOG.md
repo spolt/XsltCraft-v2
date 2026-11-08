@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-09
+
+### Added
+- **Kolay düzenle — kendi XSLT dosyanla**: ana ekrandaki "XSLT dosyanla çalış" panelinden XSLT yükledikten sonra **Kolay düzenle** ile **XSLT Editör** arasında seçim yapılır. Kolay düzenle kartı dosyada bulunan özellikleri (logo, imza / kaşe, banka / IBAN, sabit not) gösterir; dosya uygun değilse nedenini yazar ve Editör'ü önerir. XML isteğe bağlıdır; eklenmezse örnek fatura verisiyle önizlenir.
+  - **Tek soru adımı**: dosyadaki görsellerin ne olduğu (firma logosu, imza / kaşe ya da tasarımın parçası) önerili olarak bir kez sorulur; seçimler sonra sağ paneldeki "Görsel seçimlerini değiştir" bağlantısıyla değiştirilebilir. Taşınamayan görsel için neden gösterilir.
+  - **Dosyadaki logo/imza hazır gelir**: yeniden yüklemeden sürükle-bırakla başka bir konuma taşınır; görsel XSLT metninde yeni yerine yerleşir (betik gerekmez), boş konum kutusunu doldurur. Boyut ve hizalama ayarlanabilir, görsel kaldırılabilir. Taşınan görselin eski yeri boş konum olarak kalır; oraya başka bir görsel konabilir.
+  - **Serbest görsel**: logo ve imzaya ek olarak bir görsel daha yüklenip istenen konuma yerleştirilebilir.
+  - **Dosyadaki IBAN tablosu**: XSLT'de yazılı TR IBAN satırları tanınır; banka adı ve IBAN düzenlenebilir, aynı tabloya yeni satır eklenebilir, satırlar silinebilir. Tablo bulunamazsa XsltCraft'ın banka tablosu kullanılır.
+  - **Kolay düzenle ↔ XSLT Editör geçişi**: yapılan ayarlar metne işlenerek Editör'e aktarılır; Editör'den de Kolay düzenle'ye dönülebilir. Editör, Kolay düzenle ile düzenlenebilecek alanlar bulunan dosyalarda kapatılabilir bir öneri bandı gösterir.
+  - **Son kullanılan mod**: Şablonlarım'a kaydedilen dosya bir sonraki açılışta soru sorulmadan son çalışılan modda (Kolay düzenle ya da Editör) açılır.
+  - Kolay düzenle **Pro ve üstü** üyeliklerde kullanılabilir; diğer kullanıcılar dosyalarını XSLT Editör'de düzenlemeye devam eder.
+- **XSLT Editör — varsayılan XML**: XML yüklenmemişken "Varsayılan XML ile devam et" ile örnek fatura (irsaliye şablonunda örnek irsaliye) verisiyle çalışılabilir.
+
+### Changed
+- **Ana ekran**: "Çalışma alanı" başlığı kaldırıldı; dört kısayol kartı, "XSLT dosyanla çalış" paneli ve "Son düzenlenenler" listesi yeni, sade bir görünüme kavuştu. Son düzenlenenler satırları tür ve bağlam bilgisini (ör. "XSLT · Kolay düzenle") gösterir.
+- **Veritabanı**: `UserXsltTemplates` tablosuna `LastEditMode` kolonu eklendi (migration `AddUserXsltTemplateLastEditMode`; mevcut kayıtlar `Editor`).
+
 ## [2.0.1] - 2026-11-02
 
 ### Changed

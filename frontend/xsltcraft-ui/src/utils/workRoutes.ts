@@ -1,5 +1,6 @@
 import { BookOpen, Code2, LayoutGrid, type LucideIcon } from 'lucide-react'
 import type { TemplateDetail } from '../services/templateService'
+import type { XsltEditMode } from '../services/userXsltService'
 import type { FnColor } from '../theme/uiThemes'
 
 /** Çalışmanın kaynağı: tasarım alanı taslağı, temadan türetilmiş taslak ya da kullanıcı XSLT'si. */
@@ -35,9 +36,12 @@ export function draftOpenPath(id: string): string {
   return `/editor/${id}`
 }
 
-/** Kullanıcı XSLT şablonunu açma yolu — MyXsltTemplatesPage ile birebir. */
-export function xsltOpenPath(id: string): string {
-  return `/xslt-editor/${id}`
+/**
+ * Kullanıcı XSLT şablonunu açma yolu (Şablonlarım, son çalışmalar, hızlı arama): en son Kolay düzenle ile
+ * düzenlenen şablon Pro ve üstünde Kolay düzenle'de, diğer her durumda XSLT Editör'de açılır.
+ */
+export function xsltOpenPath(id: string, lastEditMode?: XsltEditMode | null, isPro = false): string {
+  return lastEditMode === 'easyEdit' && isPro ? `/easy-edit/template/${id}` : `/xslt-editor/${id}`
 }
 
 function hasBlocks(blockTree: string | null): boolean {

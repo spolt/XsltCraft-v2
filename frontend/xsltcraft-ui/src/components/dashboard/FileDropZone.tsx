@@ -1,21 +1,20 @@
-import { useRef, useState, type DragEvent } from 'react'
-import { ArrowRight, FileCode2, FileText, Upload } from 'lucide-react'
+import { useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { FileCode2, FileText, Upload } from 'lucide-react'
 import { UPLOAD_ACCEPT } from '../../utils/uploadValidation'
 import FileSlot from './FileSlot'
 import { splitDroppedFiles, type EditorFiles } from './editorFiles'
 
-const STEPS = ['XSLT şablonunu ekle', "Belge XML'ini ekle", 'Editörde önizle, doğrula ve indir']
+const STEPS = ['XSLT dosyanı ekle (XML isteğe bağlı)', "Kolay düzenle'yi ya da XSLT Editör'ü seç", 'Önizle, kaydet ve indir']
 
 interface Props {
   files: EditorFiles
   onChange: (update: (prev: EditorFiles) => EditorFiles) => void
-  /** İki dosya da seçiliyken yuvaların altında görünen "Editörü aç" aksiyonu. */
-  onOpen: () => void
+  /** Yuvaların altında gösterilen devam seçenekleri (düzenleme kartları ya da editör aksiyonu). */
+  actions?: ReactNode
 }
 
-/** Sürükle-bırak alanı + iki dosya yuvası (XSLT / belge XML). Dosyalar uzantıya göre yuvalara yerleşir. */
-export default function FileDropZone({ files, onChange, onOpen }: Props) {
-  const ready = !!(files.xslt && files.xml)
+/** Sürükle-bırak alanı + iki dosya yuvası (XSLT / isteğe bağlı belge XML). Dosyalar uzantıya göre yuvalara yerleşir. */
+export default function FileDropZone({ files, onChange, actions }: Props) {
   const [dragging, setDragging] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const dragDepth = useRef(0)
@@ -77,7 +76,7 @@ export default function FileDropZone({ files, onChange, onOpen }: Props) {
             {dragging ? 'Bırak — dosyalar yuvalara yerleşsin' : 'Dosyaları buraya sürükleyip bırak'}
           </p>
           <p className="m-0 max-w-[480px] text-[13.5px] leading-relaxed text-ui-workspace-muted">
-            XSLT şablonunu ve belge XML'ini birlikte bırakabilirsin; uzantıya göre yerleşir. Ya da aşağıdan tek tek seç.
+            XSLT dosyanı (istersen belge XML'iyle birlikte) bırakabilirsin; uzantıya göre yerleşir. Ya da aşağıdan seç.
           </p>
         </div>
 
@@ -93,7 +92,7 @@ export default function FileDropZone({ files, onChange, onOpen }: Props) {
               onClear={() => onChange((p) => ({ ...p, xslt: null }))}
             />
             <FileSlot
-              label="Belge XML"
+              label="Belge XML · isteğe bağlı"
               hint=".xml"
               accept={UPLOAD_ACCEPT.xml}
               icon={FileText}
@@ -103,19 +102,13 @@ export default function FileDropZone({ files, onChange, onOpen }: Props) {
             />
           </div>
 
-          {/* İki dosya hazır olunca birincil aksiyon dosyaların hemen altında; yer önceden ayrılır, düzen zıplamaz. */}
-          <div className="flex min-h-11 justify-center">
-            {ready && (
-              <button
-                type="button"
-                onClick={onOpen}
-                className="xc-focus inline-flex h-11 cursor-pointer items-center gap-2 rounded-lg bg-ui-accent px-6 text-[14px] font-semibold text-ui-accent-fg shadow-[var(--ui-shadow-lift)] transition-[filter] hover:brightness-110"
-              >
-                Editörü aç
-                <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
-              </button>
-            )}
-          </div>
+          {!files.xml && (
+            <p className="m-0 -mt-1 text-[12.5px] text-ui-workspace-muted @xl:ml-[calc(50%+0.5rem)]">
+              XML eklemezsen örnek fatura verisiyle önizlersin.
+            </p>
+          )}
+
+          {actions}
         </div>
 
         <ol className="m-0 grid list-none grid-cols-1 gap-3 border-t border-ui-workspace-line p-0 pt-5 @xl:grid-cols-3">
