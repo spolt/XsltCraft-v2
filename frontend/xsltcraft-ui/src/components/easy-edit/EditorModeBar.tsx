@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { EasyEditModeSwitch } from '../../hooks/useEasyEditModeSwitch'
 import DocumentBar from './DocumentBar'
 import EasyEditHintBand from './EasyEditHintBand'
@@ -15,6 +16,10 @@ interface Props {
 
 /** XSLT Editör'ün belge çubuğu (Pro ve üstü): mod anahtarı, kaydet/indir ve Kolay düzenle öneri bandı. */
 export default function EditorModeBar({ modeSwitch, fileName, dirty, saving, printDisabled, onPrint, onSave, onDownload }: Props) {
+  // Süre dolunca kapanan band bu açılışta bir daha gösterilmez; öneri düşünce (başka dosya) sıfırlanır.
+  const [autoHidden, setAutoHidden] = useState(false)
+  if (autoHidden && !modeSwitch.showHint) setAutoHidden(false)
+
   if (!modeSwitch.showDocumentBar) return null
   const { switching, switchToEasyEdit } = modeSwitch
   return (
@@ -31,8 +36,13 @@ export default function EditorModeBar({ modeSwitch, fileName, dirty, saving, pri
         printDisabled={printDisabled}
         saveDisabled={saving}
       />
-      {modeSwitch.showHint && (
-        <EasyEditHintBand onSwitch={() => void switchToEasyEdit()} onDismiss={modeSwitch.dismissHint} busy={switching} />
+      {modeSwitch.showHint && !autoHidden && (
+        <EasyEditHintBand
+          onSwitch={() => void switchToEasyEdit()}
+          onDismiss={modeSwitch.dismissHint}
+          onAutoHide={() => setAutoHidden(true)}
+          busy={switching}
+        />
       )}
     </>
   )

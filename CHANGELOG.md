@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-11-10
+
+### Changed
+- **XSLT Editör — Kolay düzenle öneri bandı** artık sürekli görünmüyor: sayfa açıldıktan sonra aşağı kayarak açılır, 10 saniye sonra kendiliğinden yukarı kayarak kapanır. Fare bandın üzerindeyken süre durur; X ile kapatma eskisi gibi kalıcıdır. "Hareketi azalt" tercihine uyar.
+
 ## [2.1.1] - 2026-11-09
 
 ### Fixed

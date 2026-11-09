@@ -12,7 +12,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>2.1.1</Version>
+    <Version>2.1.2</Version>
     <!-- Bellek tavanı DOTNET_GCHeapHardLimit ile Api'den gelir; workstation GC tek istekli süreçte yeterli. -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
