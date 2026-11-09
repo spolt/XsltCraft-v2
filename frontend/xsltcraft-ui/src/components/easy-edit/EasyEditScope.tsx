@@ -13,10 +13,12 @@ import { toDownloadName } from '../theme-use/easyEditSource'
 import { initialDocFields } from './docDraft'
 import { resolveDocAnalysis } from './resolveDocAnalysis'
 import { templateDraftId, type EasyEditDoc } from './easyEditDoc'
+import DocumentLoader from '../ui/DocumentLoader'
 
 type Gate = 'pending' | 'allowed' | 'denied' | 'error'
 
 const TOAST_MS = 6000
+const LOADING_STEPS = ['Şablon okunuyor', 'Düzenlenebilir alanlar çıkarılıyor', 'Kolay düzenle hazırlanıyor']
 const hasToken = () => !!useAuthStore.getState().accessToken
 
 /**
@@ -172,11 +174,8 @@ export default function EasyEditScope() {
   }, [key, handoffId, unlocked, isTemplateRoute, templateId])
 
   if (!key || !unlocked || ready?.key !== key || boundKey !== key) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-ui-bg text-sm text-tx-muted" role="status">
-        {gate === 'denied' || gate === 'error' ? null : 'Belge hazırlanıyor…'}
-      </div>
-    )
+    if (gate === 'denied' || gate === 'error') return <div className="h-screen bg-ui-bg" />
+    return <DocumentLoader title="Belge hazırlanıyor" steps={LOADING_STEPS} />
   }
   return <Outlet context={ready.doc} />
 }

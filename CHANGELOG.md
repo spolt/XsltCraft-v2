@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-09
+
+### Fixed
+- **Ana ekran: "Kolay düzenle ile aç" düz HTTP üzerinden açılan sitede "Açılıyor…"da takılı kalıyordu.** Belge kimliği yalnız güvenli bağlamda (HTTPS / localhost) bulunan `crypto.randomUUID()` ile üretiliyordu; HTTP'de hata veriyor ve sayfa değişmiyordu. Kimlik artık her ortamda çalışan ortak bir yardımcıyla (`utils/newId`) üretiliyor; açılış beklenmedik bir nedenle başarısız olursa buton eski haline döner ve hata bildirilir.
+
+### Changed
+- **Kolay düzenle yükleme ekranı**: belge hazırlanırken düz "Belge hazırlanıyor…" yazısı yerine taranan sayfa görseli, ilerleyen adımlar ("Şablon okunuyor" → "Düzenlenebilir alanlar çıkarılıyor" → "Kolay düzenle hazırlanıyor") ve ince bir ilerleme çizgisi gösterilir. Hızlı açılışlarda yanıp sönmez; "hareketi azalt" tercihine uyar.
+- **Ana ekran — analiz göstergesi**: Kolay düzenle kartında "Dosya analiz ediliyor…" notu, soldan dolan çapraz çizgili bir bara dönüştü; açılış sırasında butonda dönen simge ve kart üstünde ince ilerleme çizgisi görünür.
+
 ## [2.1.0] - 2026-11-09
 
 ### Added

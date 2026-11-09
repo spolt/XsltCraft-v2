@@ -1,9 +1,10 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
-import { AlertTriangle, ArrowRight, Check, Lock, RotateCw, ShieldAlert, Sparkles } from 'lucide-react'
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react'
+import { AlertTriangle, ArrowRight, Check, LoaderCircle, Lock, RotateCw, ShieldAlert, Sparkles } from 'lucide-react'
 import type { EasyEditAnalyzeResponse } from '../../services/easyEditService'
 import type { UploadAnalysis } from '../../hooks/useUploadAnalysis'
 import { ASSET_LABEL } from '../theme-assets/imageState'
 import { openUpgradeModal } from '../../store/upgradeModalStore'
+import ProgressHairline from '../ui/ProgressHairline'
 
 const RECOMMENDED = '#5B8DEF'
 const EDITOR_FEATURES = ['Sözdizimi ve UBL-TR doğrulama', 'AI asistanı', 'Canlı önizleme']
@@ -55,6 +56,8 @@ interface View {
   /** Kolay düzenle CTA'sı neden kapalı / kart altındaki bilgi. */
   easyNote: { tone: Tone; text: string } | null
   chips: Chip[] | 'skeleton' | null
+  /** Analiz sürüyor: not kutusu yerine dolan çizgili bar. */
+  analyzing: boolean
   locked: boolean
   retry: { message: string; retryAfterSeconds?: number } | null
   editorCta: string
@@ -69,6 +72,7 @@ function buildView(a: UploadAnalysis): View {
     easyEnabled: false,
     easyNote: null,
     chips: null,
+    analyzing: false,
     locked: false,
     retry: null,
     editorCta: 'Editörde aç',
@@ -79,7 +83,7 @@ function buildView(a: UploadAnalysis): View {
     case 'idle':
       return base
     case 'analyzing':
-      return { ...base, easyRecommended: true, chips: 'skeleton', easyNote: { tone: 'info', text: 'Dosya analiz ediliyor…' }, announce: 'Dosya analiz ediliyor.' }
+      return { ...base, easyRecommended: true, chips: 'skeleton', analyzing: true, announce: 'Dosya analiz ediliyor.' }
     case 'ready': {
       const chips = featureChips(a.analysis)
       const partial = a.analysis.verdict === 'partial'
@@ -147,6 +151,20 @@ function RetryButton({ seconds, onRetry }: { seconds?: number; onRetry: () => vo
   )
 }
 
+/** Analiz sürerken: soldan dolan, çapraz çizgileri kayan bar. Süre belirsiz; dolgu yavaşlayarak sona yaklaşır. */
+function AnalyzingBar({ id }: { id: string }) {
+  return (
+    <div id={id} className="relative h-9 overflow-hidden rounded-md border border-ui-workspace-line bg-ui-workspace">
+      <div
+        aria-hidden="true"
+        className="xc-stripes xc-fill absolute inset-y-0 left-0"
+        style={{ '--xc-stripe': RECOMMENDED } as CSSProperties}
+      />
+      <span className="relative flex h-full items-center px-2.5 text-[12.5px] text-ui-workspace-fg">Dosya analiz ediliyor…</span>
+    </div>
+  )
+}
+
 function Badge() {
   return (
     <span
@@ -158,13 +176,26 @@ function Badge() {
   )
 }
 
-function Card({ recommended, titleId, children }: { recommended: boolean; titleId: string; children: ReactNode }) {
+function Card({
+  recommended,
+  titleId,
+  busy = false,
+  children,
+}: {
+  recommended: boolean
+  titleId: string
+  /** Analiz / açılış sürerken kartın üst kenarında ince ilerleme çizgisi. */
+  busy?: boolean
+  children: ReactNode
+}) {
   return (
     <section
       aria-labelledby={titleId}
-      className={`flex min-w-0 flex-col gap-3 rounded-lg bg-ui-workspace-raised p-4 ${recommended ? 'border-2' : 'border border-ui-workspace-line'}`}
+      aria-busy={busy || undefined}
+      className={`relative flex min-w-0 flex-col gap-3 overflow-hidden rounded-lg bg-ui-workspace-raised p-4 ${recommended ? 'border-2' : 'border border-ui-workspace-line'}`}
       style={recommended ? { borderColor: RECOMMENDED } : undefined}
     >
+      {busy && <ProgressHairline className="absolute inset-x-0 top-0 rounded-none" trackClassName="bg-transparent" />}
       {children}
     </section>
   )
@@ -174,12 +205,14 @@ function Cta({
   label,
   primary,
   enabled,
+  busy = false,
   describedBy,
   onClick,
 }: {
   label: string
   primary: boolean
   enabled: boolean
+  busy?: boolean
   describedBy?: string
   onClick: () => void
 }) {
@@ -197,8 +230,9 @@ function Cta({
             : 'cursor-pointer border border-ui-workspace-line text-ui-workspace-fg hover:bg-ui-workspace'
       }`}
     >
+      {busy && <LoaderCircle size={14} strokeWidth={2} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />}
       {label}
-      <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+      {!busy && <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />}
     </button>
   )
 }
@@ -227,7 +261,7 @@ export default function EditChoiceCards({ analysis, opening, onRetry, onOpenEasy
       <p role="status" aria-live="polite" className="sr-only">{v.announce}</p>
 
       <div className="grid grid-cols-1 gap-3 @xl:grid-cols-2">
-        <Card recommended={v.easyRecommended} titleId={easyTitle}>
+        <Card recommended={v.easyRecommended} titleId={easyTitle} busy={opening}>
           <div className="flex items-center gap-2">
             {v.locked ? (
               <Lock size={16} strokeWidth={2} aria-hidden="true" className="text-ui-workspace-muted" />
@@ -269,6 +303,7 @@ export default function EditChoiceCards({ analysis, opening, onRetry, onOpenEasy
             </ul>
           )}
 
+          {v.analyzing && <AnalyzingBar id={easyNoteId} />}
           {v.easyNote && (
             <p id={easyNoteId} className={`m-0 flex gap-2 rounded-md border px-2.5 py-2 text-[12.5px] leading-snug ${NOTE_CLASS[v.easyNote.tone]}`}>
               {v.easyNote.tone === 'danger' ? (
@@ -300,7 +335,8 @@ export default function EditChoiceCards({ analysis, opening, onRetry, onOpenEasy
               label={opening ? 'Açılıyor…' : 'Kolay düzenle ile aç'}
               primary={v.easyRecommended}
               enabled={easyCtaEnabled}
-              describedBy={v.easyNote ? easyNoteId : undefined}
+              busy={opening}
+              describedBy={v.easyNote || v.analyzing ? easyNoteId : undefined}
               onClick={onOpenEasyEdit}
             />
           )}

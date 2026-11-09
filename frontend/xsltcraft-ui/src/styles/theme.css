@@ -548,11 +548,67 @@
   outline-offset: 2px;
 }
 
+/* Yükleme: belirsiz ince ilerleme çizgisi, belge tarama ışığı, gecikmeli yumuşak beliriş. */
+@keyframes xc-hairline {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+@keyframes xc-scan {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateY(260%); opacity: 0; }
+}
+@keyframes xc-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+/* Dolan çizgili bar: --xc-stripe renginde zemin + kayan beyaz çapraz çizgiler (koyu çalışma alanı için). */
+@keyframes xc-stripes {
+  from { background-position: 24px 0; }
+  to   { background-position: 0 0; }
+}
+@keyframes xc-fill {
+  from { width: 4%; }
+  to   { width: 92%; }
+}
+.xc-stripes {
+  background-color: color-mix(in srgb, var(--xc-stripe, var(--ui-accent)) 30%, transparent);
+  background-image: linear-gradient(
+    45deg,
+    rgb(255 255 255 / 0.09) 25%, transparent 25%, transparent 50%,
+    rgb(255 255 255 / 0.09) 50%, rgb(255 255 255 / 0.09) 75%, transparent 75%, transparent
+  );
+  background-size: 24px 24px;
+  animation: xc-stripes 0.9s linear infinite;
+}
+.xc-stripes.xc-fill {
+  animation: xc-stripes 0.9s linear infinite, xc-fill 9s cubic-bezier(0.08, 0.7, 0.25, 1) forwards;
+}
+.xc-hairline-bar { animation: xc-hairline 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.xc-scan { animation: xc-scan 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+/* Hızlı açılışlarda yanıp sönmesin diye kısa gecikmeyle belirir. */
+.xc-fade-in { animation: xc-fade-in 0.45s ease-out 0.15s both; }
+.xc-fade-in-now { animation: xc-fade-in 0.35s ease-out both; }
+
 @media (prefers-reduced-motion: reduce) {
   .xc-lift,
   .xc-lift:hover,
   .xc-lift:focus-within {
     transition: none;
     transform: none;
+  }
+  .xc-hairline-bar,
+  .xc-scan,
+  .xc-stripes,
+  .xc-stripes.xc-fill {
+    animation: none;
+  }
+  .xc-stripes.xc-fill { width: 100%; }
+  .xc-hairline-bar { transform: none; width: 100%; opacity: 0.5; }
+  .xc-scan { display: none; }
+  .xc-fade-in,
+  .xc-fade-in-now {
+    animation-duration: 0.01s;
   }
 }

@@ -4,6 +4,8 @@
  * Sunucu yine de magic-byte + boyut doğrulaması yapar; buradaki limitler maliyet/gecikme içindir.
  */
 
+import { newId } from './newId'
+
 /** Sunucunun teknik tavanı (Ai:Vision:MaxImagesPerMessage); plan limiti bunu aşamaz. */
 export const MAX_IMAGES_TECHNICAL = 3
 /** Uzun kenar üst sınırı (px). Sunucu tavanı 2048; 1536 token maliyetini düşürür. */
@@ -118,12 +120,6 @@ function toBase64(blob: Blob): Promise<string> {
     reader.onerror = () => reject(new ImageAttachmentError('Görsel okunamadı.'))
     reader.readAsDataURL(blob)
   })
-}
-
-function newId(): string {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 /** Clipboard / drag-drop / file input'tan gelen listeden yalnız dosyaları çıkarır. */
