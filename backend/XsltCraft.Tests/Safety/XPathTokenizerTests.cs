@@ -113,6 +113,7 @@ public class XPathTokenizerTests
     public async Task UnclosedBracedUriFlood_FinishesInLinearTime_AndBoundariesAreUnchanged()
     {
         // Eski tarama her Q{ için dize sonuna gidiyordu: 4 MB ≈ 25 dk. İzleyici thread testi takılmadan düşürür.
+        // Sınır 30 sn: paylaşımlı CI makinesinde paralel testlerle 5 sn aşılabiliyordu; karesel regresyonu yine kesin yakalar.
         const int pairs = 2_000_000;
         var flood = "{" + string.Concat(Enumerable.Repeat("Q{", pairs));
         var stylesheet = "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'><a b='"
@@ -121,7 +122,7 @@ public class XPathTokenizerTests
         var lexer = Task.Run(() => (End: XPathLexer.FindEnclosedExpressionEnd(flood, 1, out var malformed), Malformed: malformed));
         var scanner = Task.Run(() => XsltSafety.FindThreat(stylesheet));
         var both = Task.WhenAll(lexer, scanner);
-        Assert.Same(both, await Task.WhenAny(both, Task.Delay(TimeSpan.FromSeconds(5))));
+        Assert.Same(both, await Task.WhenAny(both, Task.Delay(TimeSpan.FromSeconds(30))));
 
         var (end, malformed) = await lexer;
         Assert.Equal(flood.Length, end);

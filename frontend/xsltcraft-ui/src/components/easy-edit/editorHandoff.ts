@@ -1,6 +1,7 @@
 import { useDocumentHandoffStore } from '../../store/documentHandoffStore'
 import { templateDraftId } from './easyEditDoc'
 import { resolveDocAnalysis } from './resolveDocAnalysis'
+import { newId } from '../../utils/newId'
 
 /**
  * Kolay düzenle → XSLT Editör aktarımı (`location.state`). Mevcut `pendingXsltFile` / `pendingXmlFile` girişinin yanında
@@ -57,11 +58,6 @@ export type EasyEditSwitchResult =
   | { ok: true; path: string }
   | { ok: false; message: string; canceled?: boolean }
 
-const newDraftId = () =>
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-
 /**
  * XSLT Editör → Kolay düzenle: analizi (önbellekte varsa onu) çözer, uygunsa belgeyi aktarıma bırakır ve açılacak
  * rotayı döndürür. Kayıtlı şablonda `templateDraftId(id)` + `/easy-edit/template/:id`, değilse `/easy-edit/:draftId`.
@@ -69,7 +65,7 @@ const newDraftId = () =>
 export async function stageEasyEditFromEditor(doc: EditorDocument, signal: AbortSignal): Promise<EasyEditSwitchResult> {
   const result = await resolveDocAnalysis({ xslt: doc.xslt }, signal)
   if (!result.ok) return result
-  const draftId = doc.templateId ? templateDraftId(doc.templateId) : newDraftId()
+  const draftId = doc.templateId ? templateDraftId(doc.templateId) : newId()
   useDocumentHandoffStore.getState().stage(draftId, {
     source: doc.templateId ? 'template' : 'upload',
     templateId: doc.templateId ?? undefined,

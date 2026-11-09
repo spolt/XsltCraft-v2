@@ -15,6 +15,7 @@ import { useUploadAnalysis, type UploadAnalysis } from '../../hooks/useUploadAna
 import { useDocumentHandoffStore } from '../../store/documentHandoffStore'
 import { toast } from '../../store/toastStore'
 import { readUploadFile, stripXsltExt } from '../../utils/uploadValidation'
+import { newId } from '../../utils/newId'
 import type { EasyEditDocumentType } from '../../services/easyEditService'
 
 /** Antrasit zeminde odak halkası panel metin rengiyle görünür kalır. */
@@ -73,18 +74,24 @@ export default function XsltWorkspace({ className = '' }: Props) {
         return
       }
     }
-    const draftId = crypto.randomUUID()
-    useDocumentHandoffStore.getState().stage(draftId, {
-      source: 'upload',
-      name: stripXsltExt(xsltFile.name),
-      fileName: xsltFile.name,
-      xslt: analysis.xslt,
-      xml,
-      dirty: true,
-      analysis: analysis.analysis,
-      analysisKey: analysis.key,
-    })
-    navigate(`/easy-edit/${draftId}`)
+    try {
+      const draftId = newId()
+      useDocumentHandoffStore.getState().stage(draftId, {
+        source: 'upload',
+        name: stripXsltExt(xsltFile.name),
+        fileName: xsltFile.name,
+        xslt: analysis.xslt,
+        xml,
+        dirty: true,
+        analysis: analysis.analysis,
+        analysisKey: analysis.key,
+      })
+      navigate(`/easy-edit/${draftId}`)
+    } catch {
+      // Buton "Açılıyor…"da takılı kalmasın.
+      setOpening(false)
+      toast.error('Kolay düzenle açılamadı, tekrar deneyin.', { title: 'Kolay düzenle' })
+    }
   }
 
   const actions = files.xslt ? (
