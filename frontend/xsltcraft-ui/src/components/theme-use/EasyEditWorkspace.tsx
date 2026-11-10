@@ -63,6 +63,8 @@ import { buildChecklist } from './themeChecklist'
 import type { EasyEditSource } from './easyEditSource'
 import { useWorkspaceSaveDownload } from './useWorkspaceSaveDownload'
 import { sampleXmlLabel, sampleXmlText } from '../dashboard/editorFiles'
+import DocumentLoader from '../ui/DocumentLoader'
+import { EDITOR_SWITCH_STEPS, PREVIEW_LOADING_STEPS } from '../easy-edit/loadingSteps'
 
 interface Props {
   source: EasyEditSource
@@ -134,10 +136,17 @@ export default function EasyEditWorkspace({ source }: Props) {
     onError: onComposeError,
   })
 
-  const openEditor = useCallback(
-    () => source.openEditor({ exportXslt: compose.exportXslt, xml, confirmLeave }),
-    [source, compose.exportXslt, xml, confirmLeave],
-  )
+  // Editöre geçiş sürerken (birleştirilmiş XSLT isteniyor) saydam yükleme katmanı gösterilir; başarıda sayfa kapanır.
+  const [openingEditor, setOpeningEditor] = useState(false)
+  const openEditor = useCallback(async () => {
+    if (openingEditor) return
+    setOpeningEditor(true)
+    try {
+      await source.openEditor({ exportXslt: compose.exportXslt, xml, confirmLeave })
+    } finally {
+      setOpeningEditor(false)
+    }
+  }, [openingEditor, source, compose.exportXslt, xml, confirmLeave])
 
   // Bozuk metinde istek gitmez: değer son geçerli yanıttan kalır.
   useEffect(() => {
@@ -359,7 +368,7 @@ export default function EasyEditWorkspace({ source }: Props) {
           dirty={source.isDirty}
           mode="easyEdit"
           onModeChange={(mode) => { if (mode === 'editor') void openEditor() }}
-          modeDisabled={saveBusy}
+          modeDisabled={saveBusy || openingEditor}
           onPrint={() => printActivePreview()}
           onSave={handleSave}
           onDownload={handleDownload}
@@ -436,7 +445,7 @@ export default function EasyEditWorkspace({ source }: Props) {
               ),
             }}
             onOpenEditor={isDoc ? () => void openEditor() : undefined}
-            editorDisabled={saveBusy}
+            editorDisabled={saveBusy || openingEditor}
           />
 
           {/* Orta: önizleme */}
@@ -458,7 +467,8 @@ export default function EasyEditWorkspace({ source }: Props) {
               <input ref={xmlInputRef} type="file" accept={UPLOAD_ACCEPT.xml} className="hidden" onChange={handleXmlFile} />
               <div className="flex-1" />
               <span aria-live="polite" className="inline-flex items-center gap-1.5 text-[12px] text-tx-subtle">
-                {compose.loading ? (
+                {/* İlk yüklemede önizleme alanındaki yükleme ekranı yeter; burada yalnız yeniden önizleme gösterilir. */}
+                {compose.loading && compose.html ? (
                   <>
                     <LoaderCircle size={14} aria-hidden="true" className="animate-spin text-ui-accent motion-reduce:animate-none" />
                     Yükleniyor
@@ -519,15 +529,19 @@ export default function EasyEditWorkspace({ source }: Props) {
             )}
 
             <div className="flex flex-1 overflow-auto px-6 py-8" style={{ justifyContent: 'safe center' }}>
-              <ThemeSlotPreview
-                html={compose.html}
-                slots={slots}
-                showSlots={showSlots}
-                dragging={dragSource !== null}
-                placements={placements}
-                staticHandles={isDoc ? docImages.staticHandles : undefined}
-                freePlacements={isDoc ? freePlacements : undefined}
-              />
+              {!compose.html && !compose.error && !editor.broken ? (
+                <DocumentLoader variant="inline" title="Belge hazırlanıyor" steps={PREVIEW_LOADING_STEPS} />
+              ) : (
+                <ThemeSlotPreview
+                  html={compose.html}
+                  slots={slots}
+                  showSlots={showSlots}
+                  dragging={dragSource !== null}
+                  placements={placements}
+                  staticHandles={isDoc ? docImages.staticHandles : undefined}
+                  freePlacements={isDoc ? freePlacements : undefined}
+                />
+              )}
             </div>
           </main>
 
@@ -564,6 +578,8 @@ export default function EasyEditWorkspace({ source }: Props) {
           onClose={roles.close}
         />
       )}
+
+      {openingEditor && <DocumentLoader variant="overlay" title="Belge hazırlanıyor" steps={EDITOR_SWITCH_STEPS} />}
     </div>
   )
 }

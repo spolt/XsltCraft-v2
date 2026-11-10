@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-11-11
+
+### Changed
+- **Kolay düzenle ↔ XSLT Editör geçişi**: üstteki mod anahtarına tıklandıktan sonra geçiş hazır olana kadar sayfanın üstünde saydam bir "Belge hazırlanıyor" katmanı görünür (taranan sayfa görseli, ilerleyen adımlar, ince ilerleme çizgisi). Alttaki sayfa görünür kalır ama tıklanamaz; hızlı geçişlerde yanıp sönmez. Editör'de kayıtlı şablon yüklenirken de "Şablon yükleniyor…" yazısı yerine aynı yükleme ekranı gösterilir.
+- **Kolay düzenle — ilk önizleme**: belge açılırken önizleme alanında boş gri sayfa yerine "Belge hazırlanıyor" ekranı gösterilir; sağ üstteki "Yükleniyor" yazısı yalnız sonraki önizleme yenilemelerinde çıkar. İlk önizleme artık 1,2 sn beklemeden istenir.
+
+## [2.1.2] - 2026-11-10
+
+### Changed
+- **XSLT Editör — Kolay düzenle öneri bandı** artık sürekli görünmüyor: sayfa açıldıktan sonra aşağı kayarak açılır, 10 saniye sonra kendiliğinden yukarı kayarak kapanır. Fare bandın üzerindeyken süre durur; X ile kapatma eskisi gibi kalıcıdır. "Hareketi azalt" tercihine uyar.
+
 ## [2.1.1] - 2026-11-09
 
 ### Fixed
