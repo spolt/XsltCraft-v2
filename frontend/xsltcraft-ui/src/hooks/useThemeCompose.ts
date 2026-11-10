@@ -75,6 +75,8 @@ export function useThemeCompose({ themeId, xslt, xmlContent, assets, bankInfo, h
   const [nonce, setNonce] = useState(0)
 
   const immediateRef = useRef(false)
+  // İlk önizleme debounce beklemez: kullanıcı açılışta boş sayfaya bakmasın.
+  const firstRef = useRef(true)
   const onErrorRef = useRef(onError)
   useEffect(() => { onErrorRef.current = onError }, [onError])
 
@@ -91,7 +93,7 @@ export function useThemeCompose({ themeId, xslt, xmlContent, assets, bankInfo, h
   useEffect(() => {
     if ((!themeId && !xslt) || !xmlContent) return
     const controller = new AbortController()
-    const delay = immediateRef.current ? 0 : DEBOUNCE_MS
+    const delay = immediateRef.current || firstRef.current ? 0 : DEBOUNCE_MS
     immediateRef.current = false
 
     const timer = setTimeout(async () => {
@@ -107,6 +109,7 @@ export function useThemeCompose({ themeId, xslt, xmlContent, assets, bankInfo, h
         // İptalden hemen önce çözülen eski yanıt yenisinin yerine yazılmasın.
         if (controller.signal.aborted) return
         setHtml(result.html ?? '')
+        firstRef.current = false
         setWarnings(result.warnings)
         setLastMs(result.generationTimeMs)
         setAppliedSlots(result.appliedSlots)

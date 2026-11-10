@@ -6,6 +6,18 @@ interface Props {
   /** Sırayla gösterilen adımlar; son adımda durur. */
   steps: string[]
   stepMs?: number
+  /**
+   * screen → tam ekran (varsayılan); inline → bulunduğu alanı doldurur (ör. önizleme alanı);
+   * overlay → sayfanın üstünde saydam katman, alttaki ekran görünür kalır ama tıklanamaz (ör. mod geçişi).
+   */
+  variant?: 'screen' | 'inline' | 'overlay'
+}
+
+const VARIANT_CLASS: Record<NonNullable<Props['variant']>, string> = {
+  screen: 'h-screen bg-ui-bg',
+  inline: 'min-h-[360px] flex-1',
+  // Hızlı geçişte yanıp sönmesin: katman kısa bir gecikmeyle belirir (xc-fade-in), tıklamaları ise hemen tutar.
+  overlay: 'xc-fade-in fixed inset-0 z-[95] bg-ui-bg/55',
 }
 
 const LINES = ['72%', '88%', '56%', '80%', '64%']
@@ -31,8 +43,8 @@ function PageGlyph() {
   )
 }
 
-/** Tam ekran, sakin yükleme ekranı: belge taranıyor görseli, başlık, ilerleyen adım ve ince ilerleme çizgisi. */
-export default function DocumentLoader({ title, steps, stepMs = 1100 }: Props) {
+/** Sakin yükleme ekranı: belge taranıyor görseli, başlık, ilerleyen adım ve ince ilerleme çizgisi. */
+export default function DocumentLoader({ title, steps, stepMs = 1100, variant = 'screen' }: Props) {
   const [step, setStep] = useState(0)
 
   useEffect(() => {
@@ -44,7 +56,12 @@ export default function DocumentLoader({ title, steps, stepMs = 1100 }: Props) {
   const current = steps[Math.min(step, steps.length - 1)] ?? ''
 
   return (
-    <div className="flex h-screen items-center justify-center bg-ui-bg px-4" role="status" aria-live="polite" aria-busy="true">
+    <div
+      className={`flex items-center justify-center px-4 ${VARIANT_CLASS[variant]}`}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
       <div className="xc-fade-in flex flex-col items-center text-center">
         <PageGlyph />
         <p className="m-0 mt-6 text-[14px] font-medium tracking-[0.01em] text-tx">{title}</p>

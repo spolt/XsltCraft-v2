@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { EasyEditModeSwitch } from '../../hooks/useEasyEditModeSwitch'
 import DocumentBar from './DocumentBar'
 import EasyEditHintBand from './EasyEditHintBand'
+import DocumentLoader from '../ui/DocumentLoader'
+import { EASY_EDIT_LOADING_STEPS } from './loadingSteps'
 
 interface Props {
   modeSwitch: EasyEditModeSwitch
@@ -44,6 +46,8 @@ export default function EditorModeBar({ modeSwitch, fileName, dirty, saving, pri
           busy={switching}
         />
       )}
+      {/* Analiz sürerken saydam katman; ardından EasyEditScope aynı yükleme ekranıyla devralır. */}
+      {switching && <DocumentLoader variant="overlay" title="Belge hazırlanıyor" steps={EASY_EDIT_LOADING_STEPS} />}
     </>
   )
 }

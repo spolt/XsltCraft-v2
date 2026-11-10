@@ -61,6 +61,8 @@ import { openUpgradeModal } from '../store/upgradeModalStore'
 import { useUiPrefsStore, type EditorLayoutId } from '../store/uiPrefsStore'
 import { toDownloadName } from '../components/theme-use/easyEditSource'
 import EditorModeBar from '../components/easy-edit/EditorModeBar'
+import { EDITOR_TEMPLATE_LOADING_STEPS } from '../components/easy-edit/loadingSteps'
+import DocumentLoader from '../components/ui/DocumentLoader'
 import { readEditorHandoff, type EditorHandoff } from '../components/easy-edit/editorHandoff'
 import { sampleXmlFile, sampleXmlLabel, sniffDocumentType, type EditorPendingState } from '../components/dashboard/editorFiles'
 
@@ -787,8 +789,8 @@ export default function XsltEditorPage() {
   let body
   if (loadingTemplate) {
     body = (
-      <main className="flex flex-1 items-center justify-center">
-        <span role="status" className="text-sm text-tx-muted">Şablon yükleniyor…</span>
+      <main className="flex flex-1">
+        <DocumentLoader variant="inline" title="Belge hazırlanıyor" steps={EDITOR_TEMPLATE_LOADING_STEPS} />
       </main>
     )
   } else if (!workspaceReady) {
