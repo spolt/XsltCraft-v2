@@ -109,21 +109,28 @@ export async function bulkUploadUserXslt(
 // --- Toplu sabit not ekleme ---
 
 export type FixedNoteMode = 'replace' | 'append'
-export type FixedNoteItemStatus = 'updated' | 'no_notes' | 'locked' | 'failed'
+export type FixedNoteItemStatus = 'updated' | 'no_notes' | 'ambiguous' | 'locked' | 'failed'
 
 export interface BulkAddFixedNoteResult {
-  results: { id: string; name: string; status: FixedNoteItemStatus }[]
+  /** `copies`: notun eklendiği kopya sayısı (A5 çift kopyada 2). */
+  results: { id: string; name: string; status: FixedNoteItemStatus; copies?: number }[]
 }
 
+/**
+ * `resolveAmbiguous: 'first'` — birden fazla not alanı bulunan şablonlarda kullanıcı onayıyla
+ * belgede önce gelen not alanını kullan (yalnız `ambiguous` dönen şablonlar için gönderilir).
+ */
 export async function bulkAddFixedNote(
   ids: string[],
   noteText: string,
   mode: FixedNoteMode,
+  resolveAmbiguous?: 'first',
 ): Promise<BulkAddFixedNoteResult> {
   const { data } = await api.post<BulkAddFixedNoteResult>('/api/user-xslt-templates/bulk-add-note', {
     ids,
     noteText,
     mode,
+    ...(resolveAmbiguous ? { resolveAmbiguous } : {}),
   })
   return data
 }

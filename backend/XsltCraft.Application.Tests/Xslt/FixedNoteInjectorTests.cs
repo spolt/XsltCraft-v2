@@ -59,7 +59,7 @@ public class FixedNoteInjectorTests
         </xsl:stylesheet>
         """;
 
-    // Yalnız koşullu (choose içinde) not döngüsü → tutturacak koşulsuz döngü yok.
+    // Yalnız içerik koşullu (SGK profili) not döngüsü → tüm faturalarda görünür bir Notlar bölümü yok.
     private const string OnlyConditionalXslt = """
         <?xml version="1.0" encoding="UTF-8"?>
         <xsl:stylesheet version="2.0"
@@ -68,7 +68,7 @@ public class FixedNoteInjectorTests
           xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
           <xsl:template match="/">
             <html><body>
-              <xsl:if test="true()">
+              <xsl:if test="//n1:Invoice/cbc:ProfileID='SGK'">
                 <xsl:for-each select="//n1:Invoice/cbc:Note">
                   <span><xsl:value-of select="."/></span>
                 </xsl:for-each>

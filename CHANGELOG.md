@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.4] - 2026-11-17
+
+### Added
+- **Şablonlarım — toplu işlemlerde ilerleme**: toplu yükleme ve toplu sabit not parti parti çalışır; modalda işlenen şablon sayısı gösterilir, işlem sürerken pencere kapatılamaz.
+- **Sabit not — belirsiz şablonlarda onay**: şablonda birden fazla eşit olasılıklı not alanı bulunursa şablon değiştirilmez ve sonuç penceresinde "Onay gerekli" görünür; "İlk bulunan not alanına ekle" ile kullanıcı onayıyla belgede önce gelen not alanı kullanılır (`resolveAmbiguous: "first"`, yeni durum `ambiguous`).
+
+### Fixed
+- **Sabit not — A5 / sayfalı / çift kopya şablonlar** (`FixedNoteInjector`, yeni `Xslt/NoteLoops/NoteLoopClassifier` + `NotesSectionLocator`, `FixedNoteSnippet`): Not döngüsünde filtre (`cbc:Note[not(contains(…))]`) bulunan ya da Notlar tablosu sayfalama koşulu (`$index = $count`) içinde olan şablonlarda "Not bölümü yok" dönüyordu. Notlar bölümü artık tablo bazında bulunur (genel not döngüsünü içeren tablo puanlanır; seçici not okumaları — ör. `contains(.,'!#INTERNET#')` —, değişkenlerdeki not döngüleri ve içerik koşullu bölümler hedef alınmaz) ve her belge kopyasında **Notlar tablosunun başına tek satır** eklenir (A5'te sayfa başına 2 kopya). Satır şablonun kendi not stilini kullanır; döngü içindeki not filtreleri satıra taşınmaz. Ekleme sonrası sonuç yeniden doğrulanır; tutmazsa şablon değişmez. Sonuç penceresinde kopya sayısı gösterilir ("Eklendi · 2 kopya").
+
+### Changed
+- **Sabit notun konumu**: not artık bulunan Notlar tablosunun en başına (başlık satırı varsa ardına) eklenir; önceden not döngüsünün hemen arkasına ekleniyordu. Kapsayıcısı olmayan, gövdeye yazılmış not döngülerinde not döngünün hemen önüne girer.
+
 ## [2.1.3] - 2026-11-11
 
 ### Changed

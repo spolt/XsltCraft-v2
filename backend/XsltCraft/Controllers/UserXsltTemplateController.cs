@@ -30,6 +30,9 @@ public class UserXsltTemplateController(
     private const int MaxBulkItems = 100;
     private const int MaxXsltChars = 2 * 1024 * 1024;
 
+    // Toplu sabit not istek başına şablon tavanı (frontend 25'lik partiler gönderir).
+    private const int MaxBulkNoteIds = 100;
+
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     private static string DisplayNameOf(User user) =>
@@ -223,14 +226,27 @@ public class UserXsltTemplateController(
             return BadRequest(new { message = "Not metni boş olamaz." });
         if (noteText.Length > 1000)
             return BadRequest(new { message = "Not metni 1000 karakteri aşamaz." });
+        try
+        {
+            System.Xml.XmlConvert.VerifyXmlChars(noteText);
+        }
+        catch (System.Xml.XmlException)
+        {
+            return BadRequest(new { message = "Not metni geçersiz karakter içeriyor." });
+        }
 
         var ids = (request.Ids ?? []).Distinct().ToList();
         if (ids.Count == 0)
             return BadRequest(new { message = "Şablon seçilmedi." });
+        if (ids.Count > MaxBulkNoteIds)
+            return BadRequest(new { message = $"Tek istekte en fazla {MaxBulkNoteIds} şablon işlenebilir." });
 
         var mode = string.Equals(request.Mode, "append", StringComparison.OrdinalIgnoreCase)
             ? FixedNoteMode.Append
             : FixedNoteMode.Replace;
+        var ambiguity = string.Equals(request.ResolveAmbiguous, "first", StringComparison.OrdinalIgnoreCase)
+            ? FixedNoteAmbiguity.PickFirst
+            : FixedNoteAmbiguity.Ask;
 
         // Yalnız sahip olunan şablonlar (IDOR koruması).
         var templates = await db.UserXsltTemplates
@@ -248,14 +264,17 @@ public class UserXsltTemplateController(
                 continue;
             }
 
-            var result = noteInjector.Inject(template.XsltContent, noteText, mode);
+            var result = noteInjector.Inject(template.XsltContent, noteText, mode, ambiguity);
             switch (result.Status)
             {
                 case FixedNoteStatus.Updated:
                     template.XsltContent = result.Xslt;
                     template.UpdatedAt = now;
                     changed = true;
-                    response.Results.Add(new BulkAddFixedNoteItemResult { Id = template.Id, Name = template.Name, Status = "updated" });
+                    response.Results.Add(new BulkAddFixedNoteItemResult { Id = template.Id, Name = template.Name, Status = "updated", Copies = result.Targets });
+                    break;
+                case FixedNoteStatus.Ambiguous:
+                    response.Results.Add(new BulkAddFixedNoteItemResult { Id = template.Id, Name = template.Name, Status = "ambiguous" });
                     break;
                 case FixedNoteStatus.NoNotesSection:
                     response.Results.Add(new BulkAddFixedNoteItemResult { Id = template.Id, Name = template.Name, Status = "no_notes" });

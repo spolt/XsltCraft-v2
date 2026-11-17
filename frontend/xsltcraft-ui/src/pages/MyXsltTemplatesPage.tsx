@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Code2, Users, FolderInput, LayoutGrid, Star, Upload, StickyNote } from 'lucide-react'
 import {
@@ -264,34 +264,65 @@ export default function MyXsltTemplatesPage() {
     if (folderId) setActiveKey(folderId)
   }
 
+  // Belirsiz (birden fazla not alanı) şablonlarda onay sonrası aynı metin/modla tekrar çalıştırmak için.
+  const lastNoteRequest = useRef<{ noteText: string; mode: FixedNoteMode } | null>(null)
+
+  async function runNoteBatches(
+    ids: string[],
+    noteText: string,
+    mode: FixedNoteMode,
+    onProgress: (done: number) => void,
+    resolveAmbiguous?: 'first',
+  ): Promise<BulkAddFixedNoteResult> {
+    const nameOf = new Map(templates.map((t) => [t.id, t.name]))
+    const res: BulkAddFixedNoteResult = { results: [] }
+    let done = 0
+    for (const [i, part] of chunk(ids, NOTE_BATCH).entries()) {
+      try {
+        const partRes = await bulkAddFixedNote(part, noteText, mode, resolveAmbiguous)
+        res.results.push(...partRes.results)
+      } catch (err: unknown) {
+        // İlk parti hata verdiyse (ör. 402 Pro gerekli) hiçbir şey işlenmedi; olduğu gibi yukarı ilet.
+        if (i === 0) throw err
+        // Sonraki partide hata: o partiyi "başarısız" say, kalanlarla devam et.
+        res.results.push(...part.map((id) => ({ id, name: nameOf.get(id) ?? id, status: 'failed' as const })))
+      }
+      done += part.length
+      onProgress(done)
+    }
+    return res
+  }
+
+  async function refreshAfterNote(res: BulkAddFixedNoteResult) {
+    // Etkilenen şablonların updatedAt'ı değişti; listeyi tazele.
+    if (res.results.some((r) => r.status === 'updated')) {
+      const tpls = await getUserXsltTemplates()
+      setTemplates(tpls)
+      setSelectedIds(new Set())
+    }
+  }
+
+  async function handleResolveAmbiguousNotes(ids: string[]) {
+    const last = lastNoteRequest.current
+    if (!last || ids.length === 0) return
+    try {
+      const res = await runNoteBatches(ids, last.noteText, last.mode, () => {}, 'first')
+      const byId = new Map(res.results.map((r) => [r.id, r]))
+      setNoteResult((prev) => (prev ? { results: prev.results.map((r) => byId.get(r.id) ?? r) } : res))
+      await refreshAfterNote(res)
+    } catch {
+      toast.error('Sabit not eklenemedi.', { durationMs: 5000 })
+    }
+  }
+
   async function handleBulkAddNote(noteText: string, mode: FixedNoteMode, onProgress: (done: number) => void) {
     const ids = [...selectedIds]
-    const nameOf = new Map(templates.map((t) => [t.id, t.name]))
+    lastNoteRequest.current = { noteText, mode }
     try {
-      const res: BulkAddFixedNoteResult = { results: [] }
-      let done = 0
-      for (const [i, part] of chunk(ids, NOTE_BATCH).entries()) {
-        try {
-          const partRes = await bulkAddFixedNote(part, noteText, mode)
-          res.results.push(...partRes.results)
-        } catch (err: unknown) {
-          // İlk parti hata verdiyse (ör. 402 Pro gerekli) hiçbir şey işlenmedi; olduğu gibi yukarı ilet.
-          if (i === 0) throw err
-          // Sonraki partide hata: o partiyi "başarısız" say, kalanlarla devam et.
-          res.results.push(...part.map((id) => ({ id, name: nameOf.get(id) ?? id, status: 'failed' as const })))
-        }
-        done += part.length
-        onProgress(done)
-      }
+      const res = await runNoteBatches(ids, noteText, mode, onProgress)
       setBulkNoteOpen(false)
       setNoteResult(res)
-      // Etkilenen şablonların updatedAt'ı değişti; listeyi tazele.
-      const updatedIds = new Set(res.results.filter((r) => r.status === 'updated').map((r) => r.id))
-      if (updatedIds.size > 0) {
-        const tpls = await getUserXsltTemplates()
-        setTemplates(tpls)
-        setSelectedIds(new Set())
-      }
+      await refreshAfterNote(res)
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       toast.error(status === 402 ? 'Sabit not ekleme XsltCraft Pro üyeliği gerektirir.' : 'Sabit not eklenemedi.', { durationMs: 5000 })
@@ -474,6 +505,7 @@ export default function MyXsltTemplatesPage() {
         <BulkNoteResultDialog
           result={noteResult}
           onClose={() => setNoteResult(null)}
+          onResolveAmbiguous={handleResolveAmbiguousNotes}
           onPreview={(id) => {
             const r = noteResult.results.find((x) => x.id === id)
             setPreviewId(id)
