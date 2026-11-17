@@ -1,231 +1,180 @@
-using System.Text.RegularExpressions;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 
+using XsltCraft.Application.ThemeSlots.Compose;
+using XsltCraft.Application.ThemeSlots.Source;
 using XsltCraft.Application.Validation;
+using XsltCraft.Application.Xslt.NoteLoops;
 
 namespace XsltCraft.Application.Xslt;
 
 /// <inheritdoc cref="IFixedNoteInjector"/>
 public sealed class FixedNoteInjector : IFixedNoteInjector
 {
-    private static readonly XNamespace Xsl = "http://www.w3.org/1999/XSL/Transform";
-
     // Enjekte edilen blok bu yorumlar arasına alınır. XSLT yorumları çıktıya render olmaz;
-    // tekrar uygulamada bloğu bulup değiştirmemizi/eklememizi sağlar (idempotent).
+    // tekrar uygulamada blokları bulup değiştirmemizi/eklememizi sağlar (idempotent).
     private const string MarkerStart = "<!-- xc:fixed-note:start -->";
     private const string MarkerEnd = "<!-- xc:fixed-note:end -->";
+    private const string MarkerStartValue = " xc:fixed-note:start ";
+    private const string MarkerEndValue = " xc:fixed-note:end ";
 
-    public FixedNoteResult Inject(string xslt, string noteText, FixedNoteMode mode)
+    // Kopya başına bir blok; pay elle kopyalanmış bloklar için. Tavan, söküm işini girdiden bağımsız küçük tutar.
+    private const int MaxBlocks = 16;
+
+    // Kopya (hedef) tavanı: A5 çift kopya 2; pay farklı yerleşimler için.
+    private const int MaxTargets = 8;
+
+    // Şablon kayıt tavanıyla aynı (UserXsltTemplateController.MaxXsltChars).
+    private const int MaxXsltChars = 2 * 1024 * 1024;
+
+    public FixedNoteResult Inject(string xslt, string noteText, FixedNoteMode mode,
+        FixedNoteAmbiguity ambiguity = FixedNoteAmbiguity.Ask)
     {
         if (string.IsNullOrEmpty(xslt))
             return new FixedNoteResult(FixedNoteStatus.Failed, xslt, "XSLT içeriği boş.");
+        if (xslt.Length > MaxXsltChars)
+            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, "XSLT çok büyük.");
+        if (!IsXmlText(noteText))
+            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, "Not metni geçersiz karakter içeriyor.");
 
-        // Önceki sabit not bloğunu (varsa) çıkar — notu her zaman güncel/doğru konuma yeniden
-        // yerleştireceğiz. Bu, daha önce yanlış yere (ör. bir xsl:variable içine) gömülmüş notların
-        // tekrar uygulamada kendini onarmasını sağlar.
-        var (cleanXslt, existingInner) = StripMarkerBlock(xslt);
+        // Önceki tüm sabit not bloklarını çıkar — not her zaman güncel/doğru konuma yeniden yerleşir
+        // (yanlış yere gömülmüş eski notlar kendini onarır).
+        var (clean, inners) = StripMarkerBlocks(xslt);
+        if (inners is null)
+            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, "Şablonda çok fazla sabit not işareti var.");
 
-        XDocument doc;
-        try
+        // Analiz ağaç kurar ve özyinelemeli klonlar: yapısal sınırlar (derinlik, eleman sayısı) önce, akış tabanlı.
+        if (ThemeComposeXsltLimits.Check(clean) is { } limit)
+            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, limit.Message);
+
+        if (!XsltSourceMap.TryBuild(clean, out var map, out var parseError))
+            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, $"XSLT ayrıştırılamadı: {parseError}");
+
+        var location = NotesSectionLocator.Locate(map.Document, ambiguity == FixedNoteAmbiguity.PickFirst);
+        switch (location.Status)
         {
-            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
-            using var sr = new StringReader(cleanXslt);
-            using var xr = XmlReader.Create(sr, settings);
-            doc = XDocument.Load(xr, LoadOptions.SetLineInfo);
+            case NotesLocateStatus.None:
+                return new FixedNoteResult(FixedNoteStatus.NoNotesSection, xslt);
+            case NotesLocateStatus.Ambiguous:
+                return new FixedNoteResult(FixedNoteStatus.Ambiguous, xslt, Candidates: location.CandidateGroups);
         }
-        catch (XmlException ex)
+
+        var targets = location.Targets;
+        if (targets.Count > MaxTargets)
+            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, "Şablonda çok fazla not alanı kopyası var.");
+        var inserts = new List<(int Offset, string Block)>(targets.Count);
+        for (var i = 0; i < targets.Count; i++)
         {
-            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, $"XSLT ayrıştırılamadı: {ex.Message}");
+            var target = targets[i];
+            var snippet = FixedNoteSnippet.Build(target, noteText);
+
+            // Append: önceki not(lar)ı koru; kopya sayısı eşleşiyorsa sırayla, değilse ilk bloğu her kopyada.
+            var inner = mode == FixedNoteMode.Append && inners.Count > 0
+                ? $"{(inners.Count == targets.Count ? inners[i] : inners[0])}\n{snippet}"
+                : snippet;
+
+            var offset = OffsetOf(map, target);
+            if (offset < 0)
+                return new FixedNoteResult(FixedNoteStatus.Failed, xslt, "Not bölümünün konumu belirlenemedi.");
+            inserts.Add((offset, $"\n{MarkerStart}\n{inner}\n{MarkerEnd}"));
         }
 
-        var loop = XsltNoteLoops.FindUnconditionalNoteLoop(doc);
+        var sb = new StringBuilder(clean.Length + inserts.Sum(x => x.Block.Length));
+        var cursor = 0;
+        foreach (var (offset, block) in inserts.OrderBy(x => x.Offset))
+        {
+            sb.Append(clean, cursor, offset - cursor).Append(block);
+            cursor = offset;
+        }
+        var updated = sb.Append(clean, cursor, clean.Length - cursor).ToString();
+        if (updated.Length > MaxXsltChars)
+            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, "Sabit not eklenince XSLT boyut sınırını aşıyor.");
 
-        // Görünür not bölümünde tutturacak koşulsuz döngü yok → kaynağı değiştirmeden bildir.
-        if (loop is null)
-            return new FixedNoteResult(FixedNoteStatus.NoNotesSection, xslt);
-
-        var prefix = loop.GetPrefixOfNamespace(Xsl) ?? "xsl";
-        var snippet = BuildSnippet(loop, noteText);
-
-        // Append: önceki not(lar)ı koru ve doğru konuma birlikte taşı; Replace: yalnız yeni not.
-        var inner = mode == FixedNoteMode.Append && !string.IsNullOrEmpty(existingInner)
-            ? $"{existingInner}\n{snippet}"
-            : snippet;
-
-        var insertAt = FindLoopEndOffset(cleanXslt, loop, prefix);
-        if (insertAt < 0)
-            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, "Not döngüsünün konumu belirlenemedi.");
-
-        var block = $"\n{MarkerStart}\n{inner}\n{MarkerEnd}";
-        var updated = cleanXslt.Insert(insertAt, block);
+        if (!Verify(updated, targets))
+            return new FixedNoteResult(FixedNoteStatus.Failed, xslt, "Sabit not güvenli biçimde yerleştirilemedi.");
 
         var threat = XsltSafety.FindThreat(updated);
         if (threat is not null)
             return new FixedNoteResult(FixedNoteStatus.Failed, xslt, threat);
 
-        return new FixedNoteResult(FixedNoteStatus.Updated, updated);
+        return new FixedNoteResult(FixedNoteStatus.Updated, updated, Targets: targets.Count);
     }
 
-    // --- Snippet'i döngünün kendi gövdesinden türet (şablonun not stilini korur) ---
-    private static string BuildSnippet(XElement? loop, string noteText)
+    private static bool IsXmlText(string text)
     {
-        var nodes = loop is not null ? DeriveTemplateNodes(loop, noteText) : DefaultNodes(noteText);
-        return SerializeInner(nodes);
-    }
-
-    private static List<XNode> DeriveTemplateNodes(XElement loop, string noteText)
-    {
-        // Gövde tek bir koşul sarmalıysa (xsl:if veya xsl:choose/when) onu aç, içeriğini al.
-        XElement source = loop;
-        var elements = loop.Elements().ToList();
-        if (elements.Count == 1 && elements[0].Name == Xsl + "if")
-            source = elements[0];
-        else if (elements.Count == 1 && elements[0].Name == Xsl + "choose"
-                 && elements[0].Element(Xsl + "when") is { } when)
-            source = when;
-
-        var clones = source.Nodes().Select(CloneNode).ToList();
-
-        // Not değerini yazan yer-tutucuyu (<xsl:value-of select="."/>) sabit metinle değiştir.
-        var target = clones
-            .OfType<XElement>()
-            .SelectMany(e => e.DescendantsAndSelf(Xsl + "value-of"))
-            .FirstOrDefault(v => Collapse(v.Attribute("select")?.Value ?? string.Empty) == ".");
-
-        if (target is null)
-            return DefaultNodes(noteText); // beklenmedik yapı → güvenli varsayılan
-
-        var replacement = new XElement(Xsl + "text", noteText);
-        if (target.Parent is null)
-            clones[clones.IndexOf(target)] = replacement;
-        else
-            target.ReplaceWith(replacement);
-
-        return clones;
-    }
-
-    private static List<XNode> DefaultNodes(string noteText) =>
-    [
-        new XElement("b", "      Not: "),
-        new XElement(Xsl + "text", noteText),
-        new XElement("br"),
-    ];
-
-    private static XNode CloneNode(XNode node) => node switch
-    {
-        XElement e => new XElement(e),
-        XText t => new XText(t.Value),
-        XComment c => new XComment(c.Value),
-        _ => new XText(node.ToString()),
-    };
-
-    // Düğümleri xsl önekini koruyacak şekilde serialize edip dış sarmalayıcıyı sıyır.
-    private static string SerializeInner(IEnumerable<XNode> nodes)
-    {
-        var wrap = new XElement(
-            Xsl + "wrap",
-            new XAttribute(XNamespace.Xmlns + "xsl", Xsl.NamespaceName),
-            nodes);
-
-        var s = wrap.ToString(SaveOptions.DisableFormatting);
-        var open = s.IndexOf('>') + 1;
-        var close = s.LastIndexOf("</", StringComparison.Ordinal);
-        return s[open..close].Trim();
-    }
-
-    // Mevcut sabit not bloğunu (varsa, hemen öncesindeki tek satır sonu dahil) string'den çıkarır;
-    // marker'lar arasındaki içeriği (önceki not satırları) ayrıca döndürür.
-    private static (string Clean, string? Inner) StripMarkerBlock(string xslt)
-    {
-        var ms = xslt.IndexOf(MarkerStart, StringComparison.Ordinal);
-        if (ms < 0)
-            return (xslt, null);
-        var me = xslt.IndexOf(MarkerEnd, StringComparison.Ordinal);
-        if (me <= ms)
-            return (xslt, null);
-
-        var inner = xslt[(ms + MarkerStart.Length)..me].Trim();
-
-        // Tekrarlı onarımda boş satır birikmemesi için bloğun önündeki tek satır sonunu da kaldır.
-        var removeStart = ms > 0 && xslt[ms - 1] == '\n' ? ms - 1 : ms;
-        var clean = xslt[..removeStart] + xslt[(me + MarkerEnd.Length)..];
-        return (clean, inner.Length == 0 ? null : inner);
-    }
-
-    // for-each derinliğini sayarak hedef döngünün </xsl:for-each> bitiş ofsetini bul (dosyayı yeniden
-    // serialize etmeden cerrahi ekleme için). Bulunamazsa -1.
-    private static int FindLoopEndOffset(string xslt, XElement loop, string prefix)
-    {
-        if (loop is not IXmlLineInfo li || !li.HasLineInfo())
-            return -1;
-
-        var startName = OffsetOf(xslt, li.LineNumber, li.LinePosition);
-        if (startName < 0)
-            return -1;
-
-        var openTag = $"<{prefix}:for-each";
-        var closeTag = $"</{prefix}:for-each>";
-
-        // '<' adın bir karakter solunda.
-        var i = Math.Max(0, startName - 1);
-        if (xslt[i] != '<')
-            i = xslt.LastIndexOf('<', Math.Min(startName, xslt.Length - 1));
-        if (i < 0)
-            return -1;
-
-        var depth = 0;
-        while (i < xslt.Length)
+        try
         {
-            if (MatchesAt(xslt, i, closeTag))
-            {
-                depth--;
-                i += closeTag.Length;
-                if (depth == 0)
-                    return i;
-            }
-            else if (MatchesAt(xslt, i, openTag) && IsTagBoundary(xslt, i + openTag.Length))
-            {
-                var gt = xslt.IndexOf('>', i);
-                if (gt < 0)
-                    return -1;
-                if (xslt[gt - 1] != '/') // kendiliğinden kapanmayan açılış → derinlik artar
-                    depth++;
-                i = gt + 1;
-            }
-            else
-            {
-                i++;
-            }
+            XmlConvert.VerifyXmlChars(text);
+            return true;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+    }
+
+    private static int OffsetOf(XsltSourceMap map, NotesTarget target)
+    {
+        if (target.BeforeElement is { } before)
+            return map.Span(before).Start;
+        if (target.AfterElement is { } after)
+            return map.Span(after).End;
+        var span = map.Span(target.InsertParent);
+        return span.SelfClosing ? -1 : span.StartTagEnd;
+    }
+
+    // Son koşul (fail-closed): sonuç iyi-biçimli, blok sayısı = kopya sayısı, her blok tek parça ve beklenen
+    // ebeveyn adının altında.
+    private static bool Verify(string updated, IReadOnlyList<NotesTarget> targets)
+    {
+        XDocument doc;
+        try
+        {
+            using var xr = XmlReader.Create(new StringReader(updated), SecureXslt.ReaderSettings());
+            doc = XDocument.Load(xr);
+        }
+        catch (XmlException)
+        {
+            return false;
         }
 
-        return -1;
+        var comments = doc.DescendantNodes().OfType<XComment>().ToList();
+        var starts = comments.Where(c => c.Value == MarkerStartValue).ToList();
+        var ends = comments.Where(c => c.Value == MarkerEndValue).ToList();
+        if (starts.Count != targets.Count || ends.Count != targets.Count)
+            return false;
+
+        var expected = targets.Select(t => t.InsertParent.Name).OrderBy(n => n.ToString()).ToList();
+        var actual = starts.Select(s => s.Parent?.Name).OrderBy(n => n?.ToString()).ToList();
+        return starts.Zip(ends).All(p => ReferenceEquals(p.First.Parent, p.Second.Parent))
+               && expected.SequenceEqual(actual);
     }
 
-    private static bool MatchesAt(string s, int i, string token) =>
-        i + token.Length <= s.Length && string.CompareOrdinal(s, i, token, 0, token.Length) == 0;
-
-    // Açılış etiketi adının ardından gelen karakter ad-karakteri olmamalı (for-eachX'i eşleştirme).
-    private static bool IsTagBoundary(string s, int i) =>
-        i >= s.Length || char.IsWhiteSpace(s[i]) || s[i] is '>' or '/';
-
-    private static int OffsetOf(string s, int line, int position)
+    // Tüm sabit not bloklarını (hemen öncesindeki tek satır sonu dahil) çıkarır; iç içerikleri belge sırasıyla döner.
+    // Tavan aşılırsa Inners null.
+    private static (string Clean, List<string>? Inners) StripMarkerBlocks(string xslt)
     {
-        if (line < 1 || position < 1)
-            return -1;
-
-        var currentLine = 1;
-        var idx = 0;
-        while (currentLine < line && idx < s.Length)
+        var inners = new List<string>();
+        var clean = xslt;
+        while (true)
         {
-            if (s[idx] == '\n')
-                currentLine++;
-            idx++;
+            var ms = clean.IndexOf(MarkerStart, StringComparison.Ordinal);
+            if (ms < 0)
+                break;
+            var me = clean.IndexOf(MarkerEnd, ms, StringComparison.Ordinal);
+            if (me < 0)
+                break;
+            if (inners.Count >= MaxBlocks)
+                return (xslt, null);
+
+            var inner = clean[(ms + MarkerStart.Length)..me].Trim();
+            if (inner.Length > 0)
+                inners.Add(inner);
+
+            var removeStart = ms > 0 && clean[ms - 1] == '\n' ? ms - 1 : ms;
+            clean = clean[..removeStart] + clean[(me + MarkerEnd.Length)..];
         }
-
-        var offset = idx + (position - 1);
-        return offset <= s.Length ? offset : -1;
+        return (clean, inners);
     }
-
-    private static string Collapse(string value) => Regex.Replace(value, @"\s+", string.Empty);
 }

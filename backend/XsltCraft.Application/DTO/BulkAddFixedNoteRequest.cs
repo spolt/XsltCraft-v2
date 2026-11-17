@@ -9,6 +9,9 @@ public sealed class BulkAddFixedNoteRequest
 
     /// <summary>"replace" (varsayılan, idempotent) veya "append".</summary>
     public string Mode { get; set; } = "replace";
+
+    /// <summary>"first": birden fazla Notlar bölümü bulunan şablonlarda kullanıcı onayıyla önce geleni kullan.</summary>
+    public string? ResolveAmbiguous { get; set; }
 }
 
 public sealed class BulkAddFixedNoteResultResponse
@@ -21,6 +24,9 @@ public sealed class BulkAddFixedNoteItemResult
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>"updated" | "no_notes" | "locked" | "failed".</summary>
+    /// <summary>"updated" | "no_notes" | "ambiguous" | "locked" | "failed".</summary>
     public string Status { get; set; } = string.Empty;
+
+    /// <summary>"updated": notun eklendiği kopya sayısı (A5 çift kopyada 2).</summary>
+    public int Copies { get; set; }
 }

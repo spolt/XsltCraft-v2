@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Code2, Users, FolderInput, LayoutGrid, Star, Upload, StickyNote } from 'lucide-react'
 import {
@@ -35,12 +35,23 @@ import MoveToFolderMenu from '../components/storage/MoveToFolderMenu'
 import BulkUploadModal from '../components/storage/BulkUploadModal'
 import BulkAddNoteModal from '../components/storage/BulkAddNoteModal'
 import BulkNoteResultDialog from '../components/storage/BulkNoteResultDialog'
+import BulkProgress from '../components/storage/BulkProgress'
+import { chunk, runPool } from '../utils/bulkRun'
 import { useTemplateLibrary, type SortKey } from '../components/storage/useTemplateLibrary'
 import { toast } from '../store/toastStore'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { isProOrAbove } from '../services/entitlementService'
 import { xsltOpenPath } from '../utils/workRoutes'
 import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
+
+// Sabit not partisi: sunucu her şablona notu tek tek gömer; küçük partiler hem ilerleme gösterir hem tek isteği kısa tutar.
+const NOTE_BATCH = 25
+
+interface BulkOp {
+  label: string
+  done: number
+  total: number
+}
 
 export default function MyXsltTemplatesPage() {
   const [templates, setTemplates] = useState<UserXsltTemplateSummary[]>([])
@@ -53,6 +64,7 @@ export default function MyXsltTemplatesPage() {
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
   const [bulkNoteOpen, setBulkNoteOpen] = useState(false)
   const [noteResult, setNoteResult] = useState<BulkAddFixedNoteResult | null>(null)
+  const [bulkOp, setBulkOp] = useState<BulkOp | null>(null)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<SortKey>('updated')
   const [previewId, setPreviewId] = useState<string | null>(null)
@@ -172,12 +184,27 @@ export default function MyXsltTemplatesPage() {
   }
   async function handleBulkMove(folderId: string | null) {
     const ids = [...selectedIds]
+    const label = folderId ? 'Şablonlar taşınıyor' : 'Şablonlar klasörden çıkarılıyor'
+    setBulkMoveOpen(false)
+    setBulkOp({ label, done: 0, total: ids.length })
     try {
-      await Promise.all(ids.map((id) => moveUserXsltToFolder(id, folderId)))
-      setTemplates((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, folderId } : t)))
-      setSelectedIds(new Set())
-      toast.success(folderId ? 'Seçilenler taşındı.' : 'Seçilenler klasörden çıkarıldı.', { durationMs: 4000 })
-    } catch { toast.error('Toplu taşıma başarısız.') } finally { setBulkMoveOpen(false) }
+      const { succeeded, failed } = await runPool(
+        ids,
+        (id) => moveUserXsltToFolder(id, folderId),
+        (done) => setBulkOp({ label, done, total: ids.length }),
+      )
+      // Yalnız başaranları yansıt; başarısızlar seçili kalır ki kullanıcı tekrar deneyebilsin.
+      const moved = new Set(succeeded)
+      setTemplates((prev) => prev.map((t) => (moved.has(t.id) ? { ...t, folderId } : t)))
+      setSelectedIds(new Set(failed))
+      if (failed.length === 0) {
+        toast.success(folderId ? 'Seçilenler taşındı.' : 'Seçilenler klasörden çıkarıldı.', { durationMs: 4000 })
+      } else {
+        toast.error(`${succeeded.length} şablon taşındı, ${failed.length} şablon taşınamadı. Taşınamayanlar seçili bırakıldı.`, { durationMs: 6000 })
+      }
+    } finally {
+      setBulkOp(null)
+    }
   }
 
   async function handleDelete(id: string) {
@@ -210,11 +237,26 @@ export default function MyXsltTemplatesPage() {
 
   async function handleBulkDelete() {
     const ids = [...selectedIds]
+    const label = 'Şablonlar siliniyor'
+    setBulkConfirm(false)
+    setBulkOp({ label, done: 0, total: ids.length })
     try {
-      await Promise.all(ids.map((id) => deleteUserXsltTemplate(id)))
-      setTemplates((prev) => prev.filter((t) => !ids.includes(t.id)))
-      setSelectedIds(new Set())
-    } catch { toast.error('Toplu silme sırasında hata oluştu.') } finally { setBulkConfirm(false) }
+      const { succeeded, failed } = await runPool(
+        ids,
+        (id) => deleteUserXsltTemplate(id),
+        (done) => setBulkOp({ label, done, total: ids.length }),
+      )
+      const deleted = new Set(succeeded)
+      setTemplates((prev) => prev.filter((t) => !deleted.has(t.id)))
+      setSelectedIds(new Set(failed))
+      if (failed.length === 0) {
+        toast.success(`${succeeded.length} şablon silindi.`, { durationMs: 4000 })
+      } else {
+        toast.error(`${succeeded.length} şablon silindi, ${failed.length} şablon silinemedi. Silinemeyenler seçili bırakıldı.`, { durationMs: 6000 })
+      }
+    } finally {
+      setBulkOp(null)
+    }
   }
 
   async function handleBulkUploaded(folderId: string | null) {
@@ -222,19 +264,65 @@ export default function MyXsltTemplatesPage() {
     if (folderId) setActiveKey(folderId)
   }
 
-  async function handleBulkAddNote(noteText: string, mode: FixedNoteMode) {
-    const ids = [...selectedIds]
+  // Belirsiz (birden fazla not alanı) şablonlarda onay sonrası aynı metin/modla tekrar çalıştırmak için.
+  const lastNoteRequest = useRef<{ noteText: string; mode: FixedNoteMode } | null>(null)
+
+  async function runNoteBatches(
+    ids: string[],
+    noteText: string,
+    mode: FixedNoteMode,
+    onProgress: (done: number) => void,
+    resolveAmbiguous?: 'first',
+  ): Promise<BulkAddFixedNoteResult> {
+    const nameOf = new Map(templates.map((t) => [t.id, t.name]))
+    const res: BulkAddFixedNoteResult = { results: [] }
+    let done = 0
+    for (const [i, part] of chunk(ids, NOTE_BATCH).entries()) {
+      try {
+        const partRes = await bulkAddFixedNote(part, noteText, mode, resolveAmbiguous)
+        res.results.push(...partRes.results)
+      } catch (err: unknown) {
+        // İlk parti hata verdiyse (ör. 402 Pro gerekli) hiçbir şey işlenmedi; olduğu gibi yukarı ilet.
+        if (i === 0) throw err
+        // Sonraki partide hata: o partiyi "başarısız" say, kalanlarla devam et.
+        res.results.push(...part.map((id) => ({ id, name: nameOf.get(id) ?? id, status: 'failed' as const })))
+      }
+      done += part.length
+      onProgress(done)
+    }
+    return res
+  }
+
+  async function refreshAfterNote(res: BulkAddFixedNoteResult) {
+    // Etkilenen şablonların updatedAt'ı değişti; listeyi tazele.
+    if (res.results.some((r) => r.status === 'updated')) {
+      const tpls = await getUserXsltTemplates()
+      setTemplates(tpls)
+      setSelectedIds(new Set())
+    }
+  }
+
+  async function handleResolveAmbiguousNotes(ids: string[]) {
+    const last = lastNoteRequest.current
+    if (!last || ids.length === 0) return
     try {
-      const res = await bulkAddFixedNote(ids, noteText, mode)
+      const res = await runNoteBatches(ids, last.noteText, last.mode, () => {}, 'first')
+      const byId = new Map(res.results.map((r) => [r.id, r]))
+      setNoteResult((prev) => (prev ? { results: prev.results.map((r) => byId.get(r.id) ?? r) } : res))
+      await refreshAfterNote(res)
+    } catch {
+      toast.error('Sabit not eklenemedi.', { durationMs: 5000 })
+    }
+  }
+
+  async function handleBulkAddNote(noteText: string, mode: FixedNoteMode, onProgress: (done: number) => void) {
+    const ids = [...selectedIds]
+    lastNoteRequest.current = { noteText, mode }
+    try {
+      const res = await runNoteBatches(ids, noteText, mode, onProgress)
       setBulkNoteOpen(false)
       setNoteResult(res)
-      // Etkilenen şablonların updatedAt'ı değişti; listeyi tazele.
-      const updatedIds = new Set(res.results.filter((r) => r.status === 'updated').map((r) => r.id))
-      if (updatedIds.size > 0) {
-        const tpls = await getUserXsltTemplates()
-        setTemplates(tpls)
-        setSelectedIds(new Set())
-      }
+      await refreshAfterNote(res)
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       toast.error(status === 402 ? 'Sabit not ekleme XsltCraft Pro üyeliği gerektirir.' : 'Sabit not eklenemedi.', { durationMs: 5000 })
@@ -303,7 +391,13 @@ export default function MyXsltTemplatesPage() {
                     <BulkUploadButton onClick={() => setBulkUploadOpen(true)} />
                   </StorageToolbar>
 
-                  {someSelected && (
+                  {bulkOp ? (
+                    <BulkBar count={bulkOp.total}>
+                      <div className="min-w-[220px] flex-[2]">
+                        <BulkProgress bare label={bulkOp.label} done={bulkOp.done} total={bulkOp.total} unit="şablon" />
+                      </div>
+                    </BulkBar>
+                  ) : someSelected && (
                     <BulkBar count={selectedIds.size}>
                       <div className="relative">
                         <BulkButton
@@ -411,6 +505,7 @@ export default function MyXsltTemplatesPage() {
         <BulkNoteResultDialog
           result={noteResult}
           onClose={() => setNoteResult(null)}
+          onResolveAmbiguous={handleResolveAmbiguousNotes}
           onPreview={(id) => {
             const r = noteResult.results.find((x) => x.id === id)
             setPreviewId(id)

@@ -4,15 +4,15 @@ set -e
 cd /opt/xsltcraft
 
 echo "==> Config yedekleniyor..."
-cp backend/XsltCraft/appsettings.Production.json /tmp/appsettings.Production.json.bak
-cp docker-compose.prod.yml /tmp/docker-compose.prod.yml.bak
+cp /opt/xsltcraft/backend/XsltCraft/appsettings.Production.json /tmp/appsettings.Production.json.bak
+cp /opt/xsltcraft/docker-compose.prod.yml /tmp/docker-compose.prod.yml.bak
 
 echo "==> Kod güncelleniyor..."
 git pull origin main
 
 echo "==> Config geri yükleniyor..."
-cp /tmp/appsettings.Production.json.bak backend/XsltCraft/appsettings.Production.json
-cp /tmp/docker-compose.prod.yml.bak docker-compose.prod.yml
+cp /tmp/appsettings.Production.json.bak /opt/xsltcraft/backend/XsltCraft/appsettings.Production.json
+cp /tmp/docker-compose.prod.yml.bak /opt/xsltcraft/docker-compose.prod.yml
 
 echo "==> Build ediliyor..."
 docker compose -f docker-compose.prod.yml up -d --build

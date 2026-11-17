@@ -5,15 +5,18 @@ import { createFolder, type Folder } from '../../services/folderService'
 import { bulkUploadUserXslt, type BulkUploadItem } from '../../services/userXsltService'
 import { FOLDER_COLORS, FOLDER_COLOR_NAME, folderDot } from './folderColors'
 import ModalShell, { MODAL_INPUT, MODAL_PRIMARY, MODAL_SECONDARY } from './ModalShell'
+import BulkProgress from './BulkProgress'
 import { toast } from '../../store/toastStore'
 import { validateUploadContent } from '../../utils/uploadValidation'
 
-const MAX_FILES = 100
+const MAX_FILES = 500
 const MAX_BYTES = 2 * 1024 * 1024
 // İstekleri Kestrel'in 30 MB gövde sınırının güvenle altında tutmak için boyut-bazlı parti.
 // ~10 MB ham içerik → JSON kaçışı sonrası dahi sınırın altında kalır.
 const MAX_BATCH_BYTES = 10 * 1024 * 1024
 const MAX_BATCH_COUNT = 50
+// Tarama bu süreden kısa sürerse ilerleme paneli hiç gösterilmez (titremeyi önler).
+const SCAN_PANEL_DELAY_MS = 300
 
 function buildBatches(items: BulkUploadItem[]): BulkUploadItem[][] {
   const batches: BulkUploadItem[][] = []
@@ -31,6 +34,11 @@ function buildBatches(items: BulkUploadItem[]): BulkUploadItem[][] {
   }
   if (current.length > 0) batches.push(current)
   return batches
+}
+
+interface Progress {
+  done: number
+  total: number
 }
 
 interface PickedFile {
@@ -66,7 +74,11 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
   const [files, setFiles] = useState<PickedFile[]>([])
   const [reading, setReading] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState('')
+  const [scan, setScan] = useState<Progress | null>(null)
+  const [upload, setUpload] = useState<Progress | null>(null)
+  const busy = reading || uploading
+  // Görsel meşguliyet: tarama göstergeleri yalnız gecikmeden sonra (scan dolunca) görünür; kilitler `busy` ile anında.
+  const showBusy = uploading || scan !== null
   const [target, setTarget] = useState<'new' | 'existing'>(defaultFolderId ? 'existing' : 'new')
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState<string>('blue')
@@ -74,7 +86,9 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
 
   const dirRef = useRef<HTMLInputElement>(null)
   const targetName = useId()
-
+  // ingest dosya okumayı beklerken güncel listeyi görebilsin (kapanıştaki `files` bayat kalabilir).
+  const filesRef = useRef<PickedFile[]>(files)
+  useEffect(() => { filesRef.current = files }, [files])
 
   // webkitdirectory React tiplerinde yok; ref ile attribute ekle.
   useEffect(() => {
@@ -84,11 +98,25 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
 
   async function ingest(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return
+    // Klasör seçiminde XSLT dışı dosyalar da gelir; sayacı yalnız XSLT'ler üzerinden tut.
+    const all = Array.from(fileList).filter((f) => /\.(xsl|xslt)$/i.test(f.name))
+    if (all.length === 0) {
+      toast.warning('Seçimde .xsl / .xslt dosyası bulunamadı.')
+      return
+    }
     setReading(true)
+    // Kısa seçimlerde panel bir an görünüp kaybolmasın: yalnız tarama gecikmeyi aşarsa göster.
+    let done = 0
+    let panelShown = false
+    const panelTimer = setTimeout(() => {
+      panelShown = true
+      setScan({ done, total: all.length })
+    }, SCAN_PANEL_DELAY_MS)
     try {
       const picked: PickedFile[] = []
-      for (const file of Array.from(fileList)) {
-        if (!/\.(xsl|xslt)$/i.test(file.name)) continue // yalnız XSLT
+      for (const [i, file] of all.entries()) {
+        done = i
+        if (panelShown && i > 0) setScan({ done: i, total: all.length })
         if (file.size > MAX_BYTES) {
           picked.push({ name: baseName(file.name), content: '', valid: false, error: '2 MB sınırı aşıldı' })
           continue
@@ -103,15 +131,25 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
           picked.push({ name: baseName(file.name), content: '', valid: false, error: 'Okunamadı' })
         }
       }
-      setFiles((prev) => {
-        // Aynı ada sahip tekrarları (ör. klasör+dosya seçimi) ele.
-        const seen = new Set(prev.map((f) => f.name))
-        const merged = [...prev]
-        for (const p of picked) if (!seen.has(p.name)) { merged.push(p); seen.add(p.name) }
-        return merged.slice(0, MAX_FILES)
-      })
+      // Aynı ada sahip tekrarları (ör. klasör+dosya seçimi) ele.
+      const prev = filesRef.current
+      const seen = new Set(prev.map((f) => f.name))
+      const merged = [...prev]
+      for (const p of picked) if (!seen.has(p.name)) { merged.push(p); seen.add(p.name) }
+      const dropped = merged.length - MAX_FILES
+      const next = dropped > 0 ? merged.slice(0, MAX_FILES) : merged
+      filesRef.current = next
+      setFiles(next)
+      if (dropped > 0) {
+        toast.warning(
+          `Tek seferde en fazla ${MAX_FILES} dosya yüklenebilir. ${dropped} dosya listeye eklenmedi; bunları ayrı bir yüklemede aktarabilirsin.`,
+          { durationMs: 8000 },
+        )
+      }
     } finally {
+      clearTimeout(panelTimer)
       setReading(false)
+      setScan(null)
     }
   }
 
@@ -121,12 +159,13 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
 
   const validFiles = files.filter((f) => f.valid)
   const canUpload =
-    !uploading && !reading && validFiles.length > 0 &&
+    !busy && validFiles.length > 0 &&
     (target === 'new' ? newName.trim().length > 0 : existingId.length > 0)
 
   async function handleUpload() {
     if (!canUpload) return
     setUploading(true)
+    setUpload({ done: 0, total: validFiles.length })
     try {
       let folderId: string | null
       if (target === 'new') {
@@ -141,11 +180,13 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
       const batches = buildBatches(items)
       let createdCount = 0
       let skippedCount = 0
-      for (let i = 0; i < batches.length; i++) {
-        if (batches.length > 1) setProgress(`${i + 1}/${batches.length}`)
-        const res = await bulkUploadUserXslt(folderId, batches[i])
+      let sent = 0
+      for (const batch of batches) {
+        const res = await bulkUploadUserXslt(folderId, batch)
         createdCount += res.created.length
         skippedCount += res.skipped.length
+        sent += batch.length
+        setUpload({ done: sent, total: items.length })
       }
 
       if (createdCount > 0) {
@@ -170,34 +211,42 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
       )
     } finally {
       setUploading(false)
-      setProgress('')
+      setUpload(null)
     }
   }
 
+  // Yükleme sürerken kapatmak isteklerin arka planda yarım kalmasına ve sonucun görülmemesine yol açar.
+  function guardedClose() {
+    if (!uploading) onClose()
+  }
+
   const pickerCls =
-    'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-field-line py-3 text-[13px] text-tx-2 transition-colors hover:border-ui-accent hover:bg-ui-hover focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ui-accent'
+    'flex flex-1 items-center justify-center gap-2 rounded-lg border border-dashed border-field-line py-3 text-[13px] text-tx-2 transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ui-accent ' +
+    (showBusy ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-ui-accent hover:bg-ui-hover')
 
   return (
     <ModalShell
       title="Klasör olarak toplu yükle"
-      subtitle={<>Birden çok <code className="font-mono">.xslt</code> dosyasını tek seferde bir klasöre aktar.</>}
-      onClose={onClose}
+      subtitle={<>Birden çok <code className="font-mono">.xslt</code> dosyasını tek seferde bir klasöre aktar (en fazla {MAX_FILES}).</>}
+      onClose={guardedClose}
       width="max-w-lg"
     >
-      {/* Dosya / klasör seçiciler */}
+      {/* Dosya / klasör seçiciler — tarama/yükleme sürerken kilitli */}
       <div className="mb-4 flex gap-2">
         <label className={pickerCls}>
           <FileCode2 size={16} aria-hidden="true" className="text-ui-accent" /> Dosya seç
-          <input type="file" multiple accept=".xsl,.xslt" className="sr-only" onChange={(e) => { ingest(e.target.files); e.target.value = '' }} />
+          <input type="file" multiple accept=".xsl,.xslt" disabled={busy} className="sr-only" onChange={(e) => { ingest(e.target.files); e.target.value = '' }} />
         </label>
         <label className={pickerCls}>
           <FolderUp size={16} aria-hidden="true" className="text-ui-accent" /> Klasör seç
-          <input ref={dirRef} type="file" className="sr-only" onChange={(e) => { ingest(e.target.files); e.target.value = '' }} />
+          <input ref={dirRef} type="file" disabled={busy} className="sr-only" onChange={(e) => { ingest(e.target.files); e.target.value = '' }} />
         </label>
       </div>
 
+      {scan && <BulkProgress label="Dosyalar taranıyor" done={scan.done} total={scan.total} unit="dosya" />}
+
       {/* Hedef klasör */}
-      <fieldset className="m-0 mb-4 flex flex-col gap-2 border-0 p-0">
+      <fieldset disabled={uploading} className="m-0 mb-4 flex flex-col gap-2 border-0 p-0">
         <legend className="sr-only">Hedef klasör</legend>
         <label className="flex cursor-pointer items-center gap-2 text-[13px] text-tx-2">
           <input type="radio" name={targetName} checked={target === 'new'} onChange={() => setTarget('new')} className="accent-(--ui-accent)" />
@@ -266,6 +315,7 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
                 {f.error && <span className="shrink-0 text-xs text-fn-orange-ink">{f.error}</span>}
                 <button
                   type="button"
+                  disabled={busy}
                   onClick={() => removeFile(f.name)}
                   aria-label={`${f.name} listeden çıkar`}
                   className="xc-focus rounded p-0.5 text-tx-subtle transition-colors hover:text-fn-red-ink"
@@ -278,11 +328,21 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
         </div>
       )}
 
+      {upload && (
+        <BulkProgress
+          label="Şablonlar yükleniyor"
+          done={upload.done}
+          total={upload.total}
+          unit="şablon"
+          hint="Yükleme bitene kadar bu pencereyi kapatma."
+        />
+      )}
+
       <div className="mt-6 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className={MODAL_SECONDARY}>İptal</button>
+        <button type="button" onClick={onClose} disabled={uploading} className={`${MODAL_SECONDARY} disabled:cursor-not-allowed disabled:opacity-50`}>İptal</button>
         <button type="button" onClick={handleUpload} disabled={!canUpload} className={MODAL_PRIMARY}>
-          {uploading ? <Loader2 size={15} aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : <Upload size={15} aria-hidden="true" />}
-          {uploading ? `Yükleniyor…${progress ? ` ${progress}` : ''}` : `Yükle${validFiles.length ? ` (${validFiles.length})` : ''}`}
+          {showBusy ? <Loader2 size={15} aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : <Upload size={15} aria-hidden="true" />}
+          {uploading ? 'Yükleniyor…' : scan ? 'Taranıyor…' : `Yükle${validFiles.length ? ` (${validFiles.length})` : ''}`}
         </button>
       </div>
     </ModalShell>
