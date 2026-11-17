@@ -53,6 +53,9 @@ internal static class GridParityKit
             ["XsltWorker:Enabled"] = workerEnabled ? "true" : "false",
             ["XsltWorker:PoolSize"] = "1",
             ["XsltWorker:StartupTimeoutMs"] = "20000",
+            // CI makinesinde Saxon'un (IKVM) soğuk açılışı üretimdeki 8 sn grid bütçesini aşabiliyor; parite
+            // testi süreyi değil çıktıyı doğrular.
+            ["Xslt:Limits:Grid:TimeoutMs"] = "30000",
         }).Build();
         var services = new ServiceCollection();
         services.AddLogging();

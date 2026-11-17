@@ -457,9 +457,11 @@ public sealed class InProcessXsltHostTests : IDisposable
         return disposable;
     }
 
+    // Gerçek motor testlerinde süre bütçesi: CI makinesinde Saxon'un (IKVM) soğuk açılışı 8 sn'yi aşabiliyor.
+    // Zaman aşımı davranışı testleri kendi kısa süresini açıkça verir (Slow).
     private static XsltExecutionLimits GridLimits(TimeSpan? deadline = null) => new()
     {
-        Deadline = deadline ?? TimeSpan.FromSeconds(8),
+        Deadline = deadline ?? TimeSpan.FromSeconds(30),
         MaxOutputChars = 8_000_000,
         MaxStylesheetDepth = 256,
         MaxInputDepth = 64,
