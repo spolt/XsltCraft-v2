@@ -14,6 +14,7 @@ using XsltCraft.Application.ThemeSlots.Analysis;
 using XsltCraft.Application.ThemeSlots.Catalog;
 using XsltCraft.Application.ThemeSlots.Compose;
 using XsltCraft.Application.ThemeSlots.Overrides;
+using XsltCraft.Application.Templates.Download;
 using XsltCraft.Application.Themes;
 using XsltCraft.Application.Validation;
 using XsltCraft.Application.XPath;
@@ -92,6 +93,9 @@ public static class ServiceCollectionExtensions
 
         // Kolay düzenle: kullanıcının yüklediği XSLT'nin analizi (yürütme Raw rotada).
         services.AddSingleton<IUploadedXsltAnalyzer, UploadedXsltAnalyzer>();
+
+        // Şablonlarım: seçili / klasör ZIP indirme yazıcısı (durumsuz).
+        services.AddSingleton<ITemplateArchiveWriter, TemplateArchiveWriter>();
 
         // -------------------------------------------------
         // User Management

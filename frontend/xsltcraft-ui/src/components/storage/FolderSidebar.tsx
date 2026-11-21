@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Folder as FolderIcon, Plus, MoreVertical, Check, X, Trash2, Pencil } from 'lucide-react'
+import { Folder as FolderIcon, Plus, MoreVertical, Check, X, Trash2, Pencil, Download } from 'lucide-react'
 import { FOLDER_COLORS, FOLDER_COLOR_NAME, folderDot, folderText } from './folderColors'
 
 export interface SpecialEntry {
@@ -25,6 +25,8 @@ interface FolderSidebarProps {
   onRename: (id: string, name: string) => void
   onRecolor: (id: string, color: string | null) => void
   onDelete: (id: string) => void
+  /** Verilirse ⋮ menüsünde "Klasörü indir" (boş klasörde devre dışı). */
+  onDownload?: (id: string) => void
 }
 
 function ColorRow({ value, onPick }: { value: string | null; onPick: (c: string) => void }) {
@@ -53,7 +55,7 @@ const INPUT = 'min-w-0 flex-1 rounded-md border border-ui-soft-line bg-ui-card p
 
 /** Klasörler kartı: Tümü / Favoriler / (Paylaşılan) + kullanıcı klasörleri ve klasör işlemleri. */
 export default function FolderSidebar({
-  specials, folders, activeKey, onSelect, onCreate, onRename, onRecolor, onDelete,
+  specials, folders, activeKey, onSelect, onCreate, onRename, onRecolor, onDelete, onDownload,
 }: FolderSidebarProps) {
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -206,6 +208,17 @@ export default function FolderSidebar({
                   >
                     <Pencil size={13} aria-hidden="true" className="text-tx-subtle" /> Yeniden adlandır
                   </button>
+                  {onDownload && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={f.count === 0}
+                      onClick={() => { onDownload(f.id); closeMenu() }}
+                      className="xc-focus flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-tx-2 hover:bg-ui-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                    >
+                      <Download size={13} aria-hidden="true" className="text-tx-subtle" /> Klasörü indir
+                    </button>
+                  )}
                   <div className="px-2 py-1">
                     <ColorRow value={f.color} onPick={(c) => { onRecolor(f.id, c); setMenuId(null) }} />
                   </div>

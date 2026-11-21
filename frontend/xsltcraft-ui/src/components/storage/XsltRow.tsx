@@ -20,11 +20,13 @@ interface Props {
   onShare: (id: string, name: string) => void
   onMove: (id: string, folderId: string | null) => void
   onToggleFavorite: (id: string, value: boolean) => void
+  /** Kapasitesi dolu klasörler (taşıma menüsünde devre dışı). */
+  fullFolderIds?: ReadonlySet<string>
 }
 
 /** Şablonlarım (XSLT) tablo satırı. Paylaşılan (sahibi olunmayan) şablonda yalnız Aç + Önizle. */
 export default function XsltRow({
-  template, folders, selected, onToggleSelect, onOpen, onDelete, onRename, onPreview, onShare, onMove, onToggleFavorite,
+  template, folders, selected, onToggleSelect, onOpen, onDelete, onRename, onPreview, onShare, onMove, onToggleFavorite, fullFolderIds,
 }: Props) {
   const [editing, setEditing] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -100,6 +102,7 @@ export default function XsltRow({
                     <MoveToFolderMenu
                       folders={folders}
                       currentFolderId={template.folderId}
+                      fullFolderIds={fullFolderIds}
                       onMove={(fid) => onMove(template.id, fid)}
                       onClose={() => setMoveOpen(false)}
                     />

@@ -24,6 +24,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddXsltCraft(builder.Configuration);
 builder.Services.AddScoped<PreviewAssetEmbedder>();
+builder.Services.AddSingleton<XsltCraft.Api.Downloads.ArchiveDownloadGate>();
 
 builder.Services.AddRateLimiter(opts =>
 {
@@ -85,6 +86,10 @@ builder.Services.AddRateLimiter(opts =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0,
             }));
+
+    // Şablon ZIP indirme (seçili / klasör): 10 req/dk/user
+    opts.AddPolicy(RateLimitPolicies.TemplateDownload, httpContext =>
+        RateLimitPolicies.PerUserOrIp(httpContext, RateLimitPolicies.TemplateDownloadPerMinute, TimeSpan.FromMinutes(1)));
 
 });
 

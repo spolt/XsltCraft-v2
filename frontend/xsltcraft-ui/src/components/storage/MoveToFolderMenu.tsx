@@ -9,9 +9,11 @@ interface MoveToFolderMenuProps {
   onClose: () => void
   /** Tetikleyiciye göre hizalama (varsayılan sağ). */
   align?: 'left' | 'right'
+  /** Kapasitesi dolu klasörler: devre dışı + "(dolu)". */
+  fullFolderIds?: ReadonlySet<string>
 }
 
-export default function MoveToFolderMenu({ folders, currentFolderId, onMove, onClose, align = 'right' }: MoveToFolderMenuProps) {
+export default function MoveToFolderMenu({ folders, currentFolderId, onMove, onClose, align = 'right', fullFolderIds }: MoveToFolderMenuProps) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -47,20 +49,26 @@ export default function MoveToFolderMenu({ folders, currentFolderId, onMove, onC
 
         {folders.length > 0 && <div className="my-1 border-t border-ui-line" />}
 
-        {folders.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            role="menuitemradio"
-            aria-checked={currentFolderId === f.id}
-            onClick={() => { onMove(f.id); onClose() }}
-            className={item}
-          >
-            <span aria-hidden="true" className={`h-2.5 w-2.5 flex-none rounded-[3px] ${folderDot(f.color)}`} />
-            <span className="flex-1 truncate">{f.name}</span>
-            {currentFolderId === f.id && <Check size={14} aria-hidden="true" className="flex-none text-ui-accent" />}
-          </button>
-        ))}
+        {folders.map((f) => {
+          // Şablonun zaten bulunduğu klasör dolu olsa da seçilebilir (taşıma yok).
+          const full = currentFolderId !== f.id && !!fullFolderIds?.has(f.id)
+          return (
+            <button
+              key={f.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={currentFolderId === f.id}
+              disabled={full}
+              onClick={() => { onMove(f.id); onClose() }}
+              className={`${item} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent`}
+            >
+              <span aria-hidden="true" className={`h-2.5 w-2.5 flex-none rounded-[3px] ${folderDot(f.color)}`} />
+              <span className="flex-1 truncate">{f.name}</span>
+              {full && <span className="flex-none text-xs text-tx-subtle">(dolu)</span>}
+              {currentFolderId === f.id && <Check size={14} aria-hidden="true" className="flex-none text-ui-accent" />}
+            </button>
+          )
+        })}
 
         {folders.length === 0 && (
           <p className="m-0 px-3 py-2 text-xs text-tx-subtle">Henüz klasör yok.</p>

@@ -2,11 +2,12 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Upload, FolderUp, FileCode2, Trash2, AlertCircle, Loader2 } from 'lucide-react'
 
 import { createFolder, type Folder } from '../../services/folderService'
-import { bulkUploadUserXslt, type BulkUploadItem } from '../../services/userXsltService'
+import { bulkUploadUserXslt, MAX_TEMPLATES_PER_FOLDER as MAX_PER_FOLDER, type BulkUploadItem } from '../../services/userXsltService'
 import { FOLDER_COLORS, FOLDER_COLOR_NAME, folderDot } from './folderColors'
 import ModalShell, { MODAL_INPUT, MODAL_PRIMARY, MODAL_SECONDARY } from './ModalShell'
 import BulkProgress from './BulkProgress'
 import { toast } from '../../store/toastStore'
+import { parseGateError } from '../../services/entitlementService'
 import { validateUploadContent } from '../../utils/uploadValidation'
 
 const MAX_FILES = 500
@@ -52,6 +53,8 @@ interface Props {
   folders: Folder[]
   /** Modal açıldığında ön-seçili hedef klasör (aktif klasör). */
   defaultFolderId?: string | null
+  /** Klasör başına mevcut şablon sayısı (kapasite ön kontrolü için). */
+  folderCounts: Record<string, number>
   onClose: () => void
   /** Başarılı yükleme sonrası; hedef klasöre yönlendirmek için folderId verir. */
   onUploaded: (folderId: string | null) => void
@@ -70,7 +73,7 @@ function baseName(fileName: string): string {
   return fileName.replace(/\.(xsl|xslt)$/i, '')
 }
 
-export default function BulkUploadModal({ folders, defaultFolderId, onClose, onUploaded }: Props) {
+export default function BulkUploadModal({ folders, defaultFolderId, folderCounts, onClose, onUploaded }: Props) {
   const [files, setFiles] = useState<PickedFile[]>([])
   const [reading, setReading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -158,8 +161,10 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
   }
 
   const validFiles = files.filter((f) => f.valid)
+  const existingCount = target === 'existing' ? folderCounts[existingId] ?? 0 : 0
+  const overCapacity = target === 'existing' && existingCount + validFiles.length > MAX_PER_FOLDER
   const canUpload =
-    !busy && validFiles.length > 0 &&
+    !busy && validFiles.length > 0 && !overCapacity &&
     (target === 'new' ? newName.trim().length > 0 : existingId.length > 0)
 
   async function handleUpload() {
@@ -181,15 +186,31 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
       let createdCount = 0
       let skippedCount = 0
       let sent = 0
+      let folderFullMessage: string | null = null
       for (const batch of batches) {
-        const res = await bulkUploadUserXslt(folderId, batch)
+        let res
+        try {
+          res = await bulkUploadUserXslt(folderId, batch)
+        } catch (err: unknown) {
+          const gate = await parseGateError(err)
+          if (gate.status !== 409 || gate.code !== 'folder_full') throw err
+          // Bu parti hiç kaydedilmedi; önceki partiler kalır.
+          folderFullMessage = gate.message ?? `Bir klasörde en fazla ${MAX_PER_FOLDER} şablon olabilir.`
+          break
+        }
         createdCount += res.created.length
         skippedCount += res.skipped.length
         sent += batch.length
         setUpload({ done: sent, total: items.length })
       }
 
-      if (createdCount > 0) {
+      if (folderFullMessage) {
+        if (createdCount === 0) {
+          toast.error(folderFullMessage, { durationMs: 8000 })
+          return
+        }
+        toast.warning(`${createdCount} şablon yüklendi; klasör doldu. ${folderFullMessage}`, { durationMs: 8000 })
+      } else if (createdCount > 0) {
         toast.success(
           skippedCount > 0
             ? `${createdCount} şablon yüklendi, ${skippedCount} dosya atlandı.`
@@ -294,6 +315,12 @@ export default function BulkUploadModal({ folders, defaultFolderId, onClose, onU
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
             </select>
+            {overCapacity && (
+              <p role="alert" className="m-0 mt-1.5 flex items-start gap-1.5 text-xs text-fn-orange-ink">
+                <AlertCircle size={13} aria-hidden="true" className="mt-px shrink-0" />
+                Bir klasörde en fazla {MAX_PER_FOLDER} şablon olabilir. Bu klasörde {existingCount} şablon var; en fazla {Math.max(0, MAX_PER_FOLDER - existingCount)} şablon daha eklenebilir.
+              </p>
+            )}
           </div>
         )}
       </fieldset>

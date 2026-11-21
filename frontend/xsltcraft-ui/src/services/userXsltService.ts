@@ -83,6 +83,38 @@ export async function setUserXsltFavorite(id: string, isFavorite: boolean): Prom
   await api.patch(`/api/user-xslt-templates/${id}/favorite`, { isFavorite })
 }
 
+/** Sunucudaki `TemplateLimits.MaxTemplatesPerFolder` ile aynı (yalnız XSLT klasörleri). */
+export const MAX_TEMPLATES_PER_FOLDER = 500
+/** Sunucudaki `DownloadLimits.MaxDownloadItems` ile aynı. */
+export const MAX_DOWNLOAD_ITEMS = 500
+
+/** Tek istekte toplu taşıma; sunucu tek kapasite kontrolü yapar (409 folder_full → hiçbiri taşınmaz). */
+export async function bulkMoveUserXslt(ids: string[], folderId: string | null): Promise<{ movedIds: string[] }> {
+  const { data } = await api.post<{ movedIds: string[] }>('/api/user-xslt-templates/bulk-move', { ids, folderId })
+  return data
+}
+
+// --- İndirme (ZIP) — JWT bellekte olduğundan <a href> yerine Blob olarak alınır ---
+
+/** İndirme ilerlemesi: alınan bayt ve (sunucu Content-Length verdiyse) toplam bayt. */
+export type DownloadProgressFn = (loaded: number, total?: number) => void
+
+export async function downloadUserXsltZip(ids: string[], onProgress?: DownloadProgressFn): Promise<Blob> {
+  const { data } = await api.post<Blob>('/api/user-xslt-templates/download', { ids }, {
+    responseType: 'blob',
+    onDownloadProgress: (e) => onProgress?.(e.loaded, e.total),
+  })
+  return data
+}
+
+export async function downloadFolderZip(folderId: string, onProgress?: DownloadProgressFn): Promise<Blob> {
+  const { data } = await api.get<Blob>(`/api/user-xslt-templates/folders/${folderId}/download`, {
+    responseType: 'blob',
+    onDownloadProgress: (e) => onProgress?.(e.loaded, e.total),
+  })
+  return data
+}
+
 // --- Toplu yükleme (klasör olarak) ---
 
 export interface BulkUploadItem {
