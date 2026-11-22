@@ -39,6 +39,12 @@ Ana ekranda (`XsltWorkspace` "XSLT dosyanla çalış", `FileDropZone`, `EditChoi
 - **Son mod:** kayıt `lastEditMode` yazar; `utils/workRoutes.xsltOpenPath(id, lastEditMode, isPro)` `easyEdit` + Pro ise `/easy-edit/template/:id`, değilse `/xslt-editor/:id` (`useRecentWork`, `MyXsltTemplatesPage`).
 - **`services/easyEditGuards`:** analiz yanıtındaki veri yalnız güvenli biçimde kullanılır — `safeImageSrc` (yalnız `data:image/*;base64` ve yalnız `<img src>`), `isValidSlotId`/`filterSlotIds` (yuva kimliği deseni). Analiz `xslt`'si yalnız metin olarak kullanılır; önizleme her zaman sunucu render'ı + sandbox'lı iframe. Kullanıcıya gösterilen metinler React metin düğümüdür.
 
+## Şablonlarım — indirme, sayfalama, klasör kapasitesi (`components/storage/`, 2.1.5)
+- **İndirme** (`useTemplateDownload`): 1 seçim → `getUserXsltTemplate` + `utils/saveBlob` ile `.xslt` (+ `reportDownload`); ≥2 → `POST /download` ZIP (`sablonlarim-YYYY-MM-DD.zip`, gerçek klasör aktifken `{klasör}-…`); klasör → `GET /folders/{id}/download` (`{klasör}.zip`, ⋮ menüsü ve araç çubuğunda "Klasörü indir"; Tümü/Favoriler/Paylaşılan'da yok). ZIP adı istemcide (`fileStem`, yerel tarih `localDateStamp`); hata gövdesi Blob → `parseGateError`.
+- **Sayfalama** istemci tarafı (`usePagedList` + `LibraryPager`): 50/100/150/200 (varsayılan 100, `localStorage` `xsltcraft-library-page-size`); klasör/arama/sıralama/boyut değişince 1. sayfa. Sayaçlar tüm liste üzerinden kalır.
+- **Seçim** `useCappedSelection` (en fazla 500, sayfalar arası korunur); başlık kutusu yalnız bu sayfanın sahip olunanlarını ekler/çıkarır, tavanı aşacaksa hiç eklemez.
+- **Klasör kapasitesi** 500 (`MAX_TEMPLATES_PER_FOLDER`, sunucu otoritatif): toplu taşıma tek `POST /bulk-move` (`useTemplateBulkActions`, istemci ön kontrolü + 409 `folder_full` mesajı); `MoveToFolderMenu` `fullFolderIds` → "(dolu)"; `BulkUploadModal` `folderCounts` ile satır içi uyarı. Taslaklarım etkilenmez (yeni prop'lar opsiyonel).
+
 ## AI paneli (`components/ai/`)
 `AiAssistantPanel` (UBL-TR Türkçe asistan; NDJSON akışı, `AbortController` ile iptal, toast), `AiRefactorDialog` (XSLT seçimi → dönüşüm → diff → onayla). **Kullanıcı onayı olmadan otomatik insert yok**; insert öncesi `/api/preview/validate-xslt`. UI'da `aiEnabled` (`useAiStore(s => s.enabled === true)`) kontrolü unutulmamalı.
 

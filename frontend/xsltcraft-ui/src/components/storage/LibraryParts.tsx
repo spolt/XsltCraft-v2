@@ -114,7 +114,7 @@ export function BulkButton({ icon: Icon, children, ...rest }: ButtonHTMLAttribut
   return (
     <button
       type="button"
-      className="xc-focus inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-ui-ink transition-colors hover:bg-ui-card"
+      className="xc-focus inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium text-ui-ink transition-colors hover:bg-ui-card disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
       {...rest}
     >
       <Icon size={14} aria-hidden="true" /> {children}

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 using XsltCraft.Application.DTO;
 using XsltCraft.Application.Interfaces;
+using XsltCraft.Application.Templates;
 using XsltCraft.Application.Validation;
 using XsltCraft.Application.Xslt;
 using XsltCraft.Domain.Entities;
@@ -174,6 +175,7 @@ public class UserXsltTemplateController(
         }
 
         var response = new BulkUploadResultResponse();
+        var pending = new List<UserXsltTemplate>();
         var now = DateTime.UtcNow;
 
         foreach (var item in items)
@@ -197,12 +199,20 @@ public class UserXsltTemplateController(
                 CreatedAt = now,
                 UpdatedAt = now
             };
-            db.UserXsltTemplates.Add(template);
+            pending.Add(template);
             response.Created.Add(new BulkUploadCreated { Id = template.Id, Name = template.Name });
         }
 
-        if (response.Created.Count > 0)
+        // Klasör kapasitesi: bu istekte gerçekten oluşturulacak sayı ile; aşılırsa hiçbiri kaydedilmez.
+        if (request.FolderId is not null)
         {
+            var full = await CheckFolderCapacityAsync(request.FolderId.Value, pending.Count);
+            if (full is not null) return full;
+        }
+
+        if (pending.Count > 0)
+        {
+            db.UserXsltTemplates.AddRange(pending);
             await db.SaveChangesAsync();
             foreach (var created in response.Created)
                 await activity.RecordAsync(userId, UserActivityType.Save, created.Id, "Xslt");
@@ -566,11 +576,68 @@ public class UserXsltTemplateController(
             var folder = await db.Folders.FindAsync(request.FolderId.Value);
             if (folder is null || folder.OwnerId != userId || folder.Kind != FolderKind.XsltTemplate)
                 return BadRequest(new { message = "Geçersiz klasör." });
+
+            // Zaten hedef klasördeyse yeni ekleme sayılmaz (dolu klasörde de 204).
+            var incoming = template.FolderId == request.FolderId ? 0 : 1;
+            var full = await CheckFolderCapacityAsync(request.FolderId.Value, incoming);
+            if (full is not null) return full;
         }
 
         template.FolderId = request.FolderId;
         await db.SaveChangesAsync();
         return NoContent();
+    }
+
+    // POST /api/user-xslt-templates/bulk-move — seçili şablonları tek istekte klasöre taşı / çıkar (yalnız sahip)
+    [HttpPost("bulk-move")]
+    public async Task<IActionResult> BulkMove([FromBody] BulkMoveUserXsltRequest request)
+    {
+        var userId = CurrentUserId;
+
+        var ids = (request.Ids ?? []).Distinct().ToList();
+        if (ids.Count == 0)
+            return BadRequest(new { message = "Şablon seçilmedi." });
+        if (ids.Count > TemplateLimits.MaxBulkMoveItems)
+            return BadRequest(new { message = $"Tek istekte en fazla {TemplateLimits.MaxBulkMoveItems} şablon taşınabilir." });
+
+        if (request.FolderId is not null)
+        {
+            var folder = await db.Folders.FindAsync(request.FolderId.Value);
+            if (folder is null || folder.OwnerId != userId || folder.Kind != FolderKind.XsltTemplate)
+                return BadRequest(new { message = "Geçersiz klasör." });
+        }
+
+        // Yalnız sahip olunanlar (IDOR); içerik yüklenmez.
+        var owned = await db.UserXsltTemplates
+            .AsNoTracking()
+            .Where(t => ids.Contains(t.Id) && t.OwnerId == userId)
+            .Select(t => new { t.Id, t.FolderId })
+            .ToListAsync();
+
+        var toMove = owned.Where(t => t.FolderId != request.FolderId).Select(t => t.Id).ToList();
+
+        if (request.FolderId is not null)
+        {
+            var full = await CheckFolderCapacityAsync(request.FolderId.Value, toMove.Count);
+            if (full is not null) return full;
+        }
+
+        if (toMove.Count > 0)
+        {
+            foreach (var id in toMove)
+            {
+                // Stub güncelleme: yalnız FolderId yazılır. IsModified açıkça — hedef null iken atanan değer
+                // stub'ın varsayılanıyla aynı olduğundan değişiklik kendiliğinden algılanmaz.
+                var stub = new UserXsltTemplate { Id = id };
+                db.UserXsltTemplates.Attach(stub);
+                var folderProp = db.Entry(stub).Property(t => t.FolderId);
+                folderProp.CurrentValue = request.FolderId;
+                folderProp.IsModified = true;
+            }
+            await db.SaveChangesAsync();
+        }
+
+        return Ok(new BulkMoveResultResponse { MovedIds = owned.Select(t => t.Id).ToList() });
     }
 
     // PATCH /api/user-xslt-templates/:id/favorite — favori durumunu değiştir (yalnız sahip)
@@ -588,6 +655,28 @@ public class UserXsltTemplateController(
         template.IsFavorite = request.IsFavorite;
         await db.SaveChangesAsync();
         return NoContent();
+    }
+
+    /// <summary>
+    /// Klasör kapasitesi (<see cref="TemplateLimits.MaxTemplatesPerFolder"/>): <paramref name="incoming"/> yeni şablon
+    /// eklenince tavan aşılacaksa 409 <c>folder_full</c>; değilse null. Mevcut fazlalık bozulmaz; yalnız yeni ekleme engellenir.
+    /// </summary>
+    private async Task<IActionResult?> CheckFolderCapacityAsync(Guid folderId, int incoming)
+    {
+        if (incoming <= 0) return null;
+
+        const int capacity = TemplateLimits.MaxTemplatesPerFolder;
+        var count = await db.UserXsltTemplates.CountAsync(t => t.FolderId == folderId);
+        if (count + incoming <= capacity) return null;
+
+        var remaining = Math.Max(0, capacity - count);
+        return Conflict(new
+        {
+            error = "folder_full",
+            message = $"Bir klasörde en fazla {capacity} şablon olabilir. Bu klasöre en fazla {remaining} şablon daha eklenebilir.",
+            capacity,
+            remaining
+        });
     }
 
     private BadRequestObjectResult InvalidEditMode() =>

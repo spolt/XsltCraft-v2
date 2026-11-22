@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Code2, Users, FolderInput, LayoutGrid, Star, Upload, StickyNote } from 'lucide-react'
+import { Code2, Users, FolderInput, LayoutGrid, Star, Upload, StickyNote, Download } from 'lucide-react'
 import {
   getUserXsltTemplates,
   getUserXsltTemplate,
   deleteUserXsltTemplate,
   updateUserXsltTemplate,
-  moveUserXsltToFolder,
   setUserXsltFavorite,
+  MAX_TEMPLATES_PER_FOLDER,
   bulkAddFixedNote,
   type UserXsltTemplateSummary,
   type FixedNoteMode,
@@ -36,8 +36,14 @@ import BulkUploadModal from '../components/storage/BulkUploadModal'
 import BulkAddNoteModal from '../components/storage/BulkAddNoteModal'
 import BulkNoteResultDialog from '../components/storage/BulkNoteResultDialog'
 import BulkProgress from '../components/storage/BulkProgress'
-import { chunk, runPool } from '../utils/bulkRun'
+import DownloadProgress from '../components/storage/DownloadProgress'
+import LibraryPager from '../components/storage/LibraryPager'
+import { chunk } from '../utils/bulkRun'
 import { useTemplateLibrary, type SortKey } from '../components/storage/useTemplateLibrary'
+import { usePagedList } from '../components/storage/usePagedList'
+import { useCappedSelection } from '../components/storage/useCappedSelection'
+import { useTemplateDownload } from '../components/storage/useTemplateDownload'
+import { useTemplateBulkActions } from '../components/storage/useTemplateBulkActions'
 import { toast } from '../store/toastStore'
 import { useEntitlementStore } from '../store/entitlementStore'
 import { isProOrAbove } from '../services/entitlementService'
@@ -47,24 +53,16 @@ import defaultInvoiceXml from '../assets/default-invoice.xml?raw'
 // Sabit not partisi: sunucu her şablona notu tek tek gömer; küçük partiler hem ilerleme gösterir hem tek isteği kısa tutar.
 const NOTE_BATCH = 25
 
-interface BulkOp {
-  label: string
-  done: number
-  total: number
-}
-
 export default function MyXsltTemplatesPage() {
   const [templates, setTemplates] = useState<UserXsltTemplateSummary[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkConfirm, setBulkConfirm] = useState(false)
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
   const [bulkNoteOpen, setBulkNoteOpen] = useState(false)
   const [noteResult, setNoteResult] = useState<BulkAddFixedNoteResult | null>(null)
-  const [bulkOp, setBulkOp] = useState<BulkOp | null>(null)
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<SortKey>('updated')
   const [previewId, setPreviewId] = useState<string | null>(null)
@@ -75,8 +73,11 @@ export default function MyXsltTemplatesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const isPro = useEntitlementStore((s) => isProOrAbove(s.entitlements))
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const { downloading, progress: downloadProgress, downloadSelected, downloadFolder } = useTemplateDownload()
 
   const activeKey = searchParams.get('folder') ?? 'all'
+  const { selectedIds, setSelectedIds, toggle: toggleSelect, togglePage } = useCappedSelection([activeKey, search])
   function setActiveKey(key: string) {
     setSearchParams(key === 'all' ? {} : { folder: key }, { replace: true })
   }
@@ -120,6 +121,8 @@ export default function MyXsltTemplatesPage() {
   }, [activeKey])
 
   const visible = useTemplateLibrary(templates, { search, match, sort })
+  const pager = usePagedList(visible, [activeKey, search, sort])
+  useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }) }, [pager.page])
 
   const counts = useMemo(() => {
     const byFolder: Record<string, number> = {}
@@ -131,6 +134,13 @@ export default function MyXsltTemplatesPage() {
     }
     return { byFolder, fav, shared, all: templates.length }
   }, [templates])
+  const fullFolderIds = useMemo(
+    () => new Set(Object.keys(counts.byFolder).filter((id) => counts.byFolder[id] >= MAX_TEMPLATES_PER_FOLDER)),
+    [counts],
+  )
+  const { bulkOp, moveOne: handleMove, bulkMove: handleBulkMove, bulkDelete } = useTemplateBulkActions({
+    templates, setTemplates, selectedIds, setSelectedIds, byFolder: counts.byFolder,
+  })
 
   const sortedFolders = useMemo(
     () => [...folders].sort((a, b) => a.name.localeCompare(b.name, 'tr')),
@@ -166,13 +176,6 @@ export default function MyXsltTemplatesPage() {
   }
 
   // --- Şablon işlemleri ---
-  async function handleMove(id: string, folderId: string | null) {
-    try {
-      await moveUserXsltToFolder(id, folderId)
-      setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, folderId } : t)))
-      toast.success(folderId ? 'Klasöre taşındı.' : 'Klasörden çıkarıldı.', { durationMs: 4000 })
-    } catch { toast.error('Taşıma başarısız.') }
-  }
   async function handleToggleFavorite(id: string, value: boolean) {
     setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, isFavorite: value } : t)))
     try {
@@ -182,31 +185,6 @@ export default function MyXsltTemplatesPage() {
       toast.error('İşlem başarısız.')
     }
   }
-  async function handleBulkMove(folderId: string | null) {
-    const ids = [...selectedIds]
-    const label = folderId ? 'Şablonlar taşınıyor' : 'Şablonlar klasörden çıkarılıyor'
-    setBulkMoveOpen(false)
-    setBulkOp({ label, done: 0, total: ids.length })
-    try {
-      const { succeeded, failed } = await runPool(
-        ids,
-        (id) => moveUserXsltToFolder(id, folderId),
-        (done) => setBulkOp({ label, done, total: ids.length }),
-      )
-      // Yalnız başaranları yansıt; başarısızlar seçili kalır ki kullanıcı tekrar deneyebilsin.
-      const moved = new Set(succeeded)
-      setTemplates((prev) => prev.map((t) => (moved.has(t.id) ? { ...t, folderId } : t)))
-      setSelectedIds(new Set(failed))
-      if (failed.length === 0) {
-        toast.success(folderId ? 'Seçilenler taşındı.' : 'Seçilenler klasörden çıkarıldı.', { durationMs: 4000 })
-      } else {
-        toast.error(`${succeeded.length} şablon taşındı, ${failed.length} şablon taşınamadı. Taşınamayanlar seçili bırakıldı.`, { durationMs: 6000 })
-      }
-    } finally {
-      setBulkOp(null)
-    }
-  }
-
   async function handleDelete(id: string) {
     try {
       await deleteUserXsltTemplate(id)
@@ -220,43 +198,6 @@ export default function MyXsltTemplatesPage() {
       const updated = await updateUserXsltTemplate(id, { name })
       setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, name: updated.name, updatedAt: updated.updatedAt } : t)))
     } catch { toast.error('Yeniden adlandırma başarısız.') }
-  }
-
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
-  }
-
-  function toggleAll() {
-    const ownedVisible = visible.filter((t) => t.isOwner).map((t) => t.id)
-    if (ownedVisible.length > 0 && ownedVisible.every((id) => selectedIds.has(id))) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(ownedVisible))
-    }
-  }
-
-  async function handleBulkDelete() {
-    const ids = [...selectedIds]
-    const label = 'Şablonlar siliniyor'
-    setBulkConfirm(false)
-    setBulkOp({ label, done: 0, total: ids.length })
-    try {
-      const { succeeded, failed } = await runPool(
-        ids,
-        (id) => deleteUserXsltTemplate(id),
-        (done) => setBulkOp({ label, done, total: ids.length }),
-      )
-      const deleted = new Set(succeeded)
-      setTemplates((prev) => prev.filter((t) => !deleted.has(t.id)))
-      setSelectedIds(new Set(failed))
-      if (failed.length === 0) {
-        toast.success(`${succeeded.length} şablon silindi.`, { durationMs: 4000 })
-      } else {
-        toast.error(`${succeeded.length} şablon silindi, ${failed.length} şablon silinemedi. Silinemeyenler seçili bırakıldı.`, { durationMs: 6000 })
-      }
-    } finally {
-      setBulkOp(null)
-    }
   }
 
   async function handleBulkUploaded(folderId: string | null) {
@@ -336,8 +277,10 @@ export default function MyXsltTemplatesPage() {
     : activeKey === 'favorites' ? 'Favoriler'
     : activeKey === 'shared' ? 'Paylaşılan'
     : folders.find((f) => f.id === activeKey)?.name ?? 'Tümü'
-  const ownedVisible = visible.filter((t) => t.isOwner).map((t) => t.id)
-  const allSelected = ownedVisible.length > 0 && ownedVisible.every((id) => selectedIds.has(id))
+  // Yalnız gerçek klasör (Tümü/Favoriler/Paylaşılan değil): klasör indirme + ZIP adı öneki.
+  const activeFolder = folders.find((f) => f.id === activeKey)
+  const ownedPage = pager.pageItems.filter((t) => t.isOwner).map((t) => t.id)
+  const allSelected = ownedPage.length > 0 && ownedPage.every((id) => selectedIds.has(id))
   const someSelected = selectedIds.size > 0
 
   const specials = [
@@ -348,7 +291,7 @@ export default function MyXsltTemplatesPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <div className="min-w-0 flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-4 px-8 pt-7 pb-9">
           <LibraryTabsHeader
             active="xslt"
@@ -369,6 +312,7 @@ export default function MyXsltTemplatesPage() {
               onRename={handleRenameFolder}
               onRecolor={handleRecolorFolder}
               onDelete={handleDeleteFolder}
+              onDownload={(id) => { const f = folders.find((x) => x.id === id); if (f) downloadFolder(f, counts.byFolder[id] ?? 0) }}
             />
 
             <section
@@ -388,8 +332,20 @@ export default function MyXsltTemplatesPage() {
                     <span className="text-[12.5px] text-tx-muted">
                       <span className="font-medium text-tx-2">{activeLabel}</span> · {visible.length} şablon
                     </span>
+                    {activeFolder && (
+                      <button
+                        type="button"
+                        disabled={downloading || !counts.byFolder[activeFolder.id]}
+                        onClick={() => downloadFolder(activeFolder, counts.byFolder[activeFolder.id] ?? 0)}
+                        className={`${SECONDARY_LINK} disabled:cursor-not-allowed disabled:opacity-50`}
+                      >
+                        <Download size={14} aria-hidden="true" /> Klasörü indir
+                      </button>
+                    )}
                     <BulkUploadButton onClick={() => setBulkUploadOpen(true)} />
                   </StorageToolbar>
+
+                  {downloadProgress && <DownloadProgress state={downloadProgress} />}
 
                   {bulkOp ? (
                     <BulkBar count={bulkOp.total}>
@@ -409,14 +365,17 @@ export default function MyXsltTemplatesPage() {
                           Klasöre taşı
                         </BulkButton>
                         {bulkMoveOpen && (
-                          <MoveToFolderMenu folders={sortedFolders} onMove={handleBulkMove} onClose={() => setBulkMoveOpen(false)} />
+                          <MoveToFolderMenu folders={sortedFolders} fullFolderIds={fullFolderIds} onMove={handleBulkMove} onClose={() => setBulkMoveOpen(false)} />
                         )}
                       </div>
                       <BulkButton icon={StickyNote} onClick={() => setBulkNoteOpen(true)}>Sabit Not Ekle</BulkButton>
+                      <BulkButton icon={Download} disabled={downloading} onClick={() => downloadSelected([...selectedIds], activeFolder?.name)}>
+                        Seçilenleri indir
+                      </BulkButton>
                       <BulkDelete
                         confirming={bulkConfirm}
                         onAsk={() => setBulkConfirm(true)}
-                        onYes={handleBulkDelete}
+                        onYes={() => { setBulkConfirm(false); bulkDelete() }}
                         onNo={() => setBulkConfirm(false)}
                       />
                     </BulkBar>
@@ -429,39 +388,50 @@ export default function MyXsltTemplatesPage() {
                         : 'Bu klasörde şablon yok.'}
                     </p>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse text-[13px]">
-                        <thead>
-                          <tr>
-                            <th scope="col" className="w-10 py-2.5 pl-3.5 pr-1 text-left">
-                              <SelectBox checked={allSelected} onChange={toggleAll} label="Görünen tüm şablonları seç" />
-                            </th>
-                            <th scope="col" className={`${TH} pl-1`}>Ad</th>
-                            <th scope="col" className={TH}>Klasör</th>
-                            <th scope="col" className={TH}>Güncellendi</th>
-                            <th scope="col" className={`${TH} pr-3.5 text-right`}>İşlemler</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {visible.map((t) => (
-                            <XsltRow
-                              key={t.id}
-                              template={t}
-                              folders={sortedFolders}
-                              selected={selectedIds.has(t.id)}
-                              onToggleSelect={toggleSelect}
-                              onOpen={() => navigate(xsltOpenPath(t.id, t.lastEditMode, isPro))}
-                              onDelete={handleDelete}
-                              onRename={handleRename}
-                              onPreview={(id, name) => { setPreviewId(id); setPreviewName(name) }}
-                              onShare={(id, name) => setShareTarget({ id, name })}
-                              onMove={handleMove}
-                              onToggleFavorite={handleToggleFavorite}
-                            />
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-[13px]">
+                          <thead>
+                            <tr>
+                              <th scope="col" className="w-10 py-2.5 pl-3.5 pr-1 text-left">
+                                <SelectBox checked={allSelected} onChange={() => togglePage(ownedPage)} label="Bu sayfadaki tüm şablonları seç" />
+                              </th>
+                              <th scope="col" className={`${TH} pl-1`}>Ad</th>
+                              <th scope="col" className={TH}>Klasör</th>
+                              <th scope="col" className={TH}>Güncellendi</th>
+                              <th scope="col" className={`${TH} pr-3.5 text-right`}>İşlemler</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pager.pageItems.map((t) => (
+                              <XsltRow
+                                key={t.id}
+                                template={t}
+                                folders={sortedFolders}
+                                selected={selectedIds.has(t.id)}
+                                onToggleSelect={toggleSelect}
+                                onOpen={() => navigate(xsltOpenPath(t.id, t.lastEditMode, isPro))}
+                                onDelete={handleDelete}
+                                onRename={handleRename}
+                                onPreview={(id, name) => { setPreviewId(id); setPreviewName(name) }}
+                                onShare={(id, name) => setShareTarget({ id, name })}
+                                onMove={handleMove}
+                                onToggleFavorite={handleToggleFavorite}
+                                fullFolderIds={fullFolderIds}
+                              />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <LibraryPager
+                        total={visible.length}
+                        page={pager.page}
+                        pageSize={pager.pageSize}
+                        totalPages={pager.totalPages}
+                        onPage={pager.setPage}
+                        onPageSize={pager.setPageSize}
+                      />
+                    </>
                   )}
                 </>
               )}
@@ -490,6 +460,7 @@ export default function MyXsltTemplatesPage() {
         <BulkUploadModal
           folders={sortedFolders}
           defaultFolderId={activeKey !== 'all' && activeKey !== 'favorites' && activeKey !== 'shared' ? activeKey : null}
+          folderCounts={counts.byFolder}
           onClose={() => setBulkUploadOpen(false)}
           onUploaded={handleBulkUploaded}
         />

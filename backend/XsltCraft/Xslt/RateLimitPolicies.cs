@@ -24,6 +24,12 @@ public static class RateLimitPolicies
     /// <summary>Kolay düzenle analizi (<c>/api/easy-edit/analyze</c>): 10 istek/dk/kullanıcı (kimliksizse IP).</summary>
     public const string EasyEditAnalyze = "easy-edit-analyze";
 
+    /// <summary>Şablon ZIP indirme (seçili / klasör): 10 istek/dk/kullanıcı (kimliksizse IP).</summary>
+    public const string TemplateDownload = "template-download";
+
+    /// <summary><see cref="TemplateDownload"/> dakika başı izin.</summary>
+    public const int TemplateDownloadPerMinute = 10;
+
     private const int PermitPerMinute = 120;
     private const int EasyEditAnalyzePerMinute = 10;
     private const int ThemePreviewPerMinute = 30;

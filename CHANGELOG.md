@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-11-21
+
+### Added
+- **Şablonlarım — Seçilenleri indir**: toplu işlem çubuğunda yeni buton. Tek şablon seçiliyse doğrudan `.xslt`, birden fazlaysa sunucuda üretilen ZIP iner (`sablonlarim-YYYY-MM-DD.zip`; aktif klasörde `{klasör}-YYYY-MM-DD.zip`). Yalnız sahip olunan şablonlar indirilebilir; tek seferde en fazla 500 şablon (`POST /api/user-xslt-templates/download`).
+- **Şablonlarım — Klasörü indir**: klasörün ⋮ menüsünden ve klasör açıkken araç çubuğundan klasördeki tüm şablonlar ZIP olarak iner (`GET /api/user-xslt-templates/folders/{id}/download`). Tümü / Favoriler / Paylaşılan görünümlerinde yoktur.
+- **İndirme göstergesi**: ZIP hazırlanırken "ZIP hazırlanıyor (N şablon)…" (belirsiz çubuk), veri akarken yüzde; bitince "N şablon indirildi." bildirimi.
+- **Şablonlarım — sayfalama**: liste sayfalara bölünür; sayfa boyutu kullanıcı seçimli (50 / 100 / 150 / 200, varsayılan 100, tarayıcıda hatırlanır). "Bu sayfadaki tüm şablonları seç" yalnız o sayfayı seçer; seçim sayfalar arasında korunur, klasör ya da arama değişince temizlenir.
+- **Toplu taşıma tek istekte** (`POST /api/user-xslt-templates/bulk-move`).
+
+### Changed
+- **Klasör kapasitesi**: bir klasörde en fazla 500 XSLT şablonu olabilir. Taşıma, toplu taşıma ve klasöre toplu yükleme sınırı aşacaksa reddedilir (409 `folder_full`); arayüz işlem başlamadan uyarır, taşıma menülerinde dolu klasör "(dolu)" görünür. Mevcut büyük klasörler etkilenmez, yalnız yeni ekleme engellenir.
+- **Seçim tavanı**: Şablonlarım'da en fazla 500 şablon seçilebilir.
+- Şablon ZIP indirmeleri için kullanıcı başına dakikada 10 istek ve eşzamanlı tek indirme sınırı.
+
 ## [2.1.4] - 2026-11-17
 
 ### Added
